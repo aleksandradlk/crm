@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LeadHunter Pro — Closer</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<link rel="stylesheet" href="/shared/style.css">
+<style>
+.notif-panel{position:fixed;top:0;right:0;bottom:0;width:340px;background:var(--bg2);border-left:1px solid var(--border2);z-index:150;transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;padding:20px}
+.notif-panel.open{transform:translateX(0)}
+.notif-item{padding:12px;background:var(--bg3);border-radius:8px;margin-bottom:8px;cursor:pointer;border:1px solid var(--border)}
+.notif-item:hover{border-color:var(--accent)}
+.reminder-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--amber);margin-right:6px}
+</style>
+</head>
+<body>
+<div class="grid-bg"></div><div class="glow"></div>
+
+<div class="app-layout" style="position:relative;z-index:1">
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-text">LeadHunter Pro</div>
+      <div class="logo-sub">Closer-Dashboard</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-item active" onclick="showSection('myLeads')"><i class="fas fa-list"></i> Meine Leads</div>
+      <div class="nav-item" onclick="showSection('reminders')"><i class="fas fa-bell"></i> Reminder <span id="reminderBadge" style="display:none" class="badge" style="font-size:10px;padding:1px 6px">0</span></div>
+    </nav>
+    <div class="sidebar-user" id="sidebarUser"></div>
+  </aside>
+
+  <main class="main-content">
+
+    <!-- MY LEADS -->
+    <div id="sec-myLeads">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+        <h1 style="font-size:20px;font-weight:700">Meine Leads</h1>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input type="text" id="searchInput" class="form-control" style="width:180px" placeholder="Suchen..." oninput="filterLeads()">
+          <select id="statusFilter" class="form-control" style="width:150px" onchange="filterLeads()">
+            <option value="">Alle Status</option>
+            <option value="neu">Neu</option>
+            <option value="kontaktiert">Kontaktiert</option>
+            <option value="nicht_erreicht">Nicht erreicht</option>
+            <option value="kein_interesse">Kein Interesse</option>
+            <option value="rueckruf">Rückruf</option>
+            <option value="kunde">Kunde</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="loadLeads()"><i class="fas fa-sync"></i></button>
+        </div>
+      </div>
+
+      <div class="stats-grid" style="margin-bottom:16px">
+        <div class="stat-card"><div class="stat-label">Zugewiesen</div><div class="stat-value sv-blue" id="st-total">—</div></div>
+        <div class="stat-card"><div class="stat-label">Neu</div><div class="stat-value" style="color:var(--accent)" id="st-neu">—</div></div>
+        <div class="stat-card"><div class="stat-label">Rückruf</div><div class="stat-value sv-amber" id="st-rueckruf">—</div></div>
+        <div class="stat-card"><div class="stat-label">Kunden</div><div class="stat-value sv-green" id="st-kunde">—</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="fas fa-phone" style="color:var(--accent)"></i> Lead-Liste <span class="badge" id="leadCount">0</span></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>#</th><th>Unternehmen</th><th>Geschäftsführer</th><th>Telefon</th>
+              <th>E-Mail</th><th>Standort</th><th>Status</th><th>Hinzugefügt</th><th></th>
+            </tr></thead>
+            <tbody id="leadsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- REMINDERS -->
+    <div id="sec-reminders" style="display:none">
+      <h1 style="font-size:20px;font-weight:700;margin-bottom:20px">Meine Reminder</h1>
+      <div id="remindersList"></div>
+    </div>
+
+  </main>
+</div>
+
+<!-- LEAD DETAIL PANEL -->
+<div class="slide-overlay" id="leadOverlay" onclick="closePanel()"></div>
+<div class="slide-panel" id="leadPanel">
+  <div style="padding:24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div style="font-size:16px;font-weight:700" id="panelTitle">Lead</div>
+      <button class="btn btn-ghost btn-sm" onclick="closePanel()"><i class="fas fa-times"></i></button>
+    </div>
+    <div id="panelBody"></div>
+  </div>
+</div>
+
+<script src="/shared/api.js"></script>
+<script>
+Auth.requireAuth();
+if (Auth.isAdmin()) window.location.href = '/admin.html';
+renderSidebarUser();
+startActivityTracking();
+
+let allLeads = [];
+
+function showSection(name) {
+  document.getElementById('sec-myLeads').style.display   = name === 'myLeads'   ? '' : 'none';
+  document.getElementById('sec-reminders').style.display = name === 'reminders' ? '' : 'none';
+  document.querySelectorAll('.nav-item').forEach((el, i) => {
+    el.classList.toggle('active', (name === 'myLeads' && i === 0) || (name === 'reminders' && i === 1));
+  });
+  if (name === 'reminders') loadReminders();
+}
+
+// ── LEADS ─────────────────────────────────────────────────────
+async function loadLeads() {
+  try {
+    allLeads = await api('GET', '/leads');
+    renderLeads(allLeads);
+    updateStats(allLeads);
+    checkReminders(allLeads);
+  } catch (e) { showToast(e.message, 'err'); }
+}
+
+function filterLeads() {
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  const status = document.getElementById('statusFilter').value;
+  let f = allLeads;
+  if (search) f = f.filter(l => (l.company||'').toLowerCase().includes(search) || (l.ceo||'').toLowerCase().includes(search) || (l.phone||'').includes(search));
+  if (status) f = f.filter(l => l.status === status);
+  renderLeads(f);
+}
+
+function renderLeads(leads) {
+  document.getElementById('leadCount').textContent = leads.length;
+  const body = document.getElementById('leadsBody');
+  if (!leads.length) {
+    body.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text3)"><i class="fas fa-inbox" style="display:block;font-size:30px;margin-bottom:10px;opacity:.3"></i>Keine Leads zugewiesen</td></tr>`;
+    return;
+  }
+  body.innerHTML = leads.map((l, i) => `
+    <tr style="cursor:pointer" onclick="openPanel(${l.id})">
+      <td style="color:var(--text3);font-size:11px;font-family:'JetBrains Mono',monospace">${String(i+1).padStart(2,'0')}</td>
+      <td style="font-weight:600">${escHtml(l.company||'—')}</td>
+      <td style="color:var(--text2);font-size:13px">${escHtml(l.ceo||'—')}</td>
+      <td>
+        ${l.phone
+          ? `<a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()" style="color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:12px">${escHtml(l.phone)}</a>`
+          : '<span style="color:var(--text3)">—</span>'}
+      </td>
+      <td style="font-size:12px">
+        ${l.email ? `<a href="mailto:${escHtml(l.email)}" onclick="event.stopPropagation()" style="color:var(--accent)">${escHtml(l.email)}</a>` : '<span style="color:var(--text3)">—</span>'}
+      </td>
+      <td style="color:var(--text2);font-size:12px">${escHtml(l.location||'—')}</td>
+      <td>${statusBadge(l.status)}</td>
+      <td style="font-size:11px;color:var(--text3)">${fmtDateShort(l.created_at)}</td>
+      <td onclick="event.stopPropagation()">
+        <select class="form-control" style="padding:4px 8px;font-size:11px;width:130px" onchange="quickStatus(${l.id}, this.value)">
+          ${['neu','kontaktiert','nicht_erreicht','kein_interesse','rueckruf','kunde'].map(s =>
+            `<option value="${s}" ${l.status===s?'selected':''}>${{neu:'Neu',kontaktiert:'Kontaktiert',nicht_erreicht:'Nicht erreicht',kein_interesse:'Kein Interesse',rueckruf:'Rückruf',kunde:'Kunde'}[s]}</option>`
+          ).join('')}
+        </select>
+      </td>
+    </tr>`).join('');
+}
+
+function updateStats(leads) {
+  document.getElementById('st-total').textContent   = leads.length;
+  document.getElementById('st-neu').textContent      = leads.filter(l => l.status === 'neu').length;
+  document.getElementById('st-rueckruf').textContent = leads.filter(l => l.status === 'rueckruf').length;
+  document.getElementById('st-kunde').textContent    = leads.filter(l => l.status === 'kunde').length;
+}
+
+function checkReminders(leads) {
+  const now = Date.now();
+  let count = 0;
+  leads.forEach(l => {
+    // Reminders werden im Detail geladen — Badge basiert auf loaded lead
+  });
+  // Load reminder count separately
+  api('GET', '/leads').then(ls => {
+    // just reload badge via reminders tab
+  }).catch(() => {});
+}
+
+async function quickStatus(id, status) {
+  try { await api('PATCH', `/leads/${id}/status`, { status }); loadLeads(); }
+  catch (e) { showToast(e.message, 'err'); }
+}
+
+// ── LEAD DETAIL PANEL ─────────────────────────────────────────
+async function openPanel(id) {
+  document.getElementById('leadOverlay').classList.add('open');
+  document.getElementById('leadPanel').classList.add('open');
+  document.getElementById('panelBody').innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3)"><i class="fas fa-spinner fa-spin"></i></div>';
+  try {
+    const l = await api('GET', `/leads/${id}`);
+    document.getElementById('panelTitle').textContent = l.company || 'Lead';
+    document.getElementById('panelBody').innerHTML = renderDetail(l);
+  } catch (e) {
+    document.getElementById('panelBody').innerHTML = `<span style="color:var(--red)">${escHtml(e.message)}</span>`;
+  }
+}
+function closePanel() {
+  document.getElementById('leadOverlay').classList.remove('open');
+  document.getElementById('leadPanel').classList.remove('open');
+  loadLeads();
+}
+
+function renderDetail(l) {
+  const infoFields = [
+    ['Geschäftsführer', l.ceo],
+    ['Telefon', l.phone, 'tel'],
+    ['E-Mail', l.email, 'email'],
+    ['Standort', l.location],
+    ['Website', l.website, 'url'],
+    ['Branche', l.industry],
+    ['Hinzugefügt am', fmtDate(l.created_at)],
+    ['Notizen', l.notes],
+  ];
+  const infoHtml = infoFields.filter(([,v]) => v).map(([k,v,t]) => {
+    let val = escHtml(v);
+    if (t === 'tel')   val = `<a href="tel:${escHtml(v)}">${escHtml(v)}</a>`;
+    if (t === 'email') val = `<a href="mailto:${escHtml(v)}">${escHtml(v)}</a>`;
+    if (t === 'url')   val = `<a href="${escHtml(v)}" target="_blank">${escHtml(v)}</a>`;
+    return `<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px">
+      <span style="color:var(--text3)">${k}</span>
+      <span style="text-align:right;max-width:200px;word-break:break-all">${val}</span></div>`;
+  }).join('');
+
+  const statusLabels = { neu:'Neu', kontaktiert:'Kontaktiert', nicht_erreicht:'Nicht erreicht', kein_interesse:'Kein Interesse', rueckruf:'Rückruf', kunde:'Kunde' };
+  const statusBtns = ['neu','kontaktiert','nicht_erreicht','kein_interesse','rueckruf','kunde'].map(s =>
+    `<button class="btn btn-ghost btn-sm" style="${l.status===s?'border-color:var(--accent);color:var(--accent)':''}" onclick="setStatus(${l.id},'${s}')">${statusLabels[s]}</button>`
+  ).join('');
+
+  const commentsHtml = (l.comments||[]).map(c => `
+    <div style="padding:10px;background:var(--bg3);border-radius:8px;margin-bottom:8px">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${escHtml(c.full_name)} · ${fmtDate(c.created_at)}</div>
+      <div style="font-size:13px">${escHtml(c.text)}</div>
+    </div>`).join('') || '<div style="color:var(--text3);font-size:12px;margin-bottom:8px">Noch keine Kommentare</div>';
+
+  const pendingReminders = (l.reminders||[]).filter(r => !r.sent);
+  const remindHtml = pendingReminders.map(r => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--bg3);border-radius:8px;margin-bottom:6px">
+      <div>
+        <div style="font-size:12px;color:var(--amber)"><i class="fas fa-bell"></i> ${fmtDate(r.remind_at)}</div>
+        ${r.note ? `<div style="font-size:12px;color:var(--text2);margin-top:2px">${escHtml(r.note)}</div>` : ''}
+      </div>
+    </div>`).join('') || '<div style="color:var(--text3);font-size:12px">Kein Reminder</div>';
+
+  return `
+    <div style="margin-bottom:14px">${statusBadge(l.status)}</div>
+    ${infoHtml}
+
+    <div style="margin:16px 0 8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Status setzen</div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:16px">${statusBtns}</div>
+
+    <div style="margin-bottom:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Kommentare</div>
+    ${commentsHtml}
+    <div style="display:flex;gap:8px;margin-bottom:20px">
+      <input type="text" id="newComment" class="form-control" placeholder="Kommentar schreiben..." onkeydown="if(event.key==='Enter')addComment(${l.id})">
+      <button class="btn btn-ghost btn-sm" onclick="addComment(${l.id})"><i class="fas fa-paper-plane"></i></button>
+    </div>
+
+    <div style="margin-bottom:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Reminder</div>
+    <div style="margin-bottom:10px">${remindHtml}</div>
+    <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end">
+      <div>
+        <div class="form-group" style="margin-bottom:8px"><label>Wann erinnern?</label><input type="datetime-local" id="remindAt" class="form-control"></div>
+        <div class="form-group" style="margin-bottom:0"><label>Notiz</label><input type="text" id="remindNote" class="form-control" placeholder="z.B. Rückruf vereinbaren..."></div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="addReminder(${l.id})"><i class="fas fa-bell"></i> Setzen</button>
+    </div>`;
+}
+
+async function setStatus(id, status) {
+  try { await api('PATCH', `/leads/${id}/status`, { status }); openPanel(id); }
+  catch (e) { showToast(e.message, 'err'); }
+}
+
+async function addComment(id) {
+  const input = document.getElementById('newComment');
+  if (!input?.value.trim()) return;
+  try { await api('POST', `/leads/${id}/comments`, { text: input.value.trim() }); openPanel(id); }
+  catch (e) { showToast(e.message, 'err'); }
+}
+
+async function addReminder(id) {
+  const at   = document.getElementById('remindAt')?.value;
+  const note = document.getElementById('remindNote')?.value;
+  if (!at) { showToast('Bitte Datum wählen', 'err'); return; }
+  try { await api('POST', `/leads/${id}/reminders`, { remind_at: at, note }); showToast('Reminder gesetzt ✓'); openPanel(id); }
+  catch (e) { showToast(e.message, 'err'); }
+}
+
+// ── REMINDERS OVERVIEW ────────────────────────────────────────
+async function loadReminders() {
+  try {
+    const leads = await api('GET', '/leads');
+    const withReminders = [];
+    for (const l of leads) {
+      const detail = await api('GET', `/leads/${l.id}`);
+      const pending = (detail.reminders||[]).filter(r => !r.sent);
+      if (pending.length) withReminders.push({ lead: l, reminders: pending });
+    }
+    const el = document.getElementById('remindersList');
+    if (!withReminders.length) {
+      el.innerHTML = '<div style="color:var(--text3);text-align:center;padding:40px"><i class="fas fa-bell" style="font-size:30px;display:block;margin-bottom:12px;opacity:.3"></i>Keine offenen Reminder</div>';
+      return;
+    }
+    el.innerHTML = withReminders.map(({ lead, reminders }) => reminders.map(r => `
+      <div class="card" style="margin-bottom:10px;cursor:pointer" onclick="openPanel(${lead.id})">
+        <div class="card-body" style="padding:14px;display:flex;align-items:center;gap:14px">
+          <i class="fas fa-bell" style="color:var(--amber);font-size:18px"></i>
+          <div style="flex:1">
+            <div style="font-weight:600;margin-bottom:2px">${escHtml(lead.company||'—')}</div>
+            <div style="font-size:12px;color:var(--amber)"><i class="fas fa-clock"></i> ${fmtDate(r.remind_at)}</div>
+            ${r.note ? `<div style="font-size:12px;color:var(--text2);margin-top:2px">${escHtml(r.note)}</div>` : ''}
+          </div>
+          ${statusBadge(lead.status)}
+        </div>
+      </div>`).join('')).join('');
+
+    const totalReminders = withReminders.reduce((s, x) => s + x.reminders.length, 0);
+    const badge = document.getElementById('reminderBadge');
+    badge.textContent = totalReminders;
+    badge.style.display = totalReminders > 0 ? 'inline' : 'none';
+  } catch (e) { showToast(e.message, 'err'); }
+}
+
+// Init
+loadLeads();
+// Reminder check every 5 minutes
+setInterval(loadReminders, 5 * 60 * 1000);
+</script>
+</body>
+</html>

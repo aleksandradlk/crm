@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LeadHunter Pro — Login</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<link rel="stylesheet" href="/shared/style.css">
+<style>
+  body { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  .login-box { width: 380px; background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--radius-lg); padding: 36px; position: relative; z-index: 1; }
+  .login-logo { text-align: center; margin-bottom: 28px; }
+  .login-logo-text { font-size: 24px; font-weight: 700; background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .login-logo-sub { font-size: 12px; color: var(--text3); margin-top: 4px; }
+  .login-btn { width: 100%; padding: 12px; }
+  .error-msg { color: var(--red); font-size: 12px; margin-top: 10px; text-align: center; min-height: 18px; }
+  .setup-link { text-align: center; margin-top: 16px; font-size: 12px; color: var(--text3); }
+  .setup-link a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="glow"></div>
+
+<div class="login-box">
+  <div class="login-logo">
+    <div class="login-logo-text">LeadHunter Pro</div>
+    <div class="login-logo-sub">Nova Flow Services · Lead Management</div>
+  </div>
+
+  <div class="form-group">
+    <label>Benutzername</label>
+    <input type="text" id="username" class="form-control" placeholder="dein_username" autofocus>
+  </div>
+  <div class="form-group">
+    <label>Passwort</label>
+    <div style="position:relative">
+      <input type="password" id="password" class="form-control" placeholder="••••••••" style="padding-right:40px">
+      <button onclick="togglePw()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px">
+        <i class="fas fa-eye" id="pwEye"></i>
+      </button>
+    </div>
+  </div>
+
+  <div class="error-msg" id="errorMsg"></div>
+
+  <button class="btn btn-primary login-btn" id="loginBtn" onclick="doLogin()">
+    <i class="fas fa-sign-in-alt"></i> Anmelden
+  </button>
+
+  <div class="setup-link" id="setupLink" style="display:none">
+    Erster Start? <a href="/setup.html">Admin-Account erstellen</a>
+  </div>
+</div>
+
+<script src="/shared/api.js"></script>
+<script>
+  // Redirect if already logged in
+  if (Auth.getToken()) {
+    window.location.href = Auth.isAdmin() ? '/admin.html' : '/closer.html';
+  }
+
+  // Check if setup needed
+  fetch('/api/auth/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    .then(r => { if (r.status === 400) document.getElementById('setupLink').style.display = 'block'; })
+    .catch(() => {});
+
+  document.getElementById('password').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+  });
+  document.getElementById('username').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('password').focus();
+  });
+
+  function togglePw() {
+    const inp = document.getElementById('password');
+    const eye = document.getElementById('pwEye');
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+    eye.className = inp.type === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash';
+  }
+
+  async function doLogin() {
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const btn = document.getElementById('loginBtn');
+    const err = document.getElementById('errorMsg');
+    err.textContent = '';
+    if (!username || !password) { err.textContent = 'Bitte alle Felder ausfüllen.'; return; }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Anmelden...';
+    try {
+      const data = await api('POST', '/auth/login', { username, password });
+      Auth.setSession(data.token, data.user);
+      window.location.href = data.user.role === 'admin' ? '/admin.html' : '/closer.html';
+    } catch (e) {
+      err.textContent = e.message;
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Anmelden';
+    }
+  }
+</script>
+</body>
+</html>
