@@ -64,9 +64,22 @@ router.patch('/:id', auth, adminOnly, async (req, res) => {
 router.delete('/:id', auth, adminOnly, async (req, res) => {
   const id = parseInt(req.params.id);
   if (id === req.user.id) return res.status(400).json({ error: 'Eigenen Account nicht löschbar' });
-  await db.query('DELETE FROM users WHERE id = ?', [id]);
-  await log(req.user.id, 'user_delete', 'user', id, null, req.ip);
-  res.json({ ok: true });
+
+  try {
+    // Abhängige Einträge bereinigen (FK-Constraints ohne ON DELETE)
+    await db.query('DELETE FROM activity_log WHERE user_id = ?', [id]);
+    await db.query('DELETE FROM reminders    WHERE user_id = ?', [id]);
+    await db.query('DELETE FROM comments     WHERE user_id = ?', [id]);
+    // Leads dieses Users dem löschenden Admin übertragen
+    await db.query('UPDATE leads SET created_by  = ? WHERE created_by  = ?', [req.user.id, id]);
+    await db.query('UPDATE leads SET assigned_to = NULL WHERE assigned_to = ?', [id]);
+    await db.query('DELETE FROM users WHERE id = ?', [id]);
+    await log(req.user.id, 'user_delete', 'user', id, null, req.ip);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('User delete error:', e.message);
+    res.status(500).json({ error: 'Löschen fehlgeschlagen: ' + e.message });
+  }
 });
 
 // GET /api/users/tracking — Echtzeit-Tracking aller Closer (Admin)
