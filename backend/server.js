@@ -38,8 +38,15 @@ app.use('/api/generate', generateRoutes);
 // ── Debug (temp) ──────────────────────────────────────────────
 const fs = require('fs');
 app.get('/_debug', (req, res) => {
-  const p = path.join(__dirname, '../public_html');
-  res.json({ __dirname, public_html_path: p, exists: fs.existsSync(p), files: fs.existsSync(p) ? fs.readdirSync(p) : [] });
+  const p1 = path.join(__dirname, '../public_html');
+  const p2 = path.join(__dirname, 'public_html');
+  const cwd = process.cwd();
+  res.json({
+    __dirname, cwd,
+    up_public_html:   { path: p1, exists: fs.existsSync(p1), files: fs.existsSync(p1) ? fs.readdirSync(p1) : [] },
+    same_public_html: { path: p2, exists: fs.existsSync(p2), files: fs.existsSync(p2) ? fs.readdirSync(p2) : [] },
+    nodejs_root:      { files: fs.readdirSync(__dirname) },
+  });
 });
 
 // ── SPA Fallback ──────────────────────────────────────────────
