@@ -19,6 +19,7 @@ app.use(cors({
   methods: ['GET','POST','PATCH','DELETE','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization'],
 }));
+app.set('trust proxy', 1);
 app.use(express.json());
 
 // Rate limiting
@@ -37,7 +38,7 @@ app.use('/api/generate', generateRoutes);
 // ── SPA Fallback ──────────────────────────────────────────────
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not found' });
-  res.sendFile(path.join(__dirname, '../public_html/login.html'));
+  res.sendFile(path.join(__dirname, '../public_html/login.html'), (err) => { if (err) res.status(200).send('OK'); });
 });
 
 // ── Start ─────────────────────────────────────────────────────
