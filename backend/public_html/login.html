@@ -8,49 +8,72 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <link rel="stylesheet" href="/shared/style.css">
 <style>
-  body { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-  .login-box { width: 380px; background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--radius-lg); padding: 36px; position: relative; z-index: 1; }
-  .login-logo { text-align: center; margin-bottom: 28px; }
-  .login-logo-text { font-size: 24px; font-weight: 700; background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-  .login-logo-sub { font-size: 12px; color: var(--text3); margin-top: 4px; }
-  .login-btn { width: 100%; padding: 12px; }
+  body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--bg); }
+  .login-wrap { display: flex; gap: 0; width: 780px; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); overflow: hidden; }
+  .login-left { flex: 1; padding: 48px 40px; }
+  .login-right { width: 280px; background: linear-gradient(160deg, var(--dark) 0%, #0d3a7a 100%); padding: 48px 32px; display: flex; flex-direction: column; justify-content: center; }
+  .login-logo { margin-bottom: 32px; }
+  .login-logo-text { font-size: 20px; font-weight: 700; color: var(--dark); letter-spacing: -0.3px; }
+  .login-logo-sub { font-size: 12px; color: var(--text3); margin-top: 3px; }
+  .login-title { font-size: 22px; font-weight: 700; color: var(--text); margin-bottom: 6px; letter-spacing: -0.4px; }
+  .login-desc { font-size: 13px; color: var(--text2); margin-bottom: 28px; }
+  .login-btn { width: 100%; padding: 11px; font-size: 14px; justify-content: center; }
   .error-msg { color: var(--red); font-size: 12px; margin-top: 10px; text-align: center; min-height: 18px; }
-  .setup-link { text-align: center; margin-top: 16px; font-size: 12px; color: var(--text3); }
+  .setup-link { text-align: center; margin-top: 14px; font-size: 12px; color: var(--text3); }
   .setup-link a { color: var(--accent); }
+  .right-title { font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 12px; letter-spacing: -0.3px; }
+  .right-sub { font-size: 13px; color: rgba(255,255,255,0.55); line-height: 1.6; }
+  .right-dots { display: flex; flex-direction: column; gap: 10px; margin-top: 28px; }
+  .right-dot { display: flex; align-items: center; gap: 10px; font-size: 12px; color: rgba(255,255,255,0.7); }
+  .right-dot i { color: var(--accent2); width: 14px; }
+  @media (max-width: 700px) { .login-wrap { width: 100%; max-width: 420px; flex-direction: column; } .login-right { display: none; } }
 </style>
 </head>
 <body>
-<div class="grid-bg"></div>
-<div class="glow"></div>
 
-<div class="login-box">
-  <div class="login-logo">
-    <div class="login-logo-text">LeadHunter Pro</div>
-    <div class="login-logo-sub">Nova Flow Services · Lead Management</div>
-  </div>
+<div class="login-wrap">
+  <div class="login-left">
+    <div class="login-logo">
+      <div class="login-logo-text">NovaFlow · LeadHunter</div>
+      <div class="login-logo-sub">Lead Management System</div>
+    </div>
+    <div class="login-title">Willkommen zurück</div>
+    <div class="login-desc">Melde dich an, um auf deine Leads zuzugreifen.</div>
 
-  <div class="form-group">
-    <label>Benutzername</label>
-    <input type="text" id="username" class="form-control" placeholder="dein_username" autofocus>
-  </div>
-  <div class="form-group">
-    <label>Passwort</label>
-    <div style="position:relative">
-      <input type="password" id="password" class="form-control" placeholder="••••••••" style="padding-right:40px">
-      <button onclick="togglePw()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px">
-        <i class="fas fa-eye" id="pwEye"></i>
-      </button>
+    <div class="form-group">
+      <label>Benutzername</label>
+      <input type="text" id="username" class="form-control" placeholder="dein_username" autofocus>
+    </div>
+    <div class="form-group">
+      <label>Passwort</label>
+      <div style="position:relative">
+        <input type="password" id="password" class="form-control" placeholder="••••••••" style="padding-right:40px">
+        <button onclick="togglePw()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px">
+          <i class="fas fa-eye" id="pwEye"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="error-msg" id="errorMsg"></div>
+
+    <button class="btn btn-primary login-btn" id="loginBtn" onclick="doLogin()">
+      Anmelden
+    </button>
+
+    <div class="setup-link" id="setupLink" style="display:none">
+      Erster Start? <a href="/setup.html">Admin-Account erstellen</a>
     </div>
   </div>
 
-  <div class="error-msg" id="errorMsg"></div>
-
-  <button class="btn btn-primary login-btn" id="loginBtn" onclick="doLogin()">
-    <i class="fas fa-sign-in-alt"></i> Anmelden
-  </button>
-
-  <div class="setup-link" id="setupLink" style="display:none">
-    Erster Start? <a href="/setup.html">Admin-Account erstellen</a>
+  <div class="login-right">
+    <div class="right-title">NovaFlow<br>LeadHunter</div>
+    <div class="right-sub">Deutschlandweite Handwerksbetriebe finden und verwalten.</div>
+    <div class="right-dots">
+      <div class="right-dot"><i class="fas fa-check-circle"></i> Leads generieren & zuweisen</div>
+      <div class="right-dot"><i class="fas fa-check-circle"></i> Status & Kommentare tracken</div>
+      <div class="right-dot"><i class="fas fa-check-circle"></i> Reminder & Rückrufe verwalten</div>
+      <div class="right-dot"><i class="fas fa-check-circle"></i> CSV-Export für jede Ansicht</div>
+    </div>
   </div>
 </div>
 
