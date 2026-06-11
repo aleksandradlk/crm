@@ -52,7 +52,7 @@ app.get('/_debug', (req, res) => {
 // ── SPA Fallback ──────────────────────────────────────────────
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not found' });
-  res.sendFile(path.join(__dirname, '../public_html/login.html'), (err) => { if (err) res.status(200).send('OK'); });
+  res.sendFile(path.join(__dirname, 'public_html/login.html'), (err) => { if (err) res.status(200).send('OK: ' + (err && err.message)); });
 });
 
 // ── Start ─────────────────────────────────────────────────────
