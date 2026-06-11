@@ -32,4 +32,19 @@ async function sendReminder({ to, toName, leadCompany, note, remindAt }) {
   });
 }
 
-module.exports = { sendReminder };
+async function sendLeadEmail({ to, subject, body, fromName }) {
+  await transporter.sendMail({
+    from: `"${fromName} · NovaFlow Services" <${process.env.SMTP_USER}>`,
+    to,
+    subject,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:580px;margin:0 auto;color:#141f34">
+        ${body.split('\n').map(l => l.trim() ? `<p style="margin:0 0 12px">${l}</p>` : '<br>').join('')}
+        <hr style="border:none;border-top:1px solid #e2e7f0;margin:24px 0">
+        <p style="color:#8e9ab5;font-size:12px">NovaFlow Services · info@novaflowservices.de</p>
+      </div>
+    `,
+  });
+}
+
+module.exports = { sendReminder, sendLeadEmail };

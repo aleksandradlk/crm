@@ -2,6 +2,7 @@ const router  = require('express').Router();
 const db      = require('../db');
 const { auth, adminOnly } = require('../middleware/auth');
 const { log } = require('../helpers/logger');
+const { sendLeadEmail } = require('../helpers/mailer');
 
 const VALID_STATUSES = ['neu','kontaktiert','nicht_erreicht','kein_interesse','rueckruf','kunde'];
 
@@ -98,8 +99,6 @@ router.patch('/:id/status', auth, async (req, res) => {
 
   const [[lead]] = await db.query('SELECT * FROM leads WHERE id = ?', [id]);
   if (!lead) return res.status(404).json({ error: 'Nicht gefunden' });
-  if (req.user.role !== 'admin' && lead.assigned_to !== req.user.id)
-    return res.status(403).json({ error: 'Kein Zugriff' });
 
   await db.query('UPDATE leads SET status = ? WHERE id = ?', [status, id]);
   await log(req.user.id, 'status_change', 'lead', id,
@@ -141,8 +140,6 @@ router.post('/:id/comments', auth, async (req, res) => {
 
   const [[lead]] = await db.query('SELECT assigned_to FROM leads WHERE id=?', [leadId]);
   if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
-  if (req.user.role !== 'admin' && lead.assigned_to !== req.user.id)
-    return res.status(403).json({ error: 'Kein Zugriff' });
 
   const [r] = await db.query(
     'INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',
@@ -160,8 +157,6 @@ router.post('/:id/reminders', auth, async (req, res) => {
 
   const [[lead]] = await db.query('SELECT assigned_to FROM leads WHERE id=?', [leadId]);
   if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
-  if (req.user.role !== 'admin' && lead.assigned_to !== req.user.id)
-    return res.status(403).json({ error: 'Kein Zugriff' });
 
   const [r] = await db.query(
     'INSERT INTO reminders (lead_id, user_id, remind_at, note) VALUES (?,?,?,?)',
@@ -177,6 +172,37 @@ router.delete('/:id/reminders/:rid', auth, async (req, res) => {
     'DELETE FROM reminders WHERE id=? AND user_id=?',
     [parseInt(req.params.rid), req.user.id]
   );
+  res.json({ ok: true });
+});
+
+// ── PATCH /api/leads/:id/assign — Closer übernimmt Lead ─────
+router.patch('/:id/assign', auth, async (req, res) => {
+  const id = parseInt(req.params.id);
+  const [[lead]] = await db.query('SELECT id FROM leads WHERE id=?', [id]);
+  if (!lead) return res.status(404).json({ error: 'Nicht gefunden' });
+  await db.query('UPDATE leads SET assigned_to=? WHERE id=?', [req.user.id, id]);
+  await log(req.user.id, 'lead_assign', 'lead', id, { assigned_to: req.user.id }, req.ip);
+  res.json({ ok: true });
+});
+
+// ── POST /api/leads/:id/email — E-Mail an Lead senden ────────
+router.post('/:id/email', auth, async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { to, subject, body } = req.body;
+  if (!to || !subject || !body)
+    return res.status(400).json({ error: 'to, subject und body sind erforderlich' });
+
+  const [[lead]] = await db.query('SELECT * FROM leads WHERE id=?', [id]);
+  if (!lead) return res.status(404).json({ error: 'Nicht gefunden' });
+
+  const [[user]] = await db.query('SELECT full_name FROM users WHERE id=?', [req.user.id]);
+  await sendLeadEmail({ to, subject, body, fromName: user?.full_name || 'NovaFlow' });
+
+  await db.query(
+    'INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',
+    [id, req.user.id, `📧 E-Mail gesendet: ${subject}`]
+  );
+  await log(req.user.id, 'lead_email_sent', 'lead', id, { to, subject }, req.ip);
   res.json({ ok: true });
 });
 
