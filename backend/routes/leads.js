@@ -18,10 +18,7 @@ router.get('/', auth, async (req, res) => {
   const params = [];
   const where  = [];
 
-  if (req.user.role !== 'admin') {
-    where.push('l.assigned_to = ?');
-    params.push(req.user.id);
-  }
+  // Closer sehen alle Leads (können aber nicht löschen)
   if (status && VALID_STATUSES.includes(status)) {
     where.push('l.status = ?');
     params.push(status);
@@ -76,8 +73,6 @@ router.get('/:id', auth, async (req, res) => {
      WHERE l.id = ?`, [id]
   );
   if (!lead) return res.status(404).json({ error: 'Nicht gefunden' });
-  if (req.user.role !== 'admin' && lead.assigned_to !== req.user.id)
-    return res.status(403).json({ error: 'Kein Zugriff' });
 
   // Comments
   const [comments] = await db.query(
