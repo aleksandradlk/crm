@@ -41,6 +41,12 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public_html/login.html'), (err) => { if (err) res.status(404).end(); });
 });
 
+// ── Auto-Migration ────────────────────────────────────────────
+const db = require('./db');
+db.query("ALTER TABLE users MODIFY COLUMN email VARCHAR(150) NULL")
+  .then(() => console.log('Migration: email nullable'))
+  .catch(() => {}); // bereits nullable — ignorieren
+
 // ── Start ─────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`LeadHunter Pro läuft auf Port ${PORT}`);
