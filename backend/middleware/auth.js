@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const db  = require('./db');
+const db  = require('../db');
 
 // Verify JWT and attach user to req
 async function auth(req, res, next) {
