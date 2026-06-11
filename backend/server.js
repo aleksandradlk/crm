@@ -35,6 +35,20 @@ app.use('/api/users',    userRoutes);
 app.use('/api/leads',    leadRoutes);
 app.use('/api/generate', generateRoutes);
 
+// ── Debug (temp) ──────────────────────────────────────────────
+const fs = require('fs');
+app.get('/_debug', (req, res) => {
+  const p = path.join(__dirname, 'public_html');
+  const loginPath = path.join(p, 'login.html');
+  res.json({
+    __dirname,
+    public_html_exists: fs.existsSync(p),
+    login_exists: fs.existsSync(loginPath),
+    login_path: loginPath,
+    files: fs.existsSync(p) ? fs.readdirSync(p) : [],
+  });
+});
+
 // ── SPA Fallback ──────────────────────────────────────────────
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not found' });
