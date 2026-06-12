@@ -64,25 +64,30 @@ router.post('/bulk', auth, adminOnly, async (req, res) => {
   if (!Array.isArray(leads) || !leads.length)
     return res.status(400).json({ error: 'Keine Leads übergeben' });
 
-  const inserted = [];
-  for (const l of leads) {
-    const [r] = await db.query(
-      `INSERT INTO leads
-        (company, ceo, email, phone, location, website, linkedin_url,
-         industry, employees, revenue, source, confidence, notes,
-         status, assigned_to, created_by)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [l.company||null, l.ceo||null, l.email||null, l.phone||null,
-       l.location||null, l.website||null, l.linkedin_url||null,
-       l.industry||null, l.employees||null, l.revenue||null,
-       l.source||'web', l.confidence||50, l.notes||null,
-       'neu', assigned_to||null, req.user.id]
-    );
-    inserted.push(r.insertId);
+  try {
+    const inserted = [];
+    for (const l of leads) {
+      const [r] = await db.query(
+        `INSERT INTO leads
+          (company, ceo, email, phone, location, website, linkedin_url,
+           industry, employees, revenue, source, confidence, notes,
+           status, assigned_to, created_by)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [l.company||null, l.ceo||null, l.email||null, l.phone||null,
+         l.location||null, l.website||null, l.linkedin_url||null,
+         l.industry||null, l.employees||null, l.revenue||null,
+         l.source||'web', l.confidence||50, l.notes||null,
+         'neu', assigned_to||null, req.user.id]
+      );
+      inserted.push(r.insertId);
+    }
+    await log(req.user.id, 'leads_bulk_create', 'lead', null,
+      { count: inserted.length, assigned_to }, req.ip);
+    res.status(201).json({ ok: true, ids: inserted });
+  } catch(e) {
+    console.error('Bulk insert error:', e.message);
+    res.status(500).json({ error: e.message });
   }
-  await log(req.user.id, 'leads_bulk_create', 'lead', null,
-    { count: inserted.length, assigned_to }, req.ip);
-  res.status(201).json({ ok: true, ids: inserted });
 });
 
 // ── GET /api/leads/:id ──────────────────────────────────────
