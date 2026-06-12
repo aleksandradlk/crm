@@ -185,6 +185,27 @@ tbody td { padding: 12px 16px; vertical-align: middle; }
 ::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
 
+/* ── Dark mode ───────────────────────────────────────────────── */
+body.dark {
+  --bg:      #0d1117;
+  --bg2:     #161b22;
+  --bg3:     #1e2531;
+  --bg4:     #27313f;
+  --text:    #e6ecf8;
+  --text2:   #94a3be;
+  --text3:   #64748b;
+  --border:  rgba(255,255,255,0.06);
+  --border2: rgba(255,255,255,0.10);
+  --shadow:  0 1px 3px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.04);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.45);
+}
+body.dark .logo img {
+  background: rgba(255,255,255,0.92);
+  border-radius: 8px;
+  padding: 6px;
+}
+body.dark select.form-control option { background: #1e2531; }
+
 /* ── Responsive ──────────────────────────────────────────────── */
 @media (max-width: 800px) {
   .app-layout { grid-template-columns: 1fr; }

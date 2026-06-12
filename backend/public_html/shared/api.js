@@ -154,3 +154,17 @@ async function logout() {
   Auth.clear();
   window.location.href = '/login.html';
 }
+
+function initTheme() {
+  if (localStorage.getItem('lh_theme') === 'dark') document.body.classList.add('dark');
+  updateThemeBtn();
+}
+function toggleTheme() {
+  const isDark = document.body.classList.toggle('dark');
+  localStorage.setItem('lh_theme', isDark ? 'dark' : 'light');
+  updateThemeBtn();
+}
+function updateThemeBtn() {
+  const btn = document.getElementById('themeBtn');
+  if (btn) btn.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
+}
