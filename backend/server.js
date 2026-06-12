@@ -8,6 +8,7 @@ const authRoutes     = require('./routes/auth');
 const userRoutes     = require('./routes/users');
 const leadRoutes     = require('./routes/leads');
 const generateRoutes = require('./routes/generate');
+const wikiRoutes     = require('./routes/wiki');
 const { startReminderCron } = require('./cron/reminders');
 
 const app  = express();
@@ -16,7 +17,7 @@ const PORT = process.env.PORT || 3000;
 // ── Middleware ────────────────────────────────────────────────
 app.use(cors({
   origin: process.env.BASE_URL || '*',
-  methods: ['GET','POST','PATCH','DELETE','OPTIONS'],
+  methods: ['GET','POST','PATCH','DELETE','PUT','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization'],
 }));
 app.set('trust proxy', 1);
@@ -28,12 +29,14 @@ app.use('/api/generate',   rateLimit({ windowMs: 60*1000, max: 5 }));
 
 // ── Static Frontend ───────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public_html')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ── API Routes ────────────────────────────────────────────────
 app.use('/api/auth',     authRoutes);
 app.use('/api/users',    userRoutes);
 app.use('/api/leads',    leadRoutes);
 app.use('/api/generate', generateRoutes);
+app.use('/api/wiki',     wikiRoutes);
 
 // ── SPA Fallback ──────────────────────────────────────────────
 app.get('*', (req, res) => {
@@ -45,7 +48,26 @@ app.get('*', (req, res) => {
 const db = require('./db');
 db.query("ALTER TABLE users MODIFY COLUMN email VARCHAR(150) NULL")
   .then(() => console.log('Migration: email nullable'))
-  .catch(() => {}); // bereits nullable — ignorieren
+  .catch(() => {});
+
+db.query(`CREATE TABLE IF NOT EXISTS wiki_files (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  category VARCHAR(100) NOT NULL,
+  filename VARCHAR(255) NOT NULL,
+  mimetype VARCHAR(100),
+  size INT,
+  uploaded_by INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)`).catch(() => {});
+
+db.query(`CREATE TABLE IF NOT EXISTS email_template (
+  id INT PRIMARY KEY,
+  subject VARCHAR(500),
+  body TEXT,
+  updated_by INT,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+)`).catch(() => {});
 
 // ── Start ─────────────────────────────────────────────────────
 app.listen(PORT, () => {

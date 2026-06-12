@@ -53,6 +53,8 @@
       <div class="nav-sep"></div>
       <div class="nav-item" onclick="showTab('users')"><i class="fas fa-users"></i> Benutzer</div>
       <div class="nav-item" onclick="showTab('tracking')"><i class="fas fa-chart-line"></i> Tracking</div>
+      <div class="nav-sep"></div>
+      <div class="nav-item" onclick="showTab('wiki')"><i class="fas fa-book"></i> Wiki</div>
     </nav>
     <div class="sidebar-user" id="sidebarUser"></div>
   </aside>
@@ -223,6 +225,45 @@
       </div>
     </div>
 
+    <!-- ── TAB: WIKI ─────────────────────────────────── -->
+    <div id="tab-wiki" class="tab-panel">
+      <h1 style="font-size:20px;font-weight:700;margin-bottom:20px">Wiki</h1>
+
+      <!-- E-Mail Vorlage -->
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-header"><div class="card-title"><i class="fas fa-envelope" style="color:var(--accent)"></i> E-Mail Vorlage</div></div>
+        <div class="card-body" style="padding:16px">
+          <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Platzhalter: <code style="background:var(--bg3);padding:2px 6px;border-radius:4px">{company}</code> wird automatisch durch den Firmennamen ersetzt.</p>
+          <div class="form-group"><label>Betreff</label><input type="text" id="wiki-tmpl-subject" class="form-control" placeholder="z.B. Ihre Online-Präsenz — {company}"></div>
+          <div class="form-group"><label>Nachricht</label><textarea id="wiki-tmpl-body" class="form-control" rows="12" style="resize:vertical;font-size:13px;line-height:1.6" placeholder="Vorlage hier eintragen..."></textarea></div>
+          <button class="btn btn-primary btn-sm" onclick="saveTemplate()"><i class="fas fa-save"></i> Vorlage speichern</button>
+        </div>
+      </div>
+
+      <!-- Datei hochladen -->
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-header"><div class="card-title"><i class="fas fa-upload" style="color:var(--accent)"></i> Datei hochladen</div></div>
+        <div class="card-body" style="padding:16px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+            <div class="form-group" style="margin:0"><label>Bezeichnung <span style="color:var(--text3)">(optional)</span></label><input type="text" id="wiki-file-name" class="form-control" placeholder="z.B. Preisliste 2026"></div>
+            <div class="form-group" style="margin:0"><label>Kategorie</label>
+              <select id="wiki-file-cat" class="form-control">
+                <option value="Vorlagen">Vorlagen</option>
+                <option value="Preislisten">Preislisten</option>
+                <option value="Dienstleistungen">Dienstleistungen</option>
+                <option value="Sonstiges">Sonstiges</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:12px"><label>Datei</label><input type="file" id="wiki-file-input" class="form-control" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.docx,.xlsx,.txt" style="padding:6px"></div>
+          <button class="btn btn-primary btn-sm" onclick="uploadWikiFile()"><i class="fas fa-upload"></i> Hochladen</button>
+        </div>
+      </div>
+
+      <!-- Dateiliste -->
+      <div id="wikiFilesContainer"></div>
+    </div>
+
   </main>
 </div>
 
@@ -235,6 +276,24 @@
       <button class="btn btn-ghost btn-sm" onclick="closeLeadPanel()"><i class="fas fa-times"></i></button>
     </div>
     <div id="panelContent"></div>
+  </div>
+</div>
+
+<!-- EMAIL MODAL -->
+<div class="modal-overlay" id="adminEmailModal">
+  <div style="background:var(--bg2);border-radius:14px;box-shadow:var(--shadow-lg);padding:28px;width:520px;max-width:96vw;max-height:90vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <h2 style="font-size:16px;font-weight:700;margin:0"><i class="fas fa-envelope" style="color:var(--accent);margin-right:8px"></i>E-Mail an Lead senden</h2>
+      <button class="btn btn-ghost btn-sm" onclick="closeEmailModal()"><i class="fas fa-times"></i></button>
+    </div>
+    <input type="hidden" id="emailLeadId">
+    <div class="form-group"><label>An</label><input type="email" id="emailTo" class="form-control"></div>
+    <div class="form-group"><label>Betreff</label><input type="text" id="emailSubject" class="form-control"></div>
+    <div class="form-group"><label>Nachricht</label><textarea id="emailBody" class="form-control" rows="10" style="resize:vertical;font-size:13px;line-height:1.6"></textarea></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+      <button class="btn btn-ghost btn-sm" onclick="closeEmailModal()">Abbrechen</button>
+      <button class="btn btn-primary btn-sm" onclick="sendEmail()"><i class="fas fa-paper-plane"></i> Senden</button>
+    </div>
   </div>
 </div>
 
@@ -274,12 +333,13 @@ function showTab(name) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
-  const navMap = { leads: 0, generate: 1, users: 3, tracking: 4 };
+  const navMap = { leads: 0, generate: 1, users: 2, tracking: 3, wiki: 4 };
   const items = document.querySelectorAll('.nav-item');
   if (navMap[name] !== undefined) items[navMap[name]]?.classList.add('active');
   if (name === 'leads')    loadLeads();
   if (name === 'users')    loadUsers();
   if (name === 'tracking') loadTracking();
+  if (name === 'wiki')     loadWiki();
 }
 
 // ── LEADS ─────────────────────────────────────────────────────
@@ -401,8 +461,12 @@ function renderLeadDetail(l) {
   const userOpts = `<option value="">— Niemandem zuweisen —</option>` +
     (allUsers||[]).map(u => `<option value="${u.id}" ${l.assigned_to===u.id?'selected':''}>${escHtml(u.full_name)} (${u.role})</option>`).join('');
 
+  const emailBtn = l.email
+    ? `<button class="btn btn-ghost btn-sm" onclick="openEmailModal(${l.id},${JSON.stringify(escHtml(l.email))},${JSON.stringify(escHtml(l.company||''))})"><i class="fas fa-envelope"></i> E-Mail senden</button>`
+    : `<span style="font-size:12px;color:var(--text3)"><i class="fas fa-envelope"></i> Keine E-Mail</span>`;
+
   return `
-    <div style="margin-bottom:16px">${statusBadge(l.status)} ${confBar(l.confidence)}</div>
+    <div style="margin-bottom:16px;display:flex;align-items:center;gap:10px">${statusBadge(l.status)} ${confBar(l.confidence)} ${emailBtn}</div>
     ${fieldsHtml}
 
     <div style="margin:16px 0 8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Zuweisen</div>
@@ -717,6 +781,128 @@ async function saveManualLead() {
     closeAddLeadModal();
     loadLeads();
   } catch(e) { document.getElementById('addLeadErr').textContent = e.message; }
+}
+
+// ── EMAIL MODAL ───────────────────────────────────────────────
+async function openEmailModal(leadId, email, company) {
+  document.getElementById('emailLeadId').value = leadId;
+  document.getElementById('emailTo').value = email;
+  try {
+    const tmpl = await api('GET', '/wiki/template');
+    document.getElementById('emailSubject').value = (tmpl.subject||'').replace(/{company}/g, company);
+    document.getElementById('emailBody').value    = (tmpl.body||'').replace(/{company}/g, company);
+  } catch {
+    document.getElementById('emailSubject').value = '';
+    document.getElementById('emailBody').value    = '';
+  }
+  document.getElementById('adminEmailModal').classList.add('open');
+}
+function closeEmailModal() { document.getElementById('adminEmailModal').classList.remove('open'); }
+async function sendEmail() {
+  const id      = document.getElementById('emailLeadId').value;
+  const to      = document.getElementById('emailTo').value.trim();
+  const subject = document.getElementById('emailSubject').value.trim();
+  const body    = document.getElementById('emailBody').value.trim();
+  if (!to || !subject || !body) { showToast('Bitte alle Felder ausfüllen', 'err'); return; }
+  try {
+    await api('POST', `/leads/${id}/email`, { to, subject, body });
+    showToast('E-Mail gesendet ✓');
+    closeEmailModal();
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+// ── WIKI ──────────────────────────────────────────────────────
+async function loadWiki() {
+  try {
+    const [files, tmpl] = await Promise.all([
+      api('GET', '/wiki/files'),
+      api('GET', '/wiki/template'),
+    ]);
+    document.getElementById('wiki-tmpl-subject').value = tmpl.subject || '';
+    document.getElementById('wiki-tmpl-body').value    = tmpl.body    || '';
+    renderWikiFiles(files, 'wikiFilesContainer', true);
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+async function saveTemplate() {
+  const subject = document.getElementById('wiki-tmpl-subject').value.trim();
+  const body    = document.getElementById('wiki-tmpl-body').value.trim();
+  try {
+    await api('PUT', '/wiki/template', { subject, body });
+    showToast('Vorlage gespeichert ✓');
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+async function uploadWikiFile() {
+  const fileInput = document.getElementById('wiki-file-input');
+  const name      = document.getElementById('wiki-file-name').value.trim();
+  const category  = document.getElementById('wiki-file-cat').value;
+  if (!fileInput.files[0]) { showToast('Datei auswählen', 'err'); return; }
+  const formData = new FormData();
+  formData.append('file', fileInput.files[0]);
+  formData.append('category', category);
+  if (name) formData.append('name', name);
+  try {
+    const res = await fetch('/api/wiki/files', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + Auth.getToken() },
+      body: formData
+    });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.error); }
+    showToast('Datei hochgeladen ✓');
+    fileInput.value = '';
+    document.getElementById('wiki-file-name').value = '';
+    loadWiki();
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+async function deleteWikiFile(id) {
+  if (!confirm('Datei wirklich löschen?')) return;
+  try {
+    await api('DELETE', `/wiki/files/${id}`);
+    showToast('Datei gelöscht');
+    loadWiki();
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+function renderWikiFiles(files, containerId, isAdmin) {
+  const container = document.getElementById(containerId);
+  if (!files.length) {
+    container.innerHTML = '<div style="color:var(--text3);text-align:center;padding:30px"><i class="fas fa-folder-open" style="font-size:28px;display:block;margin-bottom:10px;opacity:.3"></i>Noch keine Dateien hochgeladen</div>';
+    return;
+  }
+  const cats = [...new Set(files.map(f => f.category))];
+  container.innerHTML = cats.map(cat => {
+    const catFiles = files.filter(f => f.category === cat);
+    const filesHtml = catFiles.map(f => {
+      const isImage = f.mimetype?.startsWith('image/');
+      const isPdf   = f.mimetype === 'application/pdf';
+      const size    = f.size ? (f.size / 1024).toFixed(0) + ' KB' : '';
+      const icon    = isPdf ? 'file-pdf' : isImage ? 'file-image' : 'file-alt';
+      const previewBtn = (isImage || isPdf)
+        ? `<a href="/uploads/wiki/${encodeURIComponent(f.filename)}" target="_blank" class="btn btn-ghost btn-sm" title="Vorschau"><i class="fas fa-eye"></i></a>`
+        : '';
+      const delBtn = isAdmin
+        ? `<button class="btn btn-ghost btn-sm" onclick="deleteWikiFile(${f.id})" title="Löschen"><i class="fas fa-trash" style="color:var(--red)"></i></button>`
+        : '';
+      return `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg3);border-radius:8px;margin-bottom:6px">
+          <i class="fas fa-${icon}" style="color:var(--accent);font-size:18px;min-width:20px;text-align:center"></i>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(f.name)}</div>
+            <div style="font-size:11px;color:var(--text3)">${size ? size + ' · ' : ''}${fmtDateShort(f.created_at)}</div>
+          </div>
+          ${previewBtn}
+          <a href="/uploads/wiki/${encodeURIComponent(f.filename)}" download="${escHtml(f.name)}" class="btn btn-ghost btn-sm" title="Download"><i class="fas fa-download"></i></a>
+          ${delBtn}
+        </div>`;
+    }).join('');
+    return `
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-header"><div class="card-title"><i class="fas fa-folder" style="color:var(--accent)"></i> ${escHtml(cat)}</div></div>
+        <div class="card-body" style="padding:14px">${filesHtml}</div>
+      </div>`;
+  }).join('');
 }
 
 // Init

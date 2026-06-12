@@ -34,6 +34,7 @@
       <div class="nav-item active" data-sec="myLeads" onclick="showSection('myLeads')"><i class="fas fa-user-check"></i> Meine Leads <span id="rueckrufBadge" style="display:none;margin-left:auto" class="badge" title="Rückrufe offen">0</span></div>
       <div class="nav-item" data-sec="allLeads" onclick="showSection('allLeads')"><i class="fas fa-list"></i> Alle Leads</div>
       <div class="nav-item" data-sec="reminders" onclick="showSection('reminders')"><i class="fas fa-bell"></i> Reminder <span id="reminderBadge" style="display:none" class="badge">0</span></div>
+      <div class="nav-item" data-sec="wiki" onclick="showSection('wiki')"><i class="fas fa-book"></i> Wiki</div>
       <div class="nav-sep"></div>
       <div class="nav-item" onclick="openPwModal()"><i class="fas fa-key"></i> Passwort ändern</div>
     </nav>
@@ -127,6 +128,12 @@
       </div>
     </div>
 
+    <!-- WIKI -->
+    <div id="sec-wiki" style="display:none">
+      <h1 style="font-size:20px;font-weight:700;margin-bottom:20px">Wiki</h1>
+      <div id="wikiFilesContainer"></div>
+    </div>
+
     <!-- REMINDERS -->
     <div id="sec-reminders" style="display:none">
       <h1 style="font-size:20px;font-weight:700;margin-bottom:20px">Meine Reminder</h1>
@@ -183,13 +190,14 @@ const ME = Auth.getUser();
 let allLeads = [];
 
 function showSection(name) {
-  ['myLeads','allLeads','reminders'].forEach(s => {
+  ['myLeads','allLeads','wiki','reminders'].forEach(s => {
     document.getElementById('sec-' + s).style.display = s === name ? '' : 'none';
   });
   document.querySelectorAll('.nav-item[data-sec]').forEach(el => {
     el.classList.toggle('active', el.dataset.sec === name);
   });
   if (name === 'reminders') loadReminders();
+  if (name === 'wiki')      loadWiki();
 }
 
 // ── LOADS ─────────────────────────────────────────────────────
@@ -453,22 +461,17 @@ async function addReminder(id) {
 }
 
 // ── EMAIL MODAL ───────────────────────────────────────────────
-function openEmailModal(leadId, email, company) {
+async function openEmailModal(leadId, email, company) {
   document.getElementById('emailLeadId').value = leadId;
   document.getElementById('emailTo').value = email;
-  document.getElementById('emailSubject').value = `Ihre Online-Präsenz — kurze Frage, ${company}`;
-  document.getElementById('emailBody').value =
-`Guten Tag,
-
-ich habe Ihren Betrieb ${company} entdeckt und melde mich kurz von NovaFlow Services.
-
-Viele Handwerksbetriebe werden online kaum gefunden — obwohl genau das neue Kunden bringt. Wir entwickeln moderne, professionelle Websites speziell für Betriebe wie Ihren, zu einem fairen Festpreis.
-
-Hätten Sie kurz 5 Minuten für ein kurzes Gespräch? Ich freue mich auf Ihre Rückmeldung.
-
-Mit freundlichen Grüßen,
-${ME.full_name || ME.username}
-NovaFlow Services`;
+  try {
+    const tmpl = await api('GET', '/wiki/template');
+    document.getElementById('emailSubject').value = (tmpl.subject||'').replace(/{company}/g, company);
+    document.getElementById('emailBody').value    = (tmpl.body||'').replace(/{company}/g, company);
+  } catch {
+    document.getElementById('emailSubject').value = '';
+    document.getElementById('emailBody').value    = '';
+  }
   document.getElementById('emailModal').classList.add('open');
 }
 
@@ -572,6 +575,50 @@ async function changePassword() {
     showToast('Passwort geändert ✓');
     closePwModal();
   } catch(e) { err.textContent = e.message; }
+}
+
+// ── WIKI ──────────────────────────────────────────────────────
+async function loadWiki() {
+  try {
+    const files = await api('GET', '/wiki/files');
+    renderWikiFiles(files, 'wikiFilesContainer', false);
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+function renderWikiFiles(files, containerId, isAdmin) {
+  const container = document.getElementById(containerId);
+  if (!files.length) {
+    container.innerHTML = '<div style="color:var(--text3);text-align:center;padding:30px"><i class="fas fa-folder-open" style="font-size:28px;display:block;margin-bottom:10px;opacity:.3"></i>Noch keine Dateien vorhanden</div>';
+    return;
+  }
+  const cats = [...new Set(files.map(f => f.category))];
+  container.innerHTML = cats.map(cat => {
+    const catFiles = files.filter(f => f.category === cat);
+    const filesHtml = catFiles.map(f => {
+      const isImage = f.mimetype?.startsWith('image/');
+      const isPdf   = f.mimetype === 'application/pdf';
+      const size    = f.size ? (f.size / 1024).toFixed(0) + ' KB' : '';
+      const icon    = isPdf ? 'file-pdf' : isImage ? 'file-image' : 'file-alt';
+      const previewBtn = (isImage || isPdf)
+        ? `<a href="/uploads/wiki/${encodeURIComponent(f.filename)}" target="_blank" class="btn btn-ghost btn-sm" title="Vorschau"><i class="fas fa-eye"></i></a>`
+        : '';
+      return `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg3);border-radius:8px;margin-bottom:6px">
+          <i class="fas fa-${icon}" style="color:var(--accent);font-size:18px;min-width:20px;text-align:center"></i>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(f.name)}</div>
+            <div style="font-size:11px;color:var(--text3)">${size ? size + ' · ' : ''}${fmtDateShort(f.created_at)}</div>
+          </div>
+          ${previewBtn}
+          <a href="/uploads/wiki/${encodeURIComponent(f.filename)}" download="${escHtml(f.name)}" class="btn btn-ghost btn-sm" title="Download"><i class="fas fa-download"></i></a>
+        </div>`;
+    }).join('');
+    return `
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-header"><div class="card-title"><i class="fas fa-folder" style="color:var(--accent)"></i> ${escHtml(cat)}</div></div>
+        <div class="card-body" style="padding:14px">${filesHtml}</div>
+      </div>`;
+  }).join('');
 }
 
 // Init
