@@ -60,7 +60,7 @@ a { color: var(--accent); text-decoration: none; }
 .logo-text { font-size: 15px; font-weight: 700; color: var(--dark); letter-spacing: -0.2px; }
 .logo-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
 
-.nav { padding: 8px; flex: 1; overflow-y: auto; }
+.nav { padding: 8px; overflow-y: auto; }
 
 .nav-group-label {
   display: block;
@@ -102,7 +102,10 @@ a { color: var(--accent); text-decoration: none; }
 /* ── Sidebar User ────────────────────────────────────────────── */
 .sidebar-user {
   padding: 10px 12px;
-  border-top: 1px solid var(--border);
+  margin: 4px 8px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg3);
   display: flex;
   align-items: center;
   gap: 10px;
