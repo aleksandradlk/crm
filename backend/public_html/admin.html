@@ -50,7 +50,8 @@
     </div>
     <nav class="nav">
       <span class="nav-group-label">Hauptnavigation</span>
-      <div class="nav-item active" onclick="showTab('leads')"><i class="fas fa-database"></i> Leads</div>
+      <div class="nav-item active" onclick="showTab('leads')"><i class="fas fa-database"></i> Alle Leads</div>
+      <div class="nav-item" onclick="showTab('myLeads')"><i class="fas fa-user-check"></i> Meine Leads</div>
       <div class="nav-item" onclick="showTab('generate')"><i class="fas fa-search"></i> Generieren</div>
       <div class="nav-sep"></div>
       <span class="nav-group-label">Administration</span>
@@ -106,6 +107,28 @@
               <th>Standort</th><th>Status</th><th>Zugewiesen</th><th>Hinzugefügt</th><th></th>
             </tr></thead>
             <tbody id="leadsTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TAB: MEINE LEADS ─────────────────────────── -->
+    <div id="tab-myLeads" class="tab-panel">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+        <h1 style="font-size:20px;font-weight:700">Meine Leads</h1>
+        <button class="btn btn-ghost btn-sm" onclick="showTab('myLeads')"><i class="fas fa-sync"></i></button>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="fas fa-user-check" style="color:var(--accent)"></i> Mir zugewiesene Leads <span class="badge" id="myLeadCount">0</span></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>#</th><th>Unternehmen</th><th>Geschäftsführer</th><th>Kontakt</th>
+              <th>Standort</th><th>Status</th><th>Hinzugefügt</th><th></th>
+            </tr></thead>
+            <tbody id="myLeadsTableBody"></tbody>
           </table>
         </div>
       </div>
@@ -318,7 +341,7 @@
 </div>
 
 <!-- EMAIL MODAL -->
-<div id="adminEmailModal" style="position:fixed;inset:0;z-index:500;background:rgba(7,32,73,0.55);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;padding:16px">
+<div class="modal-overlay" id="adminEmailModal">
   <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:560px;max-width:96vw;max-height:92vh;overflow-y:auto;display:flex;flex-direction:column">
     <div style="padding:22px 28px 0;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding-bottom:16px;margin-bottom:4px">
       <div style="display:flex;align-items:center;gap:10px">
@@ -370,6 +393,8 @@
 <script>
 let allLeads = [], allUsers = [], generatedLeads = [], editingUserId = null;
 let panelDirty = false;
+let _panelLead = null;
+const ME = Auth.getUser();
 
 Auth.requireAdmin();
 initTheme();
@@ -381,14 +406,41 @@ function showTab(name) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
-  const navMap = { leads: 0, generate: 1, users: 2, tracking: 3, wiki: 4, chat: 5 };
+  const navMap = { leads: 0, myLeads: 1, generate: 2, users: 3, tracking: 4, wiki: 5, chat: 6 };
   const items = document.querySelectorAll('.nav-item');
   if (navMap[name] !== undefined) items[navMap[name]]?.classList.add('active');
   if (name === 'leads')    loadLeads();
+  if (name === 'myLeads')  renderMyLeads();
   if (name === 'users')    loadUsers();
   if (name === 'tracking') loadTracking();
   if (name === 'wiki')     loadWiki();
   if (name === 'chat')     loadChats();
+}
+
+// ── MEINE LEADS ───────────────────────────────────────────────
+function renderMyLeads() {
+  if (!allLeads.length) {
+    loadLeads().then(renderMyLeads);
+    return;
+  }
+  const mine = allLeads.filter(l => l.assigned_to === ME.id);
+  document.getElementById('myLeadCount').textContent = mine.length;
+  const body = document.getElementById('myLeadsTableBody');
+  if (!mine.length) {
+    body.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text3)"><i class="fas fa-inbox" style="display:block;font-size:30px;margin-bottom:10px;opacity:.3"></i>Keine Leads zugewiesen</td></tr>`;
+    return;
+  }
+  body.innerHTML = mine.map((l, i) => `
+    <tr style="cursor:pointer" onclick="openLeadPanel(${l.id})">
+      <td style="color:var(--text3);font-size:11px;font-family:'JetBrains Mono',monospace">${String(i+1).padStart(2,'0')}</td>
+      <td style="font-weight:600">${escHtml(l.company||'—')}</td>
+      <td style="color:var(--text2)">${escHtml(l.ceo||'—')}</td>
+      <td>${l.phone ? `<a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()" style="color:var(--accent);font-size:12px">${escHtml(l.phone)}</a>` : ''}</td>
+      <td style="font-size:12px;color:var(--text2)">${escHtml(l.location||'—')}</td>
+      <td>${statusBadge(l.status)}</td>
+      <td style="font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace">${fmtDateShort(l.created_at)}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openLeadPanel(${l.id})"><i class="fas fa-chevron-right"></i></button></td>
+    </tr>`).join('');
 }
 
 // ── LEADS ─────────────────────────────────────────────────────
@@ -478,6 +530,7 @@ function closeLeadPanel() {
 }
 
 function renderLeadDetail(l) {
+  _panelLead = l;
   const fields = [
     ['Geschäftsführer', l.ceo], ['E-Mail', l.email, 'email'], ['Telefon', l.phone],
     ['Standort', l.location], ['Website', l.website, 'url'], ['LinkedIn', l.linkedin_url, 'url'],
@@ -525,7 +578,7 @@ function renderLeadDetail(l) {
     (allUsers||[]).map(u => `<option value="${u.id}" ${l.assigned_to===u.id?'selected':''}>${escHtml(u.full_name)} (${u.role})</option>`).join('');
 
   const emailBtn = l.email
-    ? `<button class="btn btn-ghost btn-sm" onclick="openEmailModal(${l.id},${JSON.stringify(escHtml(l.email))},${JSON.stringify(escHtml(l.company||''))})"><i class="fas fa-envelope"></i> E-Mail senden</button>`
+    ? `<button class="btn btn-ghost btn-sm" onclick="openEmailModal()"><i class="fas fa-envelope"></i> E-Mail senden</button>`
     : `<span style="font-size:12px;color:var(--text3)"><i class="fas fa-envelope"></i> Keine E-Mail</span>`;
 
   return `
@@ -895,9 +948,12 @@ async function saveManualLead() {
 }
 
 // ── EMAIL MODAL ───────────────────────────────────────────────
-async function openEmailModal(leadId, email, company) {
-  document.getElementById('emailLeadId').value = leadId;
-  document.getElementById('emailTo').value = email;
+async function openEmailModal() {
+  const l = _panelLead;
+  if (!l?.email) return;
+  document.getElementById('emailLeadId').value = l.id;
+  document.getElementById('emailTo').value = l.email;
+  const company = l.company || '';
   try {
     const tmpl = await api('GET', '/wiki/template');
     document.getElementById('emailSubject').value = (tmpl.subject||'').replace(/{company}/g, company);
@@ -906,9 +962,9 @@ async function openEmailModal(leadId, email, company) {
     document.getElementById('emailSubject').value = '';
     document.getElementById('emailBody').value    = '';
   }
-  document.getElementById('adminEmailModal').style.display = 'flex';
+  document.getElementById('adminEmailModal').classList.add('open');
 }
-function closeEmailModal() { document.getElementById('adminEmailModal').style.display = 'none'; }
+function closeEmailModal() { document.getElementById('adminEmailModal').classList.remove('open'); }
 async function sendEmail() {
   const id      = document.getElementById('emailLeadId').value;
   const to      = document.getElementById('emailTo').value.trim();
