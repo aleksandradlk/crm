@@ -94,7 +94,7 @@
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
         <h1 style="font-size:20px;font-weight:700">Alle Leads</h1>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <input type="text" id="allSearch" class="form-control" style="width:180px" placeholder="Suchen..." oninput="filterAllLeads()">
+          <input type="text" id="allSearch" class="form-control" style="width:180px" placeholder="Suchen..." autocomplete="off" oninput="filterAllLeads()">
           <select id="allStatusFilter" class="form-control" style="width:150px" onchange="filterAllLeads()">
             <option value="">Alle Status</option>
             <option value="neu">Neu</option>
@@ -187,7 +187,7 @@
 </div>
 
 <!-- EMAIL MODAL -->
-<div id="emailModal" style="position:fixed;inset:0;z-index:500;background:rgba(7,32,73,0.55);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;padding:16px">
+<div class="modal-overlay" id="emailModal">
   <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:560px;max-width:96vw;max-height:92vh;overflow-y:auto;display:flex;flex-direction:column">
     <div style="padding:22px 28px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:10px">
@@ -278,7 +278,7 @@ function filterAllLeads() {
   const search = document.getElementById('allSearch').value.toLowerCase();
   const status = document.getElementById('allStatusFilter').value;
   let f = allLeads;
-  if (search) f = f.filter(l => (l.company||'').toLowerCase().includes(search) || (l.phone||'').includes(search) || (l.assigned_name||'').toLowerCase().includes(search));
+  if (search) f = f.filter(l => (l.company||'').toLowerCase().includes(search) || (l.phone||'').includes(search));
   if (status) f = f.filter(l => l.status === status);
   renderAllLeads(f);
 }
@@ -532,11 +532,11 @@ async function openEmailModal() {
     document.getElementById('emailSubject').value = '';
     document.getElementById('emailBody').value    = '';
   }
-  document.getElementById('emailModal').style.display = 'flex';
+  document.getElementById('emailModal').classList.add('open');
 }
 
 function closeEmailModal() {
-  document.getElementById('emailModal').style.display = 'none';
+  document.getElementById('emailModal').classList.remove('open');
 }
 
 async function sendEmail() {
@@ -891,7 +891,10 @@ async function closeChatRoom() {
   } catch(e) { showToast(e.message, 'err'); }
 }
 
-function openCreateChat() { document.getElementById('createChatModal').classList.add('open'); }
+function openCreateChat() {
+  document.getElementById('createChatModal').classList.add('open');
+  loadUsersForChatInvite('newChatInviteSelect');
+}
 function closeCreateChat() { document.getElementById('createChatModal').classList.remove('open'); }
 
 async function loadUsersForChatInvite(selectId) {
@@ -899,9 +902,9 @@ async function loadUsersForChatInvite(selectId) {
     const users = await api('GET', '/users/list');
     const sel = document.getElementById(selectId);
     if (!sel) return;
-    sel.innerHTML = users.filter(u => u.id !== ME.id && u.is_active).map(u =>
+    sel.innerHTML = users.filter(u => u.id !== ME.id).map(u =>
       `<option value="${u.id}">${escHtml(u.full_name)} (${u.role})</option>`).join('');
-  } catch {}
+  } catch(e) { showToast('Benutzer konnten nicht geladen werden', 'err'); }
 }
 
 async function saveNewChat() {
@@ -1016,8 +1019,8 @@ setInterval(checkReminderNotifications, 2 * 60 * 1000);
     </div>
     <div class="form-group"><label>Thema / Titel *</label><input id="newChatTitle" class="form-control" placeholder="z.B. Frage zu Lead XY..."></div>
     <div class="form-group"><label>Teilnehmer einladen</label>
-      <select id="newChatInviteSelect" class="form-control" multiple style="height:120px" onclick="loadUsersForChatInvite('newChatInviteSelect')">
-        <option disabled>Einmal klicken um Benutzer zu laden...</option>
+      <select id="newChatInviteSelect" class="form-control" multiple style="height:120px">
+        <option disabled>Wird geladen...</option>
       </select>
       <div style="font-size:11px;color:var(--text3);margin-top:4px">Strg + Klick für Mehrfachauswahl</div>
     </div>
