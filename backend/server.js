@@ -9,7 +9,9 @@ const userRoutes     = require('./routes/users');
 const leadRoutes     = require('./routes/leads');
 const generateRoutes = require('./routes/generate');
 const wikiRoutes     = require('./routes/wiki');
+const chatRoutes     = require('./routes/chat');
 const { startReminderCron } = require('./cron/reminders');
+const cron           = require('node-cron');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -43,6 +45,7 @@ app.use('/api/users',    userRoutes);
 app.use('/api/leads',    leadRoutes);
 app.use('/api/generate', generateRoutes);
 app.use('/api/wiki',     wikiRoutes);
+app.use('/api/chats',    chatRoutes);
 
 // ── SPA Fallback ──────────────────────────────────────────────
 app.get('*', (req, res) => {
@@ -74,6 +77,45 @@ db.query(`CREATE TABLE IF NOT EXISTS email_template (
   updated_by INT,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 )`).catch(() => {});
+
+// ── Neue DB-Migrationen ───────────────────────────────────────
+db.query('ALTER TABLE comments ADD COLUMN edited_at DATETIME NULL').catch(() => {});
+db.query('ALTER TABLE users ADD COLUMN notify_email TINYINT(1) NOT NULL DEFAULT 1').catch(() => {});
+db.query('ALTER TABLE users ADD COLUMN notify_sms   TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
+db.query('ALTER TABLE users ADD COLUMN phone        VARCHAR(50) NULL').catch(() => {});
+
+db.query(`CREATE TABLE IF NOT EXISTS chat_rooms (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
+  created_by INT NOT NULL,
+  is_closed TINYINT(1) DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)`).catch(() => {});
+
+db.query(`CREATE TABLE IF NOT EXISTS chat_participants (
+  chat_id INT NOT NULL,
+  user_id INT NOT NULL,
+  joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (chat_id, user_id)
+)`).catch(() => {});
+
+db.query(`CREATE TABLE IF NOT EXISTS chat_messages (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  chat_id INT NOT NULL,
+  user_id INT NOT NULL,
+  text TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)`).catch(() => {});
+
+// ── Cron: Activity Log nach 7 Tagen bereinigen ───────────────
+cron.schedule('0 3 * * *', async () => {
+  try {
+    const [r] = await db.query(
+      'DELETE FROM activity_log WHERE created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)'
+    );
+    console.log(`Activity cleanup: ${r.affectedRows} Einträge gelöscht`);
+  } catch(e) { console.error('Activity cleanup error:', e.message); }
+});
 
 // ── Start ─────────────────────────────────────────────────────
 app.listen(PORT, () => {

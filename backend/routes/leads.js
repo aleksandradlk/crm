@@ -90,6 +90,19 @@ router.post('/bulk', auth, adminOnly, async (req, res) => {
   }
 });
 
+// ── GET /api/leads/reminders — eigene offene Reminder ────────
+router.get('/reminders', auth, async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT r.id, r.note, r.remind_at, r.lead_id, l.company, l.status
+       FROM reminders r JOIN leads l ON l.id = r.lead_id
+       WHERE r.user_id = ? AND r.sent = 0 ORDER BY r.remind_at ASC`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── GET /api/leads/:id ──────────────────────────────────────
 router.get('/:id', auth, async (req, res) => {
   const id = parseInt(req.params.id);
@@ -210,6 +223,36 @@ router.patch('/:id/assign', auth, async (req, res) => {
     if (!lead) return res.status(404).json({ error: 'Nicht gefunden' });
     await db.query('UPDATE leads SET assigned_to=? WHERE id=?', [req.user.id, id]);
     await log(req.user.id, 'lead_assign', 'lead', id, { assigned_to: req.user.id }, req.ip);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── PATCH /api/leads/:id/comments/:cid — Kommentar bearbeiten ──
+router.patch('/:id/comments/:cid', auth, async (req, res) => {
+  const cid = parseInt(req.params.cid);
+  const { text } = req.body;
+  if (!text?.trim()) return res.status(400).json({ error: 'Text fehlt' });
+  try {
+    const [[c]] = await db.query('SELECT * FROM comments WHERE id=?', [cid]);
+    if (!c) return res.status(404).json({ error: 'Kommentar nicht gefunden' });
+    if (req.user.role !== 'admin' && c.user_id !== req.user.id)
+      return res.status(403).json({ error: 'Nur eigene Kommentare bearbeitbar' });
+    await db.query('UPDATE comments SET text=?, edited_at=NOW() WHERE id=?', [text.trim(), cid]);
+    await log(req.user.id, 'comment_edit', 'lead', parseInt(req.params.id), { cid }, req.ip);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── DELETE /api/leads/:id/comments/:cid — Kommentar löschen ──
+router.delete('/:id/comments/:cid', auth, async (req, res) => {
+  const cid = parseInt(req.params.cid);
+  try {
+    const [[c]] = await db.query('SELECT * FROM comments WHERE id=?', [cid]);
+    if (!c) return res.status(404).json({ error: 'Kommentar nicht gefunden' });
+    if (req.user.role !== 'admin' && c.user_id !== req.user.id)
+      return res.status(403).json({ error: 'Nur eigene Kommentare löschbar' });
+    await db.query('DELETE FROM comments WHERE id=?', [cid]);
+    await log(req.user.id, 'comment_delete', 'lead', parseInt(req.params.id), { cid }, req.ip);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });

@@ -59,6 +59,7 @@
       <div class="nav-sep"></div>
       <span class="nav-group-label">Ressourcen</span>
       <div class="nav-item" onclick="showTab('wiki')"><i class="fas fa-book"></i> Wissensdatenbank</div>
+      <div class="nav-item" onclick="showTab('chat')"><i class="fas fa-comments"></i> Rücksprachen</div>
     </nav>
     <div class="sidebar-user" id="sidebarUser"></div>
   </aside>
@@ -216,7 +217,13 @@
     <div id="tab-tracking" class="tab-panel">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
         <h1 style="font-size:20px;font-weight:700">Aktivitäts-Tracking</h1>
-        <button class="btn btn-ghost btn-sm" onclick="loadTracking()"><i class="fas fa-sync"></i> Aktualisieren</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="trackingUserFilter" class="input" style="font-size:13px;padding:6px 10px" onchange="loadTracking()">
+            <option value="">Alle Benutzer</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="downloadActivityLog()"><i class="fas fa-download"></i> CSV</button>
+          <button class="btn btn-ghost btn-sm" onclick="loadTracking()"><i class="fas fa-sync"></i> Aktualisieren</button>
+        </div>
       </div>
       <div id="trackingList"></div>
 
@@ -266,6 +273,33 @@
 
       <!-- Dateiliste -->
       <div id="wikiFilesContainer"></div>
+    </div>
+
+    <!-- ── TAB: CHAT ─────────────────────────────────── -->
+    <div id="tab-chat" class="tab-panel">
+      <div id="chatListView">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <h1 style="font-size:20px;font-weight:700">Rücksprachen</h1>
+          <button class="btn btn-primary btn-sm" onclick="openCreateChat()"><i class="fas fa-plus"></i> Neues Gespräch</button>
+        </div>
+        <div id="chatList"></div>
+      </div>
+      <div id="chatDetailView" style="display:none">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="backToChats()"><i class="fas fa-arrow-left"></i> Zurück</button>
+          <h1 style="font-size:18px;font-weight:700;flex:1;margin:0" id="chatDetailTitle"></h1>
+          <button class="btn btn-ghost btn-sm" id="chatInviteBtn" onclick="openChatInvite()"><i class="fas fa-user-plus"></i> Einladen</button>
+          <button class="btn btn-ghost btn-sm" id="chatCloseBtn" onclick="closeChatRoom()" style="color:var(--red)"><i class="fas fa-times-circle"></i> Beenden</button>
+        </div>
+        <div class="card" style="margin-bottom:12px">
+          <div style="padding:8px 14px;background:var(--bg3);border-radius:8px 8px 0 0;font-size:11px;color:var(--text3)" id="chatParticipants"></div>
+          <div id="chatMessages" style="padding:16px;min-height:300px;max-height:480px;overflow-y:auto;display:flex;flex-direction:column;gap:8px"></div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="chatMsgInput" class="form-control" placeholder="Nachricht schreiben..." onkeydown="if(event.key==='Enter')sendChatMsg()">
+          <button class="btn btn-primary btn-sm" onclick="sendChatMsg()"><i class="fas fa-paper-plane"></i></button>
+        </div>
+      </div>
     </div>
 
   </main>
@@ -347,13 +381,14 @@ function showTab(name) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
-  const navMap = { leads: 0, generate: 1, users: 2, tracking: 3, wiki: 4 };
+  const navMap = { leads: 0, generate: 1, users: 2, tracking: 3, wiki: 4, chat: 5 };
   const items = document.querySelectorAll('.nav-item');
   if (navMap[name] !== undefined) items[navMap[name]]?.classList.add('active');
   if (name === 'leads')    loadLeads();
   if (name === 'users')    loadUsers();
   if (name === 'tracking') loadTracking();
   if (name === 'wiki')     loadWiki();
+  if (name === 'chat')     loadChats();
 }
 
 // ── LEADS ─────────────────────────────────────────────────────
@@ -464,11 +499,17 @@ function renderLeadDetail(l) {
     `<button class="btn btn-ghost btn-sm" style="${l.status===s?'border-color:var(--accent);color:var(--accent)':''}" onclick="changeStatus(${l.id},'${s}')">${statusLabels[s]}</button>`
   ).join('');
 
-  const commentsHtml = (l.comments||[]).map(c => `
-    <div style="padding:10px;background:var(--bg3);border-radius:8px;margin-bottom:8px">
-      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${escHtml(c.full_name)} · ${fmtDate(c.created_at)}</div>
-      <div style="font-size:13px">${escHtml(c.text)}</div>
-    </div>`).join('') || '<div style="color:var(--text3);font-size:12px">Noch keine Kommentare</div>';
+  const commentsHtml = (l.comments||[]).map(c => {
+    const editBtn   = `<button onclick="editComment(${l.id},${c.id},${JSON.stringify(c.text)})" style="background:none;border:none;cursor:pointer;color:var(--text3);padding:2px 5px;font-size:11px" title="Bearbeiten"><i class="fas fa-edit"></i></button>`;
+    const deleteBtn = `<button onclick="deleteComment(${l.id},${c.id})" style="background:none;border:none;cursor:pointer;color:var(--text3);padding:2px 5px;font-size:11px" title="Löschen"><i class="fas fa-trash"></i></button>`;
+    return `<div id="comment-wrap-${c.id}" style="padding:10px;background:var(--bg3);border-radius:8px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
+        <span style="font-size:11px;color:var(--text3)">${escHtml(c.full_name)} · ${fmtDate(c.created_at)}${c.edited_at?'<i style="margin-left:4px;opacity:.6"> · bearb.</i>':''}</span>
+        <div>${editBtn}${deleteBtn}</div>
+      </div>
+      <div id="comment-text-${c.id}" style="font-size:13px">${escHtml(c.text)}</div>
+    </div>`;
+  }).join('') || '<div style="color:var(--text3);font-size:12px">Noch keine Kommentare</div>';
 
   const remindersHtml = (l.reminders||[]).filter(r => !r.sent).map(r => `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--bg3);border-radius:8px;margin-bottom:6px">
@@ -730,19 +771,47 @@ async function deleteUser(id, name) {
 }
 
 // ── TRACKING ──────────────────────────────────────────────────
+const ACTION_LABELS = {
+  login:'Anmeldung', logout:'Abmeldung', logout_inactivity:'Auto-Abmeldung (Inaktivität)',
+  status_change:'Status geändert', comment_add:'Kommentar hinzugefügt',
+  comment_edit:'Kommentar bearbeitet', comment_delete:'Kommentar gelöscht',
+  reminder_set:'Reminder gesetzt', lead_assign:'Lead übernommen',
+  lead_create_manual:'Lead manuell erstellt', lead_update:'Lead bearbeitet',
+  lead_delete:'Lead gelöscht', lead_email_sent:'E-Mail gesendet',
+  leads_bulk_create:'Leads gespeichert (Bulk)', leads_generate:'Leads generiert',
+  user_create:'User erstellt', user_update:'User bearbeitet', user_delete:'User gelöscht',
+  password_change:'Passwort geändert',
+};
+
 async function loadTracking() {
   try {
-    const [sessions, activity] = await Promise.all([
+    const filterUserId = document.getElementById('trackingUserFilter')?.value || '';
+    const activityUrl  = filterUserId
+      ? `/users/activity?limit=100&user_id=${filterUserId}`
+      : '/users/activity?limit=100';
+
+    const [sessions, activity, users] = await Promise.all([
       api('GET', '/users/tracking'),
-      api('GET', '/users/activity?limit=50'),
+      api('GET', activityUrl),
+      api('GET', '/users'),
     ]);
+
+    // Benutzer-Filter befüllen (einmalig)
+    const filterEl = document.getElementById('trackingUserFilter');
+    if (filterEl && filterEl.options.length <= 1) {
+      users.forEach(u => {
+        const opt = document.createElement('option');
+        opt.value = u.id; opt.textContent = u.full_name;
+        filterEl.appendChild(opt);
+      });
+    }
 
     const list = document.getElementById('trackingList');
     list.innerHTML = sessions.length ? sessions.map(s => {
-      const inactive = parseInt(s.inactive_minutes) || 0;
-      const sessionMin = parseInt(s.session_minutes) || 0;
-      const status = inactive < 2 ? 'online' : inactive < 15 ? 'idle' : 'offline';
-      const statusLabel = status === 'online' ? 'Aktiv' : status === 'idle' ? 'Inaktiv' : 'Offline/Abgemeldet';
+      const inactive   = parseInt(s.inactive_minutes) || 0;
+      const sessionMin = parseInt(s.session_minutes)  || 0;
+      const status     = inactive < 2 ? 'online' : inactive < 5 ? 'idle' : 'offline';
+      const statusLabel= status==='online' ? 'Aktiv' : status==='idle' ? 'Kurz inaktiv' : 'Offline/Abgemeldet';
       return `
         <div class="tracking-card">
           <div class="pulse ${status}"></div>
@@ -752,7 +821,7 @@ async function loadTracking() {
             <div class="tr-meta">${statusLabel} · Sitzung: ${sessionMin} Min · Klicks: ${s.click_count}</div>
           </div>
           <div class="tr-right">
-            <div class="tr-time">Zuletzt aktiv: ${fmtDate(s.last_active)}</div>
+            <div class="tr-time">Letzter Klick: ${fmtDate(s.last_active)}</div>
             <div style="font-size:11px;color:var(--text3)">Inaktiv seit: ${inactive} Min</div>
           </div>
         </div>`;
@@ -761,16 +830,34 @@ async function loadTracking() {
     document.getElementById('activityBody').innerHTML = activity.map(a => {
       let detail = '';
       try { const d = JSON.parse(a.detail); detail = Object.entries(d).filter(([,v])=>v!=null).map(([k,v])=>`${k}: ${v}`).join(', '); } catch {}
-      const actionLabels = { login:'Anmeldung', logout:'Abmeldung', status_change:'Status geändert', comment_add:'Kommentar', reminder_set:'Reminder gesetzt', leads_generate:'Leads generiert', leads_bulk_create:'Leads gespeichert', user_create:'User erstellt', user_update:'User bearbeitet', lead_delete:'Lead gelöscht' };
       return `
         <tr>
           <td style="font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--text3)">${fmtDate(a.created_at)}</td>
           <td style="font-weight:600;font-size:13px">${escHtml(a.full_name)}</td>
-          <td><span class="badge" style="font-size:10px">${actionLabels[a.action]||a.action}</span></td>
+          <td><span class="badge" style="font-size:10px">${ACTION_LABELS[a.action]||a.action}</span></td>
           <td style="font-size:12px;color:var(--text2)">${escHtml(detail)}</td>
         </tr>`;
     }).join('');
   } catch (e) { showToast(e.message, 'err'); }
+}
+
+function downloadActivityLog() {
+  const filterUserId = document.getElementById('trackingUserFilter')?.value || '';
+  const url = filterUserId
+    ? `/api/users/activity/download?user_id=${filterUserId}`
+    : '/api/users/activity/download';
+  const a = document.createElement('a');
+  a.href = url + '&_auth=' + Auth.getToken();
+  // Token als Query-Param nicht ideal → direkter Fetch-Download:
+  fetch(url, { headers: { Authorization: 'Bearer ' + Auth.getToken() } })
+    .then(r => r.blob())
+    .then(blob => {
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'aktivitaetslog.csv';
+      link.click();
+    })
+    .catch(e => showToast('Download fehlgeschlagen', 'err'));
 }
 
 // ── CSV EXPORT ────────────────────────────────────────────────
@@ -929,9 +1016,214 @@ function renderWikiFiles(files, containerId, isAdmin) {
   }).join('');
 }
 
-// Init
+// ── COMMENT EDIT / DELETE (Admin — kein Ownership-Check) ──────
+function editComment(leadId, cid, text) {
+  const wrap = document.getElementById(`comment-text-${cid}`);
+  if (!wrap) return;
+  wrap.innerHTML = `
+    <textarea id="cedit-${cid}" class="form-control" rows="3" style="font-size:13px;margin-bottom:6px">${escHtml(text)}</textarea>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-primary btn-sm" onclick="saveCommentEdit(${leadId},${cid})"><i class="fas fa-check"></i> Speichern</button>
+      <button class="btn btn-ghost btn-sm" onclick="openLeadPanel(${leadId})">Abbrechen</button>
+    </div>`;
+}
+async function saveCommentEdit(leadId, cid) {
+  const el = document.getElementById(`cedit-${cid}`);
+  if (!el) return;
+  const text = el.value.trim();
+  if (!text) return;
+  try {
+    await api('PATCH', `/leads/${leadId}/comments/${cid}`, { text });
+    showToast('Kommentar aktualisiert ✓');
+    openLeadPanel(leadId);
+  } catch(e) { showToast(e.message, 'err'); }
+}
+async function deleteComment(leadId, cid) {
+  if (!confirm('Kommentar wirklich löschen?')) return;
+  try {
+    await api('DELETE', `/leads/${leadId}/comments/${cid}`);
+    showToast('Kommentar gelöscht');
+    openLeadPanel(leadId);
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+// ── SETTINGS MODAL (Admin: nur Benachrichtigungen) ────────────
+async function openSettingsModal() {
+  try {
+    const me = await api('GET', '/auth/me');
+    const el = document.getElementById('adminNotifEmail');
+    const elS = document.getElementById('adminNotifSms');
+    const elP = document.getElementById('adminPhone');
+    if (el) el.checked = !!me.notify_email;
+    if (elS) elS.checked = !!me.notify_sms;
+    if (elP) elP.value = me.phone || '';
+  } catch {}
+  document.getElementById('settingsModal').classList.add('open');
+}
+function closeSettingsModal() { document.getElementById('settingsModal').classList.remove('open'); }
+async function saveNotifSettings() {
+  const notify_email = document.getElementById('adminNotifEmail')?.checked ? 1 : 0;
+  const notify_sms   = document.getElementById('adminNotifSms')?.checked   ? 1 : 0;
+  const phone        = document.getElementById('adminPhone')?.value.trim() || null;
+  try {
+    const me = Auth.getUser();
+    await api('PATCH', `/users/${me.id}/notify`, { notify_email, notify_sms, phone });
+    showToast('Einstellungen gespeichert ✓');
+    closeSettingsModal();
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+// ── REMINDER POPUP NOTIFICATIONS ─────────────────────────────
+async function checkReminderNotifications() {
+  try {
+    const reminders = await api('GET', '/leads/reminders');
+    const shownKey  = 'admin_shown_reminders';
+    const shown     = JSON.parse(sessionStorage.getItem(shownKey) || '[]');
+    const now       = Date.now();
+    reminders.forEach(r => {
+      const t = new Date(r.remind_at).getTime();
+      if (t <= now && t >= now - 60 * 60 * 1000 && !shown.includes(r.id)) {
+        showReminderPopup(r);
+        shown.push(r.id);
+      }
+    });
+    sessionStorage.setItem(shownKey, JSON.stringify(shown));
+  } catch {}
+}
+function showReminderPopup(r) {
+  const container = document.getElementById('reminderNotifContainer');
+  if (!container) return;
+  const id = `rn-${r.id}`;
+  const div = document.createElement('div');
+  div.id = id;
+  div.style.cssText = 'background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;box-shadow:var(--shadow-lg);min-width:260px;max-width:320px;animation:slideIn .3s ease;position:relative';
+  div.innerHTML = `
+    <div style="font-size:12px;color:var(--accent);font-weight:600;margin-bottom:4px"><i class="fas fa-bell"></i> Reminder fällig</div>
+    <div style="font-size:13px;font-weight:600">${escHtml(r.company)}</div>
+    ${r.note ? `<div style="font-size:12px;color:var(--text2);margin-top:3px">${escHtml(r.note)}</div>` : ''}
+    <button onclick="document.getElementById('${id}').remove()" style="position:absolute;top:8px;right:10px;background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px"><i class="fas fa-times"></i></button>
+  `;
+  container.appendChild(div);
+  setTimeout(() => { const el = document.getElementById(id); if (el) el.remove(); }, 8000);
+}
+
+// ── CHAT ──────────────────────────────────────────────────────
+let ME = Auth.getUser();
+async function loadChats() {
+  try {
+    const chats = await api('GET', '/chats');
+    const listEl = document.getElementById('chatList');
+    if (!listEl) return;
+    if (!chats.length) {
+      listEl.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:20px">Noch keine Chats</div>';
+      return;
+    }
+    listEl.innerHTML = chats.map(c => `
+      <div onclick="openChat(${c.id})" style="padding:12px 14px;border-radius:8px;cursor:pointer;background:var(--bg3);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:600;font-size:14px">${escHtml(c.title)} ${c.is_closed ? '<span style="font-size:10px;color:var(--text3)">[geschlossen]</span>' : ''}</div>
+          <div style="font-size:11px;color:var(--text3)">${fmtDate(c.created_at)}</div>
+        </div>
+        <i class="fas fa-chevron-right" style="color:var(--text3)"></i>
+      </div>`).join('');
+  } catch(e) { showToast(e.message, 'err'); }
+}
+let _chatId = null, _chatInterval = null;
+async function openChat(id) {
+  _chatId = id;
+  document.getElementById('chatListView').style.display = 'none';
+  document.getElementById('chatDetailView').style.display = 'block';
+  await refreshChat();
+  clearInterval(_chatInterval);
+  _chatInterval = setInterval(refreshChat, 10000);
+}
+async function refreshChat() {
+  if (!_chatId) return;
+  try {
+    const c = await api('GET', `/chats/${_chatId}`);
+    document.getElementById('chatDetailTitle').textContent = c.room.title;
+    const parts = (c.participants||[]).map(p => escHtml(p.full_name)).join(', ');
+    const partsEl = document.getElementById('chatParticipants');
+    if (partsEl) partsEl.textContent = 'Teilnehmer: ' + (parts || '—');
+    const msgsEl = document.getElementById('chatMessages');
+    msgsEl.innerHTML = c.messages.map(m => `
+      <div style="margin-bottom:10px;${m.user_id===ME?.id?'text-align:right':''}">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:2px">${escHtml(m.full_name)} · ${fmtDate(m.created_at)}</div>
+        <div style="display:inline-block;background:${m.user_id===ME?.id?'var(--accent)':'var(--bg3)'};color:${m.user_id===ME?.id?'#fff':'var(--text1)'};padding:8px 12px;border-radius:10px;font-size:13px;max-width:80%;text-align:left">${escHtml(m.message)}</div>
+      </div>`).join('');
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+    const closeBtn = document.getElementById('chatCloseBtn');
+    if (closeBtn) closeBtn.style.display = c.room.is_closed ? 'none' : 'inline-flex';
+  } catch(e) { showToast(e.message, 'err'); }
+}
+function backToChats() {
+  clearInterval(_chatInterval); _chatId = null;
+  document.getElementById('chatDetailView').style.display = 'none';
+  document.getElementById('chatListView').style.display = 'block';
+  loadChats();
+}
+async function sendChatMsg() {
+  const inp = document.getElementById('chatMsgInput');
+  const msg = inp?.value.trim();
+  if (!msg || !_chatId) return;
+  try {
+    await api('POST', `/chats/${_chatId}/messages`, { message: msg });
+    inp.value = '';
+    await refreshChat();
+  } catch(e) { showToast(e.message, 'err'); }
+}
+async function closeChatRoom() {
+  if (!_chatId || !confirm('Chat schließen?')) return;
+  try {
+    await api('PATCH', `/chats/${_chatId}/close`);
+    showToast('Chat geschlossen');
+    backToChats();
+  } catch(e) { showToast(e.message, 'err'); }
+}
+function openCreateChat() { document.getElementById('createChatModalAdmin').classList.add('open'); loadUsersForChatInvite(); }
+function closeCreateChat() { document.getElementById('createChatModalAdmin').classList.remove('open'); }
+async function loadUsersForChatInvite() {
+  try {
+    const users = await api('GET', '/users');
+    const el = document.getElementById('chatInviteUsersAdmin');
+    if (!el) return;
+    el.innerHTML = users.filter(u => u.id !== ME?.id).map(u =>
+      `<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:13px">
+        <input type="checkbox" value="${u.id}" style="accent-color:var(--accent)">
+        ${escHtml(u.full_name)} <span style="font-size:11px;color:var(--text3)">(${u.role})</span>
+      </label>`).join('');
+  } catch {}
+}
+async function saveNewChat() {
+  const title = document.getElementById('newChatTitleAdmin')?.value.trim();
+  if (!title) { showToast('Titel erforderlich', 'err'); return; }
+  const checkboxes = document.querySelectorAll('#chatInviteUsersAdmin input[type=checkbox]:checked');
+  const invite_ids = [...checkboxes].map(c => parseInt(c.value));
+  try {
+    const r = await api('POST', '/chats', { title, invite_ids });
+    showToast('Chat erstellt ✓');
+    closeCreateChat();
+    openChat(r.id);
+  } catch(e) { showToast(e.message, 'err'); }
+}
+async function openChatInvite() {
+  if (!_chatId) return;
+  const users = await api('GET', '/users').catch(() => []);
+  const name  = prompt('Benutzername oder Name zum Einladen:');
+  if (!name) return;
+  const u = users.find(u => u.username === name || u.full_name === name);
+  if (!u) { showToast('Benutzer nicht gefunden', 'err'); return; }
+  try {
+    await api('POST', `/chats/${_chatId}/invite`, { user_id: u.id });
+    showToast(`${u.full_name} eingeladen ✓`);
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+// ── INIT ──────────────────────────────────────────────────────
 loadLeads();
 loadClosersForSelect();
+checkReminderNotifications();
+setInterval(checkReminderNotifications, 2 * 60 * 1000);
 </script>
 
 <!-- MODAL: Lead manuell hinzufügen -->
@@ -961,6 +1253,71 @@ loadClosersForSelect();
 
 <script>
 document.getElementById('addLeadModal').addEventListener('click', function(e){ if(e.target===this) closeAddLeadModal(); });
+</script>
+
+<!-- MODAL: Einstellungen (Admin) -->
+<div class="modal-overlay" id="settingsModal">
+  <div style="background:var(--bg2);border-radius:14px;box-shadow:var(--shadow-lg);padding:28px;width:400px;max-width:96vw">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <h2 style="font-size:16px;font-weight:700;margin:0"><i class="fas fa-cog" style="color:var(--accent);margin-right:8px"></i>Einstellungen</h2>
+      <button class="btn btn-ghost btn-sm" onclick="closeSettingsModal()"><i class="fas fa-times"></i></button>
+    </div>
+    <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)">Benachrichtigungen</div>
+    <label style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer;font-size:13px">
+      <input type="checkbox" id="adminNotifEmail" style="accent-color:var(--accent)">
+      E-Mail-Benachrichtigungen
+    </label>
+    <label style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer;font-size:13px">
+      <input type="checkbox" id="adminNotifSms" style="accent-color:var(--accent)">
+      SMS-Benachrichtigungen
+    </label>
+    <div class="form-group" style="margin-top:12px">
+      <label>Telefonnummer (für SMS)</label>
+      <input id="adminPhone" class="form-control" placeholder="+49 ...">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">
+      <button class="btn btn-ghost btn-sm" onclick="closeSettingsModal()">Abbrechen</button>
+      <button class="btn btn-primary btn-sm" onclick="saveNotifSettings()"><i class="fas fa-save"></i> Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Neuen Chat erstellen (Admin) -->
+<div class="modal-overlay" id="createChatModalAdmin">
+  <div style="background:var(--bg2);border-radius:14px;box-shadow:var(--shadow-lg);padding:28px;width:420px;max-width:96vw;max-height:80vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <h2 style="font-size:16px;font-weight:700;margin:0"><i class="fas fa-comments" style="color:var(--accent);margin-right:8px"></i>Neuer Chat</h2>
+      <button class="btn btn-ghost btn-sm" onclick="closeCreateChat()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="form-group">
+      <label>Titel *</label>
+      <input id="newChatTitleAdmin" class="form-control" placeholder="z.B. Projekt Alpha">
+    </div>
+    <div class="form-group">
+      <label>Teilnehmer einladen</label>
+      <div id="chatInviteUsersAdmin" style="max-height:200px;overflow-y:auto;padding:4px 0"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn btn-ghost btn-sm" onclick="closeCreateChat()">Abbrechen</button>
+      <button class="btn btn-primary btn-sm" onclick="saveNewChat()"><i class="fas fa-plus"></i> Erstellen</button>
+    </div>
+  </div>
+</div>
+
+<!-- Reminder Popup Container -->
+<div id="reminderNotifContainer" style="position:fixed;bottom:20px;right:20px;z-index:600;display:flex;flex-direction:column;gap:8px;align-items:flex-end"></div>
+
+<style>
+@keyframes slideIn {
+  from { transform: translateX(120%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+</style>
+
+<script>
+document.getElementById('settingsModal').addEventListener('click', function(e){ if(e.target===this) closeSettingsModal(); });
+document.getElementById('createChatModalAdmin').addEventListener('click', function(e){ if(e.target===this) closeCreateChat(); });
+document.getElementById('chatInputAdmin')?.addEventListener('keydown', function(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendChatMsg(); } });
 </script>
 </body>
 </html>

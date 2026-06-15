@@ -110,4 +110,45 @@ router.get('/activity', auth, adminOnly, async (req, res) => {
   res.json(rows);
 });
 
+// GET /api/users/activity/download — CSV Export (Admin)
+router.get('/activity/download', auth, adminOnly, async (req, res) => {
+  const userId = req.query.user_id ? parseInt(req.query.user_id) : null;
+  let q = `SELECT a.created_at, u.full_name, u.username, a.action,
+                  a.target_type, a.target_id, a.detail, a.ip
+           FROM activity_log a JOIN users u ON u.id = a.user_id`;
+  const params = [];
+  if (userId) { q += ' WHERE a.user_id = ?'; params.push(userId); }
+  q += ' ORDER BY a.created_at DESC';
+  const [rows] = await db.query(q, params);
+
+  const esc = v => `"${String(v||'').replace(/"/g,'""').replace(/;/g,',')}"`;
+  const csv = [
+    'Zeitstempel;Benutzer;Username;Aktion;Ziel;Ziel-ID;Details;IP',
+    ...rows.map(r => [
+      r.created_at, r.full_name, r.username, r.action,
+      r.target_type||'', r.target_id||'', r.detail||'', r.ip||''
+    ].map(esc).join(';'))
+  ].join('\n');
+
+  res.set('Content-Type', 'text/csv; charset=utf-8');
+  res.set('Content-Disposition', 'attachment; filename="aktivitaetslog.csv"');
+  res.send('﻿' + csv);
+});
+
+// PATCH /api/users/:id/notify — Benachrichtigungs-Präferenzen speichern
+router.patch('/:id/notify', auth, async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (req.user.id !== id && req.user.role !== 'admin')
+    return res.status(403).json({ error: 'Nicht berechtigt' });
+  const { notify_email, notify_sms } = req.body;
+  const updates = [];
+  const params  = [];
+  if (notify_email !== undefined) { updates.push('notify_email=?'); params.push(notify_email ? 1 : 0); }
+  if (notify_sms   !== undefined) { updates.push('notify_sms=?');   params.push(notify_sms   ? 1 : 0); }
+  if (!updates.length) return res.status(400).json({ error: 'Nichts zu aktualisieren' });
+  params.push(id);
+  await db.query(`UPDATE users SET ${updates.join(',')} WHERE id=?`, params);
+  res.json({ ok: true });
+});
+
 module.exports = router;

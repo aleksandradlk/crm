@@ -102,13 +102,13 @@ function fmtDateShort(d) {
 // ── Activity Heartbeat (Closer-Tracking) ─────────────────────
 let _clickCount = 0;
 let _inactiveTimer = null;
-const INACTIVITY_MS = (window.INACTIVITY_TIMEOUT || 15) * 60 * 1000;
+const INACTIVITY_MS = (window.INACTIVITY_TIMEOUT || 5) * 60 * 1000;
 
 function resetInactiveTimer() {
   clearTimeout(_inactiveTimer);
   _inactiveTimer = setTimeout(async () => {
-    showToast('Automatisch abgemeldet (Inaktivität)', 'info');
-    try { await api('POST', '/auth/logout'); } catch {}
+    showToast('Automatisch abgemeldet (5 Min. Inaktivität)', 'info');
+    try { await api('POST', '/auth/logout', { reason: 'inactivity' }); } catch {}
     Auth.clear();
     setTimeout(() => window.location.href = '/login.html', 1500);
   }, INACTIVITY_MS);
@@ -138,7 +138,6 @@ function renderSidebarUser() {
   if (!user) return;
   const el = document.getElementById('sidebarUser');
   if (el) {
-    const hasPwModal = typeof openPwModal === 'function';
     el.innerHTML = `
       <div class="avatar">${escHtml(user.full_name?.[0]||'?')}</div>
       <div class="sidebar-user-info">
@@ -147,7 +146,7 @@ function renderSidebarUser() {
       </div>
       <div class="sidebar-user-actions">
         <button class="sidebar-icon-btn" id="themeBtn" title="Design wechseln" onclick="toggleTheme()"><i class="fas fa-moon"></i></button>
-        ${hasPwModal ? `<button class="sidebar-icon-btn" title="Passwort ändern" onclick="openPwModal()"><i class="fas fa-cog"></i></button>` : ''}
+        <button class="sidebar-icon-btn" title="Einstellungen" onclick="openSettingsModal()"><i class="fas fa-cog"></i></button>
         <button class="sidebar-icon-btn logout-btn" title="Abmelden" onclick="logout()"><i class="fas fa-sign-out-alt"></i></button>
       </div>
     `;

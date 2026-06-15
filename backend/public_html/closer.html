@@ -39,6 +39,7 @@
       <div class="nav-sep"></div>
       <span class="nav-group-label">Ressourcen</span>
       <div class="nav-item" data-sec="wiki" onclick="showSection('wiki')"><i class="fas fa-book"></i> Wissensdatenbank</div>
+      <div class="nav-item" data-sec="chat" onclick="showSection('chat')"><i class="fas fa-comments"></i> Rücksprachen <span id="chatBadge" style="display:none;margin-left:auto" class="badge">!</span></div>
     </nav>
     <div class="sidebar-user" id="sidebarUser"></div>
   </aside>
@@ -133,6 +134,7 @@
     <!-- WIKI -->
     <div id="sec-wiki" style="display:none">
       <h1 style="font-size:20px;font-weight:700;margin-bottom:20px">Wissensdatenbank</h1>
+      <div id="closerEmailTemplate"></div>
       <div id="wikiFilesContainer"></div>
     </div>
 
@@ -140,6 +142,33 @@
     <div id="sec-reminders" style="display:none">
       <h1 style="font-size:20px;font-weight:700;margin-bottom:20px">Meine Reminder</h1>
       <div id="remindersList"></div>
+    </div>
+
+    <!-- CHAT -->
+    <div id="sec-chat" style="display:none">
+      <div id="chatListView">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <h1 style="font-size:20px;font-weight:700">Rücksprachen</h1>
+          <button class="btn btn-primary btn-sm" onclick="openCreateChat()"><i class="fas fa-plus"></i> Neues Gespräch</button>
+        </div>
+        <div id="chatList"></div>
+      </div>
+      <div id="chatDetailView" style="display:none">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="backToChats()"><i class="fas fa-arrow-left"></i> Zurück</button>
+          <h1 style="font-size:18px;font-weight:700;flex:1;margin:0" id="chatDetailTitle"></h1>
+          <button class="btn btn-ghost btn-sm" id="chatInviteBtn" onclick="openChatInvite()" title="Einladen"><i class="fas fa-user-plus"></i></button>
+          <button class="btn btn-ghost btn-sm" id="chatCloseBtn" onclick="closeChatRoom()" title="Gespräch beenden" style="color:var(--red)"><i class="fas fa-times-circle"></i> Beenden</button>
+        </div>
+        <div class="card" style="margin-bottom:12px">
+          <div style="padding:8px 14px;background:var(--bg3);border-radius:8px 8px 0 0;font-size:11px;color:var(--text3)" id="chatParticipants"></div>
+          <div id="chatMessages" style="padding:16px;min-height:300px;max-height:480px;overflow-y:auto;display:flex;flex-direction:column;gap:8px"></div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="chatMsgInput" class="form-control" placeholder="Nachricht schreiben..." onkeydown="if(event.key==='Enter')sendChatMsg()">
+          <button class="btn btn-primary btn-sm" onclick="sendChatMsg()"><i class="fas fa-paper-plane"></i></button>
+        </div>
+      </div>
     </div>
 
   </main>
@@ -196,7 +225,7 @@ renderSidebarUser();
 startActivityTracking();
 
 function showSection(name) {
-  ['myLeads','allLeads','wiki','reminders'].forEach(s => {
+  ['myLeads','allLeads','wiki','reminders','chat'].forEach(s => {
     document.getElementById('sec-' + s).style.display = s === name ? '' : 'none';
   });
   document.querySelectorAll('.nav-item[data-sec]').forEach(el => {
@@ -204,6 +233,7 @@ function showSection(name) {
   });
   if (name === 'reminders') loadReminders();
   if (name === 'wiki')      loadWiki();
+  if (name === 'chat')      loadChats();
 }
 
 // ── LOADS ─────────────────────────────────────────────────────
@@ -400,12 +430,19 @@ function renderDetail(l) {
     `<button class="btn btn-ghost btn-sm" style="${l.status===s?'border-color:var(--accent);color:var(--accent)':''}" onclick="setStatus(${l.id},'${s}')">${label}</button>`
   ).join('');
 
-  // Aktivitätsverlauf (Kommentare als Anrufliste nutzbar)
-  const commentsHtml = (l.comments||[]).map(c => `
-    <div style="padding:10px;background:var(--bg3);border-radius:8px;margin-bottom:8px">
-      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${escHtml(c.full_name)} · ${fmtDate(c.created_at)}</div>
-      <div style="font-size:13px">${escHtml(c.text)}</div>
-    </div>`).join('') || '<div style="color:var(--text3);font-size:12px;margin-bottom:8px">Noch keine Aktivität</div>';
+  // Kommentare mit Edit/Delete (nur eigene)
+  const commentsHtml = (l.comments||[]).map(c => {
+    const isOwn = c.user_id === ME.id;
+    const editBtn   = isOwn ? `<button onclick="editComment(${l.id},${c.id},${JSON.stringify(c.text)})" style="background:none;border:none;cursor:pointer;color:var(--text3);padding:2px 5px;font-size:11px" title="Bearbeiten"><i class="fas fa-edit"></i></button>` : '';
+    const deleteBtn = isOwn ? `<button onclick="deleteComment(${l.id},${c.id},'panel')" style="background:none;border:none;cursor:pointer;color:var(--text3);padding:2px 5px;font-size:11px" title="Löschen"><i class="fas fa-trash"></i></button>` : '';
+    return `<div id="comment-wrap-${c.id}" style="padding:10px;background:var(--bg3);border-radius:8px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
+        <span style="font-size:11px;color:var(--text3)">${escHtml(c.full_name)} · ${fmtDate(c.created_at)}${c.edited_at?'<i style="margin-left:4px;opacity:.6"> · bearb.</i>':''}</span>
+        <div>${editBtn}${deleteBtn}</div>
+      </div>
+      <div id="comment-text-${c.id}" style="font-size:13px">${escHtml(c.text)}</div>
+    </div>`;
+  }).join('') || '<div style="color:var(--text3);font-size:12px;margin-bottom:8px">Noch keine Aktivität</div>';
 
   const pendingReminders = (l.reminders||[]).filter(r => !r.sent);
   const remindHtml = pendingReminders.map(r => `
@@ -414,6 +451,7 @@ function renderDetail(l) {
         <div style="font-size:12px;color:var(--amber)"><i class="fas fa-bell"></i> ${fmtDate(r.remind_at)}</div>
         ${r.note ? `<div style="font-size:12px;color:var(--text2);margin-top:2px">${escHtml(r.note)}</div>` : ''}
       </div>
+      <button class="btn btn-ghost btn-sm" onclick="deleteReminder(${l.id},${r.id})" title="Löschen"><i class="fas fa-trash" style="color:var(--red)"></i></button>
     </div>`).join('') || '<div style="color:var(--text3);font-size:12px">Kein Reminder gesetzt</div>';
 
   const assignSection = !isMine
@@ -571,13 +609,6 @@ async function saveManualLead() {
 }
 
 // ── PASSWORT ÄNDERN ───────────────────────────────────────────
-function openPwModal() {
-  ['pw-current','pw-new','pw-new2'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('pwErr').textContent = '';
-  document.getElementById('pwModal').classList.add('open');
-}
-function closePwModal() { document.getElementById('pwModal').classList.remove('open'); }
-
 async function changePassword() {
   const current = document.getElementById('pw-current').value;
   const neu     = document.getElementById('pw-new').value;
@@ -589,14 +620,33 @@ async function changePassword() {
   try {
     await api('PATCH', '/auth/password', { current_password: current, new_password: neu });
     showToast('Passwort geändert ✓');
-    closePwModal();
+    closeSettingsModal();
   } catch(e) { err.textContent = e.message; }
 }
 
 // ── WIKI ──────────────────────────────────────────────────────
 async function loadWiki() {
   try {
-    const files = await api('GET', '/wiki/files');
+    const [files, tmpl] = await Promise.all([
+      api('GET', '/wiki/files'),
+      api('GET', '/wiki/template').catch(() => ({})),
+    ]);
+    const tmplEl = document.getElementById('closerEmailTemplate');
+    if (tmplEl && (tmpl.subject || tmpl.body)) {
+      tmplEl.innerHTML = `
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-header"><div class="card-title"><i class="fas fa-envelope" style="color:var(--accent)"></i> E-Mail Vorlage <span style="font-size:11px;font-weight:400;color:var(--text3)">(nur lesbar)</span></div></div>
+          <div class="card-body" style="padding:14px">
+            <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Platzhalter <code style="background:var(--bg3);padding:1px 5px;border-radius:4px">{company}</code> wird durch Firmennamen ersetzt</div>
+            <div class="form-group" style="margin-bottom:8px"><label>Betreff</label>
+              <input class="form-control" value="${escHtml(tmpl.subject||'')}" readonly style="background:var(--bg3);color:var(--text2)"></div>
+            <div class="form-group" style="margin:0"><label>Nachricht</label>
+              <textarea class="form-control" rows="8" readonly style="background:var(--bg3);color:var(--text2);resize:none;font-size:13px;line-height:1.6">${escHtml(tmpl.body||'')}</textarea></div>
+          </div>
+        </div>`;
+    } else if (tmplEl) {
+      tmplEl.innerHTML = '';
+    }
     renderWikiFiles(files, 'wikiFilesContainer', false);
   } catch(e) { showToast(e.message, 'err'); }
 }
@@ -637,9 +687,246 @@ function renderWikiFiles(files, containerId, isAdmin) {
   }).join('');
 }
 
-// Init
+// ── KOMMENTAR EDIT / DELETE ───────────────────────────────────
+function editComment(leadId, cid, currentText) {
+  const el = document.getElementById(`comment-text-${cid}`);
+  if (!el) return;
+  el.innerHTML = `
+    <textarea id="edit-ta-${cid}" class="form-control" rows="2" style="margin-bottom:6px;font-size:13px">${escHtml(currentText)}</textarea>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-primary btn-sm" onclick="saveCommentEdit(${leadId},${cid})"><i class="fas fa-check"></i> Speichern</button>
+      <button class="btn btn-ghost btn-sm" onclick="openPanel(${leadId})">Abbrechen</button>
+    </div>`;
+  document.getElementById(`edit-ta-${cid}`)?.focus();
+}
+async function saveCommentEdit(leadId, cid) {
+  const val = document.getElementById(`edit-ta-${cid}`)?.value?.trim();
+  if (!val) return;
+  try {
+    await api('PATCH', `/leads/${leadId}/comments/${cid}`, { text: val });
+    showToast('Kommentar aktualisiert ✓');
+    openPanel(leadId);
+  } catch(e) { showToast(e.message, 'err'); }
+}
+async function deleteComment(leadId, cid) {
+  if (!confirm('Kommentar wirklich löschen?')) return;
+  try {
+    await api('DELETE', `/leads/${leadId}/comments/${cid}`);
+    showToast('Kommentar gelöscht');
+    openPanel(leadId);
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+// ── EINSTELLUNGEN MODAL ────────────────────────────────────────
+async function openSettingsModal() {
+  try {
+    const me = await api('GET', '/auth/me');
+    document.getElementById('sett-notify-email').checked = !!me.notify_email;
+    document.getElementById('sett-notify-sms').checked   = !!me.notify_sms;
+    document.getElementById('sett-phone').value          = me.phone || '';
+  } catch {}
+  document.getElementById('settingsModal').classList.add('open');
+}
+function closeSettingsModal() { document.getElementById('settingsModal').classList.remove('open'); }
+async function saveNotifSettings() {
+  const me = Auth.getUser();
+  const phone = document.getElementById('sett-phone').value.trim();
+  try {
+    await api('PATCH', `/users/${me.id}/notify`, {
+      notify_email: document.getElementById('sett-notify-email').checked ? 1 : 0,
+      notify_sms:   document.getElementById('sett-notify-sms').checked   ? 1 : 0,
+    });
+    if (phone !== undefined) await api('PATCH', `/users/${me.id}`, { phone: phone || null }).catch(() => {});
+    showToast('Einstellungen gespeichert ✓');
+    closeSettingsModal();
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+// ── REMINDER POPUP NOTIFICATIONS ─────────────────────────────
+async function checkReminderNotifications() {
+  try {
+    const reminders = await api('GET', '/leads/reminders');
+    const now = Date.now();
+    const shownRaw = sessionStorage.getItem('lh_notif_shown') || '[]';
+    const shown = new Set(JSON.parse(shownRaw));
+    const due = reminders.filter(r => {
+      const t = new Date(r.remind_at).getTime();
+      return t <= now && (now - t) < 3600000 && !shown.has(r.id);
+    });
+    if (!due.length) return;
+    due.forEach(r => shown.add(r.id));
+    sessionStorage.setItem('lh_notif_shown', JSON.stringify([...shown]));
+    showReminderPopup(due);
+  } catch {}
+}
+function showReminderPopup(due) {
+  const container = document.getElementById('reminderNotifContainer');
+  if (!container) return;
+  due.slice(0, 3).forEach(r => {
+    const card = document.createElement('div');
+    card.style.cssText = 'background:var(--bg2);border:1px solid var(--amber);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow-lg);margin-bottom:10px;max-width:320px;animation:slideIn .25s ease';
+    card.innerHTML = `
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--amber);margin-bottom:2px"><i class="fas fa-bell"></i> Reminder fällig</div>
+          <div style="font-size:13px;font-weight:600">${escHtml(r.company||'—')}</div>
+          ${r.note ? `<div style="font-size:12px;color:var(--text2);margin-top:2px">${escHtml(r.note)}</div>` : ''}
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">${fmtDate(r.remind_at)}</div>
+        </div>
+        <button onclick="this.closest('[data-notif]').remove()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;padding:0;line-height:1">×</button>
+      </div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:8px;width:100%" onclick="openPanel(${r.lead_id});this.closest('[data-notif]').remove()">Lead öffnen</button>`;
+    card.setAttribute('data-notif', r.id);
+    container.appendChild(card);
+    setTimeout(() => card.remove(), 30000);
+  });
+}
+
+// ── CHAT ───────────────────────────────────────────────────────
+let currentChatId = null;
+let chatPollTimer = null;
+
+async function loadChats() {
+  try {
+    const chats = await api('GET', '/chats');
+    const el = document.getElementById('chatList');
+    if (!chats.length) {
+      el.innerHTML = '<div style="color:var(--text3);text-align:center;padding:40px"><i class="fas fa-comments" style="font-size:28px;display:block;margin-bottom:10px;opacity:.3"></i>Noch keine Rücksprachen</div>';
+      return;
+    }
+    el.innerHTML = chats.map(c => `
+      <div class="card" style="margin-bottom:10px;cursor:pointer" onclick="openChat(${c.id})">
+        <div class="card-body" style="padding:14px;display:flex;align-items:center;gap:12px">
+          <div style="width:36px;height:36px;border-radius:10px;background:rgba(79,142,247,0.12);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:16px;flex-shrink:0">
+            <i class="fas fa-${c.is_closed ? 'lock' : 'comments'}"></i>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:13px">${escHtml(c.title)}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+              ${c.participants ? escHtml(c.participants) : '—'} · ${c.msg_count||0} Nachrichten
+            </div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            ${c.is_closed ? '<span style="font-size:11px;color:var(--text3)">Geschlossen</span>' : '<span style="font-size:11px;color:var(--green)">Offen</span>'}
+            <div style="font-size:10px;color:var(--text3)">${c.last_msg_at ? fmtDateShort(c.last_msg_at) : fmtDateShort(c.created_at)}</div>
+          </div>
+        </div>
+      </div>`).join('');
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+async function openChat(id) {
+  currentChatId = id;
+  document.getElementById('chatListView').style.display   = 'none';
+  document.getElementById('chatDetailView').style.display = '';
+  await refreshChat();
+  chatPollTimer = setInterval(refreshChat, 10000);
+}
+
+async function refreshChat() {
+  if (!currentChatId) return;
+  try {
+    const chat = await api('GET', `/chats/${currentChatId}`);
+    document.getElementById('chatDetailTitle').textContent = chat.title;
+    document.getElementById('chatParticipants').textContent =
+      'Teilnehmer: ' + (chat.participants||[]).map(p => p.full_name).join(', ');
+    document.getElementById('chatCloseBtn').style.display = chat.is_closed ? 'none' : '';
+    document.getElementById('chatInviteBtn').style.display = chat.is_closed ? 'none' : '';
+    document.getElementById('chatMsgInput').disabled = !!chat.is_closed;
+
+    const msgs = document.getElementById('chatMessages');
+    const wasBottom = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 60;
+    msgs.innerHTML = (chat.messages||[]).map(m => {
+      const isMe = m.user_id === ME.id;
+      return `<div style="display:flex;flex-direction:column;align-items:${isMe?'flex-end':'flex-start'}">
+        <div style="max-width:80%;background:${isMe?'rgba(79,142,247,0.15)':'var(--bg3)'};border-radius:10px;padding:8px 12px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:3px">${isMe?'Du':escHtml(m.full_name)} · ${fmtDate(m.created_at)}</div>
+          <div style="font-size:13px">${escHtml(m.text)}</div>
+        </div>
+      </div>`;
+    }).join('');
+    if (wasBottom) msgs.scrollTop = msgs.scrollHeight;
+  } catch {}
+}
+
+function backToChats() {
+  clearInterval(chatPollTimer);
+  currentChatId = null;
+  document.getElementById('chatDetailView').style.display = 'none';
+  document.getElementById('chatListView').style.display   = '';
+  loadChats();
+}
+
+async function sendChatMsg() {
+  const input = document.getElementById('chatMsgInput');
+  const text  = input?.value?.trim();
+  if (!text || !currentChatId) return;
+  input.value = '';
+  try {
+    await api('POST', `/chats/${currentChatId}/messages`, { text });
+    await refreshChat();
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+async function closeChatRoom() {
+  if (!confirm('Gespräch wirklich beenden?')) return;
+  try {
+    await api('PATCH', `/chats/${currentChatId}/close`);
+    showToast('Gespräch beendet');
+    await refreshChat();
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+function openCreateChat() { document.getElementById('createChatModal').classList.add('open'); }
+function closeCreateChat() { document.getElementById('createChatModal').classList.remove('open'); }
+
+async function loadUsersForChatInvite(selectId) {
+  try {
+    const users = await api('GET', '/users');
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    sel.innerHTML = users.filter(u => u.id !== ME.id && u.is_active).map(u =>
+      `<option value="${u.id}">${escHtml(u.full_name)} (${u.role})</option>`).join('');
+  } catch {}
+}
+
+async function saveNewChat() {
+  const title = document.getElementById('newChatTitle').value.trim();
+  if (!title) { showToast('Titel eingeben', 'err'); return; }
+  const sel = document.getElementById('newChatInviteSelect');
+  const invite_ids = [...(sel?.selectedOptions||[])].map(o => parseInt(o.value));
+  try {
+    const r = await api('POST', '/chats', { title, invite_ids });
+    closeCreateChat();
+    document.getElementById('newChatTitle').value = '';
+    await openChat(r.id);
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+async function openChatInvite() {
+  const allUsers = await api('GET', '/users').catch(() => []);
+  const chat = await api('GET', `/chats/${currentChatId}`).catch(() => null);
+  if (!chat) return;
+  const existing = new Set((chat.participants||[]).map(p => p.id));
+  const available = allUsers.filter(u => !existing.has(u.id) && u.is_active);
+  if (!available.length) { showToast('Alle aktiven Benutzer sind bereits Teilnehmer', 'info'); return; }
+  const chosen = available.find(u => u);
+  if (!chosen) return;
+  const name = prompt('Benutzer einladen:\n' + available.map(u => `${u.id}: ${u.full_name}`).join('\n') + '\n\nID eingeben:');
+  const uid = parseInt(name);
+  if (!uid) return;
+  try {
+    await api('POST', `/chats/${currentChatId}/invite`, { user_id: uid });
+    showToast('Eingeladen ✓');
+    await refreshChat();
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+// ── Init ──────────────────────────────────────────────────────
 loadLeads();
 setInterval(loadReminders, 5 * 60 * 1000);
+checkReminderNotifications();
+setInterval(checkReminderNotifications, 2 * 60 * 1000);
 </script>
 
 <!-- MODAL: Lead hinzufügen -->
@@ -667,23 +954,68 @@ setInterval(loadReminders, 5 * 60 * 1000);
   </div>
 </div>
 
-<!-- MODAL: Passwort ändern -->
-<div class="modal-overlay" id="pwModal" onclick="if(event.target===this)closePwModal()">
-  <div class="modal-box" style="max-width:380px">
+
+<!-- Reminder Notification Container -->
+<div id="reminderNotifContainer" style="position:fixed;bottom:24px;right:24px;z-index:600;max-width:340px"></div>
+
+<!-- MODAL: Einstellungen -->
+<div class="modal-overlay" id="settingsModal" onclick="if(event.target===this)closeSettingsModal()">
+  <div class="modal-box" style="max-width:400px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-      <h2 style="margin:0"><i class="fas fa-key" style="color:var(--accent);margin-right:8px"></i>Passwort ändern</h2>
-      <button class="btn btn-ghost btn-sm" onclick="closePwModal()"><i class="fas fa-times"></i></button>
+      <h2 style="margin:0"><i class="fas fa-cog" style="color:var(--accent);margin-right:8px"></i>Konto &amp; Einstellungen</h2>
+      <button class="btn btn-ghost btn-sm" onclick="closeSettingsModal()"><i class="fas fa-times"></i></button>
     </div>
+
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:10px">Passwort ändern</div>
     <div class="form-group"><label>Aktuelles Passwort</label><input type="password" id="pw-current" class="form-control"></div>
     <div class="form-group"><label>Neues Passwort</label><input type="password" id="pw-new" class="form-control"></div>
-    <div class="form-group"><label>Neues Passwort wiederholen</label><input type="password" id="pw-new2" class="form-control" onkeydown="if(event.key==='Enter')changePassword()"></div>
+    <div class="form-group" style="margin-bottom:4px"><label>Neues Passwort wiederholen</label><input type="password" id="pw-new2" class="form-control"></div>
     <div style="color:var(--red);font-size:12px;min-height:16px;margin-bottom:12px" id="pwErr"></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button class="btn btn-ghost btn-sm" onclick="closePwModal()">Abbrechen</button>
-      <button class="btn btn-primary btn-sm" onclick="changePassword()"><i class="fas fa-save"></i> Speichern</button>
+    <button class="btn btn-ghost btn-sm" style="margin-bottom:20px" onclick="changePassword()"><i class="fas fa-key"></i> Passwort speichern</button>
+
+    <div style="border-top:1px solid var(--border);padding-top:16px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:12px">Benachrichtigungen (Reminder)</div>
+      <label style="display:flex;align-items:center;gap:10px;margin-bottom:10px;cursor:pointer;font-size:13px">
+        <input type="checkbox" id="sett-notify-email" style="accent-color:var(--accent);width:16px;height:16px">
+        <span>E-Mail Benachrichtigung</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:10px;margin-bottom:12px;cursor:pointer;font-size:13px">
+        <input type="checkbox" id="sett-notify-sms" style="accent-color:var(--accent);width:16px;height:16px">
+        <span>SMS Benachrichtigung</span>
+      </label>
+      <div class="form-group" style="margin-bottom:0"><label>Meine Telefonnummer (für SMS)</label><input type="tel" id="sett-phone" class="form-control" placeholder="+49 ..."></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px">SMS-Versand benötigt separate Twilio-Konfiguration.</div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn btn-ghost btn-sm" onclick="closeSettingsModal()">Abbrechen</button>
+      <button class="btn btn-primary btn-sm" onclick="saveNotifSettings()"><i class="fas fa-save"></i> Speichern</button>
     </div>
   </div>
 </div>
 
+<!-- MODAL: Neues Gespräch -->
+<div class="modal-overlay" id="createChatModal" onclick="if(event.target===this)closeCreateChat()">
+  <div class="modal-box" style="max-width:420px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <h2 style="margin:0"><i class="fas fa-comments" style="color:var(--accent);margin-right:8px"></i>Neues Gespräch</h2>
+      <button class="btn btn-ghost btn-sm" onclick="closeCreateChat()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="form-group"><label>Thema / Titel *</label><input id="newChatTitle" class="form-control" placeholder="z.B. Frage zu Lead XY..."></div>
+    <div class="form-group"><label>Teilnehmer einladen</label>
+      <select id="newChatInviteSelect" class="form-control" multiple style="height:120px" onclick="loadUsersForChatInvite('newChatInviteSelect')">
+        <option disabled>Einmal klicken um Benutzer zu laden...</option>
+      </select>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">Strg + Klick für Mehrfachauswahl</div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-ghost btn-sm" onclick="closeCreateChat()">Abbrechen</button>
+      <button class="btn btn-primary btn-sm" onclick="saveNewChat()"><i class="fas fa-plus"></i> Gespräch starten</button>
+    </div>
+  </div>
+</div>
+
+<style>
+@keyframes slideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+</style>
 </body>
 </html>

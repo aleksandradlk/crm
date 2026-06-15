@@ -38,12 +38,16 @@ router.post('/login', async (req, res) => {
 // POST /api/auth/logout
 router.post('/logout', async (req, res) => {
   const header = req.headers['authorization'];
+  const { reason } = req.body || {};
   if (header) {
     try {
       const token = header.startsWith('Bearer ') ? header.slice(7) : header;
       const payload = jwt.verify(token, process.env.JWT_SECRET);
       await db.query('DELETE FROM sessions WHERE user_id = ?', [payload.id]);
-      await log(payload.id, 'logout', 'system', null, null, req.ip);
+      const action = reason === 'inactivity' ? 'logout_inactivity' : 'logout';
+      await log(payload.id, action, 'system', null,
+        reason === 'inactivity' ? { reason: 'Automatisch nach 5 Min Inaktivität' } : null,
+        req.ip);
     } catch {}
   }
   res.json({ ok: true });
@@ -110,6 +114,19 @@ router.patch('/password', async (req, res) => {
   } catch {
     res.status(401).json({ error: 'Token ungültig' });
   }
+});
+
+// GET /api/auth/me — eigenes Profil incl. Benachrichtigungs-Prefs
+const { auth } = require('../middleware/auth');
+router.get('/me', auth, async (req, res) => {
+  try {
+    const [[user]] = await db.query(
+      'SELECT id, username, full_name, email, role, notify_email, notify_sms, phone FROM users WHERE id=?',
+      [req.user.id]
+    );
+    if (!user) return res.status(404).json({ error: 'Nicht gefunden' });
+    res.json(user);
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 module.exports = router;
