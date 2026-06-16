@@ -60,7 +60,7 @@ a { color: var(--accent); text-decoration: none; }
 .logo-text { font-size: 15px; font-weight: 700; color: var(--dark); letter-spacing: -0.2px; }
 .logo-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
 
-.nav { padding: 8px; overflow-y: auto; }
+.nav { padding: 8px; overflow-y: auto; flex: 1; min-height: 0; }
 
 .nav-group-label {
   display: block;
@@ -309,6 +309,15 @@ tbody td { padding: 14px 16px; vertical-align: middle; }
   background: currentColor;
   flex-shrink: 0;
 }
+.status-select {
+  border: none;
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
 .s-neu            { background: rgba(27,115,205,0.10); color: #1b73cd; }
 .s-kontaktiert    { background: rgba(22,163,74,0.10);  color: var(--green); }
 .s-nicht_erreicht { background: rgba(245,158,11,0.10); color: var(--amber); }
@@ -334,7 +343,7 @@ tbody td { padding: 14px 16px; vertical-align: middle; }
 .modal-close:hover { color: var(--text); }
 
 /* ── Slide panel ─────────────────────────────────────────────── */
-.slide-panel { position: fixed; right: 0; top: 0; bottom: 0; width: 560px; background: var(--bg2); border-left: 1px solid var(--border2); z-index: 150; transform: translateX(100%); transition: transform 0.22s cubic-bezier(0.4,0,0.2,1); overflow-y: auto; box-shadow: var(--shadow-lg); }
+.slide-panel { position: fixed; right: 0; top: 0; bottom: 0; width: 560px; background: var(--bg2); border-left: 1px solid var(--border2); z-index: 150; transform: translateX(100%); transition: transform 0.22s cubic-bezier(0.4,0,0.2,1); overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow-lg); }
 .slide-panel.open { transform: translateX(0); }
 .slide-overlay { position: fixed; inset: 0; z-index: 149; background: rgba(7,32,73,0.18); backdrop-filter: blur(2px); display: none; }
 .slide-overlay.open { display: block; }
@@ -385,9 +394,73 @@ body.dark select.form-control option { background: var(--bg3); }
 body.dark tbody tr:hover { background: rgba(255,255,255,0.03); }
 body.dark .search-bar-kbd { background: var(--bg3); border-color: var(--border2); }
 
+/* ── Mobile topbar + Sidebar-Drawer (nur sichtbar <=800px) ──────── */
+.mobile-topbar { display: none; }
+.mobile-nav-overlay { position: fixed; inset: 0; z-index: 299; background: rgba(7,32,73,0.35); display: none; }
+.mobile-nav-overlay.open { display: block; }
+
 /* ── Responsive ──────────────────────────────────────────────── */
 @media (max-width: 800px) {
-  .app-layout { grid-template-columns: 1fr; }
-  .sidebar { display: none; }
-  .main-content { padding: 16px; gap: 16px; }
+  .mobile-topbar {
+    display: flex; align-items: center; gap: 12px;
+    position: sticky; top: 0; z-index: 120;
+    background: var(--bg2); border-bottom: 1px solid var(--border);
+    padding: 0 14px; height: 52px; flex-shrink: 0;
+  }
+  .mobile-topbar img { height: 26px; }
+  .mobile-topbar-title { font-size: 14px; font-weight: 700; color: var(--text); }
+  .hamburger-btn {
+    width: 44px; height: 44px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: none; border: none; color: var(--text); font-size: 18px; cursor: pointer;
+  }
+
+  .app-layout { grid-template-columns: 1fr; display: flex; flex-direction: column; }
+  .sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0; width: 260px; z-index: 300;
+    transform: translateX(-100%); transition: transform 0.22s ease; box-shadow: var(--shadow-lg);
+  }
+  .sidebar.mobile-open { transform: translateX(0); }
+  .main-content { padding: 14px; gap: 14px; }
+
+  /* ── Stats: 2 Spalten statt automatisch eng ──────────────── */
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+
+  /* ── Tabellen → kompakte Karten, kein horizontales Scrollen ── */
+  .table-wrap { overflow-x: visible; }
+  table { min-width: 0; width: 100%; }
+  thead { display: none; }
+  tbody, tbody tr, tbody td { display: block; width: 100%; }
+  tbody tr {
+    border: 1px solid var(--border); border-radius: 10px;
+    margin-bottom: 10px; padding: 12px 14px; background: var(--bg2);
+  }
+  tbody td { padding: 4px 0; border-bottom: none; }
+  tbody td:first-child { display: none; } /* Zeilennummer: nicht relevant auf Mobile */
+  tbody td:nth-child(2) {
+    font-size: 14px; font-weight: 700; padding-bottom: 8px; margin-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  tbody td:last-child { padding-top: 8px; text-align: right; }
+
+  /* ── Buttons & Inputs: mind. 44px Höhe für Daumenbedienung ──── */
+  .btn { min-height: 44px; }
+  .btn-sm { min-height: 40px; }
+  .btn-icon { width: 44px; min-height: 44px; }
+  .sidebar-icon-btn { width: 40px; height: 40px; font-size: 14px; }
+  .form-control { min-height: 44px; }
+  select.status-select { min-height: 38px; padding: 6px 10px; }
+
+  /* ── Lead-Detail-Panel: Vollbild auf Mobile ──────────────── */
+  .slide-panel { width: 100%; }
+
+  /* ── Modal: volle Breite, nichts abgeschnitten ───────────── */
+  .modal { width: 100%; max-width: 100%; padding: 20px; }
+}
+
+@media (max-width: 480px) {
+  /* ── Extra-schmale Screens: Toolbar-Inputs/Selects volle Breite ── */
+  input.form-control, select.form-control { width: 100% !important; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .stat-card { padding: 12px 14px; }
 }
