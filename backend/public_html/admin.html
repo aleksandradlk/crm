@@ -1128,6 +1128,12 @@ async function saveManualLead() {
 }
 
 // ── EMAIL MODAL ───────────────────────────────────────────────
+function bodyToHtml(text) {
+  if (!text) return '';
+  if (/<[a-z][\s\S]*>/i.test(text)) return text; // bereits HTML
+  return text.split('\n').map(l => `<div>${escHtml(l) || '<br>'}</div>`).join('');
+}
+
 async function openEmailModal() {
   const l = _panelLead;
   if (!l) return;
@@ -1137,7 +1143,7 @@ async function openEmailModal() {
   try {
     const tmpl = await api('GET', '/wiki/template');
     document.getElementById('emailSubject').value      = (tmpl.subject||'').replace(/{company}/g, company);
-    document.getElementById('emailBody').innerHTML     = (tmpl.body||'').replace(/{company}/g, company);
+    document.getElementById('emailBody').innerHTML     = bodyToHtml((tmpl.body||'').replace(/{company}/g, company));
   } catch {
     document.getElementById('emailSubject').value = '';
     document.getElementById('emailBody').innerHTML = '';
