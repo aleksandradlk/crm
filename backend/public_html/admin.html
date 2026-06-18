@@ -1159,7 +1159,57 @@ async function sendEmail() {
 }
 
 // ── WIKI ──────────────────────────────────────────────────────
+function initWikiEditor() {
+  const el = document.getElementById('wiki-tmpl-body');
+  if (!el || el._editorInit) return;
+  el._editorInit = true;
+
+  function insertImageFile(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = document.createElement('img');
+      img.src = e.target.result;
+      img.style.maxWidth = '100%';
+      el.focus();
+      const sel = window.getSelection();
+      if (sel.rangeCount) {
+        const range = sel.getRangeAt(0);
+        range.insertNode(img);
+        range.collapse(false);
+      } else {
+        el.appendChild(img);
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  el.addEventListener('paste', e => {
+    const items = (e.clipboardData || window.clipboardData)?.items || [];
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        insertImageFile(item.getAsFile());
+        return;
+      }
+    }
+  });
+
+  el.addEventListener('dragover', e => e.preventDefault());
+  el.addEventListener('drop', e => {
+    const files = e.dataTransfer?.files || [];
+    for (const file of files) {
+      if (file.type.startsWith('image/')) {
+        e.preventDefault();
+        insertImageFile(file);
+        return;
+      }
+    }
+  });
+}
+
 async function loadWiki() {
+  initWikiEditor();
   try {
     const [files, tmpl] = await Promise.all([
       api('GET', '/wiki/files'),
