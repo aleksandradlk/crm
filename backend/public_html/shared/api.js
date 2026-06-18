@@ -90,6 +90,14 @@ function confBar(val) {
   </div>`;
 }
 
+function ageBadge(dateStr) {
+  if (!dateStr) return '';
+  const days = Math.floor((Date.now() - new Date(dateStr)) / 86400000);
+  if (days >= 30) return `<span style="background:#ef4444;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;white-space:nowrap;vertical-align:middle" title="${days} Tage keine Aktivität"><i class="fas fa-fire"></i> ${days}T</span>`;
+  if (days >= 14) return `<span style="background:#f59e0b;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;white-space:nowrap;vertical-align:middle" title="${days} Tage keine Aktivität"><i class="fas fa-clock"></i> ${days}T</span>`;
+  return '';
+}
+
 function fmtDate(d) {
   if (!d) return '—';
   return new Date(d).toLocaleString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
