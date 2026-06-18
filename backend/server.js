@@ -1,6 +1,5 @@
 require('dotenv').config();
 const express     = require('express');
-const helmet      = require('helmet');
 const cors        = require('cors');
 const rateLimit   = require('express-rate-limit');
 const path        = require('path');
@@ -17,26 +16,9 @@ const cron           = require('node-cron');
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-// ── Security Headers ──────────────────────────────────────────
-app.use(helmet({
-  contentSecurityPolicy:        false, // Inline-JS/CSS + externe CDNs (Font Awesome etc.) würden brechen
-  crossOriginEmbedderPolicy:    false, // Uploads und externe Ressourcen würden brechen
-}));
-
 // ── Middleware ────────────────────────────────────────────────
-const ALLOWED_ORIGINS = [
-  process.env.BASE_URL,
-  `http://localhost:${process.env.PORT || 3000}`,
-  'http://localhost:3000',
-].filter(Boolean);
-
 app.use(cors({
-  origin(origin, cb) {
-    // same-origin requests have no Origin header — always allow
-    if (!origin) return cb(null, true);
-    if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
-    cb(new Error(`CORS: Origin nicht erlaubt — ${origin}`));
-  },
+  origin: process.env.BASE_URL || '*',
   methods: ['GET','POST','PATCH','DELETE','PUT','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization'],
 }));
