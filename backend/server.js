@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express     = require('express');
+const helmet      = require('helmet');
 const cors        = require('cors');
 const rateLimit   = require('express-rate-limit');
 const path        = require('path');
@@ -16,9 +17,26 @@ const cron           = require('node-cron');
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
+// ── Security Headers ──────────────────────────────────────────
+app.use(helmet({
+  contentSecurityPolicy:        false, // Inline-JS/CSS + externe CDNs (Font Awesome etc.) würden brechen
+  crossOriginEmbedderPolicy:    false, // Uploads und externe Ressourcen würden brechen
+}));
+
 // ── Middleware ────────────────────────────────────────────────
+const ALLOWED_ORIGINS = [
+  process.env.BASE_URL,
+  `http://localhost:${process.env.PORT || 3000}`,
+  'http://localhost:3000',
+].filter(Boolean);
+
 app.use(cors({
-  origin: process.env.BASE_URL || '*',
+  origin(origin, cb) {
+    // same-origin requests have no Origin header — always allow
+    if (!origin) return cb(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    cb(new Error(`CORS: Origin nicht erlaubt — ${origin}`));
+  },
   methods: ['GET','POST','PATCH','DELETE','PUT','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization'],
 }));
@@ -106,6 +124,15 @@ db.query(`CREATE TABLE IF NOT EXISTS chat_messages (
   text TEXT NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )`).catch(() => {});
+
+// ── Index-Migrationen (idempotent — Fehler = Index existiert bereits) ────────
+db.query('CREATE INDEX idx_leads_status     ON leads (status)').catch(() => {});
+db.query('CREATE INDEX idx_leads_created_at ON leads (created_at)').catch(() => {});
+db.query('CREATE INDEX idx_leads_updated_at ON leads (updated_at)').catch(() => {});
+db.query('CREATE INDEX idx_rem_user_sent_time ON reminders (user_id, sent, remind_at)').catch(() => {});
+db.query('CREATE INDEX idx_activity_created_at ON activity_log (created_at)').catch(() => {});
+db.query('CREATE INDEX idx_leads_assigned_status ON leads (assigned_to, status)').catch(() => {});
+db.query('CREATE INDEX idx_leads_status_created  ON leads (status, created_at)').catch(() => {});
 
 // ── Cron: Activity Log nach 7 Tagen bereinigen ───────────────
 cron.schedule('0 3 * * *', async () => {

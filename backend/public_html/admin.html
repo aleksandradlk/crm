@@ -79,7 +79,7 @@
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
         <h1 style="font-size:20px;font-weight:700">Alle Leads</h1>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <input type="text" id="searchInput" class="form-control" style="width:200px" placeholder="Suchen..." oninput="filterLeads()">
+          <input type="text" id="searchInput" class="form-control" style="width:200px" placeholder="Suchen..." autocomplete="new-password" oninput="filterLeads()">
           <select id="statusFilter" class="form-control" style="width:160px" onchange="filterLeads()">
             <option value="">Alle Status</option>
             <option value="neu">Neu</option>
@@ -101,6 +101,8 @@
         <div class="stat-card"><div class="stat-label">Kontaktiert</div><div class="stat-value sv-green" id="st-kontaktiert">—</div></div>
         <div class="stat-card"><div class="stat-label">Kunden</div><div class="stat-value sv-amber" id="st-kunde">—</div></div>
       </div>
+
+      <div id="funnelSummary" style="margin-bottom:16px"></div>
 
       <div class="card">
         <div class="card-header">
@@ -254,6 +256,7 @@
           <button class="btn btn-ghost btn-sm" onclick="loadTracking()"><i class="fas fa-sync"></i> Aktualisieren</button>
         </div>
       </div>
+      <div id="trackingOverview" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:24px"></div>
       <div id="trackingList"></div>
 
       <h2 style="font-size:16px;font-weight:600;margin:20px 0 12px">Aktivitätslog</h2>
@@ -429,7 +432,7 @@ function showTab(name) {
   const navMap = { leads: 0, myLeads: 1, generate: 2, users: 3, tracking: 4, wiki: 5, chat: 6 };
   const items = document.querySelectorAll('.nav-item');
   if (navMap[name] !== undefined) items[navMap[name]]?.classList.add('active');
-  if (name === 'leads')    loadLeads();
+  if (name === 'leads')    { if (allLeads.length) { renderLeads(allLeads); updateLeadStats(allLeads); } loadLeads(); }
   if (name === 'myLeads')  renderMyLeads();
   if (name === 'users')    loadUsers();
   if (name === 'tracking') loadTracking();
@@ -453,7 +456,7 @@ function renderMyLeads() {
   body.innerHTML = mine.map((l, i) => `
     <tr style="cursor:pointer" onclick="openLeadPanel(${l.id})">
       <td style="color:var(--text3);font-size:11px;font-family:'JetBrains Mono',monospace">${String(i+1).padStart(2,'0')}</td>
-      <td style="font-weight:600">${escHtml(l.company||'—')}</td>
+      <td style="font-weight:600">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}</td>
       <td style="color:var(--text2)">${escHtml(l.ceo||'—')}</td>
       <td>${l.phone ? `<a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()" style="color:var(--accent);font-size:12px">${escHtml(l.phone)}</a>` : ''}</td>
       <td style="font-size:12px;color:var(--text2)">${escHtml(l.location||'—')}</td>
@@ -530,7 +533,7 @@ function renderLeads(leads) {
   body.innerHTML = leads.map((l, i) => `
     <tr style="cursor:pointer" onclick="openLeadPanel(${l.id})">
       <td style="color:var(--text3);font-size:11px;font-family:'JetBrains Mono',monospace">${String(i+1).padStart(2,'0')}</td>
-      <td style="font-weight:600">${escHtml(l.company||'—')}</td>
+      <td style="font-weight:600">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}</td>
       <td style="color:var(--text2)">${escHtml(l.ceo||'—')}</td>
       <td>
         ${l.email ? `<a href="mailto:${escHtml(l.email)}" onclick="event.stopPropagation()" style="color:var(--accent);font-size:12px">${escHtml(l.email)}</a>` : ''}
@@ -551,6 +554,47 @@ function updateLeadStats(leads) {
   document.getElementById('st-neu').textContent         = leads.filter(l => l.status === 'neu').length;
   document.getElementById('st-kontaktiert').textContent = leads.filter(l => l.status === 'kontaktiert').length;
   document.getElementById('st-kunde').textContent       = leads.filter(l => l.status === 'kunde').length;
+  renderFunnel(leads);
+}
+
+function renderFunnel(leads) {
+  const total = leads.length;
+  const STEPS = [
+    { key: 'neu',            label: 'Neu' },
+    { key: 'kontaktiert',    label: 'Kontaktiert' },
+    { key: 'rueckruf',       label: 'Rückruf' },
+    { key: 'nicht_erreicht', label: 'Nicht erreicht' },
+    { key: 'kein_interesse', label: 'Kein Interesse' },
+    { key: 'kunde',          label: 'Kunde' },
+  ];
+  const counts = {};
+  leads.forEach(l => { counts[l.status] = (counts[l.status] || 0) + 1; });
+
+  const rows = STEPS.map(({ key, label }) => {
+    const n   = counts[key] || 0;
+    const pct = total > 0 ? Math.round(n / total * 100) : 0;
+    const bar = total > 0 ? Math.round(n / total * 100) : 0;
+    const color = key === 'kunde' ? 'var(--green,#22c55e)'
+                : key === 'kein_interesse' ? 'var(--red,#ef4444)'
+                : 'var(--accent)';
+    return `
+      <div style="display:grid;grid-template-columns:140px 40px 1fr 48px;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:13px;color:var(--text2)">${label}</span>
+        <span style="font-size:14px;font-weight:700;text-align:right">${n}</span>
+        <div style="background:var(--bg2);border-radius:4px;height:8px;overflow:hidden">
+          <div style="width:${bar}%;height:100%;background:${color};border-radius:4px;transition:width .3s"></div>
+        </div>
+        <span style="font-size:12px;color:var(--text3);text-align:right">${pct} %</span>
+      </div>`;
+  }).join('');
+
+  document.getElementById('funnelSummary').innerHTML = `
+    <div class="card" style="padding:14px 18px">
+      <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:10px;display:flex;align-items:center;gap:6px">
+        <i class="fas fa-filter" style="color:var(--accent)"></i> Lead-Funnel — ${total} Leads gesamt
+      </div>
+      ${rows}
+    </div>`;
 }
 
 async function deleteLead(id) {
@@ -580,6 +624,7 @@ function closeLeadPanel() {
 
 function renderPanelKeyInfo(l) {
   const lastNote = (l.comments||[]).length ? l.comments[l.comments.length - 1] : null;
+  const lastActivity = lastNote && lastNote.created_at > (l.updated_at||'') ? lastNote.created_at : (l.updated_at||l.created_at);
   const contactItems = [
     l.ceo   ? `<div style="display:flex;align-items:center;gap:8px;font-size:13px"><i class="fas fa-user" style="color:var(--text3);width:14px;text-align:center;flex-shrink:0"></i><span>${escHtml(l.ceo)}</span></div>` : '',
     l.phone ? `<div style="display:flex;align-items:center;gap:8px;font-size:13px"><i class="fas fa-phone" style="color:var(--text3);width:14px;text-align:center;flex-shrink:0"></i><a href="tel:${escHtml(l.phone)}" style="color:var(--accent)">${escHtml(l.phone)}</a></div>` : '',
@@ -588,6 +633,7 @@ function renderPanelKeyInfo(l) {
   return `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
       ${statusBadge(l.status)}
+      ${ageBadge(lastActivity)}
       ${confBar(l.confidence)}
       ${l.email ? `<button class="btn btn-ghost btn-sm" onclick="openEmailModal()" style="margin-left:auto"><i class="fas fa-envelope"></i> E-Mail senden</button>` : ''}
     </div>
@@ -903,48 +949,101 @@ const ACTION_LABELS = {
 async function loadTracking() {
   try {
     const filterUserId = document.getElementById('trackingUserFilter')?.value || '';
-    const activityUrl  = filterUserId
-      ? `/users/activity?limit=100&user_id=${filterUserId}`
-      : '/users/activity?limit=100';
 
     const [sessions, activity, users] = await Promise.all([
       api('GET', '/users/tracking'),
-      api('GET', activityUrl),
+      api('GET', '/users/activity?limit=200'),
       api('GET', '/users'),
     ]);
 
     // Benutzer-Filter befüllen (einmalig)
     const filterEl = document.getElementById('trackingUserFilter');
     if (filterEl && filterEl.options.length <= 1) {
-      users.forEach(u => {
+      users.filter(u => u.is_active).forEach(u => {
         const opt = document.createElement('option');
         opt.value = u.id; opt.textContent = u.full_name;
         filterEl.appendChild(opt);
       });
     }
 
-    const list = document.getElementById('trackingList');
-    list.innerHTML = sessions.length ? sessions.map(s => {
-      const inactive   = parseInt(s.inactive_minutes) || 0;
-      const sessionMin = parseInt(s.session_minutes)  || 0;
-      const status     = inactive < 2 ? 'online' : inactive < 5 ? 'idle' : 'offline';
-      const statusLabel= status==='online' ? 'Aktiv' : status==='idle' ? 'Kurz inaktiv' : 'Offline/Abgemeldet';
-      return `
-        <div class="tracking-card">
-          <div class="pulse ${status}"></div>
-          <div class="avatar" style="width:36px;height:36px;font-size:14px">${escHtml(s.full_name?.[0]||'?')}</div>
-          <div>
-            <div class="tr-name">${escHtml(s.full_name)} <span style="color:var(--text3);font-size:11px">(${s.role})</span></div>
-            <div class="tr-meta">${statusLabel} · Sitzung: ${sessionMin} Min · Klicks: ${s.click_count}</div>
-          </div>
-          <div class="tr-right">
-            <div class="tr-time">Letzter Klick: ${fmtDate(s.last_active)}</div>
-            <div style="font-size:11px;color:var(--text3)">Inaktiv seit: ${inactive} Min</div>
-          </div>
-        </div>`;
-    }).join('') : '<div style="color:var(--text3);font-size:13px;padding:20px">Keine aktiven Sitzungen</div>';
+    // Heute-Stats pro User aus activity_log ableiten
+    const todayStr = new Date().toLocaleDateString('sv'); // YYYY-MM-DD
+    const userStats = {};
+    activity.forEach(a => {
+      if (!a.created_at || !a.created_at.startsWith(todayStr)) return;
+      if (!userStats[a.user_id]) userStats[a.user_id] = { leads: new Set(), status: 0, comments: 0, lastAction: null };
+      const s = userStats[a.user_id];
+      if (['status_change','comment_add','lead_assign','lead_update','lead_create_manual'].includes(a.action) && a.target_id)
+        s.leads.add(a.target_id);
+      if (a.action === 'status_change') s.status++;
+      if (a.action === 'comment_add') s.comments++;
+      if (!s.lastAction || a.created_at > s.lastAction) s.lastAction = a.created_at;
+    });
 
-    document.getElementById('activityBody').innerHTML = activity.map(a => {
+    // Session-Map nach User-ID
+    const sessionMap = {};
+    sessions.forEach(s => sessionMap[s.id] = s);
+
+    // Alle aktiven User — inkl. ausgeloggter
+    const activeUsers = users.filter(u => u.is_active);
+    const sorted = activeUsers.map(u => {
+      const sess    = sessionMap[u.id] || null;
+      const inactive = sess ? (parseInt(sess.inactive_minutes) || 0) : null;
+      const onlineStatus = !sess ? 'out'
+        : inactive < 2 ? 'online'
+        : inactive < 5 ? 'idle'
+        : 'away';
+      return { u, sess, onlineStatus, inactive, stats: userStats[u.id] || { leads: new Set(), status: 0, comments: 0, lastAction: null } };
+    }).sort((a, b) => ({ online:0, idle:1, away:2, out:3 }[a.onlineStatus] - { online:0, idle:1, away:2, out:3 }[b.onlineStatus]));
+
+    document.getElementById('trackingOverview').innerHTML = sorted.map(({ u, sess, onlineStatus, inactive, stats }) => {
+      const pulseClass   = onlineStatus === 'online' ? 'online' : onlineStatus === 'idle' ? 'idle' : 'offline';
+      const statusLabel  = onlineStatus === 'online' ? 'Aktiv'
+        : onlineStatus === 'idle' ? 'Kurz inaktiv'
+        : onlineStatus === 'away' ? 'Angemeldet (inaktiv)'
+        : 'Nicht angemeldet';
+      const sessionInfo  = sess
+        ? `Sitzung: ${parseInt(sess.session_minutes)||0} Min · ${parseInt(sess.click_count)||0} Klicks`
+        : (u.last_login ? `Letzter Login: ${fmtDateShort(u.last_login)}` : 'Noch nie eingeloggt');
+      const leadsCount   = stats.leads.size;
+      const lastActLabel = stats.lastAction ? fmtDate(stats.lastAction) : null;
+      const cardBorder   = onlineStatus === 'online' ? 'border-color:var(--green,#22c55e)' : '';
+      return `
+        <div class="tracking-card" style="flex-direction:column;align-items:stretch;gap:10px;${cardBorder}">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="pulse ${pulseClass}"></div>
+            <div class="avatar" style="width:36px;height:36px;font-size:14px;flex-shrink:0">${escHtml(u.full_name?.[0]||'?')}</div>
+            <div style="flex:1;min-width:0">
+              <div class="tr-name">${escHtml(u.full_name)} <span style="color:var(--text3);font-size:11px">(${u.role})</span></div>
+              <div class="tr-meta">${statusLabel}${sess && inactive !== null ? ' · Inaktiv: ' + inactive + ' Min' : ''}</div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+            <div style="text-align:center;background:var(--bg2);border-radius:6px;padding:7px 4px">
+              <div style="font-size:20px;font-weight:700;color:var(--accent);line-height:1">${leadsCount}</div>
+              <div style="font-size:10px;color:var(--text3);margin-top:2px">Leads</div>
+            </div>
+            <div style="text-align:center;background:var(--bg2);border-radius:6px;padding:7px 4px">
+              <div style="font-size:20px;font-weight:700;color:var(--accent);line-height:1">${stats.status}</div>
+              <div style="font-size:10px;color:var(--text3);margin-top:2px">Status</div>
+            </div>
+            <div style="text-align:center;background:var(--bg2);border-radius:6px;padding:7px 4px">
+              <div style="font-size:20px;font-weight:700;color:var(--accent);line-height:1">${stats.comments}</div>
+              <div style="font-size:10px;color:var(--text3);margin-top:2px">Notizen</div>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--text3)">${sessionInfo}${lastActLabel ? ' · Aktiv: ' + lastActLabel : ''}</div>
+        </div>`;
+    }).join('') || '<div style="color:var(--text3);font-size:13px;padding:20px">Keine Benutzer gefunden</div>';
+
+    document.getElementById('trackingList').innerHTML = '';
+
+    // Aktivitätslog — optional nach User gefiltert (client-side)
+    const tableActivity = filterUserId
+      ? activity.filter(a => String(a.user_id) === String(filterUserId))
+      : activity;
+
+    document.getElementById('activityBody').innerHTML = tableActivity.map(a => {
       let detail = '';
       try { const d = JSON.parse(a.detail); detail = Object.entries(d).filter(([,v])=>v!=null).map(([k,v])=>`${k}: ${v}`).join(', '); } catch {}
       return `
@@ -1260,19 +1359,27 @@ async function refreshChat() {
   if (!_chatId) return;
   try {
     const c = await api('GET', `/chats/${_chatId}`);
-    document.getElementById('chatDetailTitle').textContent = c.room.title;
+    if (!c) return;
+    document.getElementById('chatDetailTitle').textContent = c.title || '';
     const parts = (c.participants||[]).map(p => escHtml(p.full_name)).join(', ');
     const partsEl = document.getElementById('chatParticipants');
     if (partsEl) partsEl.textContent = 'Teilnehmer: ' + (parts || '—');
     const msgsEl = document.getElementById('chatMessages');
-    msgsEl.innerHTML = c.messages.map(m => `
-      <div style="margin-bottom:10px;${m.user_id===ME?.id?'text-align:right':''}">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:2px">${escHtml(m.full_name)} · ${fmtDate(m.created_at)}</div>
-        <div style="display:inline-block;background:${m.user_id===ME?.id?'var(--accent)':'var(--bg3)'};color:${m.user_id===ME?.id?'#fff':'var(--text1)'};padding:8px 12px;border-radius:10px;font-size:13px;max-width:80%;text-align:left">${escHtml(m.message)}</div>
-      </div>`).join('');
-    msgsEl.scrollTop = msgsEl.scrollHeight;
-    const closeBtn = document.getElementById('chatCloseBtn');
-    if (closeBtn) closeBtn.style.display = c.room.is_closed ? 'none' : 'inline-flex';
+    if (msgsEl) {
+      msgsEl.innerHTML = (c.messages||[]).map(m => `
+        <div style="margin-bottom:10px;${m.user_id===ME?.id?'text-align:right':''}">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:2px">${escHtml(m.full_name)} · ${fmtDate(m.created_at)}</div>
+          <div style="display:inline-block;background:${m.user_id===ME?.id?'var(--accent)':'var(--bg3)'};color:${m.user_id===ME?.id?'#fff':'var(--text1)'};padding:8px 12px;border-radius:10px;font-size:13px;max-width:80%;text-align:left">${escHtml(m.text)}</div>
+        </div>`).join('');
+      msgsEl.scrollTop = msgsEl.scrollHeight;
+    }
+    const closed = !!c.is_closed;
+    const closeBtn   = document.getElementById('chatCloseBtn');
+    const inviteBtn  = document.getElementById('chatInviteBtn');
+    const msgInput   = document.getElementById('chatMsgInput');
+    if (closeBtn)  closeBtn.style.display  = closed ? 'none' : 'inline-flex';
+    if (inviteBtn) inviteBtn.style.display = closed ? 'none' : '';
+    if (msgInput)  msgInput.disabled       = closed;
   } catch(e) { showToast(e.message, 'err'); }
 }
 function backToChats() {
@@ -1286,7 +1393,7 @@ async function sendChatMsg() {
   const msg = inp?.value.trim();
   if (!msg || !_chatId) return;
   try {
-    await api('POST', `/chats/${_chatId}/messages`, { message: msg });
+    await api('POST', `/chats/${_chatId}/messages`, { text: msg });
     inp.value = '';
     await refreshChat();
   } catch(e) { showToast(e.message, 'err'); }
@@ -1327,18 +1434,43 @@ async function saveNewChat() {
 }
 async function openChatInvite() {
   if (!_chatId) return;
-  const users = await api('GET', '/users').catch(() => []);
-  const name  = prompt('Benutzername oder Name zum Einladen:');
-  if (!name) return;
-  const u = users.find(u => u.username === name || u.full_name === name);
-  if (!u) { showToast('Benutzer nicht gefunden', 'err'); return; }
   try {
-    await api('POST', `/chats/${_chatId}/invite`, { user_id: u.id });
-    showToast(`${u.full_name} eingeladen ✓`);
+    const [chat, users] = await Promise.all([
+      api('GET', `/chats/${_chatId}`),
+      api('GET', '/users'),
+    ]);
+    const existing = new Set((chat.participants||[]).map(p => p.id));
+    const available = users.filter(u => !existing.has(u.id) && u.is_active && u.id !== ME?.id);
+    const el = document.getElementById('inviteUserListAdmin');
+    if (!el) return;
+    if (!available.length) {
+      el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:8px 0">Alle aktiven Benutzer sind bereits Teilnehmer.</div>';
+    } else {
+      el.innerHTML = available.map(u =>
+        `<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;min-height:40px;cursor:pointer;font-size:13px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:var(--bg);transition:background .15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg)'">
+          <input type="checkbox" value="${u.id}" style="accent-color:var(--accent);width:16px;height:16px;flex-shrink:0">
+          <span style="font-weight:500">${escHtml(u.full_name)}</span><span style="font-size:11px;color:var(--text3);margin-left:auto">${u.role === 'admin' ? 'Admin' : 'Closer'}</span>
+        </label>`).join('');
+    }
+    document.getElementById('inviteChatModalAdmin').classList.add('open');
+  } catch(e) { showToast(e.message, 'err'); }
+}
+async function saveInviteAdmin() {
+  const checkboxes = document.querySelectorAll('#inviteUserListAdmin input[type=checkbox]:checked');
+  const ids = [...checkboxes].map(c => parseInt(c.value));
+  if (!ids.length) { showToast('Bitte mindestens einen Benutzer auswählen', 'err'); return; }
+  try {
+    for (const uid of ids) {
+      await api('POST', `/chats/${_chatId}/invite`, { user_id: uid });
+    }
+    showToast('Eingeladen ✓');
+    document.getElementById('inviteChatModalAdmin').classList.remove('open');
+    await refreshChat();
   } catch(e) { showToast(e.message, 'err'); }
 }
 
 // ── INIT ──────────────────────────────────────────────────────
+const _b = document.getElementById('leadsTableBody'); if (_b) _b.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3)"><i class="fas fa-spinner fa-spin"></i></td></tr>';
 loadLeads();
 loadClosersForSelect();
 checkReminderNotifications();
@@ -1419,6 +1551,24 @@ document.getElementById('addLeadModal').addEventListener('click', function(e){ i
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
       <button class="btn btn-ghost btn-sm" onclick="closeCreateChat()">Abbrechen</button>
       <button class="btn btn-primary btn-sm" onclick="saveNewChat()"><i class="fas fa-plus"></i> Erstellen</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Benutzer einladen (Admin) -->
+<div class="modal-overlay" id="inviteChatModalAdmin">
+  <div style="background:var(--bg2);border-radius:14px;box-shadow:var(--shadow-lg);padding:28px;width:420px;max-width:96vw;max-height:80vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <h2 style="font-size:16px;font-weight:700;margin:0"><i class="fas fa-user-plus" style="color:var(--accent);margin-right:8px"></i>Benutzer einladen</h2>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('inviteChatModalAdmin').classList.remove('open')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="form-group">
+      <label>Teilnehmer auswählen</label>
+      <div id="inviteUserListAdmin" style="max-height:240px;overflow-y:auto;padding:4px 0"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('inviteChatModalAdmin').classList.remove('open')">Abbrechen</button>
+      <button class="btn btn-primary btn-sm" onclick="saveInviteAdmin()"><i class="fas fa-user-plus"></i> Einladen</button>
     </div>
   </div>
 </div>

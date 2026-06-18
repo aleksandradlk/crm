@@ -20,6 +20,21 @@
 .modal-overlay.open{display:flex}
 .modal-box{background:var(--bg2);border-radius:14px;box-shadow:var(--shadow-lg);padding:28px;width:520px;max-width:96vw;max-height:90vh;overflow-y:auto}
 .modal-box h2{font-size:16px;font-weight:700;margin:0 0 18px}
+
+/* Pipeline */
+.view-toggle{display:flex;border:1px solid var(--border2);border-radius:8px;overflow:hidden}
+.view-toggle button{background:var(--bg3);border:none;color:var(--text3);padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px}
+.view-toggle button.active{background:var(--accent);color:#fff}
+.pipeline-board{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px}
+.pipeline-col{flex:0 0 230px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);display:flex;flex-direction:column;max-height:calc(100vh - 280px);min-height:200px}
+.pipeline-col-header{padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;color:var(--text2)}
+.pipeline-col-body{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:8px;min-height:80px;transition:background .15s}
+.pipeline-col-body.drag-over{background:rgba(79,142,247,0.1)}
+.pipeline-card{background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;cursor:grab;font-size:12px}
+.pipeline-card:active{cursor:grabbing}
+.pipeline-card.dragging{opacity:.35}
+.pipeline-card .pc-company{font-weight:700;font-size:13px;margin-bottom:4px}
+.pipeline-card .pc-row{display:flex;align-items:center;gap:6px;color:var(--text3);font-size:11px;margin-top:3px}
 </style>
 </head>
 <body>
@@ -39,8 +54,8 @@
     </div>
     <nav class="nav">
       <span class="nav-group-label">Hauptnavigation</span>
-      <div class="nav-item active" data-sec="allLeads" onclick="showSection('allLeads')"><i class="fas fa-list"></i> Alle Leads</div>
-      <div class="nav-item" data-sec="myLeads" onclick="showSection('myLeads')"><i class="fas fa-user-check"></i> Meine Leads <span id="rueckrufBadge" style="display:none;margin-left:auto" class="badge" title="Rückrufe offen">0</span></div>
+      <div class="nav-item" data-sec="allLeads" onclick="showSection('allLeads')"><i class="fas fa-list"></i> Alle Leads</div>
+      <div class="nav-item active" data-sec="myLeads" onclick="showSection('myLeads')"><i class="fas fa-user-check"></i> Meine Leads <span id="rueckrufBadge" style="display:none;margin-left:auto" class="badge" title="Rückrufe offen">0</span></div>
       <div class="nav-item" data-sec="reminders" onclick="showSection('reminders')"><i class="fas fa-bell"></i> Reminder <span id="reminderBadge" style="display:none" class="badge">0</span></div>
       <div class="nav-sep"></div>
       <span class="nav-group-label">Ressourcen</span>
@@ -59,12 +74,12 @@
     </div>
 
     <!-- MEINE LEADS -->
-    <div id="sec-myLeads" style="display:none">
+    <div id="sec-myLeads">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
         <h1 style="font-size:20px;font-weight:700">Meine Leads</h1>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-primary btn-sm" onclick="openAddLeadModal()"><i class="fas fa-plus"></i> Lead hinzufügen</button>
-          <input type="text" id="mySearch" class="form-control" style="width:160px" placeholder="Suchen..." oninput="filterMyLeads()">
+          <input type="text" id="mySearch" class="form-control" style="width:160px" placeholder="Suchen..." autocomplete="new-password" oninput="filterMyLeads()">
           <select id="myStatusFilter" class="form-control" style="width:140px" onchange="filterMyLeads()">
             <option value="">Alle Status</option>
             <option value="neu">Neu</option>
@@ -74,39 +89,49 @@
             <option value="rueckruf">Rückruf</option>
             <option value="kunde">Kunde</option>
           </select>
+          <div class="view-toggle">
+            <button id="myViewTableBtn" class="active" onclick="setMyLeadsView('table')"><i class="fas fa-table"></i> Tabelle</button>
+            <button id="myViewPipelineBtn" onclick="setMyLeadsView('pipeline')"><i class="fas fa-columns"></i> Pipeline</button>
+          </div>
           <button class="btn btn-ghost btn-sm" onclick="loadLeads()"><i class="fas fa-sync"></i></button>
         </div>
       </div>
 
       <div class="stats-grid" style="margin-bottom:16px">
-        <div class="stat-card"><div class="stat-label">Zugewiesen</div><div class="stat-value sv-blue" id="my-total">—</div></div>
-        <div class="stat-card"><div class="stat-label">Neu</div><div class="stat-value" style="color:var(--accent)" id="my-neu">—</div></div>
-        <div class="stat-card"><div class="stat-label">Rückruf</div><div class="stat-value sv-amber" id="my-rueckruf">—</div></div>
-        <div class="stat-card"><div class="stat-label">Kunden</div><div class="stat-value sv-green" id="my-kunde">—</div></div>
+        <div class="stat-card" style="cursor:pointer" title="Alle anzeigen" onclick="setMyStatusFilter('')"><div class="stat-label">Zugewiesen</div><div class="stat-value sv-blue" id="my-total">—</div></div>
+        <div class="stat-card" style="cursor:pointer" title="Neue Leads anzeigen" onclick="setMyStatusFilter('neu')"><div class="stat-label">Neu</div><div class="stat-value" style="color:var(--accent)" id="my-neu">—</div></div>
+        <div class="stat-card" style="cursor:pointer" title="Rückrufe anzeigen" onclick="setMyStatusFilter('rueckruf')"><div class="stat-label">Rückruf</div><div class="stat-value sv-amber" id="my-rueckruf">—</div></div>
+        <div class="stat-card" style="cursor:pointer" title="Kunden anzeigen" onclick="setMyStatusFilter('kunde')"><div class="stat-label">Kunden</div><div class="stat-value sv-green" id="my-kunde">—</div></div>
       </div>
 
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title"><i class="fas fa-user-check" style="color:var(--accent)"></i> Meine Lead-Liste <span class="badge" id="myLeadCount">0</span></div>
+      <div id="myLeadsTableView">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><i class="fas fa-user-check" style="color:var(--accent)"></i> Meine Lead-Liste <span class="badge" id="myLeadCount">0</span></div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>#</th><th>Unternehmen</th><th>Telefon</th><th>Standort</th>
+                <th>Status</th><th>Letzter Kontakt</th><th></th>
+              </tr></thead>
+              <tbody id="myLeadsBody"></tbody>
+            </table>
+          </div>
         </div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr>
-              <th>#</th><th>Unternehmen</th><th>Telefon</th><th>Standort</th>
-              <th>Status</th><th>Letzter Kontakt</th><th></th>
-            </tr></thead>
-            <tbody id="myLeadsBody"></tbody>
-          </table>
-        </div>
+      </div>
+
+      <div id="myLeadsPipelineView" style="display:none">
+        <div class="pipeline-board" id="pipelineBoard"></div>
       </div>
     </div>
 
     <!-- ALLE LEADS -->
-    <div id="sec-allLeads">
+    <div id="sec-allLeads" style="display:none">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
         <h1 style="font-size:20px;font-weight:700">Alle Leads</h1>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <input type="text" id="allSearch" class="form-control" style="width:180px" placeholder="Suchen..." autocomplete="off" oninput="filterAllLeads()">
+          <input type="text" id="allSearch" class="form-control" style="width:180px" placeholder="Suchen..." autocomplete="new-password" oninput="filterAllLeads()">
           <select id="allStatusFilter" class="form-control" style="width:150px" onchange="filterAllLeads()">
             <option value="">Alle Status</option>
             <option value="neu">Neu</option>
@@ -169,7 +194,7 @@
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
           <button class="btn btn-ghost btn-sm" onclick="backToChats()"><i class="fas fa-arrow-left"></i> Zurück</button>
           <h1 style="font-size:18px;font-weight:700;flex:1;margin:0" id="chatDetailTitle"></h1>
-          <button class="btn btn-ghost btn-sm" id="chatInviteBtn" onclick="openChatInvite()" title="Einladen"><i class="fas fa-user-plus"></i></button>
+          <button class="btn btn-ghost btn-sm" id="chatInviteBtn" onclick="openChatInvite()"><i class="fas fa-user-plus"></i> Einladen</button>
           <button class="btn btn-ghost btn-sm" id="chatCloseBtn" onclick="closeChatRoom()" title="Gespräch beenden" style="color:var(--red)"><i class="fas fa-times-circle"></i> Beenden</button>
         </div>
         <div class="card" style="margin-bottom:12px">
@@ -193,7 +218,12 @@
   <div id="panelHeader" style="flex-shrink:0;padding:18px 20px 16px;border-bottom:1px solid var(--border);background:var(--bg2)">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px">
       <div style="font-size:17px;font-weight:700;line-height:1.3" id="panelTitle">Lead</div>
-      <button class="btn btn-ghost btn-sm" style="flex-shrink:0" onclick="closePanel()"><i class="fas fa-times"></i></button>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button id="nextLeadBtn" class="btn btn-ghost btn-sm" onclick="nextLead()" title="Nächster Lead">
+          <i class="fas fa-arrow-right"></i><span></span>
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="closePanel()"><i class="fas fa-times"></i></button>
+      </div>
     </div>
     <div id="panelKeyInfo"></div>
   </div>
@@ -230,9 +260,27 @@
 <script src="/shared/api.js"></script>
 <script>
 const ME = Auth.getUser();
+
+function copyPhone(phone) {
+  navigator.clipboard.writeText(phone)
+    .then(() => showToast('Nummer kopiert ✓'))
+    .catch(() => {
+      const el = document.createElement('textarea');
+      el.value = phone;
+      el.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      showToast('Nummer kopiert ✓');
+    });
+}
 let allLeads = [];
 let panelDirty = false;
 let _panelLead = null;
+let _visibleMyLeads  = [];
+let _visibleAllLeads = [];
+let _panelSourceList = [];
 
 Auth.requireAuth();
 if (Auth.isAdmin()) window.location.href = '/admin.html';
@@ -260,14 +308,26 @@ function showSection(name) {
   if (name === 'reminders') loadReminders();
   if (name === 'wiki')      loadWiki();
   if (name === 'chat')      loadChats();
-  if (name === 'allLeads')  { const f = document.getElementById('allSearch'); if (f) { f.value = ''; } renderAllLeads(allLeads); }
+  if (name === 'myLeads' && allLeads.length) filterMyLeads();
+  if (name === 'allLeads')  { const f = document.getElementById('allSearch'); if (f) { f.value = ''; } if (allLeads.length) renderAllLeads(allLeads); }
 }
 
 // ── LOADS ─────────────────────────────────────────────────────
+let myLeadsViewMode = 'table';
+
+function setMyLeadsView(mode) {
+  myLeadsViewMode = mode;
+  document.getElementById('myLeadsTableView').style.display    = mode === 'table'    ? '' : 'none';
+  document.getElementById('myLeadsPipelineView').style.display = mode === 'pipeline' ? '' : 'none';
+  document.getElementById('myViewTableBtn').classList.toggle('active', mode === 'table');
+  document.getElementById('myViewPipelineBtn').classList.toggle('active', mode === 'pipeline');
+  if (mode === 'pipeline') renderPipeline(myLeads());
+}
+
 async function loadLeads() {
   try {
     allLeads = await api('GET', '/leads');
-    renderMyLeads(myLeads());
+    filterMyLeads();
     renderAllLeads(allLeads);
     updateMyStats(myLeads());
     updateAllStats(allLeads);
@@ -285,18 +345,93 @@ async function loadLeads() {
   }
 }
 
+const STATUS_PRIORITY = { rueckruf:0, nicht_erreicht:1, kontaktiert:2, neu:3, kunde:4, kein_interesse:5 };
+
 function myLeads() {
-  return allLeads.filter(l => l.assigned_to === ME.id);
+  return allLeads
+    .filter(l => l.assigned_to === ME.id)
+    .sort((a, b) => {
+      const pa = STATUS_PRIORITY[a.status] ?? 99;
+      const pb = STATUS_PRIORITY[b.status] ?? 99;
+      if (pa !== pb) return pa - pb;
+      return new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at);
+    });
 }
 
 // ── FILTER ────────────────────────────────────────────────────
+function setMyStatusFilter(status) {
+  document.getElementById('myStatusFilter').value = status;
+  filterMyLeads();
+}
+
 function filterMyLeads() {
   const search = document.getElementById('mySearch').value.toLowerCase();
   const status = document.getElementById('myStatusFilter').value;
   let f = myLeads();
-  if (search) f = f.filter(l => (l.company||'').toLowerCase().includes(search) || (l.phone||'').includes(search));
+  if (search) f = f.filter(l => (l.company||'').toLowerCase().includes(search) || (l.phone||'').includes(search) || (l.ceo||'').toLowerCase().includes(search));
   if (status) f = f.filter(l => l.status === status);
   renderMyLeads(f);
+  if (myLeadsViewMode === 'pipeline') renderPipeline(f);
+}
+
+// ── PIPELINE (Kanban) ─────────────────────────────────────────
+const PIPELINE_STATUSES = [
+  ['neu','Neu'],['kontaktiert','Kontaktiert'],['nicht_erreicht','Nicht erreicht'],
+  ['kein_interesse','Kein Interesse'],['rueckruf','Rückruf'],['kunde','Kunde']
+];
+
+function renderPipeline(leads) {
+  const board = document.getElementById('pipelineBoard');
+  board.innerHTML = PIPELINE_STATUSES.map(([status, label]) => {
+    const colLeads = leads.filter(l => l.status === status);
+    const cards = colLeads.map(l => `
+      <div class="pipeline-card" draggable="true" data-id="${l.id}"
+           ondragstart="onCardDragStart(event,${l.id})" ondragend="onCardDragEnd(event)"
+           onclick="openPanel(${l.id})">
+        <div class="pc-company">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}</div>
+        ${l.ceo ? `<div class="pc-row"><i class="fas fa-user" style="width:12px"></i>${escHtml(l.ceo)}</div>` : ''}
+        ${l.phone ? `<div class="pc-row"><i class="fas fa-phone" style="width:12px"></i><a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()" style="color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:11px">${escHtml(l.phone)}</a></div>` : ''}
+        <div class="pc-row"><i class="fas fa-clock" style="width:12px"></i>${fmtDateShort(l.updated_at || l.created_at)}</div>
+      </div>`).join('');
+    return `
+      <div class="pipeline-col">
+        <div class="pipeline-col-header"><span><span class="status-badge s-${status}" style="padding:2px 7px">${label}</span></span><span class="badge">${colLeads.length}</span></div>
+        <div class="pipeline-col-body" data-status="${status}"
+             ondragover="onColDragOver(event)" ondragleave="onColDragLeave(event)" ondrop="onColDrop(event,'${status}')">
+          ${cards || '<div style="color:var(--text3);font-size:11px;text-align:center;padding:16px 4px">Keine Leads</div>'}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+let _draggedLeadId = null;
+
+function onCardDragStart(e, id) {
+  _draggedLeadId = id;
+  e.target.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+function onCardDragEnd(e) {
+  e.target.classList.remove('dragging');
+}
+function onColDragOver(e) {
+  e.preventDefault();
+  e.currentTarget.classList.add('drag-over');
+}
+function onColDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+async function onColDrop(e, status) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  const id = _draggedLeadId;
+  _draggedLeadId = null;
+  if (!id) return;
+  const lead = allLeads.find(l => l.id === id);
+  if (!lead || lead.status === status) return;
+  lead.status = status;
+  renderPipeline(myLeads());
+  await quickStatus(id, status);
 }
 
 function filterAllLeads() {
@@ -310,6 +445,7 @@ function filterAllLeads() {
 
 // ── RENDER ────────────────────────────────────────────────────
 function renderMyLeads(leads) {
+  _visibleMyLeads = leads;
   document.getElementById('myLeadCount').textContent = leads.length;
   const body = document.getElementById('myLeadsBody');
   if (!leads.length) {
@@ -319,7 +455,7 @@ function renderMyLeads(leads) {
   body.innerHTML = leads.map((l, i) => `
     <tr style="cursor:pointer" onclick="openPanel(${l.id})">
       <td style="color:var(--text3);font-size:11px;font-family:'JetBrains Mono',monospace">${String(i+1).padStart(2,'0')}</td>
-      <td style="font-weight:600">${escHtml(l.company||'—')}</td>
+      <td style="font-weight:600">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}</td>
       <td>
         ${l.phone
           ? `<a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()" style="color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:12px">${escHtml(l.phone)}</a>`
@@ -337,6 +473,7 @@ function renderMyLeads(leads) {
 }
 
 function renderAllLeads(leads) {
+  _visibleAllLeads = leads;
   document.getElementById('allLeadCount').textContent = leads.length;
   const body = document.getElementById('allLeadsBody');
   if (!leads.length) {
@@ -351,7 +488,7 @@ function renderAllLeads(leads) {
     return `
     <tr style="cursor:pointer" onclick="openPanel(${l.id})">
       <td style="color:var(--text3);font-size:11px;font-family:'JetBrains Mono',monospace">${String(i+1).padStart(2,'0')}</td>
-      <td style="font-weight:600">${escHtml(l.company||'—')}</td>
+      <td style="font-weight:600">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}</td>
       <td>
         ${l.phone
           ? `<a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()" style="color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:12px">${escHtml(l.phone)}</a>`
@@ -409,6 +546,10 @@ function updateReminderBadge() {
 
 // ── LEAD DETAIL PANEL ─────────────────────────────────────────
 async function openPanel(id) {
+  // Quellliste beim Öffnen bestimmen (aktive Section)
+  const allSecVisible = document.getElementById('sec-allLeads')?.style.display !== 'none';
+  _panelSourceList = allSecVisible ? _visibleAllLeads : _visibleMyLeads;
+
   document.getElementById('leadOverlay').classList.add('open');
   document.getElementById('leadPanel').classList.add('open');
   document.getElementById('panelKeyInfo').innerHTML = '';
@@ -418,9 +559,32 @@ async function openPanel(id) {
     document.getElementById('panelTitle').textContent = l.company || 'Lead';
     document.getElementById('panelKeyInfo').innerHTML = renderPanelKeyInfo(l);
     document.getElementById('panelBody').innerHTML = renderDetail(l);
+    updateNextLeadBtn(id);
+    setTimeout(() => document.getElementById('newComment')?.focus(), 50);
   } catch (e) {
     document.getElementById('panelBody').innerHTML = `<span style="color:var(--red)">${escHtml(e.message)}</span>`;
   }
+}
+
+function updateNextLeadBtn(currentId) {
+  const btn = document.getElementById('nextLeadBtn');
+  if (!btn) return;
+  const idx = _panelSourceList.findIndex(l => l.id === currentId);
+  const hasNext = idx !== -1 && idx < _panelSourceList.length - 1;
+  const pos = idx !== -1 ? `${idx + 1} / ${_panelSourceList.length}` : '';
+  btn.disabled = !hasNext;
+  btn.title = hasNext ? `Nächster Lead (${idx + 2} von ${_panelSourceList.length})` : 'Letzter Lead in dieser Liste';
+  btn.querySelector('span').textContent = pos ? ` ${pos}` : '';
+}
+
+function nextLead() {
+  if (!_panelLead || !_panelSourceList.length) return;
+  const idx = _panelSourceList.findIndex(l => l.id === _panelLead.id);
+  if (idx === -1 || idx >= _panelSourceList.length - 1) {
+    showToast('Letzter Lead in dieser Liste');
+    return;
+  }
+  openPanel(_panelSourceList[idx + 1].id);
 }
 
 function closePanel() {
@@ -431,14 +595,16 @@ function closePanel() {
 
 function renderPanelKeyInfo(l) {
   const lastNote = (l.comments||[]).length ? l.comments[l.comments.length - 1] : null;
+  const lastActivity = lastNote && lastNote.created_at > (l.updated_at||'') ? lastNote.created_at : (l.updated_at||l.created_at);
   const contactItems = [
     l.ceo   ? `<div style="display:flex;align-items:center;gap:8px;font-size:13px"><i class="fas fa-user" style="color:var(--text3);width:14px;text-align:center;flex-shrink:0"></i><span>${escHtml(l.ceo)}</span></div>` : '',
-    l.phone ? `<div style="display:flex;align-items:center;gap:8px;font-size:13px"><i class="fas fa-phone" style="color:var(--text3);width:14px;text-align:center;flex-shrink:0"></i><a href="tel:${escHtml(l.phone)}" style="color:var(--accent)">${escHtml(l.phone)}</a></div>` : '',
+    l.phone ? `<div style="display:flex;align-items:center;gap:8px;font-size:13px"><i class="fas fa-phone" style="color:var(--text3);width:14px;text-align:center;flex-shrink:0"></i><a href="tel:${escHtml(l.phone)}" style="color:var(--accent);font-family:'JetBrains Mono',monospace">${escHtml(l.phone)}</a><button onclick="copyPhone('${escHtml(l.phone)}')" style="background:none;border:none;cursor:pointer;color:var(--text3);padding:2px 5px;font-size:12px;line-height:1" title="Nummer kopieren"><i class="fas fa-copy"></i></button></div>` : '',
     l.email ? `<div style="display:flex;align-items:center;gap:8px;font-size:13px"><i class="fas fa-envelope" style="color:var(--text3);width:14px;text-align:center;flex-shrink:0"></i><a href="mailto:${escHtml(l.email)}" style="color:var(--accent)">${escHtml(l.email)}</a></div>` : '',
   ].filter(Boolean).join('');
   return `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
       ${statusBadge(l.status)}
+      ${ageBadge(lastActivity)}
       ${l.email ? `<button class="btn btn-ghost btn-sm" onclick="openEmailModal()" style="margin-left:auto"><i class="fas fa-envelope"></i> E-Mail senden</button>` : ''}
     </div>
     ${contactItems ? `<div style="display:grid;gap:5px;margin-bottom:${lastNote?'10px':'0'}">${contactItems}</div>` : ''}
@@ -489,7 +655,7 @@ function renderDetail(l) {
       </div>
       <div id="comment-text-${c.id}" style="font-size:13px">${escHtml(c.text)}</div>
     </div>`;
-  }).join('') || '<div style="color:var(--text3);font-size:12px;margin-bottom:8px">Noch keine Aktivität</div>';
+  }).join('') || '<div data-no-activity style="color:var(--text3);font-size:12px;margin-bottom:8px">Noch keine Aktivität</div>';
 
   const pendingReminders = (l.reminders||[]).filter(r => !r.sent);
   const remindHtml = pendingReminders.map(r => `
@@ -499,7 +665,7 @@ function renderDetail(l) {
         ${r.note ? `<div style="font-size:12px;color:var(--text2);margin-top:2px">${escHtml(r.note)}</div>` : ''}
       </div>
       <button class="btn btn-ghost btn-sm" onclick="deleteReminder(${l.id},${r.id})" title="Löschen"><i class="fas fa-trash" style="color:var(--red)"></i></button>
-    </div>`).join('') || '<div style="color:var(--text3);font-size:12px">Kein Reminder gesetzt</div>';
+    </div>`).join('') || '<div data-no-reminder style="color:var(--text3);font-size:12px">Kein Reminder gesetzt</div>';
 
   const assignSection = !isMine
     ? `<div style="margin-bottom:16px">
@@ -511,23 +677,31 @@ function renderDetail(l) {
 
   return `
     ${assignSection}
-    ${infoHtml}
 
-    <div style="margin:16px 0 8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Status setzen</div>
-    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:16px">${statusBtns}</div>
+    <div style="margin-bottom:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Status setzen</div>
+    <div id="panelStatusBtns" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:16px">${statusBtns}</div>
 
-    <div style="margin-bottom:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Aktivitätsverlauf</div>
-    ${commentsHtml}
+    <div style="margin-bottom:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Gesprächsnotiz</div>
     <div style="display:flex;gap:8px;margin-bottom:20px">
       <input type="text" id="newComment" class="form-control" placeholder="Kommentar / Gesprächsnotiz..." onkeydown="if(event.key==='Enter')addComment(${l.id})">
       <button class="btn btn-ghost btn-sm" onclick="addComment(${l.id})"><i class="fas fa-paper-plane"></i></button>
     </div>
 
-    <div style="margin-bottom:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Reminder</div>
-    <div style="margin-bottom:10px">${remindHtml}</div>
+    ${infoHtml}
+
+    <div style="margin-top:16px;margin-bottom:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Aktivitätsverlauf</div>
+    <div id="panelCommentsList">${commentsHtml}</div>
+
+    <div style="margin-top:16px;margin-bottom:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Reminder</div>
+    <div id="panelRemindersList" style="margin-bottom:10px">${remindHtml}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+      <button class="btn btn-ghost btn-sm" onclick="quickReminder(${l.id},'+2h')"><i class="fas fa-clock"></i> Heute +2h</button>
+      <button class="btn btn-ghost btn-sm" onclick="quickReminder(${l.id},'tomorrow9')"><i class="fas fa-sun"></i> Morgen 9 Uhr</button>
+      <button class="btn btn-ghost btn-sm" onclick="quickReminder(${l.id},'3days9')"><i class="fas fa-calendar"></i> In 3 Tagen</button>
+    </div>
     <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end">
       <div>
-        <div class="form-group" style="margin-bottom:8px"><label>Wann erinnern?</label><input type="datetime-local" id="remindAt" class="form-control"></div>
+        <div class="form-group" style="margin-bottom:8px"><label>Individuell</label><input type="datetime-local" id="remindAt" class="form-control"></div>
         <div class="form-group" style="margin-bottom:0"><label>Notiz</label><input type="text" id="remindNote" class="form-control" placeholder="z.B. Rückruf vereinbaren..."></div>
       </div>
       <button class="btn btn-ghost btn-sm" onclick="addReminder(${l.id})"><i class="fas fa-bell"></i> Setzen</button>
@@ -535,23 +709,130 @@ function renderDetail(l) {
 }
 
 async function setStatus(id, status) {
-  try { await api('PATCH', `/leads/${id}/status`, { status }); panelDirty = true; openPanel(id); }
-  catch (e) { showToast(e.message, 'err'); }
+  try {
+    await api('PATCH', `/leads/${id}/status`, { status });
+    panelDirty = true;
+    _panelLead.status = status;
+    // Status-Buttons neu rendern (Highlight-Wechsel)
+    const btnHtml = [
+      ['neu','Neu'],['kontaktiert','Kontaktiert'],['nicht_erreicht','Nicht erreicht'],
+      ['kein_interesse','Kein Interesse'],['rueckruf','Rückruf'],['kunde','Kunde']
+    ].map(([s,label]) =>
+      `<button class="btn btn-ghost btn-sm" style="${s===status?'border-color:var(--accent);color:var(--accent)':''}" onclick="setStatus(${id},'${s}')">${label}</button>`
+    ).join('');
+    const btnEl = document.getElementById('panelStatusBtns');
+    if (btnEl) btnEl.innerHTML = btnHtml;
+    // Status-Badge im fixen Header aktualisieren
+    document.getElementById('panelKeyInfo').innerHTML = renderPanelKeyInfo(_panelLead);
+  } catch (e) { showToast(e.message, 'err'); }
 }
 
 async function addComment(id) {
   const input = document.getElementById('newComment');
   if (!input?.value.trim()) return;
-  try { await api('POST', `/leads/${id}/comments`, { text: input.value.trim() }); panelDirty = true; openPanel(id); }
-  catch (e) { showToast(e.message, 'err'); }
+  const text = input.value.trim();
+  try {
+    const r = await api('POST', `/leads/${id}/comments`, { text });
+    panelDirty = true;
+    input.value = '';
+    // Kommentar lokal aufbauen (API gibt nur {ok, id} zurück)
+    const newComment = { id: r.id, user_id: ME.id, full_name: ME.full_name, text, created_at: new Date().toISOString(), edited_at: null };
+    if (!_panelLead.comments) _panelLead.comments = [];
+    _panelLead.comments.push(newComment);
+    // Placeholder entfernen, neuen Kommentar anhängen
+    const listEl = document.getElementById('panelCommentsList');
+    if (listEl) {
+      listEl.querySelector('[data-no-activity]')?.remove();
+      const card = document.createElement('div');
+      card.id = `comment-wrap-${r.id}`;
+      card.style.cssText = 'padding:10px;background:var(--bg3);border-radius:8px;margin-bottom:8px';
+      card.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
+          <span style="font-size:11px;color:var(--text3)">${escHtml(ME.full_name)} · ${fmtDate(newComment.created_at)}</span>
+          <div>
+            <button onclick="editComment(${id},${r.id},${JSON.stringify(text)})" style="background:none;border:none;cursor:pointer;color:var(--text3);padding:2px 5px;font-size:11px" title="Bearbeiten"><i class="fas fa-edit"></i></button>
+            <button onclick="deleteComment(${id},${r.id})" style="background:none;border:none;cursor:pointer;color:var(--text3);padding:2px 5px;font-size:11px" title="Löschen"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+        <div id="comment-text-${r.id}" style="font-size:13px">${escHtml(text)}</div>`;
+      listEl.appendChild(card);
+    }
+    // "Letzte Notiz" im fixen Header aktualisieren
+    document.getElementById('panelKeyInfo').innerHTML = renderPanelKeyInfo(_panelLead);
+    input.focus();
+  } catch (e) { showToast(e.message, 'err'); }
 }
 
 async function addReminder(id) {
-  const at   = document.getElementById('remindAt')?.value;
-  const note = document.getElementById('remindNote')?.value;
+  const atEl   = document.getElementById('remindAt');
+  const noteEl = document.getElementById('remindNote');
+  const at   = atEl?.value;
+  const note = noteEl?.value || '';
   if (!at) { showToast('Bitte Datum wählen', 'err'); return; }
-  try { await api('POST', `/leads/${id}/reminders`, { remind_at: at, note }); panelDirty = true; showToast('Reminder gesetzt ✓'); openPanel(id); }
-  catch (e) { showToast(e.message, 'err'); }
+  try {
+    const r = await api('POST', `/leads/${id}/reminders`, { remind_at: at, note });
+    panelDirty = true;
+    showToast('Reminder gesetzt ✓');
+    atEl.value = '';
+    if (noteEl) noteEl.value = '';
+    // Reminder lokal aufbauen
+    const newReminder = { id: r.id, remind_at: at, note: note || null, sent: false };
+    if (!_panelLead.reminders) _panelLead.reminders = [];
+    _panelLead.reminders.push(newReminder);
+    // Placeholder entfernen, neuen Reminder anhängen
+    const listEl = document.getElementById('panelRemindersList');
+    if (listEl) {
+      listEl.querySelector('[data-no-reminder]')?.remove();
+      const card = document.createElement('div');
+      card.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--bg3);border-radius:8px;margin-bottom:6px';
+      card.innerHTML = `
+        <div>
+          <div style="font-size:12px;color:var(--amber)"><i class="fas fa-bell"></i> ${fmtDate(newReminder.remind_at)}</div>
+          ${newReminder.note ? `<div style="font-size:12px;color:var(--text2);margin-top:2px">${escHtml(newReminder.note)}</div>` : ''}
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="deleteReminder(${id},${r.id})" title="Löschen"><i class="fas fa-trash" style="color:var(--red)"></i></button>`;
+      listEl.appendChild(card);
+    }
+  } catch (e) { showToast(e.message, 'err'); }
+}
+
+function _quickReminderAt(preset) {
+  const d = new Date();
+  if (preset === '+2h') {
+    d.setTime(d.getTime() + 2 * 3600 * 1000);
+  } else if (preset === 'tomorrow9') {
+    d.setDate(d.getDate() + 1);
+    d.setHours(9, 0, 0, 0);
+  } else if (preset === '3days9') {
+    d.setDate(d.getDate() + 3);
+    d.setHours(9, 0, 0, 0);
+  }
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+async function quickReminder(id, preset) {
+  const at = _quickReminderAt(preset);
+  try {
+    const r = await api('POST', `/leads/${id}/reminders`, { remind_at: at, note: '' });
+    panelDirty = true;
+    showToast('Reminder gesetzt ✓');
+    const newReminder = { id: r.id, remind_at: at, note: null, sent: false };
+    if (!_panelLead.reminders) _panelLead.reminders = [];
+    _panelLead.reminders.push(newReminder);
+    const listEl = document.getElementById('panelRemindersList');
+    if (listEl) {
+      listEl.querySelector('[data-no-reminder]')?.remove();
+      const card = document.createElement('div');
+      card.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--bg3);border-radius:8px;margin-bottom:6px';
+      card.innerHTML = `
+        <div>
+          <div style="font-size:12px;color:var(--amber)"><i class="fas fa-bell"></i> ${fmtDate(newReminder.remind_at)}</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="deleteReminder(${id},${r.id})" title="Löschen"><i class="fas fa-trash" style="color:var(--red)"></i></button>`;
+      listEl.appendChild(card);
+    }
+  } catch (e) { showToast(e.message, 'err'); }
 }
 
 // ── EMAIL MODAL ───────────────────────────────────────────────
@@ -593,37 +874,37 @@ async function sendEmail() {
 // ── REMINDERS OVERVIEW ────────────────────────────────────────
 async function loadReminders() {
   try {
-    const leads = await api('GET', '/leads');
-    const withReminders = [];
-    for (const l of leads.filter(l => l.assigned_to === ME.id)) {
-      const detail = await api('GET', `/leads/${l.id}`);
-      const pending = (detail.reminders||[]).filter(r => !r.sent);
-      if (pending.length) withReminders.push({ lead: l, reminders: pending });
-    }
+    const reminders = await api('GET', '/leads/reminders');
     const el = document.getElementById('remindersList');
-    if (!withReminders.length) {
+    if (!reminders.length) {
       el.innerHTML = '<div style="color:var(--text3);text-align:center;padding:40px"><i class="fas fa-bell" style="font-size:30px;display:block;margin-bottom:12px;opacity:.3"></i>Keine offenen Reminder</div>';
-      const badge = document.getElementById('reminderBadge');
-      badge.style.display = 'none';
+      document.getElementById('reminderBadge').style.display = 'none';
       return;
     }
-    el.innerHTML = withReminders.map(({ lead, reminders }) => reminders.map(r => `
-      <div class="card" style="margin-bottom:10px;cursor:pointer" onclick="openPanel(${lead.id})">
+    el.innerHTML = reminders.map(r => `
+      <div class="card" style="margin-bottom:10px">
         <div class="card-body" style="padding:14px;display:flex;align-items:center;gap:14px">
-          <i class="fas fa-bell" style="color:var(--amber);font-size:18px"></i>
-          <div style="flex:1">
-            <div style="font-weight:600;margin-bottom:2px">${escHtml(lead.company||'—')}</div>
-            <div style="font-size:12px;color:var(--amber)"><i class="fas fa-clock"></i> ${fmtDate(r.remind_at)}</div>
-            ${r.note ? `<div style="font-size:12px;color:var(--text2);margin-top:2px">${escHtml(r.note)}</div>` : ''}
+          <i class="fas fa-bell" style="color:var(--amber);font-size:18px;flex-shrink:0"></i>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;margin-bottom:2px">${escHtml(r.company||'—')}</div>
+            <div style="font-size:12px;color:var(--amber);margin-bottom:3px"><i class="fas fa-clock"></i> ${fmtDate(r.remind_at)}</div>
+            ${r.phone ? `
+            <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+              <a href="tel:${escHtml(r.phone)}" style="font-size:13px;font-family:'JetBrains Mono',monospace;color:var(--text2);text-decoration:none" onclick="event.stopPropagation()">${escHtml(r.phone)}</a>
+              <button class="btn btn-ghost btn-sm" style="padding:2px 7px;font-size:11px;min-height:unset" onclick="event.stopPropagation();copyPhone('${escHtml(r.phone)}')" title="Kopieren"><i class="fas fa-copy"></i></button>
+            </div>` : ''}
+            ${r.note ? `<div style="font-size:12px;color:var(--text2);margin-top:3px">${escHtml(r.note)}</div>` : ''}
           </div>
-          ${statusBadge(lead.status)}
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+            ${statusBadge(r.status)}
+            <button class="btn btn-ghost btn-sm" onclick="openPanel(${r.lead_id})" title="Lead öffnen"><i class="fas fa-external-link-alt"></i></button>
+          </div>
         </div>
-      </div>`).join('')).join('');
+      </div>`).join('');
 
-    const total = withReminders.reduce((s, x) => s + x.reminders.length, 0);
     const badge = document.getElementById('reminderBadge');
-    badge.textContent = total;
-    badge.style.display = total > 0 ? 'inline' : 'none';
+    badge.textContent = reminders.length;
+    badge.style.display = 'inline';
   } catch (e) { showToast(e.message, 'err'); }
 }
 
@@ -856,26 +1137,16 @@ async function loadChats() {
     const chats = await api('GET', '/chats');
     const el = document.getElementById('chatList');
     if (!chats.length) {
-      el.innerHTML = '<div style="color:var(--text3);text-align:center;padding:40px"><i class="fas fa-comments" style="font-size:28px;display:block;margin-bottom:10px;opacity:.3"></i>Noch keine Rücksprachen</div>';
+      el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:20px">Noch keine Rücksprachen</div>';
       return;
     }
     el.innerHTML = chats.map(c => `
-      <div class="card" style="margin-bottom:10px;cursor:pointer" onclick="openChat(${c.id})">
-        <div class="card-body" style="padding:14px;display:flex;align-items:center;gap:12px">
-          <div style="width:36px;height:36px;border-radius:10px;background:rgba(79,142,247,0.12);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:16px;flex-shrink:0">
-            <i class="fas fa-${c.is_closed ? 'lock' : 'comments'}"></i>
-          </div>
-          <div style="flex:1;min-width:0">
-            <div style="font-weight:600;font-size:13px">${escHtml(c.title)}</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-              ${c.participants ? escHtml(c.participants) : '—'} · ${c.msg_count||0} Nachrichten
-            </div>
-          </div>
-          <div style="text-align:right;flex-shrink:0">
-            ${c.is_closed ? '<span style="font-size:11px;color:var(--text3)">Geschlossen</span>' : '<span style="font-size:11px;color:var(--green)">Offen</span>'}
-            <div style="font-size:10px;color:var(--text3)">${c.last_msg_at ? fmtDateShort(c.last_msg_at) : fmtDateShort(c.created_at)}</div>
-          </div>
+      <div onclick="openChat(${c.id})" style="padding:12px 14px;border-radius:8px;cursor:pointer;background:var(--bg3);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:600;font-size:14px">${escHtml(c.title)} ${c.is_closed ? '<span style="font-size:10px;color:var(--text3)">[geschlossen]</span>' : ''}</div>
+          <div style="font-size:11px;color:var(--text3)">${fmtDate(c.created_at)}</div>
         </div>
+        <i class="fas fa-chevron-right" style="color:var(--text3)"></i>
       </div>`).join('');
   } catch(e) { showToast(e.message, 'err'); }
 }
@@ -883,7 +1154,7 @@ async function loadChats() {
 async function openChat(id) {
   currentChatId = id;
   document.getElementById('chatListView').style.display   = 'none';
-  document.getElementById('chatDetailView').style.display = '';
+  document.getElementById('chatDetailView').style.display = 'block';
   await refreshChat();
   chatPollTimer = setInterval(refreshChat, 10000);
 }
@@ -892,33 +1163,30 @@ async function refreshChat() {
   if (!currentChatId) return;
   try {
     const chat = await api('GET', `/chats/${currentChatId}`);
-    document.getElementById('chatDetailTitle').textContent = chat.title;
+    document.getElementById('chatDetailTitle').textContent = chat.title || '';
     document.getElementById('chatParticipants').textContent =
-      'Teilnehmer: ' + (chat.participants||[]).map(p => p.full_name).join(', ');
-    document.getElementById('chatCloseBtn').style.display = chat.is_closed ? 'none' : '';
+      'Teilnehmer: ' + (chat.participants||[]).map(p => escHtml(p.full_name)).join(', ');
+    document.getElementById('chatCloseBtn').style.display  = chat.is_closed ? 'none' : 'inline-flex';
     document.getElementById('chatInviteBtn').style.display = chat.is_closed ? 'none' : '';
     document.getElementById('chatMsgInput').disabled = !!chat.is_closed;
 
-    const msgs = document.getElementById('chatMessages');
-    const wasBottom = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 60;
-    msgs.innerHTML = (chat.messages||[]).map(m => {
-      const isMe = m.user_id === ME.id;
-      return `<div style="display:flex;flex-direction:column;align-items:${isMe?'flex-end':'flex-start'}">
-        <div style="max-width:80%;background:${isMe?'rgba(79,142,247,0.15)':'var(--bg3)'};border-radius:10px;padding:8px 12px">
-          <div style="font-size:11px;color:var(--text3);margin-bottom:3px">${isMe?'Du':escHtml(m.full_name)} · ${fmtDate(m.created_at)}</div>
-          <div style="font-size:13px">${escHtml(m.text)}</div>
-        </div>
-      </div>`;
-    }).join('');
-    if (wasBottom) msgs.scrollTop = msgs.scrollHeight;
-  } catch {}
+    const msgsEl = document.getElementById('chatMessages');
+    if (msgsEl) {
+      msgsEl.innerHTML = (chat.messages||[]).map(m => `
+        <div style="margin-bottom:10px;${m.user_id===ME.id?'text-align:right':''}">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:2px">${escHtml(m.full_name)} · ${fmtDate(m.created_at)}</div>
+          <div style="display:inline-block;background:${m.user_id===ME.id?'var(--accent)':'var(--bg3)'};color:${m.user_id===ME.id?'#fff':'var(--text1)'};padding:8px 12px;border-radius:10px;font-size:13px;max-width:80%;text-align:left">${escHtml(m.text)}</div>
+        </div>`).join('');
+      msgsEl.scrollTop = msgsEl.scrollHeight;
+    }
+  } catch(e) { showToast(e.message, 'err'); }
 }
 
 function backToChats() {
   clearInterval(chatPollTimer);
   currentChatId = null;
   document.getElementById('chatDetailView').style.display = 'none';
-  document.getElementById('chatListView').style.display   = '';
+  document.getElementById('chatListView').style.display   = 'block';
   loadChats();
 }
 
@@ -934,63 +1202,88 @@ async function sendChatMsg() {
 }
 
 async function closeChatRoom() {
-  if (!confirm('Gespräch wirklich beenden?')) return;
+  if (!currentChatId || !confirm('Chat schließen?')) return;
   try {
     await api('PATCH', `/chats/${currentChatId}/close`);
-    showToast('Gespräch beendet');
-    await refreshChat();
+    showToast('Chat geschlossen');
+    backToChats();
   } catch(e) { showToast(e.message, 'err'); }
 }
 
 function openCreateChat() {
   document.getElementById('createChatModal').classList.add('open');
-  loadUsersForChatInvite('newChatInviteSelect');
+  loadUsersForChatInvite();
 }
-function closeCreateChat() { document.getElementById('createChatModal').classList.remove('open'); }
+function closeCreateChat() {
+  document.getElementById('createChatModal').classList.remove('open');
+  document.getElementById('newChatTitle').value = '';
+}
 
-async function loadUsersForChatInvite(selectId) {
+async function loadUsersForChatInvite() {
+  const el = document.getElementById('chatInviteUsersCl');
+  if (!el) return;
   try {
     const users = await api('GET', '/users/list');
-    const sel = document.getElementById(selectId);
-    if (!sel) return;
-    sel.innerHTML = users.filter(u => u.id !== ME.id).map(u =>
-      `<option value="${u.id}">${escHtml(u.full_name)} (${u.role})</option>`).join('');
+    el.innerHTML = users.filter(u => u.id !== ME.id).map(u =>
+      `<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;min-height:40px;cursor:pointer;font-size:13px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:var(--bg);transition:background .15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg)'">
+        <input type="checkbox" value="${u.id}" style="accent-color:var(--accent);width:16px;height:16px;flex-shrink:0">
+        <span style="font-weight:500">${escHtml(u.full_name)}</span><span style="font-size:11px;color:var(--text3);margin-left:auto">${u.role === 'admin' ? 'Admin' : 'Closer'}</span>
+      </label>`).join('');
   } catch(e) { showToast('Benutzer konnten nicht geladen werden', 'err'); }
 }
 
 async function saveNewChat() {
   const title = document.getElementById('newChatTitle').value.trim();
   if (!title) { showToast('Titel eingeben', 'err'); return; }
-  const sel = document.getElementById('newChatInviteSelect');
-  const invite_ids = [...(sel?.selectedOptions||[])].map(o => parseInt(o.value));
+  const checkboxes = document.querySelectorAll('#chatInviteUsersCl input[type=checkbox]:checked');
+  const invite_ids = [...checkboxes].map(c => parseInt(c.value));
   try {
     const r = await api('POST', '/chats', { title, invite_ids });
+    showToast('Gespräch erstellt ✓');
     closeCreateChat();
-    document.getElementById('newChatTitle').value = '';
     await openChat(r.id);
   } catch(e) { showToast(e.message, 'err'); }
 }
 
 async function openChatInvite() {
-  const allUsers = await api('GET', '/users').catch(() => []);
-  const chat = await api('GET', `/chats/${currentChatId}`).catch(() => null);
-  if (!chat) return;
-  const existing = new Set((chat.participants||[]).map(p => p.id));
-  const available = allUsers.filter(u => !existing.has(u.id) && u.is_active);
-  if (!available.length) { showToast('Alle aktiven Benutzer sind bereits Teilnehmer', 'info'); return; }
-  const chosen = available.find(u => u);
-  if (!chosen) return;
-  const name = prompt('Benutzer einladen:\n' + available.map(u => `${u.id}: ${u.full_name}`).join('\n') + '\n\nID eingeben:');
-  const uid = parseInt(name);
-  if (!uid) return;
+  if (!currentChatId) return;
   try {
-    await api('POST', `/chats/${currentChatId}/invite`, { user_id: uid });
+    const [chat, users] = await Promise.all([
+      api('GET', `/chats/${currentChatId}`),
+      api('GET', '/users/list'),
+    ]);
+    const existing = new Set((chat.participants||[]).map(p => p.id));
+    const available = users.filter(u => !existing.has(u.id) && u.id !== ME.id);
+    const el = document.getElementById('inviteUserListCl');
+    if (!el) return;
+    if (!available.length) {
+      el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:8px 0">Alle aktiven Benutzer sind bereits Teilnehmer.</div>';
+    } else {
+      el.innerHTML = available.map(u =>
+        `<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;min-height:40px;cursor:pointer;font-size:13px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:var(--bg);transition:background .15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg)'">
+          <input type="checkbox" value="${u.id}" style="accent-color:var(--accent);width:16px;height:16px;flex-shrink:0">
+          <span style="font-weight:500">${escHtml(u.full_name)}</span><span style="font-size:11px;color:var(--text3);margin-left:auto">${u.role === 'admin' ? 'Admin' : 'Closer'}</span>
+        </label>`).join('');
+    }
+    document.getElementById('inviteChatModalCl').classList.add('open');
+  } catch(e) { showToast(e.message, 'err'); }
+}
+async function saveInviteCl() {
+  const checkboxes = document.querySelectorAll('#inviteUserListCl input[type=checkbox]:checked');
+  const ids = [...checkboxes].map(c => parseInt(c.value));
+  if (!ids.length) { showToast('Bitte mindestens einen Benutzer auswählen', 'err'); return; }
+  try {
+    for (const uid of ids) {
+      await api('POST', `/chats/${currentChatId}/invite`, { user_id: uid });
+    }
     showToast('Eingeladen ✓');
+    document.getElementById('inviteChatModalCl').classList.remove('open');
     await refreshChat();
   } catch(e) { showToast(e.message, 'err'); }
 }
 
 // ── Init ──────────────────────────────────────────────────────
+['myLeadsBody','allLeadsBody'].forEach(id => { const b = document.getElementById(id); if (b) b.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)"><i class="fas fa-spinner fa-spin"></i></td></tr>'; });
 loadLeads();
 setInterval(loadReminders, 5 * 60 * 1000);
 checkReminderNotifications();
@@ -1063,21 +1356,39 @@ setInterval(checkReminderNotifications, 2 * 60 * 1000);
 
 <!-- MODAL: Neues Gespräch -->
 <div class="modal-overlay" id="createChatModal" onclick="if(event.target===this)closeCreateChat()">
-  <div class="modal-box" style="max-width:420px">
+  <div style="background:var(--bg2);border-radius:14px;box-shadow:var(--shadow-lg);padding:28px;width:420px;max-width:96vw;max-height:80vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-      <h2 style="margin:0"><i class="fas fa-comments" style="color:var(--accent);margin-right:8px"></i>Neues Gespräch</h2>
+      <h2 style="font-size:16px;font-weight:700;margin:0"><i class="fas fa-comments" style="color:var(--accent);margin-right:8px"></i>Neuer Chat</h2>
       <button class="btn btn-ghost btn-sm" onclick="closeCreateChat()"><i class="fas fa-times"></i></button>
     </div>
-    <div class="form-group"><label>Thema / Titel *</label><input id="newChatTitle" class="form-control" placeholder="z.B. Frage zu Lead XY..."></div>
-    <div class="form-group"><label>Teilnehmer einladen</label>
-      <select id="newChatInviteSelect" class="form-control" multiple style="height:120px">
-        <option disabled>Wird geladen...</option>
-      </select>
-      <div style="font-size:11px;color:var(--text3);margin-top:4px">Strg + Klick für Mehrfachauswahl</div>
+    <div class="form-group">
+      <label>Titel *</label>
+      <input id="newChatTitle" class="form-control" placeholder="z.B. Projekt Alpha">
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
+    <div class="form-group">
+      <label>Teilnehmer einladen</label>
+      <div id="chatInviteUsersCl" style="max-height:200px;overflow-y:auto;padding:4px 0"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
       <button class="btn btn-ghost btn-sm" onclick="closeCreateChat()">Abbrechen</button>
-      <button class="btn btn-primary btn-sm" onclick="saveNewChat()"><i class="fas fa-plus"></i> Gespräch starten</button>
+      <button class="btn btn-primary btn-sm" onclick="saveNewChat()"><i class="fas fa-plus"></i> Erstellen</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Benutzer einladen (Closer) -->
+<div class="modal-overlay" id="inviteChatModalCl" onclick="if(event.target===this)document.getElementById('inviteChatModalCl').classList.remove('open')">
+  <div style="background:var(--bg2);border-radius:14px;box-shadow:var(--shadow-lg);padding:28px;width:420px;max-width:96vw;max-height:80vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <h2 style="font-size:16px;font-weight:700;margin:0"><i class="fas fa-user-plus" style="color:var(--accent);margin-right:8px"></i>Benutzer einladen</h2>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('inviteChatModalCl').classList.remove('open')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="form-group"><label>Teilnehmer auswählen</label>
+      <div id="inviteUserListCl" style="max-height:240px;overflow-y:auto;padding:4px 0"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('inviteChatModalCl').classList.remove('open')">Abbrechen</button>
+      <button class="btn btn-primary btn-sm" onclick="saveInviteCl()"><i class="fas fa-user-plus"></i> Einladen</button>
     </div>
   </div>
 </div>

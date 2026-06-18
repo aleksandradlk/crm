@@ -10,9 +10,11 @@ const VALID_STATUSES = ['neu','kontaktiert','nicht_erreicht','kein_interesse','r
 // Admin: alle Leads | Closer: nur eigene (assigned_to)
 router.get('/', auth, async (req, res) => {
   const { status, search } = req.query;
-  let q = `SELECT l.*, 
-            u1.full_name AS assigned_name,
-            u2.full_name AS created_name
+  let q = `SELECT l.id, l.company, l.ceo, l.phone, l.email, l.location,
+                  l.status, l.assigned_to, l.created_by,
+                  l.created_at, l.updated_at, l.confidence,
+                  u1.full_name AS assigned_name,
+                  u2.full_name AS created_name
            FROM leads l
            LEFT JOIN users u1 ON u1.id = l.assigned_to
            LEFT JOIN users u2 ON u2.id = l.created_by`;
@@ -94,7 +96,7 @@ router.post('/bulk', auth, adminOnly, async (req, res) => {
 router.get('/reminders', auth, async (req, res) => {
   try {
     const [rows] = await db.query(
-      `SELECT r.id, r.note, r.remind_at, r.lead_id, l.company, l.status
+      `SELECT r.id, r.note, r.remind_at, r.lead_id, l.company, l.status, l.phone
        FROM reminders r JOIN leads l ON l.id = r.lead_id
        WHERE r.user_id = ? AND r.sent = 0 ORDER BY r.remind_at ASC`,
       [req.user.id]
@@ -139,6 +141,9 @@ router.patch('/:id/status', auth, async (req, res) => {
 
   const [[lead]] = await db.query('SELECT * FROM leads WHERE id = ?', [id]);
   if (!lead) return res.status(404).json({ error: 'Nicht gefunden' });
+
+  if (req.user.role !== 'admin' && lead.assigned_to !== null && lead.assigned_to !== req.user.id)
+    return res.status(403).json({ error: 'Nur eigene oder unzugewiesene Leads dürfen geändert werden' });
 
   await db.query('UPDATE leads SET status = ? WHERE id = ?', [status, id]);
   await log(req.user.id, 'status_change', 'lead', id,
@@ -219,8 +224,12 @@ router.delete('/:id/reminders/:rid', auth, async (req, res) => {
 router.patch('/:id/assign', auth, async (req, res) => {
   const id = parseInt(req.params.id);
   try {
-    const [[lead]] = await db.query('SELECT id FROM leads WHERE id=?', [id]);
+    const [[lead]] = await db.query('SELECT id, assigned_to FROM leads WHERE id=?', [id]);
     if (!lead) return res.status(404).json({ error: 'Nicht gefunden' });
+
+    if (req.user.role !== 'admin' && lead.assigned_to !== null)
+      return res.status(403).json({ error: 'Lead ist bereits zugewiesen' });
+
     await db.query('UPDATE leads SET assigned_to=? WHERE id=?', [req.user.id, id]);
     await log(req.user.id, 'lead_assign', 'lead', id, { assigned_to: req.user.id }, req.ip);
     res.json({ ok: true });
@@ -266,6 +275,9 @@ router.post('/:id/email', auth, async (req, res) => {
   try {
     const [[lead]] = await db.query('SELECT * FROM leads WHERE id=?', [id]);
     if (!lead) return res.status(404).json({ error: 'Nicht gefunden' });
+
+    if (req.user.role !== 'admin' && lead.assigned_to !== null && lead.assigned_to !== req.user.id)
+      return res.status(403).json({ error: 'E-Mail nur bei eigenen oder unzugewiesenen Leads erlaubt' });
 
     const [[user]] = await db.query('SELECT full_name FROM users WHERE id=?', [req.user.id]);
     await sendLeadEmail({ to, subject, body, fromName: user?.full_name || 'NovaFlow' });
