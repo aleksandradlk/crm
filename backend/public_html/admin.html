@@ -635,7 +635,7 @@ function renderPanelKeyInfo(l) {
       ${statusBadge(l.status)}
       ${ageBadge(lastActivity)}
       ${confBar(l.confidence)}
-      ${l.email ? `<button class="btn btn-ghost btn-sm" onclick="openEmailModal()" style="margin-left:auto"><i class="fas fa-envelope"></i> E-Mail senden</button>` : ''}
+      <button class="btn btn-ghost btn-sm" onclick="openEmailModal()" style="margin-left:auto"><i class="fas fa-envelope"></i> E-Mail senden</button>
     </div>
     ${contactItems ? `<div style="display:grid;gap:5px;margin-bottom:${lastNote?'10px':'0'}">${contactItems}</div>` : ''}
     ${lastNote ? `<div style="padding:8px 10px;background:var(--bg3);border-radius:6px;border-left:2px solid var(--accent)">
@@ -1113,9 +1113,9 @@ async function saveManualLead() {
 // ── EMAIL MODAL ───────────────────────────────────────────────
 async function openEmailModal() {
   const l = _panelLead;
-  if (!l?.email) return;
+  if (!l) return;
   document.getElementById('emailLeadId').value = l.id;
-  document.getElementById('emailTo').value = l.email;
+  document.getElementById('emailTo').value = l.email || '';
   const company = l.company || '';
   try {
     const tmpl = await api('GET', '/wiki/template');
