@@ -44,9 +44,14 @@ router.post('/', auth, adminOnly, async (req, res) => {
 
 // PATCH /api/users/:id — User bearbeiten (Admin)
 router.patch('/:id', auth, adminOnly, async (req, res) => {
-  const { full_name, email, password, is_active, role } = req.body;
+  const { username, full_name, email, password, is_active, role } = req.body;
   const id = parseInt(req.params.id);
 
+  if (username) {
+    const [[exists]] = await db.query('SELECT id FROM users WHERE username = ? AND id != ?', [username, id]);
+    if (exists) return res.status(409).json({ error: 'Benutzername bereits vergeben' });
+    await db.query('UPDATE users SET username=? WHERE id=?', [username, id]);
+  }
   if (full_name) await db.query('UPDATE users SET full_name=? WHERE id=?', [full_name, id]);
   if (email)     await db.query('UPDATE users SET email=? WHERE id=?', [email, id]);
   if (role)      await db.query('UPDATE users SET role=? WHERE id=?', [role, id]);
