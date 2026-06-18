@@ -248,7 +248,7 @@
       <input type="hidden" id="emailLeadId">
       <div class="form-group" style="margin:0"><label>An (E-Mail-Adresse)</label><input type="email" id="emailTo" class="form-control"></div>
       <div class="form-group" style="margin:0"><label>Betreff</label><input type="text" id="emailSubject" class="form-control"></div>
-      <div class="form-group" style="margin:0"><label>Nachricht <span style="font-size:11px;color:var(--text3);font-weight:400">— frei bearbeitbar</span></label><textarea id="emailBody" class="form-control" rows="12" style="resize:vertical;font-size:13px;line-height:1.65;min-height:200px"></textarea></div>
+      <div class="form-group" style="margin:0"><label>Nachricht <span style="font-size:11px;color:var(--text3);font-weight:400">— frei bearbeitbar</span></label><div id="emailBody" contenteditable="true" class="form-control" style="font-size:13px;line-height:1.65;min-height:200px;overflow-y:auto;outline:none"></div></div>
       <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:4px;border-top:1px solid var(--border)">
         <button class="btn btn-ghost btn-sm" onclick="closeEmailModal()">Abbrechen</button>
         <button class="btn btn-primary btn-sm" onclick="sendEmail()"><i class="fas fa-paper-plane"></i> Senden</button>
@@ -836,6 +836,12 @@ async function quickReminder(id, preset) {
 }
 
 // ── EMAIL MODAL ───────────────────────────────────────────────
+function bodyToHtml(text) {
+  if (!text) return '';
+  if (/<[a-z][\s\S]*>/i.test(text)) return text;
+  return text.split('\n').map(l => `<div>${escHtml(l) || '<br>'}</div>`).join('');
+}
+
 async function openEmailModal() {
   const l = _panelLead;
   if (!l) return;
@@ -844,11 +850,11 @@ async function openEmailModal() {
   const company = l.company || '';
   try {
     const tmpl = await api('GET', '/wiki/template');
-    document.getElementById('emailSubject').value = (tmpl.subject||'').replace(/{company}/g, company);
-    document.getElementById('emailBody').value    = (tmpl.body||'').replace(/{company}/g, company);
+    document.getElementById('emailSubject').value     = (tmpl.subject||'').replace(/{company}/g, company);
+    document.getElementById('emailBody').innerHTML    = bodyToHtml((tmpl.body||'').replace(/{company}/g, company));
   } catch {
     document.getElementById('emailSubject').value = '';
-    document.getElementById('emailBody').value    = '';
+    document.getElementById('emailBody').innerHTML = '';
   }
   document.getElementById('emailModal').classList.add('open');
 }
@@ -861,7 +867,7 @@ async function sendEmail() {
   const id      = document.getElementById('emailLeadId').value;
   const to      = document.getElementById('emailTo').value.trim();
   const subject = document.getElementById('emailSubject').value.trim();
-  const body    = document.getElementById('emailBody').value.trim();
+  const body    = document.getElementById('emailBody').innerHTML.trim();
   if (!to || !subject || !body) { showToast('Bitte alle Felder ausfüllen', 'err'); return; }
   try {
     await api('POST', `/leads/${id}/email`, { to, subject, body });
