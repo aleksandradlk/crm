@@ -40,13 +40,15 @@ async function api(method, path, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
 
+  const data = await res.json().catch(() => ({}));
+
   if (res.status === 401) {
+    if (path === '/auth/login') throw new Error(data.error || 'Ungültige Zugangsdaten');
     Auth.clear();
     window.location.href = '/login.html';
     throw new Error('Session abgelaufen');
   }
 
-  const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
 }
