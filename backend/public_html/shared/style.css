@@ -52,7 +52,7 @@ a { color: var(--accent); text-decoration: none; }
 
 /* ── Layout ──────────────────────────────────────────────────── */
 .app-layout { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
-.sidebar { background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+.sidebar { background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
 .main-content { padding: 28px 32px; display: flex; flex-direction: column; gap: 24px; overflow-x: hidden; }
 
 /* ── Sidebar ─────────────────────────────────────────────────── */
