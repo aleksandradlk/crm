@@ -1008,8 +1008,9 @@ async function loadTracking() {
       const leadsCount   = stats.leads.size;
       const lastActLabel = stats.lastAction ? fmtDate(stats.lastAction) : null;
       const cardBorder   = onlineStatus === 'online' ? 'border-color:var(--green,#22c55e)' : '';
+      const clickCount = parseInt(sess?.click_count) || 0;
       return `
-        <div class="tracking-card" style="flex-direction:column;align-items:stretch;gap:10px;${cardBorder}">
+        <div class="tracking-card" style="flex-direction:column;align-items:stretch;gap:10px;${cardBorder};cursor:pointer" onclick="filterTrackingUser('${u.id}')">
           <div style="display:flex;align-items:center;gap:10px">
             <div class="pulse ${pulseClass}"></div>
             <div class="avatar" style="width:36px;height:36px;font-size:14px;flex-shrink:0">${escHtml(u.full_name?.[0]||'?')}</div>
@@ -1017,8 +1018,9 @@ async function loadTracking() {
               <div class="tr-name">${escHtml(u.full_name)} <span style="color:var(--text3);font-size:11px">(${u.role})</span></div>
               <div class="tr-meta">${statusLabel}${sess && inactive !== null ? ' · Inaktiv: ' + inactive + ' Min' : ''}</div>
             </div>
+            <i class="fas fa-chevron-right" style="color:var(--text3);font-size:11px"></i>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">
             <div style="text-align:center;background:var(--bg2);border-radius:6px;padding:7px 4px">
               <div style="font-size:20px;font-weight:700;color:var(--accent);line-height:1">${leadsCount}</div>
               <div style="font-size:10px;color:var(--text3);margin-top:2px">Leads</div>
@@ -1030,6 +1032,10 @@ async function loadTracking() {
             <div style="text-align:center;background:var(--bg2);border-radius:6px;padding:7px 4px">
               <div style="font-size:20px;font-weight:700;color:var(--accent);line-height:1">${stats.comments}</div>
               <div style="font-size:10px;color:var(--text3);margin-top:2px">Notizen</div>
+            </div>
+            <div style="text-align:center;background:var(--bg2);border-radius:6px;padding:7px 4px">
+              <div style="font-size:20px;font-weight:700;color:var(--accent);line-height:1">${clickCount}</div>
+              <div style="font-size:10px;color:var(--text3);margin-top:2px">Klicks</div>
             </div>
           </div>
           <div style="font-size:11px;color:var(--text3)">${sessionInfo}${lastActLabel ? ' · Aktiv: ' + lastActLabel : ''}</div>
@@ -1055,6 +1061,14 @@ async function loadTracking() {
         </tr>`;
     }).join('');
   } catch (e) { showToast(e.message, 'err'); }
+}
+
+function filterTrackingUser(userId) {
+  const sel = document.getElementById('trackingUserFilter');
+  if (!sel) return;
+  sel.value = String(userId);
+  loadTracking();
+  document.getElementById('activityBody')?.closest('table')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function downloadActivityLog() {

@@ -27,6 +27,7 @@ async function sendReminder({ to, toName, leadCompany, note, remindAt }) {
           ${note ? `<strong>Notiz:</strong> ${note}` : ''}
         </div>
         <p style="color:#888;font-size:12px">LeadHunter Pro · info@novaflowservices.de</p>
+        <img src="https://leads.novaflowservices.de/LogoKomplett-klein.PNG" alt="NovaFlow Services" style="height:40px;margin-top:12px;display:block">
       </div>
     `,
   });
@@ -42,6 +43,7 @@ async function sendLeadEmail({ to, subject, body, fromName }) {
         ${body.split('\n').map(l => l.trim() ? `<p style="margin:0 0 12px">${l}</p>` : '<br>').join('')}
         <hr style="border:none;border-top:1px solid #e2e7f0;margin:24px 0">
         <p style="color:#8e9ab5;font-size:12px">NovaFlow Services · info@novaflowservices.de</p>
+        <img src="https://leads.novaflowservices.de/LogoKomplett-klein.PNG" alt="NovaFlow Services" style="height:40px;margin-top:12px;display:block">
       </div>
     `,
   });
