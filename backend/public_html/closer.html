@@ -308,7 +308,7 @@ function showSection(name) {
   if (name === 'reminders') loadReminders();
   if (name === 'wiki')      loadWiki();
   if (name === 'chat')      loadChats();
-  if (name === 'myLeads' && allLeads.length) filterMyLeads();
+  if (name === 'myLeads') { const f = document.getElementById('mySearch'); if (f) f.value = ''; if (allLeads.length) filterMyLeads(); }
   if (name === 'allLeads')  { const f = document.getElementById('allSearch'); if (f) { f.value = ''; } if (allLeads.length) renderAllLeads(allLeads); }
 }
 
