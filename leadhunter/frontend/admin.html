@@ -35,6 +35,11 @@
 .progress-wrap{margin-top:6px}
 .progress-bg{background:var(--bg4);height:3px;border-radius:2px}
 .progress-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width 0.4s}
+.perm-badge{display:inline-block;padding:2px 6px;background:rgba(79,142,247,0.1);border:1px solid rgba(79,142,247,0.25);border-radius:5px;font-size:10px;color:var(--accent);margin:1px 2px;white-space:nowrap}
+.perm-section{margin-top:14px;border-top:1px solid var(--border);padding-top:14px}
+.perm-row{display:flex;align-items:center;gap:10px;padding:7px 0;cursor:pointer}
+.perm-row label{font-size:13px;color:var(--text);cursor:pointer;flex:1}
+.perm-row .perm-hint{font-size:11px;color:var(--text3)}
 </style>
 </head>
 <body>
@@ -199,7 +204,7 @@
       </div>
       <div class="card">
         <div class="table-wrap">
-          <table><thead><tr><th>Name</th><th>Benutzername</th><th>E-Mail</th><th>Rolle</th><th>Status</th><th>Letzter Login</th><th></th></tr></thead>
+          <table><thead><tr><th>Name</th><th>Benutzername</th><th>E-Mail</th><th>Rolle</th><th>Rechte</th><th>Status</th><th>Letzter Login</th><th></th></tr></thead>
           <tbody id="usersTableBody"></tbody></table>
         </div>
       </div>
@@ -247,11 +252,34 @@
     <div class="form-group"><label>E-Mail *</label><input type="email" id="u-email" class="form-control"></div>
     <div class="form-group"><label>Passwort <span id="pwHint" style="color:var(--text3)">(leer = nicht ändern)</span></label><input type="password" id="u-password" class="form-control"></div>
     <div class="form-group"><label>Rolle</label>
-      <select id="u-role" class="form-control">
+      <select id="u-role" class="form-control" onchange="updatePermSection()">
         <option value="closer">Closer</option>
         <option value="admin">Admin</option>
       </select>
     </div>
+
+    <!-- Berechtigungen (nur für Closer) -->
+    <div id="permSection" class="perm-section" style="display:none">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:10px">Berechtigungen</div>
+
+      <div class="perm-row">
+        <input type="checkbox" id="p-edit-contacts" style="accent-color:var(--accent);width:15px;height:15px;cursor:pointer">
+        <label for="p-edit-contacts">Lead-Kontaktdaten bearbeiten <span class="perm-hint">(Telefon, E-Mail)</span></label>
+      </div>
+      <div class="perm-row">
+        <input type="checkbox" id="p-archive" style="accent-color:var(--accent);width:15px;height:15px;cursor:pointer">
+        <label for="p-archive">Leads archivieren / löschen</label>
+      </div>
+      <div class="perm-row">
+        <input type="checkbox" id="p-reassign" style="accent-color:var(--accent);width:15px;height:15px;cursor:pointer">
+        <label for="p-reassign">Leads zuweisen <span class="perm-hint">(anderen Closern)</span></label>
+      </div>
+      <div class="perm-row">
+        <input type="checkbox" id="p-view-all" style="accent-color:var(--accent);width:15px;height:15px;cursor:pointer">
+        <label for="p-view-all">Alle Leads sehen <span class="perm-hint">(nicht nur eigene)</span></label>
+      </div>
+    </div>
+
     <div style="display:flex;gap:8px;margin-top:16px">
       <button class="btn btn-primary" style="flex:1" onclick="saveUser()"><i class="fas fa-check"></i> Speichern</button>
       <button class="btn btn-ghost" onclick="closeUserModal()">Abbrechen</button>
@@ -338,8 +366,16 @@ function updateLeadStats(leads) {
 
 async function deleteLead(id) {
   if (!confirm('Lead wirklich löschen?')) return;
-  try { await api('DELETE', `/leads/${id}`); showToast('Lead gelöscht'); loadLeads(); }
-  catch (e) { showToast(e.message, 'err'); }
+  try {
+    await api('DELETE', `/leads/${id}`);
+    showToast('Lead gelöscht');
+    // Lokal entfernen — kein Reload nötig
+    allLeads = allLeads.filter(l => l.id !== id);
+    filterLeads();
+    updateLeadStats(allLeads);
+    // Panel schließen falls geöffnet
+    closeLeadPanel();
+  } catch (e) { showToast(e.message, 'err'); }
 }
 
 // ── LEAD DETAIL PANEL ─────────────────────────────────────────
@@ -356,7 +392,6 @@ async function openLeadPanel(id) {
 function closeLeadPanel() {
   document.getElementById('leadOverlay').classList.remove('open');
   document.getElementById('leadPanel').classList.remove('open');
-  loadLeads();
 }
 
 function renderLeadDetail(l) {
@@ -529,12 +564,23 @@ async function loadUsers() {
   try {
     allUsers = await api('GET', '/users');
     const body = document.getElementById('usersTableBody');
-    body.innerHTML = allUsers.map(u => `
+    body.innerHTML = allUsers.map(u => {
+      const permBadges = u.role === 'closer'
+        ? [
+            u.can_edit_contacts  ? '<span class="perm-badge">Kontakt</span>' : '',
+            u.can_archive_leads  ? '<span class="perm-badge">Löschen</span>' : '',
+            u.can_reassign_leads ? '<span class="perm-badge">Zuweisen</span>' : '',
+            u.can_view_all_leads ? '<span class="perm-badge">Alle Leads</span>' : '',
+          ].filter(Boolean).join('') || '<span style="color:var(--text3);font-size:11px">keine</span>'
+        : '<span style="color:var(--text3);font-size:11px">—</span>';
+
+      return `
       <tr class="user-row">
         <td style="font-weight:600">${escHtml(u.full_name)}</td>
         <td style="font-family:'JetBrains Mono',monospace;font-size:12px">${escHtml(u.username)}</td>
         <td style="font-size:12px"><a href="mailto:${escHtml(u.email)}">${escHtml(u.email)}</a></td>
         <td><span class="role-badge ${u.role==='admin'?'rb-admin':'rb-closer'}">${u.role==='admin'?'Admin':'Closer'}</span></td>
+        <td style="font-size:12px">${permBadges}</td>
         <td><span style="color:${u.is_active?'var(--green)':'var(--red)'};font-size:12px">${u.is_active?'Aktiv':'Gesperrt'}</span></td>
         <td style="font-size:12px;color:var(--text3)">${fmtDate(u.last_login)}</td>
         <td style="display:flex;gap:6px">
@@ -543,8 +589,14 @@ async function loadUsers() {
             <i class="fas fa-${u.is_active?'lock':'lock-open'}" style="color:${u.is_active?'var(--amber)':'var(--green)'}"></i>
           </button>
         </td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
   } catch (e) { showToast(e.message, 'err'); }
+}
+
+function updatePermSection() {
+  const role = document.getElementById('u-role').value;
+  document.getElementById('permSection').style.display = role === 'closer' ? 'block' : 'none';
 }
 
 function openUserModal(id) {
@@ -552,6 +604,7 @@ function openUserModal(id) {
   document.getElementById('userModalErr').textContent = '';
   document.getElementById('userModalTitle').textContent = id ? 'Benutzer bearbeiten' : 'Neuer Benutzer';
   document.getElementById('pwHint').style.display = id ? 'inline' : 'none';
+
   if (id) {
     const u = allUsers.find(x => x.id === id);
     if (u) {
@@ -560,23 +613,39 @@ function openUserModal(id) {
       document.getElementById('u-email').value    = u.email;
       document.getElementById('u-role').value     = u.role;
       document.getElementById('u-password').value = '';
+      // Berechtigungen vorausfüllen
+      document.getElementById('p-edit-contacts').checked = !!u.can_edit_contacts;
+      document.getElementById('p-archive').checked       = !!u.can_archive_leads;
+      document.getElementById('p-reassign').checked      = !!u.can_reassign_leads;
+      document.getElementById('p-view-all').checked      = !!u.can_view_all_leads;
     }
   } else {
-    ['u-name','u-username','u-email','u-password'].forEach(id => document.getElementById(id).value = '');
+    ['u-name','u-username','u-email','u-password'].forEach(fid => document.getElementById(fid).value = '');
     document.getElementById('u-role').value = 'closer';
+    ['p-edit-contacts','p-archive','p-reassign','p-view-all'].forEach(fid => {
+      document.getElementById(fid).checked = false;
+    });
   }
+  updatePermSection();
   document.getElementById('userModal').classList.add('open');
 }
 function closeUserModal() { document.getElementById('userModal').classList.remove('open'); }
 
 async function saveUser() {
+  const role = document.getElementById('u-role').value;
   const body = {
     full_name: document.getElementById('u-name').value.trim(),
     username:  document.getElementById('u-username').value.trim(),
     email:     document.getElementById('u-email').value.trim(),
-    role:      document.getElementById('u-role').value,
+    role,
     password:  document.getElementById('u-password').value || undefined,
   };
+  // Berechtigungen senden (für Closer setzen, für Admin nullen)
+  body.can_edit_contacts  = (role === 'closer' && document.getElementById('p-edit-contacts').checked) ? 1 : 0;
+  body.can_archive_leads  = (role === 'closer' && document.getElementById('p-archive').checked) ? 1 : 0;
+  body.can_reassign_leads = (role === 'closer' && document.getElementById('p-reassign').checked) ? 1 : 0;
+  body.can_view_all_leads = (role === 'closer' && document.getElementById('p-view-all').checked) ? 1 : 0;
+
   const err = document.getElementById('userModalErr');
   try {
     if (editingUserId) { await api('PATCH', `/users/${editingUserId}`, body); }
@@ -640,7 +709,7 @@ function exportCSV() {
   if (!allLeads.length) { showToast('Keine Daten', 'err'); return; }
   const h = ['Unternehmen','GF','E-Mail','Telefon','Standort','Status','Zugewiesen','Hinzugefügt','Website','LinkedIn','Branche','Konfidenz'];
   const rows = allLeads.map(l => [l.company,l.ceo,l.email,l.phone,l.location,l.status,l.assigned_name,fmtDate(l.created_at),l.website,l.linkedin_url,l.industry,l.confidence].map(v=>`"${(v||'').toString().replace(/"/g,'""')}"`).join(','));
-  const blob = new Blob(['\uFEFF' + [h.join(','),...rows].join('\n')], { type:'text/csv;charset=utf-8;' });
+  const blob = new Blob(['﻿' + [h.join(','),...rows].join('\n')], { type:'text/csv;charset=utf-8;' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `leads_${Date.now()}.csv`; a.click();
   showToast('CSV exportiert');
 }

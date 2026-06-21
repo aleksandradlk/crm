@@ -36,7 +36,7 @@
     <!-- MY LEADS -->
     <div id="sec-myLeads">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
-        <h1 style="font-size:20px;font-weight:700">Meine Leads</h1>
+        <h1 style="font-size:20px;font-weight:700" id="leadsHeading">Meine Leads</h1>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <input type="text" id="searchInput" class="form-control" style="width:180px" placeholder="Suchen..." oninput="filterLeads()">
           <select id="statusFilter" class="form-control" style="width:150px" onchange="filterLeads()">
@@ -65,10 +65,7 @@
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr>
-              <th>#</th><th>Unternehmen</th><th>Geschäftsführer</th><th>Telefon</th>
-              <th>E-Mail</th><th>Standort</th><th>Status</th><th>Hinzugefügt</th><th></th>
-            </tr></thead>
+            <thead><tr id="leadsTableHead"></tr></thead>
             <tbody id="leadsBody"></tbody>
           </table>
         </div>
@@ -103,7 +100,32 @@ if (Auth.isAdmin()) window.location.href = '/admin.html';
 renderSidebarUser();
 startActivityTracking();
 
+// Berechtigungen aus localStorage (nach Login gespeichert)
+// Backend prüft immer serverseitig — localStorage nur für UI-Sichtbarkeit.
+// Hinweis: Wenn ein Admin Berechtigungen ändert, muss der Closer sich neu einloggen,
+// damit die UI-Änderungen sichtbar werden. Die API-Sperren gelten sofort.
+const _u = Auth.getUser() || {};
+const CAN = {
+  editContacts: !!_u.can_edit_contacts,
+  archive:      !!_u.can_archive_leads,
+  reassign:     !!_u.can_reassign_leads,
+  viewAll:      !!_u.can_view_all_leads,
+};
+
 let allLeads = [];
+
+// Tabellenköpfe je nach Rechten aufbauen
+function buildTableHead() {
+  const cols = ['#','Unternehmen','Geschäftsführer','Telefon','E-Mail','Standort','Status','Hinzugefügt'];
+  if (CAN.viewAll) cols.push('Zugewiesen an');
+  cols.push('');
+  document.getElementById('leadsTableHead').innerHTML = cols.map(c => `<th>${c}</th>`).join('');
+}
+
+// Überschrift anpassen
+if (CAN.viewAll) {
+  document.getElementById('leadsHeading').textContent = 'Alle Leads';
+}
 
 function showSection(name) {
   document.getElementById('sec-myLeads').style.display   = name === 'myLeads'   ? '' : 'none';
@@ -120,7 +142,6 @@ async function loadLeads() {
     allLeads = await api('GET', '/leads');
     renderLeads(allLeads);
     updateStats(allLeads);
-    checkReminders(allLeads);
   } catch (e) { showToast(e.message, 'err'); }
 }
 
@@ -133,11 +154,13 @@ function filterLeads() {
   renderLeads(f);
 }
 
+const colCount = () => 8 + (CAN.viewAll ? 1 : 0) + 1;
+
 function renderLeads(leads) {
   document.getElementById('leadCount').textContent = leads.length;
   const body = document.getElementById('leadsBody');
   if (!leads.length) {
-    body.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text3)"><i class="fas fa-inbox" style="display:block;font-size:30px;margin-bottom:10px;opacity:.3"></i>Keine Leads zugewiesen</td></tr>`;
+    body.innerHTML = `<tr><td colspan="${colCount()}" style="text-align:center;padding:40px;color:var(--text3)"><i class="fas fa-inbox" style="display:block;font-size:30px;margin-bottom:10px;opacity:.3"></i>Keine Leads zugewiesen</td></tr>`;
     return;
   }
   body.innerHTML = leads.map((l, i) => `
@@ -156,12 +179,14 @@ function renderLeads(leads) {
       <td style="color:var(--text2);font-size:12px">${escHtml(l.location||'—')}</td>
       <td>${statusBadge(l.status)}</td>
       <td style="font-size:11px;color:var(--text3)">${fmtDateShort(l.created_at)}</td>
-      <td onclick="event.stopPropagation()">
-        <select class="form-control" style="padding:4px 8px;font-size:11px;width:130px" onchange="quickStatus(${l.id}, this.value)">
+      ${CAN.viewAll ? `<td style="font-size:12px;color:var(--text2)">${escHtml(l.assigned_name||'—')}</td>` : ''}
+      <td onclick="event.stopPropagation()" style="display:flex;gap:4px;align-items:center">
+        <select class="form-control" style="padding:4px 8px;font-size:11px;width:120px" onchange="quickStatus(${l.id}, this.value)">
           ${['neu','kontaktiert','nicht_erreicht','kein_interesse','rueckruf','kunde'].map(s =>
             `<option value="${s}" ${l.status===s?'selected':''}>${{neu:'Neu',kontaktiert:'Kontaktiert',nicht_erreicht:'Nicht erreicht',kein_interesse:'Kein Interesse',rueckruf:'Rückruf',kunde:'Kunde'}[s]}</option>`
           ).join('')}
         </select>
+        ${CAN.archive ? `<button class="btn btn-ghost btn-sm" onclick="deleteLead(${l.id})" title="Löschen" style="padding:4px 7px"><i class="fas fa-trash" style="color:var(--red);font-size:11px"></i></button>` : ''}
       </td>
     </tr>`).join('');
 }
@@ -173,21 +198,22 @@ function updateStats(leads) {
   document.getElementById('st-kunde').textContent    = leads.filter(l => l.status === 'kunde').length;
 }
 
-function checkReminders(leads) {
-  const now = Date.now();
-  let count = 0;
-  leads.forEach(l => {
-    // Reminders werden im Detail geladen — Badge basiert auf loaded lead
-  });
-  // Load reminder count separately
-  api('GET', '/leads').then(ls => {
-    // just reload badge via reminders tab
-  }).catch(() => {});
-}
-
 async function quickStatus(id, status) {
   try { await api('PATCH', `/leads/${id}/status`, { status }); loadLeads(); }
   catch (e) { showToast(e.message, 'err'); }
+}
+
+// ── LÖSCHEN (nur mit can_archive_leads) ───────────────────────
+async function deleteLead(id) {
+  if (!confirm('Lead wirklich löschen?')) return;
+  try {
+    await api('DELETE', `/leads/${id}`);
+    showToast('Lead gelöscht');
+    allLeads = allLeads.filter(l => l.id !== id);
+    filterLeads();
+    updateStats(allLeads);
+    closePanel();
+  } catch (e) { showToast(e.message, 'err'); }
 }
 
 // ── LEAD DETAIL PANEL ─────────────────────────────────────────
@@ -199,6 +225,8 @@ async function openPanel(id) {
     const l = await api('GET', `/leads/${id}`);
     document.getElementById('panelTitle').textContent = l.company || 'Lead';
     document.getElementById('panelBody').innerHTML = renderDetail(l);
+    // Zuweisung-Dropdown nachladen (async, nach render)
+    if (CAN.reassign) loadAssignableUsers(id, l.assigned_to);
   } catch (e) {
     document.getElementById('panelBody').innerHTML = `<span style="color:var(--red)">${escHtml(e.message)}</span>`;
   }
@@ -218,6 +246,7 @@ function renderDetail(l) {
     ['Website', l.website, 'url'],
     ['Branche', l.industry],
     ['Hinzugefügt am', fmtDate(l.created_at)],
+    ['Zugewiesen an', l.assigned_name],
     ['Notizen', l.notes],
   ];
   const infoHtml = infoFields.filter(([,v]) => v).map(([k,v,t]) => {
@@ -250,9 +279,49 @@ function renderDetail(l) {
       </div>
     </div>`).join('') || '<div style="color:var(--text3);font-size:12px">Kein Reminder</div>';
 
+  // Berechtigungsabhängige Abschnitte
+  const editContactsSection = CAN.editContacts ? `
+    <div style="margin:16px 0 8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Kontaktdaten bearbeiten</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div>
+        <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Telefon</label>
+        <input type="tel" id="cl-edit-phone-${l.id}" class="form-control" value="${escHtml(l.phone||'')}">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">E-Mail</label>
+        <input type="email" id="cl-edit-email-${l.id}" class="form-control" value="${escHtml(l.email||'')}">
+      </div>
+    </div>
+    <button class="btn btn-ghost btn-sm" style="margin-bottom:16px" onclick="saveContacts(${l.id})">
+      <i class="fas fa-save"></i> Kontaktdaten speichern
+    </button>
+  ` : '';
+
+  const reassignSection = CAN.reassign ? `
+    <div style="margin:16px 0 8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Zuweisen an</div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
+      <select id="cl-reassign-${l.id}" class="form-control" style="flex:1">
+        <option value="">— Nicht zuweisen —</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" onclick="reassignLead(${l.id})">
+        <i class="fas fa-user-check"></i> Zuweisen
+      </button>
+    </div>
+  ` : '';
+
+  const archiveBtn = CAN.archive ? `
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+      <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteLead(${l.id})">
+        <i class="fas fa-trash"></i> Lead löschen
+      </button>
+    </div>
+  ` : '';
+
   return `
     <div style="margin-bottom:14px">${statusBadge(l.status)}</div>
     ${infoHtml}
+    ${editContactsSection}
+    ${reassignSection}
 
     <div style="margin:16px 0 8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Status setzen</div>
     <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:16px">${statusBtns}</div>
@@ -272,9 +341,45 @@ function renderDetail(l) {
         <div class="form-group" style="margin-bottom:0"><label>Notiz</label><input type="text" id="remindNote" class="form-control" placeholder="z.B. Rückruf vereinbaren..."></div>
       </div>
       <button class="btn btn-ghost btn-sm" onclick="addReminder(${l.id})"><i class="fas fa-bell"></i> Setzen</button>
-    </div>`;
+    </div>
+    ${archiveBtn}`;
 }
 
+// ── KONTAKTDATEN SPEICHERN (can_edit_contacts) ─────────────────
+async function saveContacts(id) {
+  const phone = document.getElementById(`cl-edit-phone-${id}`)?.value.trim() || null;
+  const email = document.getElementById(`cl-edit-email-${id}`)?.value.trim() || null;
+  try {
+    await api('PATCH', `/leads/${id}`, { phone, email });
+    showToast('Kontaktdaten gespeichert ✓');
+    openPanel(id);
+  } catch (e) { showToast(e.message, 'err'); }
+}
+
+// ── LEAD ZUWEISEN (can_reassign_leads) ────────────────────────
+async function loadAssignableUsers(leadId, currentAssignedId) {
+  try {
+    const users = await api('GET', '/users/assignable');
+    const sel = document.getElementById(`cl-reassign-${leadId}`);
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Nicht zuweisen —</option>' +
+      users.map(u =>
+        `<option value="${u.id}" ${u.id === currentAssignedId ? 'selected' : ''}>${escHtml(u.full_name)}</option>`
+      ).join('');
+  } catch {}
+}
+
+async function reassignLead(id) {
+  const sel = document.getElementById(`cl-reassign-${id}`);
+  const userId = sel?.value ? parseInt(sel.value) : null;
+  try {
+    await api('PATCH', `/leads/${id}`, { assigned_to: userId });
+    showToast('Lead zugewiesen ✓');
+    openPanel(id);
+  } catch (e) { showToast(e.message, 'err'); }
+}
+
+// ── STATUS / KOMMENTARE / REMINDER ───────────────────────────
 async function setStatus(id, status) {
   try { await api('PATCH', `/leads/${id}/status`, { status }); openPanel(id); }
   catch (e) { showToast(e.message, 'err'); }
@@ -331,8 +436,8 @@ async function loadReminders() {
 }
 
 // Init
+buildTableHead();
 loadLeads();
-// Reminder check every 5 minutes
 setInterval(loadReminders, 5 * 60 * 1000);
 </script>
 </body>

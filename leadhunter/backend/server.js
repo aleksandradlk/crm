@@ -9,6 +9,7 @@ const userRoutes     = require('./routes/users');
 const leadRoutes     = require('./routes/leads');
 const generateRoutes = require('./routes/generate');
 const { startReminderCron } = require('./cron/reminders');
+const db = require('./db');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -40,9 +41,28 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/login.html'));
 });
 
+// ── DB-Migration: Berechtigungsspalten idempotent hinzufügen ──
+async function runMigrations() {
+  const cols = [
+    'can_edit_contacts',
+    'can_archive_leads',
+    'can_reassign_leads',
+    'can_view_all_leads',
+  ];
+  for (const col of cols) {
+    try {
+      await db.query(`ALTER TABLE users ADD COLUMN ${col} TINYINT(1) NOT NULL DEFAULT 0`);
+      console.log(`Migration: Spalte ${col} hinzugefügt`);
+    } catch (e) {
+      if (!e.message.includes('Duplicate column name')) throw e;
+    }
+  }
+}
+
 // ── Start ─────────────────────────────────────────────────────
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`LeadHunter Pro läuft auf Port ${PORT}`);
   console.log(`Umgebung: ${process.env.NODE_ENV || 'development'}`);
+  await runMigrations();
   startReminderCron();
 });

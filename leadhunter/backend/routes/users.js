@@ -9,6 +9,7 @@ router.get('/', auth, adminOnly, async (req, res) => {
   const [users] = await db.query(
     `SELECT u.id, u.username, u.full_name, u.email, u.role, u.is_active,
             u.last_login, u.created_at,
+            u.can_edit_contacts, u.can_archive_leads, u.can_reassign_leads, u.can_view_all_leads,
             s.last_active, s.click_count, s.login_at AS session_start
      FROM users u
      LEFT JOIN sessions s ON s.user_id = u.id
@@ -51,6 +52,14 @@ router.patch('/:id', auth, adminOnly, async (req, res) => {
     const hash = await bcrypt.hash(password, 12);
     await db.query('UPDATE users SET password_hash=? WHERE id=?', [hash, id]);
   }
+
+  // Berechtigungen (nur für Closer sinnvoll; Admin darf immer alles)
+  const PERM_FIELDS = ['can_edit_contacts','can_archive_leads','can_reassign_leads','can_view_all_leads'];
+  for (const f of PERM_FIELDS) {
+    if (req.body[f] !== undefined)
+      await db.query(`UPDATE users SET ${f}=? WHERE id=?`, [req.body[f] ? 1 : 0, id]);
+  }
+
   await log(req.user.id, 'user_update', 'user', id, req.body, req.ip);
   res.json({ ok: true });
 });
@@ -62,6 +71,12 @@ router.delete('/:id', auth, adminOnly, async (req, res) => {
   await db.query('DELETE FROM users WHERE id = ?', [id]);
   await log(req.user.id, 'user_delete', 'user', id, null, req.ip);
   res.json({ ok: true });
+});
+
+// GET /api/users/assignable — Zuweisung-Auswahl (alle authentifizierten User)
+router.get('/assignable', auth, async (req, res) => {
+  const [rows] = await db.query('SELECT id, full_name FROM users WHERE is_active=1 ORDER BY full_name');
+  res.json(rows);
 });
 
 // GET /api/users/tracking — Echtzeit-Tracking aller Closer (Admin)

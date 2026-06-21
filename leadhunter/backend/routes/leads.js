@@ -5,11 +5,19 @@ const { log } = require('../helpers/logger');
 
 const VALID_STATUSES = ['neu','kontaktiert','nicht_erreicht','kein_interesse','rueckruf','kunde'];
 
+// Hilfsfunktion: darf der User diesen Lead sehen?
+function canView(user, lead) {
+  if (user.role === 'admin') return true;
+  if (user.can_view_all_leads) return true;
+  return lead.assigned_to === user.id || lead.assigned_to === null;
+}
+
 // ── GET /api/leads ──────────────────────────────────────────
-// Admin: alle Leads | Closer: nur eigene (assigned_to)
+// Admin / can_view_all_leads: alle Leads
+// Closer sonst: eigene + unzugewiesene
 router.get('/', auth, async (req, res) => {
   const { status, search } = req.query;
-  let q = `SELECT l.*, 
+  let q = `SELECT l.*,
             u1.full_name AS assigned_name,
             u2.full_name AS created_name
            FROM leads l
@@ -18,8 +26,8 @@ router.get('/', auth, async (req, res) => {
   const params = [];
   const where  = [];
 
-  if (req.user.role !== 'admin') {
-    where.push('l.assigned_to = ?');
+  if (req.user.role !== 'admin' && !req.user.can_view_all_leads) {
+    where.push('(l.assigned_to = ? OR l.assigned_to IS NULL)');
     params.push(req.user.id);
   }
   if (status && VALID_STATUSES.includes(status)) {
@@ -76,7 +84,7 @@ router.get('/:id', auth, async (req, res) => {
      WHERE l.id = ?`, [id]
   );
   if (!lead) return res.status(404).json({ error: 'Nicht gefunden' });
-  if (req.user.role !== 'admin' && lead.assigned_to !== req.user.id)
+  if (!canView(req.user, lead))
     return res.status(403).json({ error: 'Kein Zugriff' });
 
   // Comments
@@ -103,7 +111,7 @@ router.patch('/:id/status', auth, async (req, res) => {
 
   const [[lead]] = await db.query('SELECT * FROM leads WHERE id = ?', [id]);
   if (!lead) return res.status(404).json({ error: 'Nicht gefunden' });
-  if (req.user.role !== 'admin' && lead.assigned_to !== req.user.id)
+  if (!canView(req.user, lead))
     return res.status(403).json({ error: 'Kein Zugriff' });
 
   await db.query('UPDATE leads SET status = ? WHERE id = ?', [status, id]);
@@ -112,12 +120,33 @@ router.patch('/:id/status', auth, async (req, res) => {
   res.json({ ok: true });
 });
 
-// ── PATCH /api/leads/:id — allgemeines Update (Admin) ────────
-router.patch('/:id', auth, adminOnly, async (req, res) => {
+// ── PATCH /api/leads/:id — allgemeines Update ────────────────
+// Admin: alle Felder
+// can_edit_contacts: nur phone + email
+// can_reassign_leads: nur assigned_to
+router.patch('/:id', auth, async (req, res) => {
+  const isAdmin = req.user.role === 'admin';
+  if (!isAdmin && !req.user.can_edit_contacts && !req.user.can_reassign_leads) {
+    return res.status(403).json({ error: 'Kein Zugriff' });
+  }
+
   const id = parseInt(req.params.id);
-  const allowed = ['company','ceo','email','phone','location','website',
-                   'linkedin_url','industry','employees','revenue','notes',
-                   'assigned_to','confidence'];
+
+  // Zugriffscheck für Nicht-Admins
+  if (!isAdmin) {
+    const [[lead]] = await db.query('SELECT assigned_to FROM leads WHERE id=?', [id]);
+    if (!lead) return res.status(404).json({ error: 'Nicht gefunden' });
+    if (!canView(req.user, lead))
+      return res.status(403).json({ error: 'Kein Zugriff' });
+  }
+
+  const allowed = isAdmin
+    ? ['company','ceo','email','phone','location','website','linkedin_url','industry','employees','revenue','notes','assigned_to','confidence']
+    : [
+        ...(req.user.can_edit_contacts  ? ['email','phone'] : []),
+        ...(req.user.can_reassign_leads ? ['assigned_to']   : []),
+      ];
+
   const updates = [];
   const params  = [];
   for (const k of allowed) {
@@ -130,8 +159,12 @@ router.patch('/:id', auth, adminOnly, async (req, res) => {
   res.json({ ok: true });
 });
 
-// ── DELETE /api/leads/:id (Admin) ────────────────────────────
-router.delete('/:id', auth, adminOnly, async (req, res) => {
+// ── DELETE /api/leads/:id ────────────────────────────────────
+// Admin oder can_archive_leads
+router.delete('/:id', auth, async (req, res) => {
+  if (req.user.role !== 'admin' && !req.user.can_archive_leads) {
+    return res.status(403).json({ error: 'Kein Zugriff' });
+  }
   const id = parseInt(req.params.id);
   await db.query('DELETE FROM leads WHERE id = ?', [id]);
   await log(req.user.id, 'lead_delete', 'lead', id, null, req.ip);
@@ -146,7 +179,7 @@ router.post('/:id/comments', auth, async (req, res) => {
 
   const [[lead]] = await db.query('SELECT assigned_to FROM leads WHERE id=?', [leadId]);
   if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
-  if (req.user.role !== 'admin' && lead.assigned_to !== req.user.id)
+  if (!canView(req.user, lead))
     return res.status(403).json({ error: 'Kein Zugriff' });
 
   const [r] = await db.query(
@@ -165,7 +198,7 @@ router.post('/:id/reminders', auth, async (req, res) => {
 
   const [[lead]] = await db.query('SELECT assigned_to FROM leads WHERE id=?', [leadId]);
   if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
-  if (req.user.role !== 'admin' && lead.assigned_to !== req.user.id)
+  if (!canView(req.user, lead))
     return res.status(403).json({ error: 'Kein Zugriff' });
 
   const [r] = await db.query(

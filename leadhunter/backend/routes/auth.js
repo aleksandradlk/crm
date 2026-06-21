@@ -3,6 +3,7 @@ const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
 const db      = require('../db');
 const { log } = require('../helpers/logger');
+const { auth: authMiddleware } = require('../middleware/auth');
 
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
@@ -31,7 +32,13 @@ router.post('/login', async (req, res) => {
 
   res.json({
     token,
-    user: { id: user.id, username: user.username, full_name: user.full_name, role: user.role }
+    user: {
+      id: user.id, username: user.username, full_name: user.full_name, role: user.role,
+      can_edit_contacts:  !!user.can_edit_contacts,
+      can_archive_leads:  !!user.can_archive_leads,
+      can_reassign_leads: !!user.can_reassign_leads,
+      can_view_all_leads: !!user.can_view_all_leads,
+    }
   });
 });
 
@@ -82,6 +89,18 @@ router.post('/heartbeat', async (req, res) => {
   } catch {
     res.status(401).json({ error: 'Token ungültig' });
   }
+});
+
+// GET /api/auth/me — aktuellen Benutzer mit Rechten zurückgeben
+router.get('/me', authMiddleware, (req, res) => {
+  const u = req.user;
+  res.json({
+    id: u.id, username: u.username, full_name: u.full_name, role: u.role,
+    can_edit_contacts:  !!u.can_edit_contacts,
+    can_archive_leads:  !!u.can_archive_leads,
+    can_reassign_leads: !!u.can_reassign_leads,
+    can_view_all_leads: !!u.can_view_all_leads,
+  });
 });
 
 module.exports = router;
