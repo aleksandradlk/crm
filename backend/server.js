@@ -9,7 +9,8 @@ const userRoutes     = require('./routes/users');
 const leadRoutes     = require('./routes/leads');
 const generateRoutes = require('./routes/generate');
 const wikiRoutes     = require('./routes/wiki');
-const chatRoutes     = require('./routes/chat');
+const chatRoutes          = require('./routes/chat');
+const phoneVerifyRoutes   = require('./routes/phoneVerification');
 const { startReminderCron } = require('./cron/reminders');
 const cron           = require('node-cron');
 
@@ -46,6 +47,7 @@ app.use('/api/leads',    leadRoutes);
 app.use('/api/generate', generateRoutes);
 app.use('/api/wiki',     wikiRoutes);
 app.use('/api/chats',    chatRoutes);
+app.use('/api/leads',    phoneVerifyRoutes);
 
 // ── SPA Fallback ──────────────────────────────────────────────
 app.get('*', (req, res) => {
@@ -109,6 +111,14 @@ db.query(`CREATE TABLE IF NOT EXISTS chat_messages (
 
 db.query('ALTER TABLE chat_rooms ADD COLUMN lead_id INT NULL').catch(() => {});
 db.query('ALTER TABLE users ADD COLUMN can_edit_contacts TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
+
+// ── Telefon-Verifizierung ─────────────────────────────────────
+db.query('ALTER TABLE leads ADD COLUMN phone_verified          TINYINT(1)   NOT NULL DEFAULT 0').catch(() => {});
+db.query('ALTER TABLE leads ADD COLUMN phone_verified_at       DATETIME     NULL').catch(() => {});
+db.query('ALTER TABLE leads ADD COLUMN phone_verify_code_hash  VARCHAR(255) NULL').catch(() => {});
+db.query('ALTER TABLE leads ADD COLUMN phone_verify_expires_at DATETIME     NULL').catch(() => {});
+db.query('ALTER TABLE leads ADD COLUMN phone_verify_sent_at    DATETIME     NULL').catch(() => {});
+db.query('ALTER TABLE leads ADD COLUMN phone_verify_attempts   INT          NOT NULL DEFAULT 0').catch(() => {});
 
 // ── Index-Migrationen (idempotent — Fehler = Index existiert bereits) ────────
 db.query('CREATE INDEX idx_leads_status     ON leads (status)').catch(() => {});

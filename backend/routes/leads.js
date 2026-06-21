@@ -175,6 +175,12 @@ router.patch('/:id', auth, async (req, res) => {
     if (req.body[k] !== undefined) { updates.push(`${k}=?`); params.push(req.body[k]); }
   }
   if (!updates.length) return res.status(400).json({ error: 'Nichts zu aktualisieren' });
+  // Wenn Telefonnummer geändert wird → Verifizierung zurücksetzen
+  if (req.body.phone !== undefined) {
+    updates.push('phone_verified=0','phone_verified_at=NULL',
+                 'phone_verify_code_hash=NULL','phone_verify_expires_at=NULL',
+                 'phone_verify_attempts=0');
+  }
   params.push(id);
   await db.query(`UPDATE leads SET ${updates.join(',')} WHERE id=?`, params);
   await log(req.user.id, 'lead_update', 'lead', id, req.body, req.ip);

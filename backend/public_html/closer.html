@@ -658,14 +658,78 @@ async function saveEditContactCl() {
   }
 }
 
+// ── Telefon-Verifizierung (Closer) ────────────────────────────
+let _verifyLeadIdCl = null;
+
+function openPhoneVerifyCl(leadId) {
+  _verifyLeadIdCl = leadId;
+  const lead = _panelLead?.id === leadId ? _panelLead : allLeads.find(l => l.id === leadId);
+  document.getElementById('pvPhoneCl').textContent = lead?.phone || '';
+  document.getElementById('pvStep1Cl').style.display = '';
+  document.getElementById('pvStep2Cl').style.display = 'none';
+  document.getElementById('pvErrorCl').textContent = '';
+  document.getElementById('pvSendBtnCl').disabled = false;
+  document.getElementById('pvSendBtnCl').innerHTML = '<i class="fas fa-paper-plane"></i> SMS senden';
+  document.getElementById('phoneVerifyModalCl').classList.add('open');
+}
+
+function closePhoneVerifyModalCl() {
+  document.getElementById('phoneVerifyModalCl').classList.remove('open');
+  _verifyLeadIdCl = null;
+}
+
+async function pvSendSmsCl() {
+  const btn = document.getElementById('pvSendBtnCl');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sende...';
+  document.getElementById('pvErrorCl').textContent = '';
+  try {
+    await api('POST', `/leads/${_verifyLeadIdCl}/phone-verification/start`);
+    document.getElementById('pvStep1Cl').style.display = 'none';
+    document.getElementById('pvStep2Cl').style.display = '';
+    document.getElementById('pvCodeCl').value = '';
+    setTimeout(() => document.getElementById('pvCodeCl').focus(), 80);
+  } catch(e) {
+    document.getElementById('pvErrorCl').textContent = e.message;
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-paper-plane"></i> SMS senden';
+  }
+}
+
+async function pvConfirmCl() {
+  const code = document.getElementById('pvCodeCl').value.trim();
+  if (!/^\d{6}$/.test(code)) { document.getElementById('pvErrorCl').textContent = 'Bitte 6-stelligen Code eingeben.'; return; }
+  const btn = document.getElementById('pvConfirmBtnCl');
+  btn.disabled = true;
+  document.getElementById('pvErrorCl').textContent = '';
+  try {
+    await api('POST', `/leads/${_verifyLeadIdCl}/phone-verification/confirm`, { code });
+    showToast('Telefonnummer verifiziert ✓');
+    if (_panelLead && _panelLead.id === _verifyLeadIdCl) {
+      _panelLead.phone_verified = 1;
+      document.getElementById('panelKeyInfo').innerHTML = renderPanelKeyInfo(_panelLead);
+    }
+    const l = allLeads.find(l => l.id === _verifyLeadIdCl);
+    if (l) l.phone_verified = 1;
+    closePhoneVerifyModalCl();
+  } catch(e) {
+    document.getElementById('pvErrorCl').textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 function renderPanelKeyInfo(l) {
   const lastNote = (l.comments||[]).length ? l.comments[l.comments.length - 1] : null;
   const lastActivity = lastNote && lastNote.created_at > (l.updated_at||'') ? lastNote.created_at : (l.updated_at||l.created_at);
   const canEdit = ME && ME.can_edit_contacts;
-  const editBtnCl = (field, val) => canEdit ? `<button onclick="editLeadContactCl(${l.id},'${field}',${escHtml(JSON.stringify(val||''))})" style="background:none;border:none;cursor:pointer;color:var(--text3);padding:1px 5px;font-size:11px;flex-shrink:0;line-height:1;margin-left:auto" title="Bearbeiten"><i class="fas fa-edit"></i></button>` : '';
+  const editBtnCl = (field, val) => canEdit ? `<button onclick="editLeadContactCl(${l.id},'${field}',${escHtml(JSON.stringify(val||''))})" style="background:none;border:none;cursor:pointer;color:var(--text3);padding:1px 5px;font-size:11px;flex-shrink:0;line-height:1" title="Bearbeiten"><i class="fas fa-edit"></i></button>` : '';
+  const verifyBadgeCl = l.phone_verified
+    ? `<span style="color:var(--green);font-size:11px;font-weight:600;flex-shrink:0"><i class="fas fa-check-circle"></i> Verifiziert</span>`
+    : (l.phone && canEdit ? `<button onclick="openPhoneVerifyCl(${l.id})" style="background:none;border:1px solid var(--border2);border-radius:5px;cursor:pointer;color:var(--text3);padding:2px 7px;font-size:11px;flex-shrink:0;white-space:nowrap"><i class="fas fa-shield-alt"></i> Verifizieren</button>` : (l.phone && !l.phone_verified ? `<span style="color:var(--text3);font-size:11px;flex-shrink:0">Nicht verifiziert</span>` : ''));
   const contactItems = [
     l.ceo   ? `<div style="display:flex;align-items:center;gap:8px;font-size:13px"><i class="fas fa-user" style="color:var(--text3);width:14px;text-align:center;flex-shrink:0"></i><span>${escHtml(l.ceo)}</span></div>` : '',
-    `<div style="display:flex;align-items:center;gap:8px;font-size:13px"><i class="fas fa-phone" style="color:var(--text3);width:14px;text-align:center;flex-shrink:0"></i>${l.phone ? `<a href="tel:${escHtml(l.phone)}" style="color:var(--accent);font-family:'JetBrains Mono',monospace">${escHtml(l.phone)}</a><button onclick="copyPhone('${escHtml(l.phone||'')}')" style="background:none;border:none;cursor:pointer;color:var(--text3);padding:2px 5px;font-size:12px;line-height:1" title="Nummer kopieren"><i class="fas fa-copy"></i></button>` : `<span style="color:var(--text3);font-size:12px">—</span>`}${editBtnCl('phone', l.phone)}</div>`,
+    `<div style="display:flex;align-items:center;gap:8px;font-size:13px;flex-wrap:wrap"><i class="fas fa-phone" style="color:var(--text3);width:14px;text-align:center;flex-shrink:0"></i>${l.phone ? `<a href="tel:${escHtml(l.phone)}" style="color:var(--accent);font-family:'JetBrains Mono',monospace">${escHtml(l.phone)}</a><button onclick="copyPhone('${escHtml(l.phone||'')}')" style="background:none;border:none;cursor:pointer;color:var(--text3);padding:2px 5px;font-size:12px;line-height:1" title="Nummer kopieren"><i class="fas fa-copy"></i></button>` : `<span style="color:var(--text3);font-size:12px">—</span>`}${editBtnCl('phone', l.phone)}${verifyBadgeCl}</div>`,
     `<div style="display:flex;align-items:center;gap:8px;font-size:13px"><i class="fas fa-envelope" style="color:var(--text3);width:14px;text-align:center;flex-shrink:0"></i>${l.email ? `<a href="mailto:${escHtml(l.email)}" style="color:var(--accent)">${escHtml(l.email)}</a>` : `<span style="color:var(--text3);font-size:12px">—</span>`}${editBtnCl('email', l.email)}</div>`,
   ].filter(Boolean).join('');
   return `
@@ -1593,6 +1657,43 @@ setInterval(checkReminderNotifications, 2 * 60 * 1000);
 
 <script>
 document.getElementById('editContactInputCl')?.addEventListener('keydown', function(e){ if(e.key==='Enter') saveEditContactCl(); if(e.key==='Escape') closeEditContactModalCl(); });
+</script>
+
+<!-- PHONE VERIFY MODAL (Closer) -->
+<div class="modal-overlay" id="phoneVerifyModalCl" onclick="if(event.target===this)closePhoneVerifyModalCl()">
+  <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:420px;max-width:96vw;display:flex;flex-direction:column">
+    <div style="padding:22px 28px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:36px;height:36px;border-radius:10px;background:rgba(27,115,205,0.12);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:16px"><i class="fas fa-shield-alt"></i></div>
+        <div style="font-size:16px;font-weight:700;color:var(--text)">Telefonnummer verifizieren</div>
+      </div>
+      <button onclick="closePhoneVerifyModalCl()" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:13px"><i class="fas fa-times"></i></button>
+    </div>
+    <div style="padding:20px 28px 24px;display:flex;flex-direction:column;gap:14px">
+      <div id="pvStep1Cl">
+        <p style="font-size:13px;color:var(--text2);margin:0 0 10px">SMS mit 6-stelligem Code wird gesendet an:</p>
+        <div id="pvPhoneCl" style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--text);background:var(--bg3);border-radius:8px;padding:10px 14px;margin-bottom:14px"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border);padding-top:12px">
+          <button class="btn btn-ghost btn-sm" onclick="closePhoneVerifyModalCl()">Abbrechen</button>
+          <button class="btn btn-primary btn-sm" id="pvSendBtnCl" onclick="pvSendSmsCl()"><i class="fas fa-paper-plane"></i> SMS senden</button>
+        </div>
+      </div>
+      <div id="pvStep2Cl" style="display:none">
+        <p style="font-size:13px;color:var(--text2);margin:0 0 10px">6-stelligen Code aus der SMS eingeben:</p>
+        <input type="text" id="pvCodeCl" inputmode="numeric" maxlength="6" placeholder="000000"
+          style="width:100%;text-align:center;letter-spacing:10px;font-size:26px;font-family:'JetBrains Mono',monospace;padding:12px;border:1px solid var(--border2);border-radius:8px;background:var(--bg3);color:var(--text);outline:none;box-sizing:border-box">
+        <p style="font-size:11px;color:var(--text3);margin:8px 0 0">Code ist 10 Minuten gültig. <button onclick="pvSendSmsCl()" style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:11px;padding:0">Neuer Code?</button></p>
+        <div style="display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border);padding-top:12px;margin-top:12px">
+          <button class="btn btn-ghost btn-sm" onclick="closePhoneVerifyModalCl()">Abbrechen</button>
+          <button class="btn btn-primary btn-sm" id="pvConfirmBtnCl" onclick="pvConfirmCl()"><i class="fas fa-check"></i> Bestätigen</button>
+        </div>
+      </div>
+      <div id="pvErrorCl" style="color:var(--red);font-size:12px;min-height:16px;margin-top:-8px"></div>
+    </div>
+  </div>
+</div>
+<script>
+document.getElementById('pvCodeCl')?.addEventListener('keydown', e => { if(e.key==='Enter') pvConfirmCl(); });
 </script>
 </body>
 </html>
