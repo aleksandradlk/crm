@@ -84,7 +84,7 @@
         <h1 style="font-size:20px;font-weight:700">Alle Leads</h1>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <input type="text" id="searchInput" class="form-control" style="width:200px" placeholder="Suchen..." autocomplete="new-password" oninput="filterLeads()">
-          <select id="statusFilter" class="form-control" style="width:160px" onchange="filterLeads()">
+          <select id="statusFilter" class="form-control" style="width:150px" onchange="filterLeads()">
             <option value="">Alle Status</option>
             <option value="neu">Neu</option>
             <option value="kontaktiert">Kontaktiert</option>
@@ -92,6 +92,9 @@
             <option value="kein_interesse">Kein Interesse</option>
             <option value="rueckruf">Rückruf</option>
             <option value="kunde">Kunde</option>
+          </select>
+          <select id="closerFilter" class="form-control" style="width:150px" onchange="filterLeads()">
+            <option value="">Alle Closer</option>
           </select>
           <button class="btn btn-primary btn-sm" onclick="openAddLeadModal()"><i class="fas fa-plus"></i> Lead hinzufügen</button>
           <button class="btn btn-ghost btn-sm" onclick="exportCSV()"><i class="fas fa-download"></i> CSV</button>
@@ -101,9 +104,19 @@
 
       <div class="stats-grid" style="margin-bottom:16px">
         <div class="stat-card"><div class="stat-label">Gesamt</div><div class="stat-value sv-blue" id="st-total">—</div></div>
-        <div class="stat-card"><div class="stat-label">Neu</div><div class="stat-value sv-accent" id="st-neu" style="color:var(--accent)">—</div></div>
-        <div class="stat-card"><div class="stat-label">Kontaktiert</div><div class="stat-value sv-green" id="st-kontaktiert">—</div></div>
+        <div class="stat-card"><div class="stat-label">Heute neu</div><div class="stat-value sv-accent" id="st-heute" style="color:var(--accent)">—</div></div>
+        <div class="stat-card"><div class="stat-label">Rückrufe</div><div class="stat-value" id="st-rueckruf" style="color:var(--amber)">—</div></div>
         <div class="stat-card"><div class="stat-label">Kunden</div><div class="stat-value sv-amber" id="st-kunde">—</div></div>
+      </div>
+
+      <!-- Bulk-Action-Bar -->
+      <div id="bulkBar" style="display:none;align-items:center;gap:10px;background:rgba(79,142,247,0.1);border:1px solid rgba(79,142,247,0.35);border-radius:10px;padding:10px 14px;margin-bottom:12px;flex-wrap:wrap">
+        <span id="bulkCount" style="font-size:13px;font-weight:600;color:var(--accent)">0 ausgewählt</span>
+        <span style="color:var(--border2)">|</span>
+        <span style="font-size:13px;color:var(--text2)">Zuweisen an:</span>
+        <select id="bulkAssignSelect" class="form-control" style="width:180px"></select>
+        <button class="btn btn-primary btn-sm" onclick="executeBulkAssign()"><i class="fas fa-user-tag"></i> Zuweisen</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearBulkSelection()"><i class="fas fa-times"></i> Abbrechen</button>
       </div>
 
       <div id="funnelSummary" style="margin-bottom:16px"></div>
@@ -115,6 +128,7 @@
         <div class="table-wrap">
           <table>
             <thead><tr>
+              <th style="width:32px"><input type="checkbox" id="selectAllLeads" title="Alle auswählen" onchange="toggleAllLeadsSelect(this.checked)" style="accent-color:var(--accent)"></th>
               <th>#</th><th>Unternehmen</th><th>Geschäftsführer</th><th>Kontakt</th>
               <th>Standort</th><th>Status</th><th>Zugewiesen</th><th>Hinzugefügt</th><th></th>
             </tr></thead>
@@ -572,16 +586,22 @@ async function loadLeads() {
   }
 }
 
+let currentFilteredLeads = [];
+let bulkSelectedIds = new Set();
+
 function filterLeads() {
   const search = document.getElementById('searchInput').value.toLowerCase();
   const status = document.getElementById('statusFilter').value;
+  const closer = document.getElementById('closerFilter').value;
   let filtered = allLeads;
-  if (search) filtered = filtered.filter(l =>
+  if (search)  filtered = filtered.filter(l =>
     (l.company||'').toLowerCase().includes(search) ||
     (l.ceo||'').toLowerCase().includes(search) ||
     (l.location||'').toLowerCase().includes(search)
   );
-  if (status) filtered = filtered.filter(l => l.status === status);
+  if (status)  filtered = filtered.filter(l => l.status === status);
+  if (closer)  filtered = filtered.filter(l => String(l.assigned_to) === closer);
+  currentFilteredLeads = filtered;
   renderLeads(filtered);
 }
 
@@ -589,11 +609,14 @@ function renderLeads(leads) {
   document.getElementById('leadCount').textContent = leads.length + ' Einträge';
   const body = document.getElementById('leadsTableBody');
   if (!leads.length) {
-    body.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text3)"><i class="fas fa-inbox" style="display:block;font-size:30px;margin-bottom:10px;opacity:.3"></i>Keine Leads</td></tr>`;
+    body.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text3)"><i class="fas fa-inbox" style="display:block;font-size:30px;margin-bottom:10px;opacity:.3"></i>Keine Leads</td></tr>`;
     return;
   }
   body.innerHTML = leads.map((l, i) => `
-    <tr style="cursor:pointer" onclick="openLeadPanel(${l.id})">
+    <tr style="cursor:pointer;${bulkSelectedIds.has(l.id)?'background:rgba(79,142,247,0.07)':''}" onclick="openLeadPanel(${l.id})">
+      <td onclick="event.stopPropagation()">
+        <input type="checkbox" class="lead-cb" data-id="${l.id}" ${bulkSelectedIds.has(l.id)?'checked':''} onchange="toggleBulkSelect(${l.id},this.checked)" style="accent-color:var(--accent)">
+      </td>
       <td style="color:var(--text3);font-size:11px;font-family:'JetBrains Mono',monospace">${String(i+1).padStart(2,'0')}</td>
       <td style="font-weight:600">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}</td>
       <td style="color:var(--text2)">${escHtml(l.ceo||'—')}</td>
@@ -612,10 +635,11 @@ function renderLeads(leads) {
 }
 
 function updateLeadStats(leads) {
-  document.getElementById('st-total').textContent      = leads.length;
-  document.getElementById('st-neu').textContent         = leads.filter(l => l.status === 'neu').length;
-  document.getElementById('st-kontaktiert').textContent = leads.filter(l => l.status === 'kontaktiert').length;
-  document.getElementById('st-kunde').textContent       = leads.filter(l => l.status === 'kunde').length;
+  const today = new Date().toDateString();
+  document.getElementById('st-total').textContent    = leads.length;
+  document.getElementById('st-heute').textContent    = leads.filter(l => new Date(l.created_at).toDateString() === today).length;
+  document.getElementById('st-rueckruf').textContent = leads.filter(l => l.status === 'rueckruf').length;
+  document.getElementById('st-kunde').textContent    = leads.filter(l => l.status === 'kunde').length;
   renderFunnel(leads);
 }
 
@@ -921,8 +945,12 @@ function renderLeadDetail(l) {
 }
 
 async function changeStatus(id, status) {
-  try { await api('PATCH', `/leads/${id}/status`, { status }); panelDirty = true; openLeadPanel(id); }
-  catch (e) { showToast(e.message, 'err'); }
+  try {
+    await api('PATCH', `/leads/${id}/status`, { status });
+    panelDirty = true;
+    openLeadPanel(id);
+    if (status === 'rueckruf') showRueckrufPopup(id);
+  } catch (e) { showToast(e.message, 'err'); }
 }
 
 async function assignLead(leadId) {
@@ -964,14 +992,97 @@ async function deleteReminder(leadId, rid) {
 }
 
 // ── GENERATE ──────────────────────────────────────────────────
+let _allUsers = [];
+
 async function loadClosersForSelect() {
   try {
-    const users = await api('GET', '/users');
+    _allUsers = await api('GET', '/users');
+    const active = _allUsers.filter(u => u.is_active);
+
     const sel = document.getElementById('gen-assign');
     sel.innerHTML = '<option value="">— Nicht zuweisen —</option>' +
-      users.filter(u => u.is_active).map(u =>
-        `<option value="${u.id}">${escHtml(u.full_name)} (${u.role})</option>`).join('');
+      active.map(u => `<option value="${u.id}">${escHtml(u.full_name)} (${u.role})</option>`).join('');
+
+    const cf = document.getElementById('closerFilter');
+    if (cf) cf.innerHTML = '<option value="">Alle Closer</option>' +
+      active.map(u => `<option value="${u.id}">${escHtml(u.full_name)}</option>`).join('');
+
+    const ba = document.getElementById('bulkAssignSelect');
+    if (ba) ba.innerHTML = '<option value="">— Closer auswählen —</option>' +
+      active.map(u => `<option value="${u.id}">${escHtml(u.full_name)}</option>`).join('');
   } catch {}
+}
+
+// ── Bulk-Zuweisung ─────────────────────────────────────────────
+function toggleBulkSelect(id, checked) {
+  if (checked) bulkSelectedIds.add(id);
+  else bulkSelectedIds.delete(id);
+  updateBulkBar();
+}
+
+function toggleAllLeadsSelect(checked) {
+  const vis = currentFilteredLeads.length ? currentFilteredLeads : allLeads;
+  vis.forEach(l => checked ? bulkSelectedIds.add(l.id) : bulkSelectedIds.delete(l.id));
+  updateBulkBar();
+  renderLeads(vis);
+}
+
+function clearBulkSelection() {
+  bulkSelectedIds.clear();
+  const cb = document.getElementById('selectAllLeads');
+  if (cb) cb.checked = false;
+  updateBulkBar();
+  const vis = currentFilteredLeads.length ? currentFilteredLeads : allLeads;
+  renderLeads(vis);
+}
+
+function updateBulkBar() {
+  const bar = document.getElementById('bulkBar');
+  if (!bar) return;
+  if (bulkSelectedIds.size > 0) {
+    bar.style.display = 'flex';
+    document.getElementById('bulkCount').textContent = bulkSelectedIds.size + ' ausgewählt';
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+async function executeBulkAssign() {
+  const closerId = document.getElementById('bulkAssignSelect').value;
+  if (!closerId) { showToast('Bitte einen Closer auswählen', 'err'); return; }
+  if (!bulkSelectedIds.size) return;
+  try {
+    await Promise.all([...bulkSelectedIds].map(id =>
+      api('PATCH', `/leads/${id}`, { assigned_to: closerId })
+    ));
+    showToast(`${bulkSelectedIds.size} Leads zugewiesen ✓`);
+    clearBulkSelection();
+    loadLeads();
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+// ── Rückruf-Reminder-Popup ────────────────────────────────────
+let _rueckrufLeadId = null;
+
+function showRueckrufPopup(leadId) {
+  _rueckrufLeadId = leadId;
+  document.getElementById('rueckrufPopup').style.display = 'flex';
+}
+
+function closeRueckrufPopup() {
+  document.getElementById('rueckrufPopup').style.display = 'none';
+  _rueckrufLeadId = null;
+}
+
+async function setQuickReminder(offsetHours) {
+  if (!_rueckrufLeadId) return;
+  const dt = new Date(Date.now() + offsetHours * 3600 * 1000);
+  const remind_at = dt.toISOString().slice(0, 16);
+  try {
+    await api('POST', `/leads/${_rueckrufLeadId}/reminder`, { remind_at, note: 'Rückruf' });
+    showToast('Reminder gesetzt ✓');
+  } catch(e) { showToast(e.message, 'err'); }
+  closeRueckrufPopup();
 }
 
 function genLog(msg, type='info') {
@@ -1316,12 +1427,13 @@ function downloadActivityLog() {
 
 // ── CSV EXPORT ────────────────────────────────────────────────
 function exportCSV() {
-  if (!allLeads.length) { showToast('Keine Daten', 'err'); return; }
+  const data = currentFilteredLeads.length ? currentFilteredLeads : allLeads;
+  if (!data.length) { showToast('Keine Daten', 'err'); return; }
   const h = ['Unternehmen','GF','E-Mail','Telefon','Standort','Status','Zugewiesen','Hinzugefügt','Website','LinkedIn','Branche','Konfidenz'];
-  const rows = allLeads.map(l => [l.company,l.ceo,l.email,l.phone,l.location,l.status,l.assigned_name,fmtDate(l.created_at),l.website,l.linkedin_url,l.industry,l.confidence].map(v=>`"${(v||'').toString().replace(/"/g,'""')}"`).join(','));
-  const blob = new Blob(['\uFEFF' + [h.join(','),...rows].join('\n')], { type:'text/csv;charset=utf-8;' });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `leads_${Date.now()}.csv`; a.click();
-  showToast('CSV exportiert');
+  const rows = data.map(l => [l.company,l.ceo,l.email,l.phone,l.location,l.status,l.assigned_name,fmtDate(l.created_at),l.website,l.linkedin_url,l.industry,l.confidence].map(v=>`"${(v||'').toString().replace(/"/g,'""""')}"`).join(','));
+  const blob = new Blob(['﻿' + [h.join(','),...rows].join('\n')], { type:'text/csv;charset=utf-8;' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `leads_\.csv`; a.click();
+  showToast(`CSV exportiert (${data.length} Leads)`);
 }
 
 // ── LEAD MANUELL HINZUFÜGEN ───────────────────────────────────
@@ -1334,12 +1446,29 @@ function openAddLeadModal() {
 }
 function closeAddLeadModal() { document.getElementById('addLeadModal').classList.remove('open'); }
 
-async function saveManualLead() {
+async function saveManualLead(force = false) {
   const get = id => document.getElementById(id)?.value.trim() || '';
   const body = { company: get('ml-company'), ceo: get('ml-ceo'), phone: get('ml-phone'),
     email: get('ml-email'), location: get('ml-location'), industry: get('ml-industry'),
     website: get('ml-website'), notes: get('ml-notes') };
   if (!body.company) { document.getElementById('addLeadErr').textContent = 'Firmenname ist erforderlich'; return; }
+
+  if (!force) {
+    const norm = s => (s||'').toLowerCase().replace(/[\s\-\/]/g,'');
+    const normPhone = norm(body.phone);
+    const normCompany = norm(body.company);
+    const dup = allLeads.find(l =>
+      (body.phone && normPhone && norm(l.phone) === normPhone) ||
+      (norm(l.company) === normCompany)
+    );
+    if (dup) {
+      const err = document.getElementById('addLeadErr');
+      err.innerHTML = `⚠️ Mögliches Duplikat: <b>${escHtml(dup.company)}</b> (${escHtml(dup.location||'')}) existiert bereits.<br>
+        <button class="btn btn-ghost btn-sm" style="margin-top:6px;font-size:11px" onclick="saveManualLead(true)">Trotzdem speichern</button>`;
+      return;
+    }
+  }
+
   try {
     await api('POST', '/leads', body);
     showToast('Lead hinzugefügt ✓');
@@ -1947,6 +2076,21 @@ async function submitAdminFeedback() {
   } catch(e) { document.getElementById('afbModalErr').textContent = e.message; }
 }
 </script>
+
+<!-- POPUP: Rückruf-Reminder -->
+<div id="rueckrufPopup" style="display:none;position:fixed;bottom:24px;right:24px;z-index:9999;background:var(--bg2);border:1px solid var(--border2);border-radius:14px;box-shadow:var(--shadow-lg);padding:18px 20px;min-width:260px;max-width:320px;flex-direction:column;gap:12px">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <span style="font-weight:700;font-size:14px"><i class="fas fa-bell" style="color:var(--amber);margin-right:6px"></i>Reminder setzen?</span>
+    <button onclick="closeRueckrufPopup()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">&times;</button>
+  </div>
+  <div style="font-size:12px;color:var(--text2)">Status auf <b>Rückruf</b> gesetzt — wann zurückrufen?</div>
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <button class="btn btn-ghost btn-sm" style="justify-content:flex-start" onclick="setQuickReminder(20)"><i class="fas fa-clock" style="width:16px"></i> Morgen 9:00 Uhr</button>
+    <button class="btn btn-ghost btn-sm" style="justify-content:flex-start" onclick="setQuickReminder(44)"><i class="fas fa-clock" style="width:16px"></i> Übermorgen 9:00 Uhr</button>
+    <button class="btn btn-ghost btn-sm" style="justify-content:flex-start" onclick="setQuickReminder(164)"><i class="fas fa-clock" style="width:16px"></i> In einer Woche</button>
+    <button class="btn btn-ghost btn-sm" style="justify-content:flex-start;color:var(--text3)" onclick="closeRueckrufPopup()"><i class="fas fa-times" style="width:16px"></i> Kein Reminder</button>
+  </div>
+</div>
 
 <!-- MODAL: Lead manuell hinzufügen -->
 <div class="modal-overlay" id="addLeadModal">

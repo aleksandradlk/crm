@@ -588,6 +588,7 @@ async function quickStatus(id, status) {
     updateAllStats(allLeads);
     updateReminderBadge();
     showToast('Status aktualisiert ✓');
+    if (status === 'rueckruf') showRueckrufPopupCl(id);
   } catch (e) { showToast(e.message, 'err'); }
 }
 
@@ -903,6 +904,7 @@ async function setStatus(id, status) {
     await api('PATCH', `/leads/${id}/status`, { status });
     panelDirty = true;
     _panelLead.status = status;
+    if (status === 'rueckruf') showRueckrufPopupCl(id);
     // Status-Buttons neu rendern (Highlight-Wechsel)
     const btnHtml = [
       ['neu','Neu'],['kontaktiert','Kontaktiert'],['nicht_erreicht','Nicht erreicht'],
@@ -1114,12 +1116,53 @@ function openAddLeadModal() {
 }
 function closeAddLeadModal() { document.getElementById('clAddLeadModal').classList.remove('open'); }
 
-async function saveManualLead() {
+// ── Rückruf-Reminder-Popup (Closer) ──────────────────────────
+let _rueckrufLeadIdCl = null;
+
+function showRueckrufPopupCl(leadId) {
+  _rueckrufLeadIdCl = leadId;
+  document.getElementById('rueckrufPopupCl').style.display = 'flex';
+}
+
+function closeRueckrufPopupCl() {
+  document.getElementById('rueckrufPopupCl').style.display = 'none';
+  _rueckrufLeadIdCl = null;
+}
+
+async function setQuickReminderCl(offsetHours) {
+  if (!_rueckrufLeadIdCl) return;
+  const dt = new Date(Date.now() + offsetHours * 3600 * 1000);
+  const remind_at = dt.toISOString().slice(0, 16);
+  try {
+    await api('POST', `/leads/${_rueckrufLeadIdCl}/reminder`, { remind_at, note: 'Rückruf' });
+    showToast('Reminder gesetzt ✓');
+  } catch(e) { showToast(e.message, 'err'); }
+  closeRueckrufPopupCl();
+}
+
+async function saveManualLead(force = false) {
   const get = id => document.getElementById(id)?.value.trim() || '';
   const body = { company: get('cl-company'), ceo: get('cl-ceo'), phone: get('cl-phone'),
     email: get('cl-email'), location: get('cl-location'), industry: get('cl-industry'),
     website: get('cl-website'), notes: get('cl-notes') };
   if (!body.company) { document.getElementById('clLeadErr').textContent = 'Firmenname ist erforderlich'; return; }
+
+  if (!force) {
+    const norm = s => (s||'').toLowerCase().replace(/[\s\-\/]/g,'');
+    const normPhone = norm(body.phone);
+    const normCompany = norm(body.company);
+    const dup = allLeads.find(l =>
+      (body.phone && normPhone && norm(l.phone) === normPhone) ||
+      (norm(l.company) === normCompany)
+    );
+    if (dup) {
+      const err = document.getElementById('clLeadErr');
+      err.innerHTML = `⚠️ Mögliches Duplikat: <b>${escHtml(dup.company)}</b> (${escHtml(dup.location||'')}) existiert bereits.<br>
+        <button class="btn btn-ghost btn-sm" style="margin-top:6px;font-size:11px" onclick="saveManualLead(true)">Trotzdem speichern</button>`;
+      return;
+    }
+  }
+
   try {
     await api('POST', '/leads', body);
     showToast('Lead hinzugefügt ✓');
@@ -1634,6 +1677,21 @@ async function deleteMyFeedback(id) {
   catch(e) { showToast(e.message,'err'); }
 }
 </script>
+
+<!-- POPUP: Rückruf-Reminder -->
+<div id="rueckrufPopupCl" style="display:none;position:fixed;bottom:24px;right:24px;z-index:9999;background:var(--bg2);border:1px solid var(--border2);border-radius:14px;box-shadow:var(--shadow-lg);padding:18px 20px;min-width:260px;max-width:320px;flex-direction:column;gap:12px">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <span style="font-weight:700;font-size:14px"><i class="fas fa-bell" style="color:var(--amber);margin-right:6px"></i>Reminder setzen?</span>
+    <button onclick="closeRueckrufPopupCl()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">&times;</button>
+  </div>
+  <div style="font-size:12px;color:var(--text2)">Status auf <b>Rückruf</b> gesetzt — wann zurückrufen?</div>
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <button class="btn btn-ghost btn-sm" style="justify-content:flex-start" onclick="setQuickReminderCl(20)"><i class="fas fa-clock" style="width:16px"></i> Morgen 9:00 Uhr</button>
+    <button class="btn btn-ghost btn-sm" style="justify-content:flex-start" onclick="setQuickReminderCl(44)"><i class="fas fa-clock" style="width:16px"></i> Übermorgen 9:00 Uhr</button>
+    <button class="btn btn-ghost btn-sm" style="justify-content:flex-start" onclick="setQuickReminderCl(164)"><i class="fas fa-clock" style="width:16px"></i> In einer Woche</button>
+    <button class="btn btn-ghost btn-sm" style="justify-content:flex-start;color:var(--text3)" onclick="closeRueckrufPopupCl()"><i class="fas fa-times" style="width:16px"></i> Kein Reminder</button>
+  </div>
+</div>
 
 <!-- MODAL: Lead hinzufügen -->
 <div class="modal-overlay" id="clAddLeadModal" onclick="if(event.target===this)closeAddLeadModal()">
