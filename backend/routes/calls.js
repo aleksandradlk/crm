@@ -50,6 +50,15 @@ router.patch('/:id', auth, async (req, res) => {
 router.get('/lead/:leadId', auth, async (req, res) => {
   const leadId = parseInt(req.params.leadId);
   try {
+    // Closer darf nur Call-Logs von Leads lesen, auf die er Zugriff hat
+    if (req.user.role !== 'admin') {
+      const [[lead]] = await db.query(
+        'SELECT assigned_to FROM leads WHERE id=?', [leadId]
+      );
+      if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
+      if (lead.assigned_to !== null && lead.assigned_to !== req.user.id)
+        return res.status(403).json({ error: 'Kein Zugriff auf diesen Lead' });
+    }
     const [rows] = await db.query(
       `SELECT cl.*, u.full_name FROM call_logs cl
        JOIN users u ON u.id = cl.user_id

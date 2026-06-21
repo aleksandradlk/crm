@@ -121,6 +121,9 @@ router.get('/:id', auth, async (req, res) => {
      WHERE l.id = ?`, [id]
   );
   if (!lead) return res.status(404).json({ error: 'Nicht gefunden' });
+  // Closer darf nur eigene oder unzugewiesene Leads lesen
+  if (req.user.role !== 'admin' && lead.assigned_to !== null && lead.assigned_to !== req.user.id)
+    return res.status(403).json({ error: 'Kein Zugriff auf diesen Lead' });
 
   // Comments
   const [comments] = await db.query(

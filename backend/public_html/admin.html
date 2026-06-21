@@ -709,18 +709,18 @@ async function startCall(leadId, phone) {
   } catch(e) {
     showToast(e.message, 'err'); return;
   }
-  // Modal zuerst öffnen — CRM-Tab bleibt sichtbar
-  document.getElementById('callDocStatus').value   = 'reached';
-  document.getElementById('callDocDuration').value = '';
-  document.getElementById('callDocNote').value     = '';
+  document.getElementById('callDocPhone').textContent = phone || '';
+  document.getElementById('callDocStatus').value      = 'reached';
+  document.getElementById('callDocDuration').value    = '';
+  document.getElementById('callDocNote').value        = '';
   document.getElementById('callDocError').textContent = '';
   document.getElementById('callDocModal').classList.add('open');
-  // tel: über temporäres <a> auslösen — kein window.location-Wechsel
-  const a = document.createElement('a');
-  a.href = `tel:${phone}`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+}
+
+function copyCallPhone() {
+  const num = document.getElementById('callDocPhone').textContent.trim();
+  if (!num) return;
+  navigator.clipboard.writeText(num).then(() => showToast('Nummer kopiert'));
 }
 
 function closeCallDocModal() {
@@ -1960,9 +1960,13 @@ document.getElementById('editContactInput')?.addEventListener('keydown', functio
       <button onclick="closeCallDocModal()" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:13px"><i class="fas fa-times"></i></button>
     </div>
     <div style="padding:20px 28px 24px;display:flex;flex-direction:column;gap:14px">
-      <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg3);border-radius:8px;font-size:12px;color:var(--text3)">
-        <i class="fas fa-mobile-alt" style="flex-shrink:0"></i>
-        Der Anruf läuft über deine Standard-Telefon-App. Deine Absendernummer kommt aus dieser App.
+      <div style="background:var(--bg3);border-radius:10px;padding:12px 16px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:6px">Telefonnummer</div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span id="callDocPhone" style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:var(--text);letter-spacing:.5px"></span>
+          <button onclick="copyCallPhone()" style="background:none;border:1px solid var(--border2);border-radius:6px;cursor:pointer;color:var(--text3);padding:3px 10px;font-size:11px;white-space:nowrap" title="Nummer kopieren"><i class="fas fa-copy"></i> Kopieren</button>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:8px"><i class="fas fa-info-circle" style="margin-right:4px"></i>Rufe die Nummer manuell über dein Handy oder deine Telefon-App an und dokumentiere das Ergebnis hier.</div>
       </div>
       <div class="form-group" style="margin:0">
         <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Ergebnis</label>
