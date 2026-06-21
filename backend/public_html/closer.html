@@ -608,13 +608,65 @@ function closePanel() {
   if (panelDirty) { panelDirty = false; loadLeads(); }
 }
 
+let _editClLeadId = null, _editClField = null;
+
+function editLeadContactCl(leadId, field, current) {
+  _editClLeadId = leadId;
+  _editClField  = field;
+  const label = field === 'phone' ? 'Telefonnummer' : 'E-Mail-Adresse';
+  const icon  = field === 'phone' ? 'fa-phone' : 'fa-envelope';
+  document.getElementById('editContactTitleCl').innerHTML = `<i class="fas ${icon}" style="color:var(--accent);margin-right:8px"></i>${label} bearbeiten`;
+  document.getElementById('editContactLabelCl').textContent = label;
+  const inp = document.getElementById('editContactInputCl');
+  inp.type  = field === 'email' ? 'email' : 'tel';
+  inp.value = current || '';
+  inp.placeholder = field === 'phone' ? '+49 123 456789' : 'name@beispiel.de';
+  document.getElementById('editContactErrorCl').textContent = '';
+  document.getElementById('editContactModalCl').classList.add('open');
+  setTimeout(() => inp.focus(), 50);
+}
+
+function closeEditContactModalCl() {
+  document.getElementById('editContactModalCl').classList.remove('open');
+}
+
+async function saveEditContactCl() {
+  const trimmed = document.getElementById('editContactInputCl').value.trim();
+  const errEl   = document.getElementById('editContactErrorCl');
+  if (_editClField === 'email' && trimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    errEl.textContent = 'Ungültige E-Mail-Adresse'; return;
+  }
+  errEl.textContent = '';
+  const btn = document.getElementById('editContactSaveBtnCl');
+  btn.disabled = true;
+  try {
+    await api('PATCH', `/leads/${_editClLeadId}`, { [_editClField]: trimmed || null });
+    const label = _editClField === 'phone' ? 'Telefonnummer' : 'E-Mail-Adresse';
+    showToast(`${label} gespeichert ✓`);
+    if (_panelLead && _panelLead.id === _editClLeadId) {
+      _panelLead[_editClField] = trimmed || null;
+      document.getElementById('panelKeyInfo').innerHTML = renderPanelKeyInfo(_panelLead);
+    }
+    const l = allLeads.find(l => l.id === _editClLeadId);
+    if (l) l[_editClField] = trimmed || null;
+    panelDirty = true;
+    closeEditContactModalCl();
+  } catch(e) {
+    errEl.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 function renderPanelKeyInfo(l) {
   const lastNote = (l.comments||[]).length ? l.comments[l.comments.length - 1] : null;
   const lastActivity = lastNote && lastNote.created_at > (l.updated_at||'') ? lastNote.created_at : (l.updated_at||l.created_at);
+  const canEdit = ME && ME.can_edit_contacts;
+  const editBtnCl = (field, val) => canEdit ? `<button onclick="editLeadContactCl(${l.id},'${field}',${escHtml(JSON.stringify(val||''))})" style="background:none;border:none;cursor:pointer;color:var(--text3);padding:1px 5px;font-size:11px;flex-shrink:0;line-height:1;margin-left:auto" title="Bearbeiten"><i class="fas fa-edit"></i></button>` : '';
   const contactItems = [
     l.ceo   ? `<div style="display:flex;align-items:center;gap:8px;font-size:13px"><i class="fas fa-user" style="color:var(--text3);width:14px;text-align:center;flex-shrink:0"></i><span>${escHtml(l.ceo)}</span></div>` : '',
-    l.phone ? `<div style="display:flex;align-items:center;gap:8px;font-size:13px"><i class="fas fa-phone" style="color:var(--text3);width:14px;text-align:center;flex-shrink:0"></i><a href="tel:${escHtml(l.phone)}" style="color:var(--accent);font-family:'JetBrains Mono',monospace">${escHtml(l.phone)}</a><button onclick="copyPhone('${escHtml(l.phone)}')" style="background:none;border:none;cursor:pointer;color:var(--text3);padding:2px 5px;font-size:12px;line-height:1" title="Nummer kopieren"><i class="fas fa-copy"></i></button></div>` : '',
-    l.email ? `<div style="display:flex;align-items:center;gap:8px;font-size:13px"><i class="fas fa-envelope" style="color:var(--text3);width:14px;text-align:center;flex-shrink:0"></i><a href="mailto:${escHtml(l.email)}" style="color:var(--accent)">${escHtml(l.email)}</a></div>` : '',
+    `<div style="display:flex;align-items:center;gap:8px;font-size:13px"><i class="fas fa-phone" style="color:var(--text3);width:14px;text-align:center;flex-shrink:0"></i>${l.phone ? `<a href="tel:${escHtml(l.phone)}" style="color:var(--accent);font-family:'JetBrains Mono',monospace">${escHtml(l.phone)}</a><button onclick="copyPhone('${escHtml(l.phone||'')}')" style="background:none;border:none;cursor:pointer;color:var(--text3);padding:2px 5px;font-size:12px;line-height:1" title="Nummer kopieren"><i class="fas fa-copy"></i></button>` : `<span style="color:var(--text3);font-size:12px">—</span>`}${editBtnCl('phone', l.phone)}</div>`,
+    `<div style="display:flex;align-items:center;gap:8px;font-size:13px"><i class="fas fa-envelope" style="color:var(--text3);width:14px;text-align:center;flex-shrink:0"></i>${l.email ? `<a href="mailto:${escHtml(l.email)}" style="color:var(--accent)">${escHtml(l.email)}</a>` : `<span style="color:var(--text3);font-size:12px">—</span>`}${editBtnCl('email', l.email)}</div>`,
   ].filter(Boolean).join('');
   return `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
@@ -1515,5 +1567,32 @@ setInterval(checkReminderNotifications, 2 * 60 * 1000);
 <style>
 @keyframes slideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 </style>
+
+<div class="modal-overlay" id="editContactModalCl" onclick="if(event.target===this)closeEditContactModalCl()">
+  <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:420px;max-width:96vw;display:flex;flex-direction:column">
+    <div style="padding:22px 28px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:36px;height:36px;border-radius:10px;background:rgba(27,115,205,0.12);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:16px"><i class="fas fa-edit"></i></div>
+        <div id="editContactTitleCl" style="font-size:16px;font-weight:700;color:var(--text)">Kontakt bearbeiten</div>
+      </div>
+      <button onclick="closeEditContactModalCl()" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:13px"><i class="fas fa-times"></i></button>
+    </div>
+    <div style="padding:20px 28px 24px;display:flex;flex-direction:column;gap:14px">
+      <div class="form-group" style="margin:0">
+        <label id="editContactLabelCl" style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Wert</label>
+        <input type="text" id="editContactInputCl" class="form-control" style="font-size:14px">
+        <div id="editContactErrorCl" style="color:var(--red);font-size:12px;margin-top:6px;min-height:16px"></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:4px;border-top:1px solid var(--border)">
+        <button class="btn btn-ghost btn-sm" onclick="closeEditContactModalCl()">Abbrechen</button>
+        <button class="btn btn-primary btn-sm" id="editContactSaveBtnCl" onclick="saveEditContactCl()"><i class="fas fa-check"></i> Speichern</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.getElementById('editContactInputCl')?.addEventListener('keydown', function(e){ if(e.key==='Enter') saveEditContactCl(); if(e.key==='Escape') closeEditContactModalCl(); });
+</script>
 </body>
 </html>

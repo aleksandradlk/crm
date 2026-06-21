@@ -395,10 +395,16 @@
     <div class="form-group"><label>E-Mail <span style="color:var(--text3);font-weight:400">(optional)</span></label><input type="email" id="u-email" class="form-control" placeholder="z.B. name@firma.de"></div>
     <div class="form-group"><label>Passwort <span id="pwHint" style="color:var(--text3)">(leer = nicht ändern)</span></label><input type="password" id="u-password" class="form-control"></div>
     <div class="form-group"><label>Rolle</label>
-      <select id="u-role" class="form-control">
+      <select id="u-role" class="form-control" onchange="toggleCanEditContactsRow()">
         <option value="closer">Closer</option>
         <option value="admin">Admin</option>
       </select>
+    </div>
+    <div id="canEditContactsRow" class="form-group" style="display:none;margin-bottom:4px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400">
+        <input type="checkbox" id="u-can-edit-contacts" style="width:15px;height:15px;accent-color:var(--accent)">
+        <span>Darf Lead-Kontaktdaten (E-Mail/Telefon) bearbeiten</span>
+      </label>
     </div>
     <div style="display:flex;gap:8px;margin-top:16px">
       <button class="btn btn-primary" style="flex:1" onclick="saveUser()"><i class="fas fa-check"></i> Speichern</button>
@@ -933,7 +939,7 @@ async function loadUsers() {
         <td style="font-weight:600">${escHtml(u.full_name)}</td>
         <td style="font-family:'JetBrains Mono',monospace;font-size:12px">${escHtml(u.username)}</td>
         <td style="font-size:12px">${u.email ? `<a href="mailto:${escHtml(u.email)}">${escHtml(u.email)}</a>` : '<span style="color:var(--text3)">—</span>'}</td>
-        <td><span class="role-badge ${u.role==='admin'?'rb-admin':'rb-closer'}">${u.role==='admin'?'Admin':'Closer'}</span></td>
+        <td><span class="role-badge ${u.role==='admin'?'rb-admin':'rb-closer'}">${u.role==='admin'?'Admin':'Closer'}</span>${u.role==='closer'&&u.can_edit_contacts?'<span style="font-size:10px;color:var(--text3);margin-left:5px" title="Darf Lead-Kontaktdaten bearbeiten"><i class="fas fa-edit"></i></span>':''}</td>
         <td><span style="color:${u.is_active?'var(--green)':'var(--red)'};font-size:12px">${u.is_active?'Aktiv':'Gesperrt'}</span></td>
         <td style="font-size:12px;color:var(--text3)">${fmtDate(u.last_login)}</td>
         <td style="display:flex;gap:6px">
@@ -958,6 +964,11 @@ async function loadUsers() {
   } catch (e) { showToast(e.message, 'err'); }
 }
 
+function toggleCanEditContactsRow() {
+  const row = document.getElementById('canEditContactsRow');
+  row.style.display = document.getElementById('u-role').value === 'closer' ? 'block' : 'none';
+}
+
 function openUserModal(id) {
   editingUserId = id || null;
   document.getElementById('userModalErr').textContent = '';
@@ -968,25 +979,30 @@ function openUserModal(id) {
     if (u) {
       document.getElementById('u-name').value     = u.full_name;
       document.getElementById('u-username').value = u.username;
-      document.getElementById('u-email').value    = u.email;
+      document.getElementById('u-email').value    = u.email || '';
       document.getElementById('u-role').value     = u.role;
       document.getElementById('u-password').value = '';
+      document.getElementById('u-can-edit-contacts').checked = !!u.can_edit_contacts;
     }
   } else {
     ['u-name','u-username','u-email','u-password'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('u-role').value = 'closer';
+    document.getElementById('u-can-edit-contacts').checked = false;
   }
+  toggleCanEditContactsRow();
   document.getElementById('userModal').classList.add('open');
 }
 function closeUserModal() { document.getElementById('userModal').classList.remove('open'); }
 
 async function saveUser() {
+  const role = document.getElementById('u-role').value;
   const body = {
     full_name: document.getElementById('u-name').value.trim(),
     username:  document.getElementById('u-username').value.trim(),
     email:     document.getElementById('u-email').value.trim(),
-    role:      document.getElementById('u-role').value,
+    role,
     password:  document.getElementById('u-password').value || undefined,
+    can_edit_contacts: role === 'closer' ? (document.getElementById('u-can-edit-contacts').checked ? 1 : 0) : 0,
   };
   const err = document.getElementById('userModalErr');
   try {

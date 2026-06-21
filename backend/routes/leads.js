@@ -156,12 +156,19 @@ router.patch('/:id/status', auth, async (req, res) => {
   res.json({ ok: true });
 });
 
-// ── PATCH /api/leads/:id — allgemeines Update (Admin) ────────
-router.patch('/:id', auth, adminOnly, async (req, res) => {
+// ── PATCH /api/leads/:id — Update (Admin: alles; Closer mit can_edit_contacts: nur phone/email) ──
+router.patch('/:id', auth, async (req, res) => {
   const id = parseInt(req.params.id);
-  const allowed = ['company','ceo','email','phone','location','website',
-                   'linkedin_url','industry','employees','revenue','notes',
-                   'assigned_to','confidence'];
+  const isAdmin = req.user.role === 'admin';
+  const canEditContacts = req.user.can_edit_contacts;
+  if (!isAdmin && !canEditContacts)
+    return res.status(403).json({ error: 'Kein Zugriff' });
+
+  const allowed = isAdmin
+    ? ['company','ceo','email','phone','location','website',
+       'linkedin_url','industry','employees','revenue','notes','assigned_to','confidence']
+    : ['email','phone'];
+
   const updates = [];
   const params  = [];
   for (const k of allowed) {

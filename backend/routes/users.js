@@ -8,7 +8,7 @@ const { log }  = require('../helpers/logger');
 router.get('/', auth, adminOnly, async (req, res) => {
   const [users] = await db.query(
     `SELECT u.id, u.username, u.full_name, u.email, u.role, u.is_active,
-            u.last_login, u.created_at,
+            u.last_login, u.created_at, u.can_edit_contacts,
             s.last_active, s.click_count, s.login_at AS session_start
      FROM users u
      LEFT JOIN sessions s ON s.user_id = u.id
@@ -44,7 +44,7 @@ router.post('/', auth, adminOnly, async (req, res) => {
 
 // PATCH /api/users/:id — User bearbeiten (Admin)
 router.patch('/:id', auth, adminOnly, async (req, res) => {
-  const { username, full_name, email, password, is_active, role } = req.body;
+  const { username, full_name, email, password, is_active, role, can_edit_contacts } = req.body;
   const id = parseInt(req.params.id);
 
   if (username) {
@@ -57,6 +57,8 @@ router.patch('/:id', auth, adminOnly, async (req, res) => {
   if (role)      await db.query('UPDATE users SET role=? WHERE id=?', [role, id]);
   if (is_active !== undefined)
     await db.query('UPDATE users SET is_active=? WHERE id=?', [is_active ? 1 : 0, id]);
+  if (can_edit_contacts !== undefined)
+    await db.query('UPDATE users SET can_edit_contacts=? WHERE id=?', [can_edit_contacts ? 1 : 0, id]);
   if (password) {
     const hash = await bcrypt.hash(password, 12);
     await db.query('UPDATE users SET password_hash=? WHERE id=?', [hash, id]);

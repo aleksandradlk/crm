@@ -108,6 +108,7 @@ db.query(`CREATE TABLE IF NOT EXISTS chat_messages (
 )`).catch(() => {});
 
 db.query('ALTER TABLE chat_rooms ADD COLUMN lead_id INT NULL').catch(() => {});
+db.query('ALTER TABLE users ADD COLUMN can_edit_contacts TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
 
 // ── Index-Migrationen (idempotent — Fehler = Index existiert bereits) ────────
 db.query('CREATE INDEX idx_leads_status     ON leads (status)').catch(() => {});
