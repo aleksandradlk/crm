@@ -347,6 +347,7 @@
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
         <h1 style="font-size:20px;font-weight:700">Feedback-Board</h1>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="openAdminFeedbackModal()"><i class="fas fa-plus"></i> Neu eintragen</button>
           <select id="fbTagFilter" class="form-control" style="width:160px" onchange="renderFeedbackList()">
             <option value="">Alle Tags</option>
             <option value="offen">Offen</option>
@@ -1913,6 +1914,38 @@ async function deleteFeedback(id) {
   try { await api('DELETE', `/feedback/${id}`); allFeedback = allFeedback.filter(x=>x.id!==id); renderFeedbackList(); }
   catch(e) { showToast(e.message,'err'); }
 }
+
+function openAdminFeedbackModal() {
+  document.getElementById('afb-title').value = '';
+  document.getElementById('afb-desc').value = '';
+  document.getElementById('afbModalErr').textContent = '';
+  selectAdminFbType('wunsch');
+  document.getElementById('adminFeedbackModal').classList.add('open');
+}
+function closeAdminFeedbackModal() { document.getElementById('adminFeedbackModal').classList.remove('open'); }
+
+function selectAdminFbType(type) {
+  document.getElementById('afb-type').value = type;
+  document.getElementById('afb-type-wunsch').className = type === 'wunsch' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
+  document.getElementById('afb-type-bug').className    = type === 'bug'    ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
+  document.getElementById('afb-type-wunsch').style.flex = '1';
+  document.getElementById('afb-type-bug').style.flex    = '1';
+}
+
+async function submitAdminFeedback() {
+  const title = document.getElementById('afb-title').value.trim();
+  if (!title) { document.getElementById('afbModalErr').textContent = 'Titel ist erforderlich'; return; }
+  try {
+    await api('POST', '/feedback', {
+      title,
+      description: document.getElementById('afb-desc').value.trim() || null,
+      type: document.getElementById('afb-type').value,
+    });
+    showToast('Feedback eingetragen');
+    closeAdminFeedbackModal();
+    loadFeedback();
+  } catch(e) { document.getElementById('afbModalErr').textContent = e.message; }
+}
 </script>
 
 <!-- MODAL: Lead manuell hinzufügen -->
@@ -2107,6 +2140,35 @@ document.getElementById('editContactInput')?.addEventListener('keydown', functio
         <button class="btn btn-primary btn-sm" id="callDocSaveBtn" onclick="saveCallDoc()"><i class="fas fa-check"></i> Speichern</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- MODAL: Feedback eintragen (Admin) -->
+<div class="modal-overlay" id="adminFeedbackModal" onclick="if(event.target===this)closeAdminFeedbackModal()">
+  <div class="modal" style="max-width:480px">
+    <button class="modal-close" onclick="closeAdminFeedbackModal()"><i class="fas fa-times"></i></button>
+    <div class="modal-title">Feedback / Idee eintragen</div>
+    <div class="form-group">
+      <label>Typ</label>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button id="afb-type-wunsch" class="btn btn-primary btn-sm" style="flex:1" onclick="selectAdminFbType('wunsch')"><i class="fas fa-lightbulb"></i> Wunsch / Idee</button>
+        <button id="afb-type-bug" class="btn btn-ghost btn-sm" style="flex:1" onclick="selectAdminFbType('bug')"><i class="fas fa-bug"></i> Bug / Problem</button>
+      </div>
+      <input type="hidden" id="afb-type" value="wunsch">
+    </div>
+    <div class="form-group">
+      <label>Titel *</label>
+      <input type="text" id="afb-title" class="form-control" placeholder="Kurze Beschreibung">
+    </div>
+    <div class="form-group">
+      <label>Details <span style="color:var(--text3);font-weight:400">(optional)</span></label>
+      <textarea id="afb-desc" class="form-control" rows="4" placeholder="Was genau fehlt / was funktioniert nicht?"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-primary" style="flex:1" onclick="submitAdminFeedback()"><i class="fas fa-check"></i> Absenden</button>
+      <button class="btn btn-ghost" onclick="closeAdminFeedbackModal()">Abbrechen</button>
+    </div>
+    <div id="afbModalErr" style="color:var(--red);font-size:12px;margin-top:6px;text-align:center"></div>
   </div>
 </div>
 </body>

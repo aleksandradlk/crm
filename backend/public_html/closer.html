@@ -236,10 +236,11 @@
     <h2><i class="fas fa-flag" style="color:var(--accent);margin-right:8px"></i> Feedback / Wunsch eintragen</h2>
     <div class="form-group">
       <label>Typ</label>
-      <select id="fb-type" class="form-control">
-        <option value="wunsch">Wunsch / Feature-Idee</option>
-        <option value="bug">Bug / Problem</option>
-      </select>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button id="fb-type-wunsch" class="btn btn-primary btn-sm" style="flex:1" onclick="selectFbType('wunsch')"><i class="fas fa-lightbulb"></i> Wunsch / Idee</button>
+        <button id="fb-type-bug" class="btn btn-ghost btn-sm" style="flex:1" onclick="selectFbType('bug')"><i class="fas fa-bug"></i> Bug / Problem</button>
+      </div>
+      <input type="hidden" id="fb-type" value="wunsch">
     </div>
     <div class="form-group">
       <label>Titel *</label>
@@ -1595,11 +1596,19 @@ async function loadMyFeedback() {
   } catch(e) { showToast(e.message, 'err'); }
 }
 
+function selectFbType(type) {
+  document.getElementById('fb-type').value = type;
+  document.getElementById('fb-type-wunsch').className = type === 'wunsch' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
+  document.getElementById('fb-type-bug').className    = type === 'bug'    ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
+  document.getElementById('fb-type-wunsch').style.flex = '1';
+  document.getElementById('fb-type-bug').style.flex    = '1';
+}
+
 function openFeedbackModal() {
   document.getElementById('fb-title').value = '';
   document.getElementById('fb-desc').value = '';
-  document.getElementById('fb-type').value = 'wunsch';
   document.getElementById('fbModalErr').textContent = '';
+  selectFbType('wunsch');
   document.getElementById('feedbackModal').classList.add('open');
 }
 function closeFeedbackModal() { document.getElementById('feedbackModal').classList.remove('open'); }
