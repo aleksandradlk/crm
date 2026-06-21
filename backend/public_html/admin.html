@@ -439,7 +439,12 @@ function showTab(name) {
   const navMap = { leads: 0, myLeads: 1, generate: 2, users: 3, tracking: 4, wiki: 5, chat: 6 };
   const items = document.querySelectorAll('.nav-item');
   if (navMap[name] !== undefined) items[navMap[name]]?.classList.add('active');
-  if (name === 'leads')    { if (allLeads.length) { renderLeads(allLeads); updateLeadStats(allLeads); } loadLeads(); }
+  if (name === 'leads')    {
+    const _s = document.getElementById('searchInput'); if (_s) _s.value = '';
+    const _sf = document.getElementById('statusFilter'); if (_sf) _sf.value = '';
+    if (allLeads.length) { renderLeads(allLeads); updateLeadStats(allLeads); }
+    loadLeads();
+  }
   if (name === 'myLeads')  renderMyLeads();
   if (name === 'users')    loadUsers();
   if (name === 'tracking') loadTracking();
@@ -637,26 +642,54 @@ function closeLeadPanel() {
   if (panelDirty) { panelDirty = false; loadLeads(); }
 }
 
+let _editContactLeadId = null, _editContactField = null;
+
 function editLeadContact(leadId, field, current) {
+  _editContactLeadId = leadId;
+  _editContactField  = field;
   const label = field === 'phone' ? 'Telefonnummer' : 'E-Mail-Adresse';
-  const val = prompt(`${label} ändern:`, current || '');
-  if (val === null) return;
-  const trimmed = val.trim();
-  if (field === 'email' && trimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-    showToast('Ungültige E-Mail-Adresse', 'err'); return;
+  const icon  = field === 'phone' ? 'fa-phone' : 'fa-envelope';
+  document.getElementById('editContactTitle').innerHTML = `<i class="fas ${icon}" style="color:var(--accent);margin-right:8px"></i>${label} bearbeiten`;
+  document.getElementById('editContactLabel').textContent = label;
+  const inp = document.getElementById('editContactInput');
+  inp.type  = field === 'email' ? 'email' : 'tel';
+  inp.value = current || '';
+  inp.placeholder = field === 'phone' ? '+49 123 456789' : 'name@beispiel.de';
+  document.getElementById('editContactError').textContent = '';
+  document.getElementById('editContactModal').classList.add('open');
+  setTimeout(() => inp.focus(), 50);
+}
+
+function closeEditContactModal() {
+  document.getElementById('editContactModal').classList.remove('open');
+}
+
+async function saveEditContact() {
+  const trimmed = document.getElementById('editContactInput').value.trim();
+  const errEl   = document.getElementById('editContactError');
+  if (_editContactField === 'email' && trimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    errEl.textContent = 'Ungültige E-Mail-Adresse'; return;
   }
-  api('PATCH', `/leads/${leadId}`, { [field]: trimmed || null })
-    .then(() => {
-      showToast(`${label} gespeichert ✓`);
-      if (_panelLead && _panelLead.id === leadId) {
-        _panelLead[field] = trimmed || null;
-        document.getElementById('panelKeyInfo').innerHTML = renderPanelKeyInfo(_panelLead);
-      }
-      const l = allLeads.find(l => l.id === leadId);
-      if (l) l[field] = trimmed || null;
-      panelDirty = true;
-    })
-    .catch(e => showToast(e.message, 'err'));
+  errEl.textContent = '';
+  const btn = document.getElementById('editContactSaveBtn');
+  btn.disabled = true;
+  try {
+    await api('PATCH', `/leads/${_editContactLeadId}`, { [_editContactField]: trimmed || null });
+    const label = _editContactField === 'phone' ? 'Telefonnummer' : 'E-Mail-Adresse';
+    showToast(`${label} gespeichert ✓`);
+    if (_panelLead && _panelLead.id === _editContactLeadId) {
+      _panelLead[_editContactField] = trimmed || null;
+      document.getElementById('panelKeyInfo').innerHTML = renderPanelKeyInfo(_panelLead);
+    }
+    const l = allLeads.find(l => l.id === _editContactLeadId);
+    if (l) l[_editContactField] = trimmed || null;
+    panelDirty = true;
+    closeEditContactModal();
+  } catch(e) {
+    errEl.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function renderPanelKeyInfo(l) {
@@ -1800,6 +1833,30 @@ document.getElementById('addLeadModal').addEventListener('click', function(e){ i
 document.getElementById('settingsModal').addEventListener('click', function(e){ if(e.target===this) closeSettingsModal(); });
 document.getElementById('createChatModalAdmin').addEventListener('click', function(e){ if(e.target===this) closeCreateChat(); });
 document.getElementById('chatInputAdmin')?.addEventListener('keydown', function(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendChatMsg(); } });
+document.getElementById('editContactInput')?.addEventListener('keydown', function(e){ if(e.key==='Enter') saveEditContact(); if(e.key==='Escape') closeEditContactModal(); });
 </script>
+
+<div class="modal-overlay" id="editContactModal" onclick="if(event.target===this)closeEditContactModal()">
+  <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:420px;max-width:96vw;display:flex;flex-direction:column">
+    <div style="padding:22px 28px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:36px;height:36px;border-radius:10px;background:rgba(27,115,205,0.12);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:16px"><i class="fas fa-edit"></i></div>
+        <div id="editContactTitle" style="font-size:16px;font-weight:700;color:var(--text)">Kontakt bearbeiten</div>
+      </div>
+      <button onclick="closeEditContactModal()" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:13px"><i class="fas fa-times"></i></button>
+    </div>
+    <div style="padding:20px 28px 24px;display:flex;flex-direction:column;gap:14px">
+      <div class="form-group" style="margin:0">
+        <label id="editContactLabel" style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Wert</label>
+        <input type="text" id="editContactInput" class="form-control" style="font-size:14px">
+        <div id="editContactError" style="color:var(--red);font-size:12px;margin-top:6px;min-height:16px"></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:4px;border-top:1px solid var(--border)">
+        <button class="btn btn-ghost btn-sm" onclick="closeEditContactModal()">Abbrechen</button>
+        <button class="btn btn-primary btn-sm" id="editContactSaveBtn" onclick="saveEditContact()"><i class="fas fa-check"></i> Speichern</button>
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
