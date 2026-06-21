@@ -35,6 +35,14 @@
 .pipeline-card.dragging{opacity:.35}
 .pipeline-card .pc-company{font-weight:700;font-size:13px;margin-bottom:4px}
 .pipeline-card .pc-row{display:flex;align-items:center;gap:6px;color:var(--text3);font-size:11px;margin-top:3px}
+
+/* ── Mobile Lead-Liste ── */
+@media (max-width: 767px) {
+  .mob-hide { display: none !important; }
+  .table-wrap table td, .table-wrap table th { padding: 6px 5px; }
+  .table-wrap table { font-size: 12px; }
+  .table-wrap select.form-control { width: 100px !important; font-size: 10px !important; padding: 2px 3px !important; }
+}
 </style>
 </head>
 <body>
@@ -112,8 +120,8 @@
           <div class="table-wrap">
             <table>
               <thead><tr>
-                <th>#</th><th>Unternehmen</th><th>Telefon</th><th>Standort</th>
-                <th>Status</th><th>Letzter Kontakt</th><th></th>
+                <th class="mob-hide">#</th><th>Unternehmen</th><th>Telefon</th><th class="mob-hide">Standort</th>
+                <th>Status</th><th class="mob-hide">Letzter Kontakt</th><th></th>
               </tr></thead>
               <tbody id="myLeadsBody"></tbody>
             </table>
@@ -159,8 +167,8 @@
         <div class="table-wrap">
           <table>
             <thead><tr>
-              <th>#</th><th>Unternehmen</th><th>Telefon</th><th>Standort</th>
-              <th>Zugewiesen an</th><th>Status</th><th>Letzter Kontakt</th><th></th>
+              <th class="mob-hide">#</th><th>Unternehmen</th><th>Telefon</th><th class="mob-hide">Standort</th>
+              <th class="mob-hide">Zugewiesen an</th><th>Status</th><th class="mob-hide">Letzter Kontakt</th><th></th>
             </tr></thead>
             <tbody id="allLeadsBody"></tbody>
           </table>
@@ -197,6 +205,7 @@
           <button class="btn btn-ghost btn-sm" id="chatInviteBtn" onclick="openChatInvite()"><i class="fas fa-user-plus"></i> Einladen</button>
           <button class="btn btn-ghost btn-sm" id="chatCloseBtn" onclick="closeChatRoom()" title="Gespräch beenden" style="color:var(--red)"><i class="fas fa-times-circle"></i> Beenden</button>
         </div>
+        <div id="chatLeadContext"></div>
         <div class="card" style="margin-bottom:12px">
           <div style="padding:8px 14px;background:var(--bg3);border-radius:8px 8px 0 0;font-size:11px;color:var(--text3)" id="chatParticipants"></div>
           <div id="chatMessages" style="padding:16px;min-height:300px;max-height:480px;overflow-y:auto;display:flex;flex-direction:column;gap:8px"></div>
@@ -455,16 +464,14 @@ function renderMyLeads(leads) {
   }
   body.innerHTML = leads.map((l, i) => `
     <tr style="cursor:pointer" onclick="openPanel(${l.id})">
-      <td style="color:var(--text3);font-size:11px;font-family:'JetBrains Mono',monospace">${String(i+1).padStart(2,'0')}</td>
+      <td class="mob-hide" style="color:var(--text3);font-size:11px;font-family:'JetBrains Mono',monospace">${String(i+1).padStart(2,'0')}</td>
       <td style="font-weight:600">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}</td>
       <td>
-        ${l.phone
-          ? `<a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()" style="color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:12px">${escHtml(l.phone)}</a>`
-          : '<span style="color:var(--text3)">—</span>'}
+        ${l.phone ? `<a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()" style="color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:12px">${escHtml(l.phone)}</a>` : ''}
       </td>
-      <td style="color:var(--text2);font-size:12px">${escHtml(l.location||'—')}</td>
+      <td class="mob-hide" style="color:var(--text2);font-size:12px">${escHtml(l.location||'—')}</td>
       <td>${statusBadge(l.status)}</td>
-      <td style="font-size:11px;color:var(--text3)">${fmtDateShort(l.updated_at || l.created_at)}</td>
+      <td class="mob-hide" style="font-size:11px;color:var(--text3)">${fmtDateShort(l.updated_at || l.created_at)}</td>
       <td onclick="event.stopPropagation()">
         <select class="form-control" style="padding:4px 8px;font-size:11px;width:130px" onchange="quickStatus(${l.id}, this.value)">
           ${statusOptions(l.status)}
@@ -488,17 +495,15 @@ function renderAllLeads(leads) {
       : `<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:3px 8px" onclick="event.stopPropagation();assignToMe(${l.id})"><i class="fas fa-hand-pointer"></i> Übernehmen</button>`;
     return `
     <tr style="cursor:pointer" onclick="openPanel(${l.id})">
-      <td style="color:var(--text3);font-size:11px;font-family:'JetBrains Mono',monospace">${String(i+1).padStart(2,'0')}</td>
+      <td class="mob-hide" style="color:var(--text3);font-size:11px;font-family:'JetBrains Mono',monospace">${String(i+1).padStart(2,'0')}</td>
       <td style="font-weight:600">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}</td>
       <td>
-        ${l.phone
-          ? `<a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()" style="color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:12px">${escHtml(l.phone)}</a>`
-          : '<span style="color:var(--text3)">—</span>'}
+        ${l.phone ? `<a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()" style="color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:12px">${escHtml(l.phone)}</a>` : ''}
       </td>
-      <td style="color:var(--text2);font-size:12px">${escHtml(l.location||'—')}</td>
-      <td style="font-size:12px">${l.assigned_name ? `<span style="color:var(--text2)">${escHtml(l.assigned_name)}</span>` : '<span style="color:var(--text3)">—</span>'}</td>
+      <td class="mob-hide" style="color:var(--text2);font-size:12px">${escHtml(l.location||'—')}</td>
+      <td class="mob-hide" style="font-size:12px">${l.assigned_name ? `<span style="color:var(--text2)">${escHtml(l.assigned_name)}</span>` : '—'}</td>
       <td>${statusBadge(l.status)}</td>
-      <td style="font-size:11px;color:var(--text3)">${fmtDateShort(l.updated_at || l.created_at)}</td>
+      <td class="mob-hide" style="font-size:11px;color:var(--text3)">${fmtDateShort(l.updated_at || l.created_at)}</td>
       <td onclick="event.stopPropagation()">${assignBtn}</td>
     </tr>`;
   }).join('');
@@ -615,7 +620,10 @@ function renderPanelKeyInfo(l) {
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
       ${statusBadge(l.status)}
       ${ageBadge(lastActivity)}
-      <button class="btn btn-ghost btn-sm" onclick="openEmailModal()" style="margin-left:auto"><i class="fas fa-envelope"></i> E-Mail senden</button>
+      <div style="display:flex;gap:6px;margin-left:auto">
+        <button class="btn btn-ghost btn-sm" onclick="openCreateChatFromLead(${l.id})" title="Rücksprache erstellen"><i class="fas fa-comments"></i> Rücksprache</button>
+        <button class="btn btn-ghost btn-sm" onclick="openEmailModal()"><i class="fas fa-envelope"></i> E-Mail</button>
+      </div>
     </div>
     ${contactItems ? `<div style="display:grid;gap:5px;margin-bottom:${lastNote?'10px':'0'}">${contactItems}</div>` : ''}
     ${lastNote ? `<div style="padding:8px 10px;background:var(--bg3);border-radius:6px;border-left:2px solid var(--accent)">
@@ -1202,6 +1210,19 @@ async function refreshChat() {
     document.getElementById('chatDetailTitle').textContent = chat.title || '';
     document.getElementById('chatParticipants').textContent =
       'Teilnehmer: ' + (chat.participants||[]).map(p => escHtml(p.full_name)).join(', ');
+    const ctxEl = document.getElementById('chatLeadContext');
+    if (ctxEl) {
+      ctxEl.innerHTML = chat.lead_id ? `
+        <div style="background:var(--bg3);border-radius:8px;padding:10px 14px;margin-bottom:12px;border-left:3px solid var(--accent)">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:6px">Lead-Kontext</div>
+          <div style="font-size:13px;font-weight:600">${escHtml(chat.lead_company||'—')}</div>
+          ${chat.lead_ceo?`<div style="font-size:12px;color:var(--text2)">${escHtml(chat.lead_ceo)}</div>`:''}
+          ${chat.lead_phone?`<div style="font-size:12px;margin-top:3px"><i class="fas fa-phone" style="color:var(--text3);font-size:10px;margin-right:5px"></i><a href="tel:${escHtml(chat.lead_phone)}" style="color:var(--accent)">${escHtml(chat.lead_phone)}</a></div>`:''}
+          ${chat.lead_email?`<div style="font-size:12px;margin-top:2px"><i class="fas fa-envelope" style="color:var(--text3);font-size:10px;margin-right:5px"></i>${escHtml(chat.lead_email)}</div>`:''}
+          <div style="margin-top:6px">${statusBadge(chat.lead_status||'neu')}</div>
+          <button class="btn btn-ghost btn-sm" style="margin-top:8px;font-size:11px" onclick="openPanel(${chat.lead_id})"><i class="fas fa-external-link-alt"></i> Lead öffnen</button>
+        </div>` : '';
+    }
     document.getElementById('chatCloseBtn').style.display  = chat.is_closed ? 'none' : 'inline-flex';
     document.getElementById('chatInviteBtn').style.display = chat.is_closed ? 'none' : '';
     document.getElementById('chatMsgInput').disabled = !!chat.is_closed;
@@ -1246,13 +1267,59 @@ async function closeChatRoom() {
   } catch(e) { showToast(e.message, 'err'); }
 }
 
+let _chatCreateLeadId = null;
+
 function openCreateChat() {
+  _chatCreateLeadId = null;
+  document.getElementById('chatTypeGeneral').classList.add('active');
+  document.getElementById('chatTypeLead').classList.remove('active');
+  document.getElementById('chatLeadSection').style.display = 'none';
+  document.getElementById('chatLeadSearch').value = '';
+  document.getElementById('chatLeadResults').innerHTML = '';
+  document.getElementById('chatLeadSelected').style.display = 'none';
+  document.getElementById('newChatTitle').value = '';
   document.getElementById('createChatModal').classList.add('open');
   loadUsersForChatInvite();
 }
 function closeCreateChat() {
   document.getElementById('createChatModal').classList.remove('open');
   document.getElementById('newChatTitle').value = '';
+  _chatCreateLeadId = null;
+}
+function setChatType(type) {
+  const isLead = type === 'lead';
+  document.getElementById('chatTypeGeneral').classList.toggle('active', !isLead);
+  document.getElementById('chatTypeLead').classList.toggle('active', isLead);
+  document.getElementById('chatLeadSection').style.display = isLead ? '' : 'none';
+  if (!isLead) {
+    _chatCreateLeadId = null;
+    document.getElementById('chatLeadSearch').value = '';
+    document.getElementById('chatLeadResults').innerHTML = '';
+    document.getElementById('chatLeadSelected').style.display = 'none';
+  }
+}
+function searchLeadForChat() {
+  const q = (document.getElementById('chatLeadSearch').value || '').toLowerCase().trim();
+  const res = document.getElementById('chatLeadResults');
+  if (!q) { res.innerHTML = ''; return; }
+  const matches = allLeads.filter(l => (l.company||'').toLowerCase().includes(q) || (l.location||'').toLowerCase().includes(q)).slice(0, 8);
+  res.innerHTML = matches.length
+    ? matches.map(l => `<div style="padding:8px 10px;cursor:pointer;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;font-size:13px;background:var(--bg)" onclick="selectLeadForChat(${l.id})" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg)'"><strong>${escHtml(l.company||'—')}</strong>${l.location?`<span style="color:var(--text3);font-size:11px"> · ${escHtml(l.location)}</span>`:''}</div>`).join('')
+    : '<div style="color:var(--text3);font-size:12px;padding:6px 0">Nichts gefunden</div>';
+}
+function selectLeadForChat(id) {
+  _chatCreateLeadId = id;
+  const lead = allLeads.find(l => l.id === id);
+  document.getElementById('chatLeadSearch').value = '';
+  document.getElementById('chatLeadResults').innerHTML = '';
+  const sel = document.getElementById('chatLeadSelected');
+  sel.style.display = '';
+  sel.innerHTML = `<i class="fas fa-check" style="color:var(--green);margin-right:6px"></i><strong>${escHtml(lead?.company||'Lead #'+id)}</strong><button onclick="_chatCreateLeadId=null;document.getElementById('chatLeadSelected').style.display='none'" style="float:right;background:none;border:none;cursor:pointer;color:var(--text3)"><i class="fas fa-times"></i></button>`;
+}
+function openCreateChatFromLead(leadId) {
+  openCreateChat();
+  setChatType('lead');
+  selectLeadForChat(leadId);
 }
 
 async function loadUsersForChatInvite() {
@@ -1273,10 +1340,12 @@ async function saveNewChat() {
   if (!title) { showToast('Titel eingeben', 'err'); return; }
   const checkboxes = document.querySelectorAll('#chatInviteUsersCl input[type=checkbox]:checked');
   const invite_ids = [...checkboxes].map(c => parseInt(c.value));
+  const lead_id = _chatCreateLeadId || null;
   try {
-    const r = await api('POST', '/chats', { title, invite_ids });
+    const r = await api('POST', '/chats', { title, invite_ids, lead_id });
     showToast('Gespräch erstellt ✓');
     closeCreateChat();
+    showSection('chat');
     await openChat(r.id);
   } catch(e) { showToast(e.message, 'err'); }
 }
@@ -1392,18 +1461,31 @@ setInterval(checkReminderNotifications, 2 * 60 * 1000);
 
 <!-- MODAL: Neues Gespräch -->
 <div class="modal-overlay" id="createChatModal" onclick="if(event.target===this)closeCreateChat()">
-  <div style="background:var(--bg2);border-radius:14px;box-shadow:var(--shadow-lg);padding:28px;width:420px;max-width:96vw;max-height:80vh;overflow-y:auto">
+  <div style="background:var(--bg2);border-radius:14px;box-shadow:var(--shadow-lg);padding:28px;width:480px;max-width:96vw;max-height:85vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-      <h2 style="font-size:16px;font-weight:700;margin:0"><i class="fas fa-comments" style="color:var(--accent);margin-right:8px"></i>Neuer Chat</h2>
+      <h2 style="font-size:16px;font-weight:700;margin:0"><i class="fas fa-comments" style="color:var(--accent);margin-right:8px"></i>Neue Rücksprache</h2>
       <button class="btn btn-ghost btn-sm" onclick="closeCreateChat()"><i class="fas fa-times"></i></button>
     </div>
     <div class="form-group">
+      <label>Art der Rücksprache</label>
+      <div class="view-toggle" style="width:100%;margin-top:6px">
+        <button id="chatTypeGeneral" class="active" onclick="setChatType('general')" style="flex:1;justify-content:center">Allgemeine Frage</button>
+        <button id="chatTypeLead" onclick="setChatType('lead')" style="flex:1;justify-content:center"><i class="fas fa-building" style="margin-right:5px"></i>Zu einem Lead</button>
+      </div>
+    </div>
+    <div id="chatLeadSection" style="display:none" class="form-group">
+      <label>Lead suchen</label>
+      <input type="text" id="chatLeadSearch" class="form-control" placeholder="Firmenname eingeben..." oninput="searchLeadForChat()">
+      <div id="chatLeadResults" style="margin-top:6px;max-height:150px;overflow-y:auto"></div>
+      <div id="chatLeadSelected" style="display:none;margin-top:6px;padding:8px 10px;background:var(--bg3);border-radius:6px;border-left:2px solid var(--accent);font-size:13px"></div>
+    </div>
+    <div class="form-group">
       <label>Titel *</label>
-      <input id="newChatTitle" class="form-control" placeholder="z.B. Projekt Alpha">
+      <input id="newChatTitle" class="form-control" placeholder="z.B. Frage zu Angebot">
     </div>
     <div class="form-group">
       <label>Teilnehmer einladen</label>
-      <div id="chatInviteUsersCl" style="max-height:200px;overflow-y:auto;padding:4px 0"></div>
+      <div id="chatInviteUsersCl" style="max-height:180px;overflow-y:auto;padding:4px 0"></div>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
       <button class="btn btn-ghost btn-sm" onclick="closeCreateChat()">Abbrechen</button>

@@ -41,12 +41,12 @@ router.get('/', auth, async (req, res) => {
 
 // ── POST /api/chats — Neuen Chat anlegen ─────────────────────
 router.post('/', auth, async (req, res) => {
-  const { title, invite_ids } = req.body;
+  const { title, invite_ids, lead_id } = req.body;
   if (!title?.trim()) return res.status(400).json({ error: 'Titel fehlt' });
   try {
     const [r] = await db.query(
-      'INSERT INTO chat_rooms (title, created_by) VALUES (?,?)',
-      [title.trim(), req.user.id]
+      'INSERT INTO chat_rooms (title, created_by, lead_id) VALUES (?,?,?)',
+      [title.trim(), req.user.id, lead_id || null]
     );
     const chatId = r.insertId;
     // Creator automatisch hinzufügen
@@ -71,8 +71,13 @@ router.get('/:id', auth, async (req, res) => {
   const chatId = parseInt(req.params.id);
   try {
     const [[room]] = await db.query(
-      `SELECT r.*, u.full_name AS created_by_name
-       FROM chat_rooms r JOIN users u ON u.id = r.created_by WHERE r.id=?`, [chatId]
+      `SELECT r.*, u.full_name AS created_by_name,
+              l.company AS lead_company, l.phone AS lead_phone,
+              l.email AS lead_email, l.status AS lead_status, l.ceo AS lead_ceo
+       FROM chat_rooms r
+       JOIN users u ON u.id = r.created_by
+       LEFT JOIN leads l ON l.id = r.lead_id
+       WHERE r.id=?`, [chatId]
     );
     if (!room) return res.status(404).json({ error: 'Chat nicht gefunden' });
 
