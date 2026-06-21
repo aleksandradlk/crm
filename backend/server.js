@@ -37,7 +37,7 @@ app.use(express.static(path.join(__dirname, 'public_html'), {
     }
   },
 }));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 
 // ── API Routes ────────────────────────────────────────────────
 app.use('/api/auth',     authRoutes);

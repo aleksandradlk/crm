@@ -97,4 +97,12 @@ router.put('/template', auth, adminOnly, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// GET /api/wiki/files/:filename — authenticated file delivery
+router.get('/files/:filename', auth, (req, res) => {
+  const filename = path.basename(req.params.filename);
+  const filepath = path.join(UPLOAD_DIR, filename);
+  if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'Nicht gefunden' });
+  res.sendFile(filepath);
+});
+
 module.exports = router;

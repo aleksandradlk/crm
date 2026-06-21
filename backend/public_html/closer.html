@@ -981,6 +981,26 @@ async function loadWiki() {
   } catch(e) { showToast(e.message, 'err'); }
 }
 
+async function wikiFileOpen(filename, encodedName, forceDownload) {
+  try {
+    const res = await fetch(`/api/wiki/files/${encodeURIComponent(filename)}`, {
+      headers: { 'Authorization': 'Bearer ' + Auth.getToken() }
+    });
+    if (!res.ok) { showToast('Datei nicht verfügbar', 'err'); return; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    if (forceDownload) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = encodedName ? decodeURIComponent(encodedName) : filename;
+      a.click();
+    } else {
+      window.open(url, '_blank');
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch(e) { showToast('Fehler beim Laden', 'err'); }
+}
+
 function renderWikiFiles(files, containerId, isAdmin) {
   const container = document.getElementById(containerId);
   if (!files.length) {
@@ -996,7 +1016,7 @@ function renderWikiFiles(files, containerId, isAdmin) {
       const size    = f.size ? (f.size / 1024).toFixed(0) + ' KB' : '';
       const icon    = isPdf ? 'file-pdf' : isImage ? 'file-image' : 'file-alt';
       const previewBtn = (isImage || isPdf)
-        ? `<a href="/uploads/wiki/${encodeURIComponent(f.filename)}" target="_blank" class="btn btn-ghost btn-sm" title="Vorschau"><i class="fas fa-eye"></i></a>`
+        ? `<button class="btn btn-ghost btn-sm" title="Vorschau" onclick="wikiFileOpen('${f.filename}')"><i class="fas fa-eye"></i></button>`
         : '';
       return `
         <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg3);border-radius:8px;margin-bottom:6px">
@@ -1006,7 +1026,7 @@ function renderWikiFiles(files, containerId, isAdmin) {
             <div style="font-size:11px;color:var(--text3)">${size ? size + ' · ' : ''}${fmtDateShort(f.created_at)}</div>
           </div>
           ${previewBtn}
-          <a href="/uploads/wiki/${encodeURIComponent(f.filename)}" download="${escHtml(f.name)}" class="btn btn-ghost btn-sm" title="Download"><i class="fas fa-download"></i></a>
+          <button class="btn btn-ghost btn-sm" title="Download" onclick="wikiFileOpen('${f.filename}','${encodeURIComponent(f.name)}',true)"><i class="fas fa-download"></i></button>
         </div>`;
     }).join('');
     return `
