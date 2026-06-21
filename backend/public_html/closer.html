@@ -716,8 +716,8 @@ async function saveCallDocCl() {
 
 function renderCallLogsCl(logs) {
   if (!logs || !logs.length) return '';
-  const LABELS = { reached:'Erreicht', 'no-answer':'Nicht erreicht', busy:'Besetzt', failed:'Fehlgeschlagen', wrong_number:'Falsche Nummer', started:'Gestartet' };
-  const COLORS = { reached:'var(--green)', 'no-answer':'var(--amber)', busy:'var(--amber)', failed:'var(--red)', wrong_number:'var(--red)', started:'var(--text3)' };
+  const LABELS = { reached:'Erreicht', 'no-answer':'Nicht erreicht', busy:'Besetzt', failed:'Fehlgeschlagen', wrong_number:'Falsche Nummer', started:'Gestartet', completed:'Gespräch geführt', manual:'Manuell' };
+  const COLORS = { reached:'var(--green)', 'no-answer':'var(--amber)', busy:'var(--amber)', failed:'var(--red)', wrong_number:'var(--red)', started:'var(--text3)', completed:'var(--green)', manual:'var(--text3)' };
   return `<div style="margin-top:12px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:6px">Anrufe</div>` +
     logs.map(c => `<div style="display:flex;gap:8px;align-items:flex-start;padding:7px 10px;background:var(--bg3);border-radius:6px;border-left:2px solid ${COLORS[c.status]||'var(--text3)'};margin-bottom:5px;font-size:12px">
       <div style="flex:1">
@@ -1699,7 +1699,7 @@ document.getElementById('editContactInputCl')?.addEventListener('keydown', funct
       </div>
       <div class="form-group" style="margin:0">
         <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Notiz <span style="font-weight:400;color:var(--text3)">(optional)</span></label>
-        <textarea id="callDocNoteCl" class="form-control" rows="3" placeholder="Was wurde besprochen?" style="resize:vertical;font-size:13px"></textarea>
+        <textarea id="callDocNoteCl" class="form-control" rows="3" maxlength="1000" placeholder="Was wurde besprochen?" style="resize:vertical;font-size:13px"></textarea>
       </div>
       <div id="callDocErrorCl" style="color:var(--red);font-size:12px;min-height:14px;margin-top:-6px"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border);padding-top:12px">

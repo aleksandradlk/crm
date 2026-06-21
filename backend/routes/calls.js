@@ -22,15 +22,18 @@ router.patch('/:id', auth, async (req, res) => {
 
     if (status && VALID_STATUSES.includes(status)) {
       updates.push('status=?'); params.push(status);
-      if (status !== 'started') { updates.push('ended_at=NOW()'); }
+      updates.push('ended_at=NOW()');
     }
     if (duration_seconds != null) {
       updates.push('duration_seconds=?');
       params.push(parseInt(duration_seconds) || null);
     }
     if (note !== undefined) {
+      const noteClean = note?.trim() || null;
+      if (noteClean && noteClean.length > 1000)
+        return res.status(400).json({ error: 'Notiz darf maximal 1000 Zeichen lang sein' });
       updates.push('note=?');
-      params.push(note?.trim() || null);
+      params.push(noteClean);
     }
 
     if (!updates.length) return res.status(400).json({ error: 'Nichts zu aktualisieren' });
