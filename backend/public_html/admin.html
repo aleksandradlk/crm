@@ -605,9 +605,17 @@ function renderFunnel(leads) {
 }
 
 async function deleteLead(id) {
-  if (!confirm('Lead wirklich löschen?')) return;
-  try { await api('DELETE', `/leads/${id}`); showToast('Lead gelöscht'); loadLeads(); }
-  catch (e) { showToast(e.message, 'err'); }
+  const lead = allLeads.find(l => l.id === id);
+  const name = lead?.company ? `"${lead.company}"` : `Lead #${id}`;
+  if (!confirm(`${name} endgültig löschen?\n\nAlle Kommentare und Erinnerungen werden ebenfalls gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.`)) return;
+  try {
+    await api('DELETE', `/leads/${id}`);
+    showToast('Lead gelöscht');
+    allLeads = allLeads.filter(l => l.id !== id);
+    renderAllLeads(allLeads);
+    updateAllStats(allLeads);
+    if (_panelLead?.id === id) closeLeadPanel();
+  } catch (e) { showToast(e.message, 'err'); }
 }
 
 // ── LEAD DETAIL PANEL ─────────────────────────────────────────
@@ -645,6 +653,7 @@ function renderPanelKeyInfo(l) {
       <div style="display:flex;gap:6px;margin-left:auto">
         <button class="btn btn-ghost btn-sm" onclick="openCreateChatFromLead(${l.id})" title="Rücksprache erstellen"><i class="fas fa-comments"></i> Rücksprache</button>
         <button class="btn btn-ghost btn-sm" onclick="openEmailModal()"><i class="fas fa-envelope"></i> E-Mail</button>
+        <button class="btn btn-ghost btn-sm" onclick="deleteLead(${l.id})" title="Lead löschen" style="color:var(--red)"><i class="fas fa-trash"></i></button>
       </div>
     </div>
     ${contactItems ? `<div style="display:grid;gap:5px;margin-bottom:${lastNote?'10px':'0'}">${contactItems}</div>` : ''}

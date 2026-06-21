@@ -177,9 +177,20 @@ router.patch('/:id', auth, adminOnly, async (req, res) => {
 // ── DELETE /api/leads/:id (Admin) ────────────────────────────
 router.delete('/:id', auth, adminOnly, async (req, res) => {
   const id = parseInt(req.params.id);
-  await db.query('DELETE FROM leads WHERE id = ?', [id]);
-  await log(req.user.id, 'lead_delete', 'lead', id, null, req.ip);
-  res.json({ ok: true });
+  try {
+    const [[lead]] = await db.query('SELECT id FROM leads WHERE id = ?', [id]);
+    if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
+    // Abhängige Daten bereinigen (verhindert FK-Fehler und Waiseneinträge)
+    await db.query('DELETE FROM comments  WHERE lead_id = ?', [id]);
+    await db.query('DELETE FROM reminders WHERE lead_id = ?', [id]);
+    await db.query('UPDATE chat_rooms SET lead_id = NULL WHERE lead_id = ?', [id]);
+    await db.query('DELETE FROM leads WHERE id = ?', [id]);
+    await log(req.user.id, 'lead_delete', 'lead', id, null, req.ip);
+    res.json({ ok: true });
+  } catch(e) {
+    console.error('Lead delete error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── POST /api/leads/:id/comments ────────────────────────────
