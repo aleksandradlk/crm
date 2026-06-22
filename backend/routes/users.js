@@ -13,9 +13,11 @@ router.get('/', auth, adminOnly, async (req, res) => {
             u.last_login, u.created_at,
             u.can_edit_contacts, u.can_archive_leads, u.can_reassign_leads,
             u.can_view_all_leads, u.can_create_users, u.can_generate_leads,
-            s.last_active, s.click_count, s.login_at AS session_start
+            s.last_active, s.click_count, s.login_at AS session_start,
+            c.full_name AS creator_name, c.email AS creator_email
      FROM users u
      LEFT JOIN sessions s ON s.user_id = u.id
+     LEFT JOIN users c ON c.id = u.created_by
      ORDER BY u.created_at DESC`
   );
   res.json(users);
@@ -93,9 +95,12 @@ router.post('/', auth, async (req, res) => {
   if (req.user.role !== 'admin' && !req.user.can_create_users)
     return res.status(403).json({ error: 'Keine Berechtigung' });
 
-  const { username, password, full_name, email, role } = req.body;
+  const { username, password, full_name, email } = req.body;
   if (!username || !password || !full_name)
     return res.status(400).json({ error: 'Name, Benutzername und Passwort sind erforderlich' });
+
+  // Closer mit can_create_users darf nur einfache Closer anlegen — keine Rolle, keine Rechte wählbar
+  const finalRole = req.user.role === 'admin' && req.body.role === 'admin' ? 'admin' : 'closer';
 
   const emailVal = email && email.trim() ? email.trim() : null;
 
@@ -109,10 +114,19 @@ router.post('/', auth, async (req, res) => {
 
   const hash = await bcrypt.hash(password, 12);
   const [result] = await db.query(
-    'INSERT INTO users (username, password_hash, full_name, email, role) VALUES (?,?,?,?,?)',
-    [username, hash, full_name, emailVal, role === 'admin' ? 'admin' : 'closer']
+    'INSERT INTO users (username, password_hash, full_name, email, role, created_by) VALUES (?,?,?,?,?,?)',
+    [username, hash, full_name, emailVal, finalRole, req.user.id]
   );
-  await log(req.user.id, 'user_create', 'user', result.insertId, { username, role }, req.ip);
+
+  // Berechtigungen nur Admin darf setzen
+  if (req.user.role === 'admin') {
+    for (const f of PERM_FIELDS) {
+      if (req.body[f] !== undefined)
+        await db.query(`UPDATE users SET ${f}=? WHERE id=?`, [req.body[f] ? 1 : 0, result.insertId]);
+    }
+  }
+
+  await log(req.user.id, 'user_create', 'user', result.insertId, { username, role: finalRole }, req.ip);
   res.status(201).json({ ok: true, id: result.insertId });
 });
 

@@ -18,8 +18,8 @@ function startReminderCron() {
 
       for (const r of due) {
         if (!r.email) {
-          await db.query('UPDATE reminders SET sent = 1 WHERE id = ?', [r.id]);
-          console.log(`Reminder (id=${r.id}) übersprungen — kein E-Mail beim User`);
+          // Kein Zustellkanal — Reminder bleibt ausstehend (sent=0), damit er nicht verschwindet
+          console.log(`Reminder (id=${r.id}) übersprungen — User hat keine E-Mail-Adresse, bleibt ausstehend`);
           continue;
         }
         try {

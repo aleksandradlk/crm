@@ -150,6 +150,10 @@
             <option value="rueckruf">Rückruf</option>
             <option value="kunde">Kunde</option>
           </select>
+          <select id="allAssignFilter" class="form-control" style="width:150px" onchange="filterAllLeads()">
+            <option value="">Alle Zuweisungen</option>
+            <option value="none">Nicht zugewiesen</option>
+          </select>
           <button class="btn btn-ghost btn-sm" onclick="loadLeads()"><i class="fas fa-sync"></i></button>
         </div>
       </div>
@@ -376,7 +380,7 @@ function showSection(name) {
   if (name === 'chat')      loadChats();
   if (name === 'feedback')  loadMyFeedback();
   if (name === 'myLeads') { const f = document.getElementById('mySearch'); if (f) f.value = ''; if (allLeads.length) filterMyLeads(); }
-  if (name === 'allLeads')  { const f = document.getElementById('allSearch'); if (f) { f.value = ''; } if (allLeads.length) renderAllLeads(allLeads); }
+  if (name === 'allLeads')  { const f = document.getElementById('allSearch'); if (f) f.value = ''; const sf = document.getElementById('allStatusFilter'); if (sf) sf.value = ''; const af = document.getElementById('allAssignFilter'); if (af) af.value = ''; if (allLeads.length) renderAllLeads(allLeads); }
 }
 
 // ── LOADS ─────────────────────────────────────────────────────
@@ -391,9 +395,29 @@ function setMyLeadsView(mode) {
   if (mode === 'pipeline') renderPipeline(myLeads());
 }
 
+function populateAssignFilter() {
+  const sel = document.getElementById('allAssignFilter');
+  if (!sel) return;
+  const current = sel.value;
+  // Alle Optionen außer den ersten zwei (Alle / Nicht zugewiesen) entfernen
+  while (sel.options.length > 2) sel.remove(2);
+  const seen = new Set();
+  allLeads.forEach(l => {
+    if (l.assigned_to && l.assigned_name && !seen.has(l.assigned_to)) {
+      seen.add(l.assigned_to);
+      const opt = document.createElement('option');
+      opt.value = l.assigned_to;
+      opt.textContent = l.assigned_name;
+      sel.appendChild(opt);
+    }
+  });
+  sel.value = current;
+}
+
 async function loadLeads() {
   try {
-    allLeads = await api('GET', '/leads');
+    allLeads = await api('GET', '/leads?limit=500');
+    populateAssignFilter();
     filterMyLeads();
     renderAllLeads(allLeads);
     updateMyStats(myLeads());
@@ -504,9 +528,12 @@ async function onColDrop(e, status) {
 function filterAllLeads() {
   const search = document.getElementById('allSearch').value.toLowerCase();
   const status = document.getElementById('allStatusFilter').value;
+  const assign = document.getElementById('allAssignFilter').value;
   let f = allLeads;
   if (search) f = f.filter(l => (l.company||'').toLowerCase().includes(search) || (l.phone||'').includes(search));
   if (status) f = f.filter(l => l.status === status);
+  if (assign === 'none') f = f.filter(l => !l.assigned_to);
+  else if (assign) f = f.filter(l => String(l.assigned_to) === assign);
   renderAllLeads(f);
 }
 

@@ -288,7 +288,7 @@
       </div>
       <div class="card">
         <div class="table-wrap">
-          <table><thead><tr><th>Name</th><th>Benutzername</th><th>E-Mail</th><th>Rolle</th><th>Status</th><th>Letzter Login</th><th></th></tr></thead>
+          <table><thead><tr><th>Name</th><th>Benutzername</th><th>E-Mail</th><th>Rolle</th><th>Status</th><th>Letzter Login</th><th>Erstellt von</th><th></th></tr></thead>
           <tbody id="usersTableBody"></tbody></table>
         </div>
       </div>
@@ -475,7 +475,7 @@
         </label>
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;font-size:13px">
           <input type="checkbox" id="u-can-archive-leads" style="width:15px;height:15px;accent-color:var(--accent)">
-          <span>Leads löschen</span>
+          <span>Leads archivieren</span>
         </label>
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;font-size:13px">
           <input type="checkbox" id="u-can-reassign-leads" style="width:15px;height:15px;accent-color:var(--accent)">
@@ -704,7 +704,7 @@ async function quickChangeStatus(id, sel) {
 // ── LEADS ─────────────────────────────────────────────────────
 async function loadLeads() {
   try {
-    allLeads = await api('GET', '/leads');
+    allLeads = await api('GET', '/leads?limit=500');
     currentFilteredLeads = allLeads;
     renderLeads(allLeads);
     updateLeadStats(allLeads);
@@ -821,10 +821,10 @@ function renderFunnel(leads) {
 async function deleteLead(id) {
   const lead = allLeads.find(l => l.id === id);
   const name = lead?.company ? `"${lead.company}"` : `Lead #${id}`;
-  if (!confirm(`${name} endgültig löschen?\n\nAlle Kommentare und Erinnerungen werden ebenfalls gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.`)) return;
+  if (!confirm(`${name} archivieren?\n\nDer Lead wird ausgeblendet. Kommentare und Erinnerungen bleiben erhalten und können vom Admin wiederhergestellt werden.`)) return;
   try {
     await api('DELETE', `/leads/${id}`);
-    showToast('Lead gelöscht');
+    showToast('Lead archiviert');
     allLeads = allLeads.filter(l => l.id !== id);
     renderLeads(allLeads);
     updateLeadStats(allLeads);
@@ -1305,7 +1305,7 @@ async function loadUsers() {
         <td style="font-size:12px">${u.email ? `<a href="mailto:${escHtml(u.email)}">${escHtml(u.email)}</a>` : '<span style="color:var(--text3)">—</span>'}</td>
         <td><span class="role-badge ${u.role==='admin'?'rb-admin':'rb-closer'}">${u.role==='admin'?'Admin':'Closer'}</span>${u.role==='closer'?[
             [u.can_edit_contacts,'Kontaktdaten bearbeiten','fa-address-card'],
-            [u.can_archive_leads,'Leads löschen','fa-trash'],
+            [u.can_archive_leads,'Leads archivieren','fa-archive'],
             [u.can_reassign_leads,'Leads zuweisen','fa-user-tag'],
             [u.can_view_all_leads,'Alle Leads sehen','fa-eye'],
             [u.can_create_users,'User anlegen','fa-user-plus'],
@@ -1314,6 +1314,7 @@ async function loadUsers() {
         </td>
         <td><span style="color:${u.is_active?'var(--green)':'var(--red)'};font-size:12px">${u.is_active?'Aktiv':'Gesperrt'}</span></td>
         <td style="font-size:12px;color:var(--text3)">${fmtDate(u.last_login)}</td>
+        <td style="font-size:12px;color:var(--text2)">${u.creator_name ? `${escHtml(u.creator_name)}${u.creator_email ? `<br><span style="color:var(--text3);font-size:11px">${escHtml(u.creator_email)}</span>` : ''}` : '<span style="color:var(--text3)">—</span>'}</td>
         <td style="display:flex;gap:6px">
           <button class="btn btn-ghost btn-sm" onclick="openUserModal(${u.id})"><i class="fas fa-edit"></i></button>
           <button class="btn btn-ghost btn-sm" onclick="toggleUser(${u.id},${u.is_active})" title="${u.is_active?'Sperren':'Aktivieren'}">
@@ -1410,7 +1411,7 @@ const ACTION_LABELS = {
   comment_edit:'Kommentar bearbeitet', comment_delete:'Kommentar gelöscht',
   reminder_set:'Reminder gesetzt', lead_assign:'Lead übernommen',
   lead_create_manual:'Lead manuell erstellt', lead_update:'Lead bearbeitet',
-  lead_delete:'Lead gelöscht', lead_email_sent:'E-Mail gesendet',
+  lead_delete:'Lead gelöscht', lead_archive:'Lead archiviert', lead_email_sent:'E-Mail gesendet',
   leads_bulk_create:'Leads gespeichert (Bulk)', leads_generate:'Leads generiert',
   user_create:'User erstellt', user_update:'User bearbeitet', user_delete:'User gelöscht',
   password_change:'Passwort geändert',

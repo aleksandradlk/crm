@@ -7,14 +7,13 @@ const { sendLeadEmail } = require('../helpers/mailer');
 const VALID_STATUSES = ['neu','kontaktiert','nicht_erreicht','kein_interesse','rueckruf','kunde'];
 
 function canView(user, lead) {
-  if (user.role === 'admin') return true;
-  if (user.can_view_all_leads) return true;
-  return lead.assigned_to === user.id || lead.assigned_to === null;
+  // Alle authentifizierten Benutzer dürfen alle Leads sehen
+  return true;
 }
 
 // ── GET /api/leads ──────────────────────────────────────────
 router.get('/', auth, async (req, res) => {
-  const { status, search } = req.query;
+  const { status, search, assigned_to } = req.query;
   let q = `SELECT l.id, l.company, l.ceo, l.phone, l.email, l.location,
                   l.status, l.assigned_to, l.created_by,
                   l.created_at, l.updated_at, l.confidence,
@@ -24,25 +23,33 @@ router.get('/', auth, async (req, res) => {
            LEFT JOIN users u1 ON u1.id = l.assigned_to
            LEFT JOIN users u2 ON u2.id = l.created_by`;
   const params = [];
-  const where  = [];
+  const where  = ['l.archived_at IS NULL'];
 
-  if (req.user.role !== 'admin' && !req.user.can_view_all_leads) {
-    where.push('(l.assigned_to = ? OR l.assigned_to IS NULL)');
-    params.push(req.user.id);
-  }
   if (status && VALID_STATUSES.includes(status)) {
     where.push('l.status = ?');
     params.push(status);
   }
+  if (assigned_to === 'none') {
+    where.push('l.assigned_to IS NULL');
+  } else if (assigned_to && /^\d+$/.test(assigned_to)) {
+    where.push('l.assigned_to = ?');
+    params.push(parseInt(assigned_to));
+  }
   if (search) {
-    where.push('(l.company LIKE ? OR l.ceo LIKE ? OR l.location LIKE ?)');
-    const s = `%${search}%`;
-    params.push(s, s, s);
+    if (search.length >= 3) {
+      const term = search.replace(/[+\-><()*~"@]/g, ' ').trim().split(/\s+/).filter(Boolean).map(w => w + '*').join(' ');
+      where.push('MATCH(l.company, l.ceo, l.location) AGAINST (? IN BOOLEAN MODE)');
+      params.push(term);
+    } else {
+      where.push('(l.company LIKE ? OR l.ceo LIKE ? OR l.location LIKE ?)');
+      const s = `%${search}%`;
+      params.push(s, s, s);
+    }
   }
   if (where.length) q += ' WHERE ' + where.join(' AND ');
   q += ' ORDER BY l.created_at DESC';
 
-  const limit  = Math.min(parseInt(req.query.limit)  || 500, 1000);
+  const limit  = Math.min(parseInt(req.query.limit)  || 100, 500);
   const offset = Math.max(parseInt(req.query.offset) || 0, 0);
   q += ' LIMIT ? OFFSET ?';
   params.push(limit, offset);
@@ -126,11 +133,9 @@ router.get('/:id', auth, async (req, res) => {
      FROM leads l
      LEFT JOIN users u1 ON u1.id = l.assigned_to
      LEFT JOIN users u2 ON u2.id = l.created_by
-     WHERE l.id = ?`, [id]
+     WHERE l.id = ? AND l.archived_at IS NULL`, [id]
   );
   if (!lead) return res.status(404).json({ error: 'Nicht gefunden' });
-  if (!canView(req.user, lead))
-    return res.status(403).json({ error: 'Kein Zugriff auf diesen Lead' });
 
   const [comments] = await db.query(
     `SELECT c.*, u.full_name, u.username FROM comments c
@@ -202,23 +207,24 @@ router.patch('/:id', auth, async (req, res) => {
   res.json({ ok: true });
 });
 
-// ── DELETE /api/leads/:id ────────────────────────────────────
+// ── DELETE /api/leads/:id — Soft-Archivierung (kein physisches Löschen) ─────
 router.delete('/:id', auth, async (req, res) => {
   if (req.user.role !== 'admin' && !req.user.can_archive_leads)
     return res.status(403).json({ error: 'Keine Berechtigung' });
 
   const id = parseInt(req.params.id);
+  const reason = req.body?.reason || null;
   try {
-    const [[lead]] = await db.query('SELECT id FROM leads WHERE id = ?', [id]);
+    const [[lead]] = await db.query('SELECT id FROM leads WHERE id = ? AND archived_at IS NULL', [id]);
     if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
-    await db.query('DELETE FROM comments  WHERE lead_id = ?', [id]);
-    await db.query('DELETE FROM reminders WHERE lead_id = ?', [id]);
-    await db.query('UPDATE chat_rooms SET lead_id = NULL WHERE lead_id = ?', [id]).catch(() => {});
-    await db.query('DELETE FROM leads WHERE id = ?', [id]);
-    await log(req.user.id, 'lead_delete', 'lead', id, null, req.ip);
+    await db.query(
+      'UPDATE leads SET archived_at = NOW(), archived_by = ?, archive_reason = ? WHERE id = ?',
+      [req.user.id, reason, id]
+    );
+    await log(req.user.id, 'lead_archive', 'lead', id, { reason }, req.ip);
     res.json({ ok: true });
   } catch(e) {
-    console.error('Lead delete error:', e);
+    console.error('Lead archive error:', e);
     res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
   }
 });

@@ -21,7 +21,21 @@ const app  = express();
 const PORT = process.env.PORT || 3000;
 
 // ── Middleware ────────────────────────────────────────────────
-app.use(helmet({ contentSecurityPolicy: false }));
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc:  ["'self'"],
+      scriptSrc:   ["'self'", "'unsafe-inline'"],
+      styleSrc:    ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdnjs.cloudflare.com"],
+      fontSrc:     ["'self'", "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com"],
+      imgSrc:      ["'self'", "data:", "blob:"],
+      connectSrc:  ["'self'"],
+      objectSrc:   ["'none'"],
+      baseUri:     ["'self'"],
+      frameAncestors: ["'none'"],
+    }
+  }
+}));
 app.use(compression());
 app.use(cors({
   origin: process.env.BASE_URL || '*',
@@ -160,6 +174,14 @@ db.query('CREATE INDEX idx_rem_user_sent_time ON reminders (user_id, sent, remin
 db.query('CREATE INDEX idx_activity_created_at ON activity_log (created_at)').catch(() => {});
 db.query('CREATE INDEX idx_leads_assigned_status ON leads (assigned_to, status)').catch(() => {});
 db.query('CREATE INDEX idx_leads_status_created  ON leads (status, created_at)').catch(() => {});
+
+// ── Audit-Migrationen ─────────────────────────────────────────
+db.query('ALTER TABLE users ADD COLUMN created_by INT NULL').catch(() => {});
+db.query('ALTER TABLE leads ADD COLUMN archived_at DATETIME NULL').catch(() => {});
+db.query('ALTER TABLE leads ADD COLUMN archived_by INT NULL').catch(() => {});
+db.query('ALTER TABLE leads ADD COLUMN archive_reason VARCHAR(500) NULL').catch(() => {});
+db.query('CREATE INDEX idx_leads_archived ON leads (archived_at)').catch(() => {});
+db.query('ALTER TABLE leads ADD FULLTEXT INDEX ft_leads_search (company, ceo, location)').catch(() => {});
 
 // ── Cron: Activity Log nach 7 Tagen bereinigen ───────────────
 cron.schedule('0 3 * * *', async () => {
