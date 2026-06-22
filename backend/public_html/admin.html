@@ -82,6 +82,7 @@
       <div class="nav-item" onclick="showTab('wiki')"><i class="fas fa-book"></i> Wissensdatenbank</div>
       <div class="nav-item" onclick="showTab('chat')"><i class="fas fa-comments"></i> Rücksprachen</div>
       <div class="nav-item" onclick="showTab('feedback')"><i class="fas fa-flag"></i> Feedback-Board</div>
+      <div class="nav-item" onclick="showTab('archive')"><i class="fas fa-archive"></i> Archiv</div>
     </nav>
     <div class="sidebar-user" id="sidebarUser"></div>
   </aside>
@@ -282,9 +283,18 @@
 
     <!-- ── TAB: USERS ─────────────────────────────────── -->
     <div id="tab-users" class="tab-panel">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
         <h1 style="font-size:20px;font-weight:700">Benutzerverwaltung</h1>
         <button class="btn btn-primary btn-sm" onclick="openUserModal()"><i class="fas fa-plus"></i> Neuer Benutzer</button>
+      </div>
+      <div class="card" style="margin-bottom:16px;padding:14px 16px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500;margin:0">
+            <input type="checkbox" id="settingCloserSeesAdmins" onchange="saveCloserSeesAdmins()" style="width:16px;height:16px;cursor:pointer">
+            Closer dürfen Admins in Lead-Zuweisungen sehen
+          </label>
+          <span style="font-size:11px;color:var(--text3)">(steuert Zuweisungsfilter & -dropdowns für Closer)</span>
+        </div>
       </div>
       <div class="card">
         <div class="table-wrap">
@@ -405,6 +415,15 @@
         </div>
       </div>
       <div id="feedbackList"></div>
+    </div>
+
+    <!-- ── TAB: ARCHIV ──────────────────────────────── -->
+    <div id="tab-archive" class="tab-panel">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <h1 style="font-size:20px;font-weight:700">Archivierte Leads</h1>
+        <button class="btn btn-ghost btn-sm" onclick="loadArchive()"><i class="fas fa-sync"></i> Aktualisieren</button>
+      </div>
+      <div id="archiveList"></div>
     </div>
 
   </main>
@@ -531,7 +550,7 @@ function showTab(name) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
-  const navMap = { leads: 0, myLeads: 1, generate: 2, users: 3, tracking: 4, wiki: 5, chat: 6, feedback: 7 };
+  const navMap = { leads: 0, myLeads: 1, generate: 2, users: 3, tracking: 4, wiki: 5, chat: 6, feedback: 7, archive: 8 };
   const items = document.querySelectorAll('.nav-item');
   if (navMap[name] !== undefined) items[navMap[name]]?.classList.add('active');
   if (name === 'leads')    {
@@ -541,11 +560,12 @@ function showTab(name) {
     loadLeads();
   }
   if (name === 'myLeads')  renderMyLeads();
-  if (name === 'users')    loadUsers();
+  if (name === 'users')    { loadUsers(); loadAppSettings(); }
   if (name === 'tracking') loadTracking();
   if (name === 'wiki')     loadWiki();
   if (name === 'chat')     loadChats();
   if (name === 'feedback') loadFeedback();
+  if (name === 'archive')  loadArchive();
 }
 
 // ── PIPELINE (geteilt für Alle Leads + Meine Leads) ──────────
@@ -2122,6 +2142,74 @@ showTab('leads');
 loadClosersForSelect();
 checkReminderNotifications();
 setInterval(checkReminderNotifications, 2 * 60 * 1000);
+
+// ── EINSTELLUNGEN ─────────────────────────────────────────────
+async function loadAppSettings() {
+  try {
+    const s = await api('GET', '/settings');
+    const cb = document.getElementById('settingCloserSeesAdmins');
+    if (cb) cb.checked = s.closer_sees_admins === 'true';
+  } catch(e) {}
+}
+async function saveCloserSeesAdmins() {
+  const val = document.getElementById('settingCloserSeesAdmins')?.checked ? 'true' : 'false';
+  try {
+    await api('PATCH', '/settings/closer_sees_admins', { value: val });
+    showToast('Einstellung gespeichert ✓');
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+// ── ARCHIV ────────────────────────────────────────────────────
+async function loadArchive() {
+  try {
+    const leads = await api('GET', '/leads/archived');
+    const el = document.getElementById('archiveList');
+    if (!leads.length) {
+      el.innerHTML = '<div style="color:var(--text3);text-align:center;padding:40px"><i class="fas fa-archive" style="font-size:28px;display:block;margin-bottom:10px;opacity:.3"></i>Keine archivierten Leads</div>';
+      return;
+    }
+    el.innerHTML = leads.map(l => `
+      <div class="card" style="padding:14px 16px;margin-bottom:10px">
+        <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap">
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:14px;margin-bottom:4px">${escHtml(l.company||'—')}</div>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--text2);margin-bottom:6px">
+              ${l.ceo   ? `<span><i class="fas fa-user" style="opacity:.5;margin-right:4px"></i>${escHtml(l.ceo)}</span>` : ''}
+              ${l.phone ? `<span><i class="fas fa-phone" style="opacity:.5;margin-right:4px"></i><a href="tel:${escHtml(l.phone)}" style="color:inherit">${escHtml(l.phone)}</a></span>` : ''}
+              ${l.email ? `<span><i class="fas fa-envelope" style="opacity:.5;margin-right:4px"></i>${escHtml(l.email)}</span>` : ''}
+              ${l.assigned_name ? `<span><i class="fas fa-user-check" style="opacity:.5;margin-right:4px"></i>${escHtml(l.assigned_name)}</span>` : ''}
+            </div>
+            <div style="font-size:11px;color:var(--text3)">
+              ${statusBadge(l.status)}
+              <span style="margin-left:8px"><i class="fas fa-archive" style="margin-right:3px"></i>Archiviert ${fmtDate(l.archived_at)} ${l.archived_by_name ? 'von ' + escHtml(l.archived_by_name) : ''}</span>
+              ${l.archive_reason ? `<span style="margin-left:8px;font-style:italic">"${escHtml(l.archive_reason)}"</span>` : ''}
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+            <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="restoreLead(${l.id})"><i class="fas fa-undo"></i> Wiederherstellen</button>
+            <button class="btn btn-ghost btn-sm" style="font-size:12px;color:var(--red)" onclick="permanentDeleteLead(${l.id},'${escHtml((l.company||'').replace(/'/g,"\\'"))}')"><i class="fas fa-trash"></i> Endgültig löschen</button>
+          </div>
+        </div>
+      </div>`).join('');
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+async function restoreLead(id) {
+  try {
+    await api('POST', `/leads/${id}/restore`);
+    showToast('Lead wiederhergestellt ✓');
+    loadArchive();
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+async function permanentDeleteLead(id, name) {
+  if (!confirm(`Lead "${name}" endgültig löschen?\n\nDieser Vorgang kann NICHT rückgängig gemacht werden.\nAlle Kommentare und Reminder werden ebenfalls gelöscht.`)) return;
+  try {
+    await api('DELETE', `/leads/${id}/permanent`);
+    showToast('Lead endgültig gelöscht');
+    loadArchive();
+  } catch(e) { showToast(e.message, 'err'); }
+}
 
 // ── FEEDBACK-BOARD ────────────────────────────────────────────
 let allFeedback = [];

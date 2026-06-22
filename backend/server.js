@@ -13,7 +13,8 @@ const generateRoutes = require('./routes/generate');
 const wikiRoutes     = require('./routes/wiki');
 const chatRoutes     = require('./routes/chat');
 const callRoutes     = require('./routes/calls');
-const feedbackRoutes = require('./routes/feedback');
+const feedbackRoutes  = require('./routes/feedback');
+const settingsRoutes  = require('./routes/settings');
 const { startReminderCron } = require('./cron/reminders');
 const cron           = require('node-cron');
 
@@ -68,6 +69,7 @@ app.use('/api/wiki',     wikiRoutes);
 app.use('/api/chats',    chatRoutes);
 app.use('/api/calls',    callRoutes);
 app.use('/api/feedback', feedbackRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // ── SPA Fallback ──────────────────────────────────────────────
 app.get('*', (req, res) => {
@@ -174,6 +176,13 @@ db.query('CREATE INDEX idx_rem_user_sent_time ON reminders (user_id, sent, remin
 db.query('CREATE INDEX idx_activity_created_at ON activity_log (created_at)').catch(() => {});
 db.query('CREATE INDEX idx_leads_assigned_status ON leads (assigned_to, status)').catch(() => {});
 db.query('CREATE INDEX idx_leads_status_created  ON leads (status, created_at)').catch(() => {});
+
+// ── Settings-Tabelle ─────────────────────────────────────────
+db.query(`CREATE TABLE IF NOT EXISTS app_settings (
+  key_name VARCHAR(100) PRIMARY KEY,
+  value TEXT NOT NULL
+)`).catch(() => {});
+db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('closer_sees_admins','false')").catch(() => {});
 
 // ── Audit-Migrationen ─────────────────────────────────────────
 db.query('ALTER TABLE users ADD COLUMN created_by INT NULL').catch(() => {});

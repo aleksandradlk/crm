@@ -70,6 +70,7 @@
       <div class="nav-item" data-sec="wiki" onclick="showSection('wiki')"><i class="fas fa-book"></i> Wissensdatenbank</div>
       <div class="nav-item" data-sec="chat" onclick="showSection('chat')"><i class="fas fa-comments"></i> Rücksprachen <span id="chatBadge" style="display:none;margin-left:auto" class="badge">!</span></div>
       <div class="nav-item" data-sec="feedback" onclick="showSection('feedback')"><i class="fas fa-flag"></i> Feedback / Wünsche</div>
+      <div class="nav-item" id="navCreateUser" data-sec="createUser" onclick="showSection('createUser')" style="display:none"><i class="fas fa-user-plus"></i> Benutzer anlegen</div>
     </nav>
     <div class="sidebar-user" id="sidebarUser"></div>
   </aside>
@@ -241,6 +242,37 @@
       <div id="myFeedbackList"></div>
     </div>
 
+    <!-- BENUTZER ANLEGEN (nur bei can_create_users) -->
+    <div id="sec-createUser" style="display:none;max-width:480px">
+      <h1 style="font-size:20px;font-weight:700;margin-bottom:20px">Benutzer anlegen</h1>
+      <div class="card">
+        <div class="card-body" style="padding:20px">
+          <div class="form-group">
+            <label>Name <span style="color:var(--red)">*</span></label>
+            <input type="text" id="cu-name" class="form-control" placeholder="Vor- und Nachname" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label>Benutzername <span style="color:var(--red)">*</span></label>
+            <input type="text" id="cu-username" class="form-control" placeholder="z.B. max.mustermann" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label>E-Mail</label>
+            <input type="email" id="cu-email" class="form-control" placeholder="optional" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label>Telefon</label>
+            <input type="text" id="cu-phone" class="form-control" placeholder="optional" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label>Passwort <span style="color:var(--red)">*</span></label>
+            <input type="password" id="cu-password" class="form-control" placeholder="Mindestens 6 Zeichen" autocomplete="new-password">
+          </div>
+          <div id="cuErr" style="color:var(--red);font-size:12px;margin-bottom:10px;min-height:16px"></div>
+          <button class="btn btn-primary" style="width:100%" onclick="submitCreateUser()"><i class="fas fa-user-plus"></i> Benutzer anlegen</button>
+        </div>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -357,6 +389,12 @@ initTheme();
 renderSidebarUser();
 startActivityTracking();
 
+// Benutzer anlegen: nur anzeigen wenn Berechtigung vorhanden
+if (ME?.can_create_users) {
+  const navEl = document.getElementById('navCreateUser');
+  if (navEl) navEl.style.display = '';
+}
+
 function toggleMobileNav() {
   document.getElementById('sidebar').classList.toggle('mobile-open');
   document.getElementById('mobileNavOverlay').classList.toggle('open');
@@ -368,7 +406,7 @@ function closeMobileNav() {
 
 function showSection(name) {
   closeMobileNav();
-  ['myLeads','allLeads','wiki','reminders','chat','feedback'].forEach(s => {
+  ['myLeads','allLeads','wiki','reminders','chat','feedback','createUser'].forEach(s => {
     document.getElementById('sec-' + s).style.display = s === name ? '' : 'none';
   });
   document.querySelectorAll('.nav-item[data-sec]').forEach(el => {
@@ -395,28 +433,34 @@ function setMyLeadsView(mode) {
   if (mode === 'pipeline') renderPipeline(myLeads());
 }
 
+let _assignableUsers = [];
+
+async function loadAssignableUsers() {
+  try {
+    _assignableUsers = await api('GET', '/users/assignable');
+  } catch(e) { _assignableUsers = []; }
+}
+
 function populateAssignFilter() {
   const sel = document.getElementById('allAssignFilter');
   if (!sel) return;
   const current = sel.value;
-  // Alle Optionen außer den ersten zwei (Alle / Nicht zugewiesen) entfernen
   while (sel.options.length > 2) sel.remove(2);
-  const seen = new Set();
-  allLeads.forEach(l => {
-    if (l.assigned_to && l.assigned_name && !seen.has(l.assigned_to)) {
-      seen.add(l.assigned_to);
-      const opt = document.createElement('option');
-      opt.value = l.assigned_to;
-      opt.textContent = l.assigned_name;
-      sel.appendChild(opt);
-    }
+  _assignableUsers.forEach(u => {
+    const opt = document.createElement('option');
+    opt.value = u.id;
+    opt.textContent = u.full_name;
+    sel.appendChild(opt);
   });
-  sel.value = current;
+  if (current) sel.value = current;
 }
 
 async function loadLeads() {
   try {
-    allLeads = await api('GET', '/leads?limit=500');
+    [allLeads] = await Promise.all([
+      api('GET', '/leads?limit=500'),
+      loadAssignableUsers(),
+    ]);
     populateAssignFilter();
     filterMyLeads();
     renderAllLeads(allLeads);
@@ -1714,6 +1758,31 @@ async function deleteMyFeedback(id) {
   if (!confirm('Eintrag löschen?')) return;
   try { await api('DELETE', `/feedback/${id}`); loadMyFeedback(); }
   catch(e) { showToast(e.message,'err'); }
+}
+
+// ── BENUTZER ANLEGEN (Closer mit can_create_users) ────────────
+async function submitCreateUser() {
+  const name     = document.getElementById('cu-name')?.value.trim();
+  const username = document.getElementById('cu-username')?.value.trim();
+  const email    = document.getElementById('cu-email')?.value.trim() || null;
+  const phone    = document.getElementById('cu-phone')?.value.trim() || null;
+  const password = document.getElementById('cu-password')?.value;
+  const errEl    = document.getElementById('cuErr');
+  if (errEl) errEl.textContent = '';
+
+  if (!name)     { if (errEl) errEl.textContent = 'Name ist erforderlich'; return; }
+  if (!username) { if (errEl) errEl.textContent = 'Benutzername ist erforderlich'; return; }
+  if (!password || password.length < 6) { if (errEl) errEl.textContent = 'Passwort muss mindestens 6 Zeichen haben'; return; }
+
+  try {
+    await api('POST', '/users', { full_name: name, username, email, phone, password });
+    showToast('Benutzer angelegt ✓');
+    ['cu-name','cu-username','cu-email','cu-phone','cu-password'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+  } catch(e) {
+    if (errEl) errEl.textContent = e.message;
+  }
 }
 </script>
 

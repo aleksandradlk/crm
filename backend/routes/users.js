@@ -23,10 +23,25 @@ router.get('/', auth, adminOnly, async (req, res) => {
   res.json(users);
 });
 
-// GET /api/users/assignable — Kurzliste für Zuweisung (alle auth)
+// GET /api/users/assignable — Kurzliste für Zuweisung
+// Admin: alle; Closer: nur Closer (außer closer_sees_admins=true)
 router.get('/assignable', auth, async (req, res) => {
-  const [rows] = await db.query('SELECT id, full_name FROM users WHERE is_active=1 ORDER BY full_name');
-  res.json(rows);
+  try {
+    if (req.user.role === 'admin') {
+      const [rows] = await db.query('SELECT id, full_name, role FROM users WHERE is_active=1 ORDER BY full_name');
+      return res.json(rows);
+    }
+    const [[setting]] = await db.query("SELECT value FROM app_settings WHERE key_name='closer_sees_admins'");
+    const closerSeesAdmins = setting?.value === 'true';
+    const q = closerSeesAdmins
+      ? 'SELECT id, full_name, role FROM users WHERE is_active=1 ORDER BY full_name'
+      : "SELECT id, full_name, role FROM users WHERE is_active=1 AND role='closer' ORDER BY full_name";
+    const [rows] = await db.query(q);
+    res.json(rows);
+  } catch(e) {
+    const [rows] = await db.query('SELECT id, full_name, role FROM users WHERE is_active=1 ORDER BY full_name');
+    res.json(rows);
+  }
 });
 
 // GET /api/users/list — Kurzliste aller aktiven User (für Chat-Einladungen, alle Auth-User)
@@ -95,7 +110,7 @@ router.post('/', auth, async (req, res) => {
   if (req.user.role !== 'admin' && !req.user.can_create_users)
     return res.status(403).json({ error: 'Keine Berechtigung' });
 
-  const { username, password, full_name, email } = req.body;
+  const { username, password, full_name, email, phone } = req.body;
   if (!username || !password || !full_name)
     return res.status(400).json({ error: 'Name, Benutzername und Passwort sind erforderlich' });
 
@@ -103,6 +118,7 @@ router.post('/', auth, async (req, res) => {
   const finalRole = req.user.role === 'admin' && req.body.role === 'admin' ? 'admin' : 'closer';
 
   const emailVal = email && email.trim() ? email.trim() : null;
+  const phoneVal = phone && phone.trim() ? phone.trim() : null;
 
   const [[existsUser]] = await db.query('SELECT id FROM users WHERE username = ?', [username]);
   if (existsUser) return res.status(409).json({ error: 'Benutzername bereits vergeben' });
@@ -114,8 +130,8 @@ router.post('/', auth, async (req, res) => {
 
   const hash = await bcrypt.hash(password, 12);
   const [result] = await db.query(
-    'INSERT INTO users (username, password_hash, full_name, email, role, created_by) VALUES (?,?,?,?,?,?)',
-    [username, hash, full_name, emailVal, finalRole, req.user.id]
+    'INSERT INTO users (username, password_hash, full_name, email, phone, role, created_by) VALUES (?,?,?,?,?,?,?)',
+    [username, hash, full_name, emailVal, phoneVal, finalRole, req.user.id]
   );
 
   // Berechtigungen nur Admin darf setzen

@@ -125,6 +125,61 @@ router.get('/reminders', auth, async (req, res) => {
   } catch(e) { console.error('Reminders error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
+// ── GET /api/leads/archived — archivierte Leads (Admin) ─────
+router.get('/archived', auth, adminOnly, async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT l.id, l.company, l.ceo, l.phone, l.email, l.location, l.status,
+              l.archived_at, l.archive_reason,
+              u1.full_name AS assigned_name,
+              u2.full_name AS archived_by_name
+       FROM leads l
+       LEFT JOIN users u1 ON u1.id = l.assigned_to
+       LEFT JOIN users u2 ON u2.id = l.archived_by
+       WHERE l.archived_at IS NOT NULL
+       ORDER BY l.archived_at DESC
+       LIMIT 500`
+    );
+    res.json(rows);
+  } catch(e) {
+    console.error('Archived leads error:', e);
+    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
+  }
+});
+
+// ── POST /api/leads/:id/restore — Lead wiederherstellen (Admin) ──
+router.post('/:id/restore', auth, adminOnly, async (req, res) => {
+  const id = parseInt(req.params.id);
+  try {
+    const [[lead]] = await db.query('SELECT id FROM leads WHERE id=? AND archived_at IS NOT NULL', [id]);
+    if (!lead) return res.status(404).json({ error: 'Archivierter Lead nicht gefunden' });
+    await db.query('UPDATE leads SET archived_at=NULL, archived_by=NULL, archive_reason=NULL WHERE id=?', [id]);
+    await log(req.user.id, 'lead_restore', 'lead', id, {}, req.ip);
+    res.json({ ok: true });
+  } catch(e) {
+    console.error('Lead restore error:', e);
+    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
+  }
+});
+
+// ── DELETE /api/leads/:id/permanent — endgültig löschen (Admin) ─
+router.delete('/:id/permanent', auth, adminOnly, async (req, res) => {
+  const id = parseInt(req.params.id);
+  try {
+    const [[lead]] = await db.query('SELECT id FROM leads WHERE id=? AND archived_at IS NOT NULL', [id]);
+    if (!lead) return res.status(404).json({ error: 'Nur archivierte Leads können endgültig gelöscht werden' });
+    await db.query('DELETE FROM reminders WHERE lead_id=?', [id]);
+    await db.query('DELETE FROM comments  WHERE lead_id=?', [id]);
+    await db.query('DELETE FROM call_logs WHERE lead_id=?', [id]).catch(() => {});
+    await db.query('DELETE FROM leads     WHERE id=?', [id]);
+    await log(req.user.id, 'lead_delete_permanent', 'lead', id, {}, req.ip);
+    res.json({ ok: true });
+  } catch(e) {
+    console.error('Lead permanent delete error:', e);
+    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
+  }
+});
+
 // ── GET /api/leads/:id ──────────────────────────────────────
 router.get('/:id', auth, async (req, res) => {
   const id = parseInt(req.params.id);
