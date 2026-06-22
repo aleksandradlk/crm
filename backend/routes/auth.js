@@ -17,7 +17,7 @@ router.post('/login', async (req, res) => {
   const ok = await bcrypt.compare(password, user.password_hash);
   if (!ok) return res.status(401).json({ error: 'Ungültige Zugangsdaten' });
 
-  const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '12h' });
+  const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '4h' });
 
   // Upsert session
   await db.query(
@@ -134,7 +134,7 @@ router.get('/me', auth, async (req, res) => {
     );
     if (!user) return res.status(404).json({ error: 'Nicht gefunden' });
     res.json(user);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('Auth /me error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 module.exports = router;

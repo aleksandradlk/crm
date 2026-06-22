@@ -36,7 +36,7 @@ router.get('/', auth, async (req, res) => {
          GROUP BY r.id ORDER BY COALESCE(MAX(m.created_at), r.created_at) DESC`;
     const [rows] = await db.query(q, [req.user.id]);
     res.json(rows);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('Chat error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 // ── POST /api/chats — Neuen Chat anlegen ─────────────────────
@@ -63,7 +63,7 @@ router.post('/', auth, async (req, res) => {
       }
     }
     res.status(201).json({ ok: true, id: chatId });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('Chat error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 // ── GET /api/chats/:id — Chat mit Nachrichten ─────────────────
@@ -100,7 +100,7 @@ router.get('/:id', auth, async (req, res) => {
        JOIN users u ON u.id = cp.user_id WHERE cp.chat_id=?`, [chatId]
     );
     res.json({ ...room, messages, participants });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('Chat error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 // ── POST /api/chats/:id/messages — Nachricht senden ──────────
@@ -126,7 +126,7 @@ router.post('/:id/messages', auth, async (req, res) => {
       [chatId, req.user.id, text.trim()]
     );
     res.status(201).json({ ok: true, id: r.insertId });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('Chat error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 // ── POST /api/chats/:id/invite — Nutzer einladen ─────────────
@@ -151,7 +151,7 @@ router.post('/:id/invite', auth, async (req, res) => {
       [chatId, user_id]
     );
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('Chat error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 // ── PATCH /api/chats/:id/close — Chat schließen ──────────────
@@ -164,7 +164,7 @@ router.patch('/:id/close', auth, async (req, res) => {
       return res.status(403).json({ error: 'Nur Ersteller oder Admin kann schließen' });
     await db.query('UPDATE chat_rooms SET is_closed=1 WHERE id=?', [chatId]);
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('Chat error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 module.exports = router;

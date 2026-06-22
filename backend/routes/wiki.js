@@ -37,7 +37,7 @@ router.get('/files', auth, async (req, res) => {
        ORDER BY f.category, f.created_at DESC`
     );
     res.json(files);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('Wiki error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 // POST /api/wiki/files (admin)
@@ -59,7 +59,7 @@ router.post('/files', auth, adminOnly, (req, res, next) => {
     );
     await log(req.user.id, 'wiki_upload', 'wiki', r.insertId, { name, category }, req.ip);
     res.status(201).json({ ok: true, id: r.insertId });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('Wiki error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 // DELETE /api/wiki/files/:id (admin)
@@ -72,7 +72,7 @@ router.delete('/files/:id', auth, adminOnly, async (req, res) => {
     await db.query('DELETE FROM wiki_files WHERE id=?', [req.params.id]);
     await log(req.user.id, 'wiki_delete', 'wiki', req.params.id, { name: file.name }, req.ip);
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('Wiki error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 // GET /api/wiki/template
@@ -80,7 +80,7 @@ router.get('/template', auth, async (req, res) => {
   try {
     const [[tmpl]] = await db.query('SELECT * FROM email_template WHERE id=1');
     res.json(tmpl || { subject: '', body: '' });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('Wiki error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 // PUT /api/wiki/template (admin)
@@ -94,7 +94,7 @@ router.put('/template', auth, adminOnly, async (req, res) => {
     );
     await log(req.user.id, 'wiki_template_update', 'wiki', 1, {}, req.ip);
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('Wiki error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 // GET /api/wiki/files/:filename — authenticated file delivery

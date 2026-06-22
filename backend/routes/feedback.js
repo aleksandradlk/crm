@@ -23,7 +23,7 @@ router.get('/', auth, async (req, res) => {
     }
     const [rows] = await db.query(q);
     res.json(rows);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('Feedback error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 // POST /api/feedback — neuen Eintrag erstellen (alle)
@@ -38,7 +38,7 @@ router.post('/', auth, async (req, res) => {
     );
     await log(req.user.id, 'feedback_create', 'feedback', r.insertId, { title }, req.ip);
     res.status(201).json({ ok: true, id: r.insertId });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('Feedback error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 // PATCH /api/feedback/:id — Tag + interne Notiz (Admin)
@@ -58,7 +58,7 @@ router.patch('/:id', auth, adminOnly, async (req, res) => {
     await db.query(`UPDATE feedback SET ${updates.join(',')} WHERE id=?`, params);
     await log(req.user.id, 'feedback_update', 'feedback', id, { tag, admin_note }, req.ip);
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('Feedback error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 // DELETE /api/feedback/:id (Admin oder eigener Eintrag)
@@ -71,7 +71,7 @@ router.delete('/:id', auth, async (req, res) => {
       return res.status(403).json({ error: 'Kein Zugriff' });
     await db.query('DELETE FROM feedback WHERE id=?', [id]);
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('Feedback error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 module.exports = router;

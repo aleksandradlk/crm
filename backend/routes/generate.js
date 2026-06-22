@@ -100,8 +100,8 @@ Antworte NUR mit diesem JSON-Array:
 
     res.json({ ok: true, leads });
   } catch (err) {
-    console.error('Generate error:', err.message);
-    res.status(500).json({ error: err.message });
+    console.error('Generate error:', err);
+    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
   }
 });
 

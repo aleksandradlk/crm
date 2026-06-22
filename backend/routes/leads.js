@@ -68,8 +68,8 @@ router.post('/', auth, async (req, res) => {
     await log(req.user.id, 'lead_create_manual', 'lead', r.insertId, { company }, req.ip);
     res.status(201).json({ ok: true, id: r.insertId });
   } catch(e) {
-    console.error('Lead create error:', e.message);
-    res.status(500).json({ error: e.message });
+    console.error('Lead create error:', e);
+    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
   }
 });
 
@@ -100,8 +100,8 @@ router.post('/bulk', auth, adminOnly, async (req, res) => {
       { count: inserted.length, assigned_to }, req.ip);
     res.status(201).json({ ok: true, ids: inserted });
   } catch(e) {
-    console.error('Bulk insert error:', e.message);
-    res.status(500).json({ error: e.message });
+    console.error('Bulk insert error:', e);
+    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
   }
 });
 
@@ -115,7 +115,7 @@ router.get('/reminders', auth, async (req, res) => {
       [req.user.id]
     );
     res.json(rows);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('Reminders error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 // ── GET /api/leads/:id ──────────────────────────────────────
@@ -218,8 +218,8 @@ router.delete('/:id', auth, async (req, res) => {
     await log(req.user.id, 'lead_delete', 'lead', id, null, req.ip);
     res.json({ ok: true });
   } catch(e) {
-    console.error('Lead delete error:', e.message);
-    res.status(500).json({ error: e.message });
+    console.error('Lead delete error:', e);
+    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
   }
 });
 
@@ -255,7 +255,7 @@ router.patch('/:id/comments/:cid', auth, async (req, res) => {
     await db.query('UPDATE comments SET text=?, edited_at=NOW() WHERE id=?', [text.trim(), cid]);
     await log(req.user.id, 'comment_edit', 'lead', parseInt(req.params.id), { cid }, req.ip);
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('Comment edit error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 // ── DELETE /api/leads/:id/comments/:cid — Kommentar löschen ──
@@ -269,7 +269,7 @@ router.delete('/:id/comments/:cid', auth, async (req, res) => {
     await db.query('DELETE FROM comments WHERE id=?', [cid]);
     await log(req.user.id, 'comment_delete', 'lead', parseInt(req.params.id), { cid }, req.ip);
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('Comment delete error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 // ── POST /api/leads/:id/reminders ───────────────────────────
@@ -307,13 +307,19 @@ router.patch('/:id/assign', auth, async (req, res) => {
     const [[lead]] = await db.query('SELECT id, assigned_to FROM leads WHERE id=?', [id]);
     if (!lead) return res.status(404).json({ error: 'Nicht gefunden' });
 
-    if (req.user.role !== 'admin' && lead.assigned_to !== null)
-      return res.status(403).json({ error: 'Lead ist bereits zugewiesen' });
-
-    await db.query('UPDATE leads SET assigned_to=? WHERE id=?', [req.user.id, id]);
+    if (req.user.role !== 'admin') {
+      const [result] = await db.query(
+        'UPDATE leads SET assigned_to=? WHERE id=? AND assigned_to IS NULL',
+        [req.user.id, id]
+      );
+      if (result.affectedRows === 0)
+        return res.status(409).json({ error: 'Dieser Lead wurde bereits übernommen.' });
+    } else {
+      await db.query('UPDATE leads SET assigned_to=? WHERE id=?', [req.user.id, id]);
+    }
     await log(req.user.id, 'lead_assign', 'lead', id, { assigned_to: req.user.id }, req.ip);
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('Lead assign error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 // ── POST /api/leads/:id/email — E-Mail an Lead senden ────────
@@ -338,8 +344,8 @@ router.post('/:id/email', auth, async (req, res) => {
     await log(req.user.id, 'lead_email_sent', 'lead', id, { to, subject }, req.ip);
     res.json({ ok: true });
   } catch(e) {
-    console.error('Email send error:', e.message);
-    res.status(500).json({ error: 'E-Mail konnte nicht gesendet werden: ' + e.message });
+    console.error('Email send error:', e);
+    res.status(500).json({ error: 'E-Mail konnte nicht gesendet werden.' });
   }
 });
 
@@ -363,8 +369,8 @@ router.post('/:id/calls/start', auth, async (req, res) => {
     await log(req.user.id, 'call_started', 'lead', leadId, { phone: lead.phone }, req.ip);
     res.status(201).json({ ok: true, id: r.insertId });
   } catch(e) {
-    console.error('call start error:', e.message);
-    res.status(500).json({ error: e.message });
+    console.error('call start error:', e);
+    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
   }
 });
 

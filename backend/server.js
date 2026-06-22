@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express     = require('express');
 const cors        = require('cors');
+const helmet      = require('helmet');
+const compression = require('compression');
 const rateLimit   = require('express-rate-limit');
 const path        = require('path');
 
@@ -19,6 +21,8 @@ const app  = express();
 const PORT = process.env.PORT || 3000;
 
 // ── Middleware ────────────────────────────────────────────────
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(compression());
 app.use(cors({
   origin: process.env.BASE_URL || '*',
   methods: ['GET','POST','PATCH','DELETE','PUT','OPTIONS'],

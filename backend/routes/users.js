@@ -176,8 +176,8 @@ router.delete('/:id', auth, adminOnly, async (req, res) => {
     await log(req.user.id, 'user_delete', 'user', id, null, req.ip);
     res.json({ ok: true });
   } catch (e) {
-    console.error('User delete error:', e.message);
-    res.status(500).json({ error: 'Löschen fehlgeschlagen: ' + e.message });
+    console.error('User delete error:', e);
+    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
   }
 });
 

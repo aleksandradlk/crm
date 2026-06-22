@@ -41,8 +41,8 @@ router.patch('/:id', auth, async (req, res) => {
     await db.query(`UPDATE call_logs SET ${updates.join(',')} WHERE id=?`, params);
     res.json({ ok: true });
   } catch(e) {
-    console.error('call update error:', e.message);
-    res.status(500).json({ error: e.message });
+    console.error('call update error:', e);
+    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
   }
 });
 
@@ -66,7 +66,7 @@ router.get('/lead/:leadId', auth, async (req, res) => {
       [leadId]
     );
     res.json(rows);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('Call history error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 module.exports = router;
