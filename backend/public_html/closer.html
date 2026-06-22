@@ -332,13 +332,19 @@
         <div style="width:36px;height:36px;border-radius:10px;background:rgba(27,115,205,0.12);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:16px"><i class="fas fa-envelope"></i></div>
         <div>
           <div style="font-size:16px;font-weight:700;color:var(--text)">E-Mail senden</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:1px">Vorlage aus Wiki wird automatisch geladen</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:1px">Vorlage wählen oder manuell bearbeiten</div>
         </div>
       </div>
       <button onclick="closeEmailModal()" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:13px"><i class="fas fa-times"></i></button>
     </div>
     <div style="padding:20px 28px 24px;display:flex;flex-direction:column;gap:14px">
       <input type="hidden" id="emailLeadId">
+      <div class="form-group" style="margin:0">
+        <label>Vorlage wählen <span style="font-size:11px;color:var(--text3);font-weight:400">— optional</span></label>
+        <select id="clEmailTemplateSelect" class="form-control" onchange="applyCloserEmailTemplate()">
+          <option value="">— Ohne Vorlage —</option>
+        </select>
+      </div>
       <div class="form-group" style="margin:0"><label>An (E-Mail-Adresse)</label><input type="email" id="emailTo" class="form-control"></div>
       <div class="form-group" style="margin:0"><label>Betreff</label><input type="text" id="emailSubject" class="form-control"></div>
       <div class="form-group" style="margin:0"><label>Nachricht <span style="font-size:11px;color:var(--text3);font-weight:400">— frei bearbeitbar</span></label><div id="emailBody" contenteditable="true" class="form-control" style="font-size:13px;line-height:1.65;min-height:200px;overflow-y:auto;outline:none"></div></div>
@@ -1115,20 +1121,56 @@ function bodyToHtml(text) {
   return text.split('\n').map(l => `<div>${escHtml(l) || '<br>'}</div>`).join('');
 }
 
+function replacePlaceholders(text, lead) {
+  if (!text) return text;
+  const r = {
+    '{{kunde}}':  lead.ceo      || '',
+    '{{firma}}':  lead.company  || '',
+    '{{closer}}': ME?.full_name || '',
+    '{{telefon}}':lead.phone    || '',
+    '{{email}}':  lead.email    || '',
+    '{company}':  lead.company  || '',
+  };
+  Object.entries(r).forEach(([k, v]) => { text = text.split(k).join(v); });
+  return text;
+}
+
+let _clEmailTemplates = [];
+
+async function loadCloserEmailTemplates() {
+  try {
+    _clEmailTemplates = await api('GET', '/email-templates');
+    const sel = document.getElementById('clEmailTemplateSelect');
+    if (!sel) return;
+    while (sel.options.length > 1) sel.remove(1);
+    _clEmailTemplates.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.id;
+      opt.textContent = t.name + (t.category ? ' (' + t.category + ')' : '');
+      sel.appendChild(opt);
+    });
+  } catch(e) { console.error('Email-Vorlagen laden:', e); }
+}
+
+function applyCloserEmailTemplate() {
+  const id   = parseInt(document.getElementById('clEmailTemplateSelect')?.value);
+  if (!id || !_panelLead) return;
+  const tmpl = _clEmailTemplates.find(t => t.id === id);
+  if (!tmpl) return;
+  document.getElementById('emailSubject').value  = replacePlaceholders(tmpl.subject, _panelLead);
+  document.getElementById('emailBody').innerHTML = bodyToHtml(replacePlaceholders(tmpl.body, _panelLead));
+}
+
 async function openEmailModal() {
   const l = _panelLead;
   if (!l) return;
-  document.getElementById('emailLeadId').value = l.id;
-  document.getElementById('emailTo').value = l.email || '';
-  const company = l.company || '';
-  try {
-    const tmpl = await api('GET', '/wiki/template');
-    document.getElementById('emailSubject').value     = (tmpl.subject||'').replace(/{company}/g, company);
-    document.getElementById('emailBody').innerHTML    = bodyToHtml((tmpl.body||'').replace(/{company}/g, company));
-  } catch {
-    document.getElementById('emailSubject').value = '';
-    document.getElementById('emailBody').innerHTML = '';
-  }
+  document.getElementById('emailLeadId').value   = l.id;
+  document.getElementById('emailTo').value       = l.email || '';
+  document.getElementById('emailSubject').value  = '';
+  document.getElementById('emailBody').innerHTML = '';
+  const sel = document.getElementById('clEmailTemplateSelect');
+  if (sel) sel.value = '';
+  if (!_clEmailTemplates.length) await loadCloserEmailTemplates();
   document.getElementById('emailModal').classList.add('open');
 }
 

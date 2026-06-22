@@ -332,19 +332,13 @@
     <div id="tab-wiki" class="tab-panel">
       <h1 style="font-size:20px;font-weight:700;margin-bottom:20px">Wissensdatenbank</h1>
 
-      <!-- E-Mail Vorlage -->
-      <div class="card" style="margin-bottom:20px">
-        <div class="card-header"><div class="card-title"><i class="fas fa-envelope" style="color:var(--accent)"></i> E-Mail Vorlage</div></div>
-        <div class="card-body" style="padding:16px">
-          <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Platzhalter: <code style="background:var(--bg3);padding:2px 6px;border-radius:4px">{company}</code> wird automatisch durch den Firmennamen ersetzt.</p>
-          <div class="form-group"><label>Betreff</label><input type="text" id="wiki-tmpl-subject" class="form-control" placeholder="z.B. Ihre Online-Präsenz — {company}"></div>
-          <div class="form-group">
-            <label>Nachricht <span style="font-size:11px;color:var(--text3);font-weight:400">— Text, Bilder per Drag & Drop oder Strg+V einfügen</span></label>
-            <div id="wiki-tmpl-body" contenteditable="true" class="form-control" style="min-height:220px;font-size:13px;line-height:1.6;overflow-y:auto;outline:none" data-placeholder="Vorlage hier eintragen..."></div>
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="saveTemplate()"><i class="fas fa-save"></i> Vorlage speichern</button>
-        </div>
+      <!-- E-Mail Vorlagen -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-size:16px;font-weight:700"><i class="fas fa-envelope" style="color:var(--accent);margin-right:8px"></i>E-Mail Vorlagen</div>
+        <button class="btn btn-primary btn-sm" onclick="openTemplateMgmtModal()"><i class="fas fa-plus"></i> Neue Vorlage</button>
       </div>
+      <p style="font-size:12px;color:var(--text3);margin-bottom:14px">Platzhalter: <code style="background:var(--bg3);padding:1px 5px;border-radius:4px">{{kunde}}</code> <code style="background:var(--bg3);padding:1px 5px;border-radius:4px">{{firma}}</code> <code style="background:var(--bg3);padding:1px 5px;border-radius:4px">{{closer}}</code> <code style="background:var(--bg3);padding:1px 5px;border-radius:4px">{{telefon}}</code> <code style="background:var(--bg3);padding:1px 5px;border-radius:4px">{{email}}</code></p>
+      <div id="adminTemplateList" style="margin-bottom:24px"></div>
 
       <!-- Datei hochladen -->
       <div class="card" style="margin-bottom:20px">
@@ -452,13 +446,19 @@
         <div style="width:36px;height:36px;border-radius:10px;background:rgba(27,115,205,0.12);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:16px"><i class="fas fa-envelope"></i></div>
         <div>
           <div style="font-size:16px;font-weight:700;color:var(--text)">E-Mail senden</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:1px">Vorlage aus Wiki wird automatisch geladen</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:1px">Vorlage wählen oder manuell bearbeiten</div>
         </div>
       </div>
       <button onclick="closeEmailModal()" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:13px"><i class="fas fa-times"></i></button>
     </div>
     <div style="padding:20px 28px 24px;display:flex;flex-direction:column;gap:14px">
       <input type="hidden" id="emailLeadId">
+      <div class="form-group" style="margin:0">
+        <label>Vorlage wählen <span style="font-size:11px;color:var(--text3);font-weight:400">— optional, überschreibt Betreff &amp; Text</span></label>
+        <select id="emailTemplateSelect" class="form-control" onchange="applyAdminEmailTemplate()">
+          <option value="">— Ohne Vorlage —</option>
+        </select>
+      </div>
       <div class="form-group" style="margin:0"><label>An (E-Mail-Adresse)</label><input type="email" id="emailTo" class="form-control"></div>
       <div class="form-group" style="margin:0"><label>Betreff</label><input type="text" id="emailSubject" class="form-control"></div>
       <div class="form-group" style="margin:0"><label>Nachricht <span style="font-size:11px;color:var(--text3);font-weight:400">— frei bearbeitbar</span></label><div id="emailBody" contenteditable="true" class="form-control" style="font-size:13px;line-height:1.65;min-height:200px;overflow-y:auto;outline:none"></div></div>
@@ -466,6 +466,43 @@
         <button class="btn btn-ghost btn-sm" onclick="closeEmailModal()">Abbrechen</button>
         <button class="btn btn-primary btn-sm" onclick="sendEmail()"><i class="fas fa-paper-plane"></i> Senden</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- E-MAIL VORLAGE VERWALTUNGS-MODAL -->
+<div class="modal-overlay" id="templateMgmtModal" onclick="if(event.target===this)closeTemplateMgmtModal()">
+  <div class="modal" style="max-width:580px">
+    <h2 id="tmplMgmtTitle"><i class="fas fa-envelope" style="color:var(--accent);margin-right:8px"></i>Vorlage erstellen</h2>
+    <input type="hidden" id="tmplMgmtId">
+    <div class="form-group">
+      <label>Name <span style="color:var(--red)">*</span></label>
+      <input type="text" id="tmpl-name" class="form-control" placeholder="z.B. Nachfassen nach Gespräch">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group" style="margin:0">
+        <label>Kategorie <span style="font-size:11px;color:var(--text3)">(optional)</span></label>
+        <input type="text" id="tmpl-category" class="form-control" placeholder="z.B. Nachfassen">
+      </div>
+      <div class="form-group" style="margin:0;display:flex;align-items:flex-end;padding-bottom:1px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;font-weight:500">
+          <input type="checkbox" id="tmpl-active" checked style="width:15px;height:15px"> Aktiv
+        </label>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Betreff <span style="color:var(--red)">*</span></label>
+      <input type="text" id="tmpl-subject" class="form-control" placeholder="z.B. Weitere Informationen zu {{firma}}">
+    </div>
+    <div class="form-group" style="margin-bottom:6px">
+      <label>Text <span style="color:var(--red)">*</span></label>
+      <textarea id="tmpl-body" class="form-control" rows="8" style="font-size:13px;line-height:1.6;resize:vertical" placeholder="Hallo {{kunde}},&#10;&#10;...&#10;&#10;Viele Grüße&#10;{{closer}}"></textarea>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:14px">Platzhalter: <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">{{kunde}}</code> <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">{{firma}}</code> <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">{{closer}}</code> <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">{{telefon}}</code> <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">{{email}}</code></div>
+    <div id="tmplMgmtErr" style="color:var(--red);font-size:12px;min-height:16px;margin-bottom:8px"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="saveEmailTemplate()"><i class="fas fa-save"></i> Speichern</button>
+      <button class="btn btn-ghost" onclick="closeTemplateMgmtModal()">Abbrechen</button>
     </div>
   </div>
 </div>
@@ -562,7 +599,7 @@ function showTab(name) {
   if (name === 'myLeads')  renderMyLeads();
   if (name === 'users')    { loadUsers(); loadAppSettings(); }
   if (name === 'tracking') loadTracking();
-  if (name === 'wiki')     loadWiki();
+  if (name === 'wiki')     { loadWiki(); loadEmailTemplatesForAdmin(); }
   if (name === 'chat')     loadChats();
   if (name === 'feedback') loadFeedback();
   if (name === 'archive')  loadArchive();
@@ -1644,16 +1681,14 @@ async function openEmailModal() {
   const l = _panelLead;
   if (!l) return;
   document.getElementById('emailLeadId').value = l.id;
-  document.getElementById('emailTo').value = l.email || '';
-  const company = l.company || '';
-  try {
-    const tmpl = await api('GET', '/wiki/template');
-    document.getElementById('emailSubject').value      = (tmpl.subject||'').replace(/{company}/g, company);
-    document.getElementById('emailBody').innerHTML     = bodyToHtml((tmpl.body||'').replace(/{company}/g, company));
-  } catch {
-    document.getElementById('emailSubject').value = '';
-    document.getElementById('emailBody').innerHTML = '';
-  }
+  document.getElementById('emailTo').value     = l.email || '';
+  document.getElementById('emailSubject').value = '';
+  document.getElementById('emailBody').innerHTML = '';
+  // Vorlagen laden falls noch nicht geladen
+  if (!_emailTemplates.length) await loadEmailTemplatesForAdmin();
+  else populateAdminTemplateDropdown();
+  const sel = document.getElementById('emailTemplateSelect');
+  if (sel) sel.value = '';
   document.getElementById('adminEmailModal').classList.add('open');
 }
 function closeEmailModal() { document.getElementById('adminEmailModal').classList.remove('open'); }
@@ -1667,6 +1702,137 @@ async function sendEmail() {
     await api('POST', `/leads/${id}/email`, { to, subject, body });
     showToast('E-Mail gesendet ✓');
     closeEmailModal();
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+// ── E-MAIL VORLAGEN (Admin-Verwaltung) ────────────────────────
+let _emailTemplates = [];
+
+function replacePlaceholders(text, lead) {
+  if (!text) return text;
+  const r = {
+    '{{kunde}}':  lead.ceo      || '',
+    '{{firma}}':  lead.company  || '',
+    '{{closer}}': ME?.full_name || '',
+    '{{telefon}}':lead.phone    || '',
+    '{{email}}':  lead.email    || '',
+    '{company}':  lead.company  || '',
+  };
+  Object.entries(r).forEach(([k, v]) => { text = text.split(k).join(v); });
+  return text;
+}
+
+async function loadEmailTemplatesForAdmin() {
+  try {
+    _emailTemplates = await api('GET', '/email-templates');
+    renderAdminTemplateList();
+    populateAdminTemplateDropdown();
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+function renderAdminTemplateList() {
+  const el = document.getElementById('adminTemplateList');
+  if (!el) return;
+  if (!_emailTemplates.length) {
+    el.innerHTML = '<div style="color:var(--text3);padding:20px;text-align:center">Noch keine Vorlagen</div>';
+    return;
+  }
+  el.innerHTML = _emailTemplates.map(t => `
+    <div class="card" style="padding:12px 16px;margin-bottom:8px;opacity:${t.is_active?1:0.55}">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13px">${escHtml(t.name)}
+            ${t.category ? `<span style="font-size:10px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:1px 6px;margin-left:6px;color:var(--text3)">${escHtml(t.category)}</span>` : ''}
+            ${t.is_active ? '' : '<span style="font-size:10px;color:var(--text3);margin-left:6px">[inaktiv]</span>'}
+          </div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">${escHtml(t.subject)}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="openTemplateMgmtModal(${t.id})"><i class="fas fa-edit"></i></button>
+          <button class="btn btn-ghost btn-sm" style="font-size:11px" title="${t.is_active?'Deaktivieren':'Aktivieren'}" onclick="toggleTemplateActive(${t.id},${t.is_active?0:1})">
+            <i class="fas fa-${t.is_active?'eye-slash':'eye'}"></i>
+          </button>
+          <button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--red)" onclick="deleteEmailTemplate(${t.id},'${escHtml((t.name||'').replace(/'/g,"\\'"))}')"><i class="fas fa-trash"></i></button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function populateAdminTemplateDropdown() {
+  const sel = document.getElementById('emailTemplateSelect');
+  if (!sel) return;
+  const cur = sel.value;
+  while (sel.options.length > 1) sel.remove(1);
+  _emailTemplates.filter(t => t.is_active).forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t.id;
+    opt.textContent = t.name + (t.category ? ' (' + t.category + ')' : '');
+    sel.appendChild(opt);
+  });
+  if (cur) sel.value = cur;
+}
+
+function applyAdminEmailTemplate() {
+  const id = parseInt(document.getElementById('emailTemplateSelect')?.value);
+  if (!id) return;
+  const tmpl = _emailTemplates.find(t => t.id === id);
+  if (!tmpl || !_panelLead) return;
+  document.getElementById('emailSubject').value   = replacePlaceholders(tmpl.subject, _panelLead);
+  document.getElementById('emailBody').innerHTML  = bodyToHtml(replacePlaceholders(tmpl.body, _panelLead));
+}
+
+function openTemplateMgmtModal(id) {
+  const tmpl = id ? _emailTemplates.find(t => t.id === id) : null;
+  document.getElementById('tmplMgmtId').value       = id || '';
+  document.getElementById('tmplMgmtTitle').innerHTML = `<i class="fas fa-envelope" style="color:var(--accent);margin-right:8px"></i>${tmpl ? 'Vorlage bearbeiten' : 'Vorlage erstellen'}`;
+  document.getElementById('tmpl-name').value         = tmpl?.name     || '';
+  document.getElementById('tmpl-category').value     = tmpl?.category || '';
+  document.getElementById('tmpl-subject').value      = tmpl?.subject  || '';
+  document.getElementById('tmpl-body').value         = tmpl?.body     || '';
+  document.getElementById('tmpl-active').checked     = tmpl ? !!tmpl.is_active : true;
+  document.getElementById('tmplMgmtErr').textContent = '';
+  document.getElementById('templateMgmtModal').classList.add('open');
+  setTimeout(() => document.getElementById('tmpl-name').focus(), 50);
+}
+function closeTemplateMgmtModal() { document.getElementById('templateMgmtModal').classList.remove('open'); }
+
+async function saveEmailTemplate() {
+  const id      = parseInt(document.getElementById('tmplMgmtId').value) || null;
+  const name    = document.getElementById('tmpl-name').value.trim();
+  const subject = document.getElementById('tmpl-subject').value.trim();
+  const body    = document.getElementById('tmpl-body').value.trim();
+  const category= document.getElementById('tmpl-category').value.trim() || null;
+  const active  = document.getElementById('tmpl-active').checked ? 1 : 0;
+  const errEl   = document.getElementById('tmplMgmtErr');
+  if (!name || !subject || !body) { errEl.textContent = 'Name, Betreff und Text sind erforderlich'; return; }
+  try {
+    if (id) {
+      await api('PATCH', `/email-templates/${id}`, { name, subject, body, category, is_active: active });
+    } else {
+      await api('POST', '/email-templates', { name, subject, body, category });
+    }
+    showToast(id ? 'Vorlage aktualisiert ✓' : 'Vorlage erstellt ✓');
+    closeTemplateMgmtModal();
+    loadEmailTemplatesForAdmin();
+  } catch(e) { errEl.textContent = e.message; }
+}
+
+async function toggleTemplateActive(id, newVal) {
+  try {
+    await api('PATCH', `/email-templates/${id}`, { is_active: newVal });
+    const t = _emailTemplates.find(x => x.id === id);
+    if (t) t.is_active = newVal;
+    renderAdminTemplateList();
+    populateAdminTemplateDropdown();
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+async function deleteEmailTemplate(id, name) {
+  if (!confirm(`Vorlage "${name}" löschen?`)) return;
+  try {
+    await api('DELETE', `/email-templates/${id}`);
+    showToast('Vorlage gelöscht');
+    loadEmailTemplatesForAdmin();
   } catch(e) { showToast(e.message, 'err'); }
 }
 

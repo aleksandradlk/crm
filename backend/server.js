@@ -14,7 +14,8 @@ const wikiRoutes     = require('./routes/wiki');
 const chatRoutes     = require('./routes/chat');
 const callRoutes     = require('./routes/calls');
 const feedbackRoutes  = require('./routes/feedback');
-const settingsRoutes  = require('./routes/settings');
+const settingsRoutes       = require('./routes/settings');
+const emailTemplateRoutes  = require('./routes/emailtemplates');
 const { startReminderCron } = require('./cron/reminders');
 const cron           = require('node-cron');
 
@@ -69,7 +70,8 @@ app.use('/api/wiki',     wikiRoutes);
 app.use('/api/chats',    chatRoutes);
 app.use('/api/calls',    callRoutes);
 app.use('/api/feedback', feedbackRoutes);
-app.use('/api/settings', settingsRoutes);
+app.use('/api/settings',        settingsRoutes);
+app.use('/api/email-templates', emailTemplateRoutes);
 
 // ── SPA Fallback ──────────────────────────────────────────────
 app.get('*', (req, res) => {
@@ -176,6 +178,48 @@ db.query('CREATE INDEX idx_rem_user_sent_time ON reminders (user_id, sent, remin
 db.query('CREATE INDEX idx_activity_created_at ON activity_log (created_at)').catch(() => {});
 db.query('CREATE INDEX idx_leads_assigned_status ON leads (assigned_to, status)').catch(() => {});
 db.query('CREATE INDEX idx_leads_status_created  ON leads (status, created_at)').catch(() => {});
+
+// ── E-Mail-Vorlagen-Tabelle + Seed ───────────────────────────
+db.query(`CREATE TABLE IF NOT EXISTS email_templates (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  name       VARCHAR(200) NOT NULL,
+  subject    VARCHAR(500) NOT NULL,
+  body       TEXT NOT NULL,
+  category   VARCHAR(100) NULL,
+  is_active  TINYINT(1)  NOT NULL DEFAULT 1,
+  created_by INT NULL,
+  updated_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+)`).then(() => {
+  db.query('SELECT COUNT(*) AS cnt FROM email_templates').then(([[{ cnt }]]) => {
+    if (cnt > 0) return;
+    const seeds = [
+      ['Allgemeine Informationen', 'Weitere Informationen zu {{firma}}',
+       'Hallo {{kunde}},\n\nwie besprochen sende ich Ihnen hier die wichtigsten Informationen.\n\nWenn Sie Fragen haben oder etwas unklar ist, können wir das gerne kurz telefonisch besprechen.\n\nViele Grüße\n{{closer}}',
+       'Allgemein'],
+      ['Interesse vorhanden', 'Nächster Schritt für {{firma}}',
+       'Hallo {{kunde}},\n\nvielen Dank für das Gespräch. Da grundsätzlich Interesse besteht, würde ich als nächsten Schritt gerne kurz abstimmen, welche Lösung für {{firma}} am sinnvollsten ist.\n\nWann passt es Ihnen für eine kurze Rücksprache?\n\nViele Grüße\n{{closer}}',
+       'Vertrieb'],
+      ['Nachfassen', 'Kurze Rückfrage zu unserem Gespräch',
+       'Hallo {{kunde}},\n\nich wollte kurz nachfragen, ob Sie sich die Informationen bereits anschauen konnten.\n\nGerne können wir die offenen Punkte kurz telefonisch klären.\n\nViele Grüße\n{{closer}}',
+       'Nachfassen'],
+      ['Termin bestätigen', 'Bestätigung unseres Termins',
+       'Hallo {{kunde}},\n\nhiermit bestätige ich unseren Termin.\n\nFalls sich bei Ihnen etwas ändert, geben Sie mir bitte kurz Bescheid.\n\nViele Grüße\n{{closer}}',
+       'Termin'],
+      ['Mehr Infos senden', 'Weitere Details für {{firma}}',
+       'Hallo {{kunde}},\n\ngerne sende ich Ihnen weitere Informationen zu den besprochenen Punkten.\n\nWenn Sie möchten, können wir danach kurz telefonieren und prüfen, was für {{firma}} konkret sinnvoll ist.\n\nViele Grüße\n{{closer}}',
+       'Info'],
+      ['Keine Antwort', 'Kurze Erinnerung',
+       'Hallo {{kunde}},\n\nich wollte mich kurz in Erinnerung bringen, da ich bisher keine Rückmeldung erhalten habe.\n\nBesteht das Thema für {{firma}} aktuell noch?\n\nViele Grüße\n{{closer}}',
+       'Nachfassen'],
+    ];
+    Promise.all(seeds.map(([name, subject, body, category]) =>
+      db.query('INSERT INTO email_templates (name, subject, body, category) VALUES (?,?,?,?)',
+        [name, subject, body, category])
+    )).catch(() => {});
+  }).catch(() => {});
+}).catch(() => {});
 
 // ── Settings-Tabelle ─────────────────────────────────────────
 db.query(`CREATE TABLE IF NOT EXISTS app_settings (
