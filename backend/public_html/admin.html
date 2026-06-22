@@ -142,21 +142,35 @@
     <div id="tab-myLeads" class="tab-panel">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
         <h1 style="font-size:20px;font-weight:700">Meine Leads</h1>
-        <button class="btn btn-ghost btn-sm" onclick="showTab('myLeads')"><i class="fas fa-sync"></i></button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div class="view-toggle">
+            <button id="myLeadsViewTable" class="active" onclick="setMyLeadsView('table')"><i class="fas fa-table"></i> Tabelle</button>
+            <button id="myLeadsViewPipeline" onclick="setMyLeadsView('pipeline')"><i class="fas fa-columns"></i> Pipeline</button>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="showTab('myLeads')"><i class="fas fa-sync"></i></button>
+        </div>
       </div>
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title"><i class="fas fa-user-check" style="color:var(--accent)"></i> Mir zugewiesene Leads <span class="badge" id="myLeadCount">0</span></div>
+
+      <div id="myLeadsTableView">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><i class="fas fa-user-check" style="color:var(--accent)"></i> Mir zugewiesene Leads <span class="badge" id="myLeadCount">0</span></div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>#</th><th>Unternehmen</th><th>Geschäftsführer</th><th>Kontakt</th>
+                <th>Standort</th><th>Status</th><th>Hinzugefügt</th><th></th>
+              </tr></thead>
+              <tbody id="myLeadsTableBody"></tbody>
+            </table>
+          </div>
         </div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr>
-              <th>#</th><th>Unternehmen</th><th>Geschäftsführer</th><th>Kontakt</th>
-              <th>Standort</th><th>Status</th><th>Hinzugefügt</th><th></th>
-            </tr></thead>
-            <tbody id="myLeadsTableBody"></tbody>
-          </table>
-        </div>
+      </div>
+
+      <div id="myLeadsPipelineView" style="display:none">
+        <div id="myLeadsFunnel"></div>
+        <div id="myLeadsPipelineCols" style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-top:16px"></div>
       </div>
     </div>
 
@@ -517,6 +531,17 @@ function showTab(name) {
 }
 
 // ── MEINE LEADS ───────────────────────────────────────────────
+let myLeadsView = 'table';
+
+function setMyLeadsView(v) {
+  myLeadsView = v;
+  document.getElementById('myLeadsViewTable').classList.toggle('active', v === 'table');
+  document.getElementById('myLeadsViewPipeline').classList.toggle('active', v === 'pipeline');
+  document.getElementById('myLeadsTableView').style.display    = v === 'table'    ? '' : 'none';
+  document.getElementById('myLeadsPipelineView').style.display = v === 'pipeline' ? '' : 'none';
+  renderMyLeads();
+}
+
 function renderMyLeads() {
   if (!allLeads.length) {
     loadLeads().then(renderMyLeads);
@@ -524,6 +549,12 @@ function renderMyLeads() {
   }
   const mine = allLeads.filter(l => l.assigned_to === ME.id);
   document.getElementById('myLeadCount').textContent = mine.length;
+
+  if (myLeadsView === 'pipeline') {
+    renderMyLeadsPipeline(mine);
+    return;
+  }
+
   const body = document.getElementById('myLeadsTableBody');
   if (!mine.length) {
     body.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text3)"><i class="fas fa-inbox" style="display:block;font-size:30px;margin-bottom:10px;opacity:.3"></i>Keine Leads zugewiesen</td></tr>`;
@@ -540,6 +571,59 @@ function renderMyLeads() {
       <td style="font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace">${fmtDateShort(l.created_at)}</td>
       <td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openLeadPanel(${l.id})"><i class="fas fa-chevron-right"></i></button></td>
     </tr>`).join('');
+}
+
+function renderMyLeadsPipeline(mine) {
+  const STEPS = [
+    { key: 'neu',            label: 'Neu',            color: 'var(--accent)' },
+    { key: 'kontaktiert',    label: 'Kontaktiert',    color: 'var(--accent2)' },
+    { key: 'rueckruf',       label: 'Rückruf',        color: 'var(--amber)' },
+    { key: 'nicht_erreicht', label: 'Nicht erreicht', color: 'var(--text3)' },
+    { key: 'kein_interesse', label: 'Kein Interesse', color: 'var(--red)' },
+    { key: 'kunde',          label: 'Kunde',          color: 'var(--green)' },
+  ];
+  const total = mine.length;
+  const counts = {};
+  mine.forEach(l => { counts[l.status] = (counts[l.status]||0) + 1; });
+
+  // Funnel-Balken
+  const funnelRows = STEPS.map(({ key, label, color }) => {
+    const n = counts[key] || 0;
+    const pct = total > 0 ? Math.round(n / total * 100) : 0;
+    return `<div style="display:grid;grid-template-columns:140px 36px 1fr 44px;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:13px;color:var(--text2)">${label}</span>
+      <span style="font-size:14px;font-weight:700;text-align:right">${n}</span>
+      <div style="background:var(--bg2);border-radius:4px;height:8px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:${color};border-radius:4px;transition:width .3s"></div>
+      </div>
+      <span style="font-size:12px;color:var(--text3);text-align:right">${pct}%</span>
+    </div>`;
+  }).join('');
+  document.getElementById('myLeadsFunnel').innerHTML = `
+    <div class="card" style="padding:14px 18px;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:10px;display:flex;align-items:center;gap:6px">
+        <i class="fas fa-filter" style="color:var(--accent)"></i> Mein Funnel — ${total} Leads
+      </div>${funnelRows}
+    </div>`;
+
+  // Spalten-Kanban
+  document.getElementById('myLeadsPipelineCols').innerHTML = STEPS.map(({ key, label, color }) => {
+    const cards = mine.filter(l => l.status === key);
+    const cardHtml = cards.length
+      ? cards.map(l => `
+        <div class="card" style="padding:10px 12px;margin-bottom:8px;cursor:pointer;border-left:3px solid ${color}" onclick="openLeadPanel(${l.id})">
+          <div style="font-weight:600;font-size:13px;margin-bottom:3px">${escHtml(l.company||'—')}</div>
+          ${l.phone ? `<div style="font-size:11px;color:var(--accent)">${escHtml(l.phone)}</div>` : ''}
+          ${l.location ? `<div style="font-size:11px;color:var(--text3)">${escHtml(l.location)}</div>` : ''}
+        </div>`).join('')
+      : `<div style="color:var(--text3);font-size:12px;text-align:center;padding:16px 0">Keine</div>`;
+    return `<div>
+      <div style="font-size:12px;font-weight:700;color:${color};margin-bottom:8px;display:flex;align-items:center;gap:6px">
+        <span>${label}</span><span class="badge">${cards.length}</span>
+      </div>
+      ${cardHtml}
+    </div>`;
+  }).join('');
 }
 
 // ── STATUS QUICK-CHANGE (Tabellenzeile) ────────────────────────
