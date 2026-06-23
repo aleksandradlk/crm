@@ -80,8 +80,10 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-// ── POST /api/leads/bulk — mehrere Leads auf einmal speichern (Admin) ──
-router.post('/bulk', auth, adminOnly, async (req, res) => {
+// ── POST /api/leads/bulk — mehrere Leads auf einmal speichern (Admin oder can_generate_leads) ──
+router.post('/bulk', auth, async (req, res) => {
+  if (req.user.role !== 'admin' && !req.user.can_generate_leads)
+    return res.status(403).json({ error: 'Keine Berechtigung' });
   const { leads, assigned_to } = req.body;
   if (!Array.isArray(leads) || !leads.length)
     return res.status(400).json({ error: 'Keine Leads übergeben' });
