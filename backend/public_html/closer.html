@@ -196,7 +196,7 @@
         <div style="font-size:13px;color:var(--text2);line-height:1.65;display:flex;flex-direction:column;gap:8px">
           <div><strong>Wissensdatenbank:</strong> Hier findest du alle wichtigen Unterlagen — Preisliste, Angebotsleitfaden und weitere Dokumente.</div>
           <div><strong>E-Mail Vorlagen:</strong> Öffne einen Lead, klicke auf <strong>E-Mail</strong> und wähle eine Vorlage. Platzhalter werden automatisch ersetzt.</div>
-          <div><strong>Fragen? Kein Problem!</strong> Melde dich jederzeit bei Aleksandra Dalak<span id="wikiAdminPhone"></span> — per WhatsApp oder Chat.</div>
+          <div><strong>Fragen? Kein Problem!</strong> Melde dich jederzeit bei Aleksandra Dalak<span id="wikiAdminPhone"></span><span id="wikiAdminEmail"></span> — per WhatsApp oder Chat.</div>
         </div>
       </div>
 
@@ -1527,7 +1527,6 @@ async function openSettingsModal() {
   try {
     const me = await api('GET', '/auth/me');
     document.getElementById('sett-notify-email').checked = !!me.notify_email;
-    document.getElementById('sett-notify-sms').checked   = !!me.notify_sms;
     document.getElementById('sett-phone').value          = me.phone || '';
   } catch {}
   document.getElementById('settingsModal').classList.add('open');
@@ -1539,9 +1538,8 @@ async function saveNotifSettings() {
   try {
     await api('PATCH', `/users/${me.id}/notify`, {
       notify_email: document.getElementById('sett-notify-email').checked ? 1 : 0,
-      notify_sms:   document.getElementById('sett-notify-sms').checked   ? 1 : 0,
+      phone: phone || null,
     });
-    if (phone !== undefined) await api('PATCH', `/users/${me.id}`, { phone: phone || null }).catch(() => {});
     showToast('Einstellungen gespeichert ✓');
     closeSettingsModal();
   } catch(e) { showToast(e.message, 'err'); }
@@ -1816,16 +1814,22 @@ async function saveInviteCl() {
   } catch(e) { showToast(e.message, 'err'); }
 }
 
-// ── Onboarding ────────────────────────────────────────────────
+// ── Onboarding + Admin-Kontakt ────────────────────────────────
 (async () => {
   try {
     const contact = await api('GET', '/users/admin-contact');
-    if (contact?.phone) {
-      const el1 = document.getElementById('onboardingAdminPhone');
-      const el2 = document.getElementById('wikiAdminPhone');
-      if (el1) el1.textContent = ` (${contact.phone})`;
-      if (el2) el2.textContent = ` (${contact.phone})`;
-    }
+    const phone = contact?.phone;
+    const email = contact?.email;
+    const phoneStr = phone ? ` 📱 ${phone}` : '';
+    const emailStr = email ? ` ✉️ ${email}` : '';
+    ['onboardingAdminPhone','wikiAdminPhone'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = phoneStr;
+    });
+    ['onboardingAdminEmail','wikiAdminEmail'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = emailStr;
+    });
   } catch {}
 })();
 
@@ -2073,16 +2077,11 @@ async function clSaveGeneratedLeads() {
 
     <div style="border-top:1px solid var(--border);padding-top:16px;margin-bottom:12px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:12px">Benachrichtigungen (Reminder)</div>
-      <label style="display:flex;align-items:center;gap:10px;margin-bottom:10px;cursor:pointer;font-size:13px">
-        <input type="checkbox" id="sett-notify-email" style="accent-color:var(--accent);width:16px;height:16px">
-        <span>E-Mail Benachrichtigung</span>
-      </label>
       <label style="display:flex;align-items:center;gap:10px;margin-bottom:12px;cursor:pointer;font-size:13px">
-        <input type="checkbox" id="sett-notify-sms" style="accent-color:var(--accent);width:16px;height:16px">
-        <span>SMS Benachrichtigung</span>
+        <input type="checkbox" id="sett-notify-email" style="accent-color:var(--accent);width:16px;height:16px">
+        <span>E-Mail Benachrichtigung (Reminder)</span>
       </label>
-      <div class="form-group" style="margin-bottom:0"><label>Meine Telefonnummer (für SMS)</label><input type="tel" id="sett-phone" class="form-control" placeholder="+49 ..."></div>
-      <div style="font-size:11px;color:var(--text3);margin-top:6px">SMS-Versand benötigt separate Twilio-Konfiguration.</div>
+      <div class="form-group" style="margin-bottom:0"><label>Meine Telefonnummer</label><input type="tel" id="sett-phone" class="form-control" placeholder="+49 ..."></div>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
       <button class="btn btn-ghost btn-sm" onclick="closeSettingsModal()">Abbrechen</button>
@@ -2249,7 +2248,7 @@ document.getElementById('editContactInputCl')?.addEventListener('keydown', funct
         <div style="width:32px;height:32px;border-radius:8px;background:rgba(34,197,94,0.12);display:flex;align-items:center;justify-content:center;color:var(--green);flex-shrink:0"><i class="fab fa-whatsapp"></i></div>
         <div>
           <div style="font-size:13px;font-weight:600;margin-bottom:3px">Fragen? Kein Problem!</div>
-          <div style="font-size:12px;color:var(--text2);line-height:1.5">Falls du Fragen hast oder etwas unklar ist, kannst du jederzeit eine <strong>Rücksprache</strong> über den Chat öffnen oder mir direkt per <strong>WhatsApp</strong> schreiben. Ich helfe dir gerne weiter!<br><span style="color:var(--text3)">— Aleksandra Dalak<span id="onboardingAdminPhone"></span></span></div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.5">Falls du Fragen hast oder etwas unklar ist, kannst du jederzeit eine <strong>Rücksprache</strong> über den Chat öffnen oder mir direkt per <strong>WhatsApp</strong> schreiben. Ich helfe dir gerne weiter!<br><span style="color:var(--text3)">— Aleksandra Dalak<span id="onboardingAdminPhone"></span><span id="onboardingAdminEmail"></span></span></div>
         </div>
       </div>
     </div>

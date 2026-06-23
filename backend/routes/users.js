@@ -9,7 +9,7 @@ const PERM_FIELDS = ['can_edit_contacts','can_archive_leads','can_reassign_leads
 // GET /api/users — alle User (Admin)
 router.get('/', auth, adminOnly, async (req, res) => {
   const [users] = await db.query(
-    `SELECT u.id, u.username, u.full_name, u.email, u.role, u.is_active,
+    `SELECT u.id, u.username, u.full_name, u.email, u.phone, u.role, u.is_active,
             u.last_login, u.created_at,
             u.can_edit_contacts, u.can_archive_leads, u.can_reassign_leads,
             u.can_view_all_leads, u.can_create_users, u.can_generate_leads,
@@ -181,11 +181,13 @@ router.patch('/:id/notify', auth, async (req, res) => {
   const id = parseInt(req.params.id);
   if (req.user.id !== id && req.user.role !== 'admin')
     return res.status(403).json({ error: 'Nicht berechtigt' });
-  const { notify_email, notify_sms } = req.body;
+  const { notify_email, notify_sms, phone, email } = req.body;
   const updates = [];
   const params  = [];
   if (notify_email !== undefined) { updates.push('notify_email=?'); params.push(notify_email ? 1 : 0); }
   if (notify_sms   !== undefined) { updates.push('notify_sms=?');   params.push(notify_sms   ? 1 : 0); }
+  if (phone        !== undefined) { updates.push('phone=?');        params.push(phone || null); }
+  if (email        !== undefined) { updates.push('email=?');        params.push(email || null); }
   if (!updates.length) return res.status(400).json({ error: 'Nichts zu aktualisieren' });
   params.push(id);
   await db.query(`UPDATE users SET ${updates.join(',')} WHERE id=?`, params);
@@ -216,7 +218,7 @@ router.delete('/:id', auth, adminOnly, async (req, res) => {
 router.get('/admin-contact', auth, async (req, res) => {
   try {
     const [[admin]] = await db.query(
-      "SELECT full_name, phone FROM users WHERE role='admin' AND is_active=1 ORDER BY id ASC LIMIT 1"
+      "SELECT full_name, phone, email FROM users WHERE role='admin' AND is_active=1 ORDER BY id ASC LIMIT 1"
     );
     res.json(admin || { full_name: 'Aleksandra Dalak', phone: null });
   } catch(e) { res.status(500).json({ error: 'Fehler' }); }
