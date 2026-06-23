@@ -524,6 +524,33 @@ function unlockBodyScroll() {
   window.scrollTo(0, _bodyLockScrollY);
 }
 
+// Debug-Funktion: in Safari-Konsole `debugMobileSidebar()` aufrufen
+window.debugMobileSidebar = function() {
+  const sb  = document.getElementById('sidebar');
+  const nav = sb ? sb.querySelector('.nav') : null;
+  const usr = document.getElementById('sidebarUser');
+  const sbR = sb  ? sb.getBoundingClientRect()  : {};
+  const usR = usr ? usr.getBoundingClientRect() : {};
+  const vvh = window.visualViewport ? window.visualViewport.height : 'n/a';
+  console.table({
+    'window.innerHeight':        window.innerHeight,
+    'visualViewport.height':     vvh,
+    '--app-vh (CSS var)':        getComputedStyle(document.documentElement).getPropertyValue('--app-vh').trim(),
+    'sidebar height (rect)':     sbR.height,
+    'sidebar bottom (rect)':     sbR.bottom,
+    'nav clientHeight':          nav ? nav.clientHeight : 'n/a',
+    'nav scrollHeight':          nav ? nav.scrollHeight : 'n/a',
+    'nav can scroll':            nav ? (nav.scrollHeight > nav.clientHeight) : 'n/a',
+    'sidebarUser top (rect)':    usR.top,
+    'sidebarUser bottom (rect)': usR.bottom,
+    'body.position':             getComputedStyle(document.body).position,
+    'body.overflow':             getComputedStyle(document.body).overflow,
+    'body.classList':            document.body.className || '(none)',
+  });
+  const ok = typeof vvh === 'number' && usR.bottom <= vvh + 2;
+  console.log(ok ? '✅ sidebarUser ist innerhalb des Viewports' : '❌ sidebarUser liegt AUSSERHALB des Viewports!');
+};
+
 function toggleMobileNav() {
   const isOpen = document.getElementById('sidebar').classList.toggle('mobile-open');
   document.getElementById('mobileNavOverlay').classList.toggle('open');

@@ -66,8 +66,8 @@ a { color: var(--accent); text-decoration: none; }
 .logo-text { font-size: 15px; font-weight: 700; color: var(--dark); letter-spacing: -0.2px; }
 .logo-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
 
-/* Nav: einziger Scrollcontainer in der Sidebar */
-.nav { padding: 8px; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; flex: 1 1 auto; min-height: 0; }
+/* Nav: einziger Scrollcontainer in der Sidebar — spezifisch auf Sidebar beschränkt */
+.sidebar .nav { padding: 8px; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; flex: 1 1 auto; min-height: 0; }
 
 .nav-group-label {
   display: block;
@@ -427,20 +427,23 @@ body.dark .search-bar-kbd { background: var(--bg3); border-color: var(--border2)
   .sidebar {
     position: fixed;
     top: 0; left: 0; width: 260px; z-index: 300;
-    /* Höhe: JS setzt --app-vh via visualViewport, Fallback: 100dvh / 100svh / 100vh */
-    height: var(--app-vh, 100dvh);
-    height: var(--app-vh, 100svh);
-    max-height: var(--app-vh, 100dvh);
+    /* Höhe: ältere Browser → 100vh; moderne → 100dvh; JS → var(--app-vh) */
+    height: 100vh;
+    height: 100dvh;
+    height: var(--app-vh);
     transform: translateX(-100%); transition: transform 0.22s ease; box-shadow: var(--shadow-lg);
-    overflow: hidden; /* overflow nur auf .nav, nicht auf sidebar */
-    /* Safe Area: Status Bar oben berücksichtigen */
+    overflow: hidden; /* nur .sidebar .nav scrollt intern */
+    /* Safe Area oben (Notch / Dynamic Island) */
     padding-top: env(safe-area-inset-top, 0px);
   }
   .sidebar.mobile-open { transform: translateX(0); }
-  /* User-/Logout-Bereich: Safe Area unten (Home Indicator) */
+  /* Nav: Extra-Padding unten, damit letzter Eintrag nicht direkt an User-Bar klebt */
+  .sidebar .nav { padding-bottom: 16px; }
+  /* User-/Logout-Bereich: Safe Area unten (Home Indicator auf iPhone) */
   .sidebar .sidebar-user {
     padding-bottom: max(14px, env(safe-area-inset-bottom, 14px));
     margin-bottom: 0;
+    background: var(--bg3); /* Sicherstellen: nicht transparent hinter Nav-Inhalt */
   }
   .main-content { padding: 14px; gap: 14px; }
 
