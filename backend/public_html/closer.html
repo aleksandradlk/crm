@@ -415,6 +415,26 @@ if (ME?.can_create_users) {
   if (navEl) navEl.style.display = '';
 }
 
+// Berechtigungen vom Server frisch laden (damit Admin-Änderungen ohne Re-Login greifen)
+(async () => {
+  try {
+    const fresh = await api('GET', '/auth/me');
+    if (!fresh) return;
+    Object.assign(ME, fresh);
+    localStorage.setItem('lh_user', JSON.stringify(ME));
+    Object.assign(CAN, {
+      editContacts:  !!fresh.can_edit_contacts,
+      archive:       !!fresh.can_archive_leads,
+      reassign:      !!fresh.can_reassign_leads,
+      viewAll:       !!fresh.can_view_all_leads,
+      createUsers:   !!fresh.can_create_users,
+      generateLeads: !!fresh.can_generate_leads,
+    });
+    const navEl = document.getElementById('navCreateUser');
+    if (navEl) navEl.style.display = fresh.can_create_users ? '' : 'none';
+  } catch {}
+})();
+
 function toggleMobileNav() {
   document.getElementById('sidebar').classList.toggle('mobile-open');
   document.getElementById('mobileNavOverlay').classList.toggle('open');
