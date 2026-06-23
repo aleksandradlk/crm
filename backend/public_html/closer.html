@@ -492,15 +492,47 @@ if (ME?.can_generate_leads) { const n = document.getElementById('navGenerateLead
   } catch {}
 })();
 
+// ── Viewport-Höhe messen (iOS Safari visualViewport) ────────────────
+(function() {
+  let _vpTimer;
+  function updateViewportVars() {
+    const h = (window.visualViewport ? window.visualViewport.height : window.innerHeight) + 'px';
+    document.documentElement.style.setProperty('--app-vh', h);
+  }
+  function debounced() { clearTimeout(_vpTimer); _vpTimer = setTimeout(updateViewportVars, 60); }
+  updateViewportVars();
+  window.addEventListener('resize', debounced);
+  window.addEventListener('orientationchange', debounced);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', debounced);
+    window.visualViewport.addEventListener('scroll', debounced);
+  }
+})();
+
+// ── iOS-robuster Body-Scroll-Lock ────────────────────────────────────
+let _bodyLockScrollY = 0;
+function lockBodyScroll() {
+  if (document.body.classList.contains('body-locked')) return;
+  _bodyLockScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+  document.body.classList.add('body-locked');
+  document.body.style.top = '-' + _bodyLockScrollY + 'px';
+}
+function unlockBodyScroll() {
+  if (!document.body.classList.contains('body-locked')) return;
+  document.body.classList.remove('body-locked');
+  document.body.style.top = '';
+  window.scrollTo(0, _bodyLockScrollY);
+}
+
 function toggleMobileNav() {
   const isOpen = document.getElementById('sidebar').classList.toggle('mobile-open');
   document.getElementById('mobileNavOverlay').classList.toggle('open');
-  document.body.classList.toggle('no-scroll', isOpen);
+  if (isOpen) lockBodyScroll(); else unlockBodyScroll();
 }
 function closeMobileNav() {
   document.getElementById('sidebar').classList.remove('mobile-open');
   document.getElementById('mobileNavOverlay').classList.remove('open');
-  document.body.classList.remove('no-scroll');
+  unlockBodyScroll();
 }
 
 function showSection(name) {
