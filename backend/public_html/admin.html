@@ -352,6 +352,7 @@
               </select>
             </div>
           </div>
+          <div class="form-group" style="margin-bottom:12px"><label>Notiz für Closer <span style="color:var(--text3);font-weight:400">(optional)</span></label><textarea id="wiki-file-note" class="form-control" rows="2" placeholder="z.B. Bitte vor dem ersten Kundengespräch lesen. Preisliste gültig ab 2026." style="resize:vertical;font-size:13px"></textarea></div>
           <div class="form-group" style="margin-bottom:12px"><label>Datei</label><input type="file" id="wiki-file-input" class="form-control" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.docx,.xlsx,.txt" style="padding:6px"></div>
           <button class="btn btn-primary btn-sm" onclick="uploadWikiFile()"><i class="fas fa-upload"></i> Hochladen</button>
         </div>
@@ -1913,6 +1914,8 @@ async function uploadWikiFile() {
   formData.append('file', fileInput.files[0]);
   formData.append('category', category);
   if (name) formData.append('name', name);
+  const note = document.getElementById('wiki-file-note').value.trim();
+  if (note) formData.append('note', note);
   try {
     const res = await fetch('/api/wiki/files', {
       method: 'POST',
@@ -1923,6 +1926,7 @@ async function uploadWikiFile() {
     showToast('Datei hochgeladen ✓');
     fileInput.value = '';
     document.getElementById('wiki-file-name').value = '';
+    document.getElementById('wiki-file-note').value = '';
     loadWiki();
   } catch(e) { showToast(e.message, 'err'); }
 }
@@ -1977,15 +1981,18 @@ function renderWikiFiles(files, containerId, isAdmin) {
         ? `<button class="btn btn-ghost btn-sm" onclick="deleteWikiFile(${f.id})" title="Löschen"><i class="fas fa-trash" style="color:var(--red)"></i></button>`
         : '';
       return `
-        <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg3);border-radius:8px;margin-bottom:6px">
-          <i class="fas fa-${icon}" style="color:var(--accent);font-size:18px;min-width:20px;text-align:center"></i>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(f.name)}</div>
-            <div style="font-size:11px;color:var(--text3)">${size ? size + ' · ' : ''}${fmtDateShort(f.created_at)}</div>
+        <div style="padding:10px;background:var(--bg3);border-radius:8px;margin-bottom:6px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <i class="fas fa-${icon}" style="color:var(--accent);font-size:18px;min-width:20px;text-align:center"></i>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(f.name)}</div>
+              <div style="font-size:11px;color:var(--text3)">${size ? size + ' · ' : ''}${fmtDateShort(f.created_at)}</div>
+            </div>
+            ${previewBtn}
+            <button class="btn btn-ghost btn-sm" title="Download" onclick="wikiFileOpen('${f.filename}','${encodeURIComponent(f.name)}',true)"><i class="fas fa-download"></i></button>
+            ${delBtn}
           </div>
-          ${previewBtn}
-          <button class="btn btn-ghost btn-sm" title="Download" onclick="wikiFileOpen('${f.filename}','${encodeURIComponent(f.name)}',true)"><i class="fas fa-download"></i></button>
-          ${delBtn}
+          ${f.note ? `<div style="margin-top:8px;padding:8px 10px;background:rgba(79,142,247,0.07);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--text2);line-height:1.5"><i class="fas fa-info-circle" style="color:var(--accent);margin-right:5px"></i>${escHtml(f.note)}</div>` : ''}
         </div>`;
     }).join('');
     return `
