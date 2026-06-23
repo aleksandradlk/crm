@@ -33,6 +33,7 @@ router.post('/login', async (req, res) => {
     token,
     user: {
       id: user.id, username: user.username, full_name: user.full_name, role: user.role,
+      onboarding_shown:   !!user.onboarding_shown,
       can_edit_contacts:  !!user.can_edit_contacts,
       can_archive_leads:  !!user.can_archive_leads,
       can_reassign_leads: !!user.can_reassign_leads,

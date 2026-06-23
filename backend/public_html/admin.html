@@ -298,7 +298,7 @@
       </div>
       <div class="card">
         <div class="table-wrap">
-          <table><thead><tr><th>Name</th><th>Benutzername</th><th>E-Mail</th><th>Rolle</th><th>Status</th><th>Letzter Login</th><th>Erstellt von</th><th></th></tr></thead>
+          <table><thead><tr><th>Name</th><th>Benutzername</th><th>E-Mail</th><th>Telefon</th><th>Rolle</th><th>Status</th><th>Letzter Login</th><th>Erstellt von</th><th></th></tr></thead>
           <tbody id="usersTableBody"></tbody></table>
         </div>
       </div>
@@ -515,6 +515,7 @@
     <div class="form-group"><label>Vollständiger Name *</label><input type="text" id="u-name" class="form-control"></div>
     <div class="form-group"><label>Benutzername *</label><input type="text" id="u-username" class="form-control"></div>
     <div class="form-group"><label>E-Mail <span style="color:var(--text3);font-weight:400">(optional)</span></label><input type="email" id="u-email" class="form-control" placeholder="z.B. name@firma.de"></div>
+    <div class="form-group"><label>Telefon *</label><input type="text" id="u-phone" class="form-control" placeholder="z.B. +49 152 123456"></div>
     <div class="form-group"><label>Passwort <span id="pwHint" style="color:var(--text3)">(leer = nicht ändern)</span></label><input type="password" id="u-password" class="form-control"></div>
     <div class="form-group"><label>Rolle</label>
       <select id="u-role" class="form-control" onchange="updatePermSection()">
@@ -1360,6 +1361,7 @@ async function loadUsers() {
         <td style="font-weight:600">${escHtml(u.full_name)}</td>
         <td style="font-family:'JetBrains Mono',monospace;font-size:12px">${escHtml(u.username)}</td>
         <td style="font-size:12px">${u.email ? `<a href="mailto:${escHtml(u.email)}">${escHtml(u.email)}</a>` : '<span style="color:var(--text3)">—</span>'}</td>
+        <td style="font-size:12px;font-family:'JetBrains Mono',monospace">${u.phone ? escHtml(u.phone) : '<span style="color:var(--text3)">—</span>'}</td>
         <td><span class="role-badge ${u.role==='admin'?'rb-admin':'rb-closer'}">${u.role==='admin'?'Admin':'Closer'}</span>${u.role==='closer'?[
             [u.can_edit_contacts,'Kontaktdaten bearbeiten','fa-address-card'],
             [u.can_archive_leads,'Leads archivieren','fa-archive'],
@@ -1413,6 +1415,7 @@ function openUserModal(id) {
       document.getElementById('u-name').value     = u.full_name;
       document.getElementById('u-username').value = u.username;
       document.getElementById('u-email').value    = u.email || '';
+      document.getElementById('u-phone').value    = u.phone || '';
       document.getElementById('u-role').value     = u.role;
       document.getElementById('u-password').value = '';
       PERM_IDS.forEach((elId, i) => {
@@ -1420,7 +1423,7 @@ function openUserModal(id) {
       });
     }
   } else {
-    ['u-name','u-username','u-email','u-password'].forEach(fid => document.getElementById(fid).value = '');
+    ['u-name','u-username','u-email','u-phone','u-password'].forEach(fid => document.getElementById(fid).value = '');
     document.getElementById('u-role').value = 'closer';
     PERM_IDS.forEach(elId => document.getElementById(elId).checked = false);
   }
@@ -1430,18 +1433,21 @@ function openUserModal(id) {
 function closeUserModal() { document.getElementById('userModal').classList.remove('open'); }
 
 async function saveUser() {
-  const role = document.getElementById('u-role').value;
+  const role  = document.getElementById('u-role').value;
+  const phone = document.getElementById('u-phone').value.trim();
+  const err   = document.getElementById('userModalErr');
+  if (!editingUserId && !phone) { err.textContent = 'Telefonnummer ist erforderlich'; return; }
   const body = {
     full_name: document.getElementById('u-name').value.trim(),
     username:  document.getElementById('u-username').value.trim(),
     email:     document.getElementById('u-email').value.trim(),
+    phone:     phone || null,
     role,
     password:  document.getElementById('u-password').value || undefined,
   };
   PERM_KEYS.forEach((key, i) => {
     body[key] = (role === 'closer' && document.getElementById(PERM_IDS[i]).checked) ? 1 : 0;
   });
-  const err = document.getElementById('userModalErr');
   try {
     if (editingUserId) { await api('PATCH', `/users/${editingUserId}`, body); }
     else               { await api('POST', '/users', body); }
@@ -1887,14 +1893,8 @@ function initWikiEditor() {
 }
 
 async function loadWiki() {
-  initWikiEditor();
   try {
-    const [files, tmpl] = await Promise.all([
-      api('GET', '/wiki/files'),
-      api('GET', '/wiki/template'),
-    ]);
-    document.getElementById('wiki-tmpl-subject').value   = tmpl.subject || '';
-    document.getElementById('wiki-tmpl-body').innerHTML  = bodyToHtml(tmpl.body || '');
+    const files = await api('GET', '/wiki/files');
     renderWikiFiles(files, 'wikiFilesContainer', true);
   } catch(e) { showToast(e.message, 'err'); }
 }

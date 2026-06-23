@@ -76,6 +76,48 @@ function showToast(msg, type = 'ok') {
   t._timer = setTimeout(() => { t.style.display = 'none'; }, 3500);
 }
 
+// ── Custom Confirm Dialog ─────────────────────────────────────
+function customConfirm(message, { title = 'Bitte bestätigen', okLabel = 'Bestätigen', cancelLabel = 'Abbrechen', danger = false } = {}) {
+  return new Promise(resolve => {
+    let overlay = document.getElementById('_customConfirmOverlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = '_customConfirmOverlay';
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(7,32,73,0.35);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:16px';
+      overlay.innerHTML = `
+        <div id="_customConfirmBox" style="background:var(--bg2);border:1px solid var(--border2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.28);width:100%;max-width:420px;padding:28px 28px 24px;display:flex;flex-direction:column;gap:0">
+          <div id="_customConfirmTitle" style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:12px"></div>
+          <div id="_customConfirmMsg"   style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:22px;white-space:pre-line"></div>
+          <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button id="_customConfirmCancel" class="btn btn-ghost btn-sm"></button>
+            <button id="_customConfirmOk"     class="btn btn-sm"></button>
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
+    }
+    document.getElementById('_customConfirmTitle').textContent  = title;
+    document.getElementById('_customConfirmMsg').textContent    = message;
+    const okBtn     = document.getElementById('_customConfirmOk');
+    const cancelBtn = document.getElementById('_customConfirmCancel');
+    okBtn.textContent     = okLabel;
+    cancelBtn.textContent = cancelLabel;
+    okBtn.className = danger ? 'btn btn-sm' : 'btn btn-primary btn-sm';
+    okBtn.style.background    = danger ? 'var(--red)'  : '';
+    okBtn.style.borderColor   = danger ? 'var(--red)'  : '';
+    okBtn.style.color         = danger ? '#fff'        : '';
+    const cleanup = (result) => {
+      overlay.style.display = 'none';
+      okBtn.onclick = null; cancelBtn.onclick = null;
+      resolve(result);
+    };
+    okBtn.onclick     = () => cleanup(true);
+    cancelBtn.onclick = () => cleanup(false);
+    overlay.onclick   = (e) => { if (e.target === overlay) cleanup(false); };
+    overlay.style.display = 'flex';
+    setTimeout(() => okBtn.focus(), 30);
+  });
+}
+
 // ── Helpers ───────────────────────────────────────────────────
 function escHtml(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');

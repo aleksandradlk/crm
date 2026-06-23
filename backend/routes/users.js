@@ -158,6 +158,7 @@ router.patch('/:id', auth, adminOnly, async (req, res) => {
   }
   if (full_name) await db.query('UPDATE users SET full_name=? WHERE id=?', [full_name, id]);
   if (email !== undefined) await db.query('UPDATE users SET email=? WHERE id=?', [email || null, id]);
+  if (req.body.phone !== undefined) await db.query('UPDATE users SET phone=? WHERE id=?', [req.body.phone || null, id]);
   if (role)      await db.query('UPDATE users SET role=? WHERE id=?', [role, id]);
   if (is_active !== undefined)
     await db.query('UPDATE users SET is_active=? WHERE id=?', [is_active ? 1 : 0, id]);
@@ -209,6 +210,24 @@ router.delete('/:id', auth, adminOnly, async (req, res) => {
     console.error('User delete error:', e);
     res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
   }
+});
+
+// GET /api/users/admin-contact — Kontaktdaten des ersten aktiven Admins (fuer Closer)
+router.get('/admin-contact', auth, async (req, res) => {
+  try {
+    const [[admin]] = await db.query(
+      "SELECT full_name, phone FROM users WHERE role='admin' AND is_active=1 ORDER BY id ASC LIMIT 1"
+    );
+    res.json(admin || { full_name: 'Aleksandra Dalak', phone: null });
+  } catch(e) { res.status(500).json({ error: 'Fehler' }); }
+});
+
+// POST /api/users/onboarding-done — Onboarding als gesehen markieren
+router.post('/onboarding-done', auth, async (req, res) => {
+  try {
+    await db.query('UPDATE users SET onboarding_shown=1 WHERE id=?', [req.user.id]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: 'Fehler' }); }
 });
 
 module.exports = router;

@@ -109,6 +109,7 @@ db.query('ALTER TABLE comments ADD COLUMN edited_at DATETIME NULL').catch(() => 
 db.query('ALTER TABLE users ADD COLUMN notify_email TINYINT(1) NOT NULL DEFAULT 1').catch(() => {});
 db.query('ALTER TABLE users ADD COLUMN notify_sms   TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
 db.query('ALTER TABLE users ADD COLUMN phone        VARCHAR(50) NULL').catch(() => {});
+db.query('ALTER TABLE users ADD COLUMN onboarding_shown TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
 
 db.query(`CREATE TABLE IF NOT EXISTS chat_rooms (
   id INT AUTO_INCREMENT PRIMARY KEY,

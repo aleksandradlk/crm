@@ -6,7 +6,9 @@ const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
 
-const UPLOAD_DIR = path.join(__dirname, '..', 'uploads', 'wiki');
+// Außerhalb des App-Verzeichnisses — überlebt Neustarts und Deployments
+const UPLOAD_DIR = process.env.WIKI_UPLOAD_DIR
+  || path.join(require('os').homedir(), 'uploads', 'wiki');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const storage = multer.diskStorage({
@@ -47,15 +49,15 @@ router.post('/files', auth, adminOnly, (req, res, next) => {
     next();
   });
 }, async (req, res) => {
-  const { name, category } = req.body;
+  const { name, category, note } = req.body;
   if (!req.file) return res.status(400).json({ error: 'Keine Datei hochgeladen' });
   if (!category) return res.status(400).json({ error: 'Kategorie fehlt' });
   try {
     const [r] = await db.query(
-      `INSERT INTO wiki_files (name, category, filename, mimetype, size, uploaded_by)
-       VALUES (?,?,?,?,?,?)`,
+      `INSERT INTO wiki_files (name, category, filename, mimetype, size, uploaded_by, note)
+       VALUES (?,?,?,?,?,?,?)`,
       [name || req.file.originalname, category, req.file.filename,
-       req.file.mimetype, req.file.size, req.user.id]
+       req.file.mimetype, req.file.size, req.user.id, note?.trim() || null]
     );
     await log(req.user.id, 'wiki_upload', 'wiki', r.insertId, { name, category }, req.ip);
     res.status(201).json({ ok: true, id: r.insertId });

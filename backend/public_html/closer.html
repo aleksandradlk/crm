@@ -185,6 +185,20 @@
     <!-- WIKI -->
     <div id="sec-wiki" style="display:none">
       <h1 style="font-size:20px;font-weight:700;margin-bottom:20px">Wissensdatenbank</h1>
+
+      <!-- Pinned Willkommenskarte -->
+      <div style="background:rgba(79,142,247,0.08);border:1px solid rgba(79,142,247,0.35);border-radius:12px;padding:18px 20px;margin-bottom:20px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <div style="width:36px;height:36px;border-radius:10px;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;flex-shrink:0"><i class="fas fa-star"></i></div>
+          <div style="font-size:15px;font-weight:700">Willkommen bei NovaFlow!</div>
+        </div>
+        <div style="font-size:13px;color:var(--text2);line-height:1.65;display:flex;flex-direction:column;gap:8px">
+          <div><strong>Wissensdatenbank:</strong> Hier findest du alle wichtigen Unterlagen — Preisliste, Angebotsleitfaden und weitere Dokumente.</div>
+          <div><strong>E-Mail Vorlagen:</strong> Öffne einen Lead, klicke auf <strong>E-Mail</strong> und wähle eine Vorlage. Platzhalter werden automatisch ersetzt.</div>
+          <div><strong>Fragen? Kein Problem!</strong> Melde dich jederzeit bei Aleksandra Dalak<span id="wikiAdminPhone"></span> — per WhatsApp oder Chat.</div>
+        </div>
+      </div>
+
       <div id="closerEmailTemplate"></div>
       <div id="wikiFilesContainer"></div>
     </div>
@@ -1725,6 +1739,32 @@ async function saveInviteCl() {
   } catch(e) { showToast(e.message, 'err'); }
 }
 
+// ── Onboarding ────────────────────────────────────────────────
+(async () => {
+  try {
+    const contact = await api('GET', '/users/admin-contact');
+    if (contact?.phone) {
+      const el1 = document.getElementById('onboardingAdminPhone');
+      const el2 = document.getElementById('wikiAdminPhone');
+      if (el1) el1.textContent = ` (${contact.phone})`;
+      if (el2) el2.textContent = ` (${contact.phone})`;
+    }
+  } catch {}
+})();
+
+if (ME && !ME.onboarding_shown) {
+  document.getElementById('onboardingModal').classList.add('open');
+}
+
+async function closeOnboarding() {
+  document.getElementById('onboardingModal').classList.remove('open');
+  try {
+    await api('POST', '/users/onboarding-done');
+    if (ME) ME.onboarding_shown = true;
+    localStorage.setItem('lh_user', JSON.stringify(ME));
+  } catch(e) {}
+}
+
 // ── Init ──────────────────────────────────────────────────────
 ['myLeadsBody','allLeadsBody'].forEach(id => { const b = document.getElementById(id); if (b) b.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)"><i class="fas fa-spinner fa-spin"></i></td></tr>'; });
 showSection('myLeads');
@@ -2035,5 +2075,43 @@ document.getElementById('editContactInputCl')?.addEventListener('keydown', funct
     </div>
   </div>
 </div>
+
+<!-- ONBOARDING MODAL -->
+<div class="modal-overlay" id="onboardingModal" style="z-index:9000">
+  <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:18px;box-shadow:0 24px 80px rgba(0,0,0,0.3);width:100%;max-width:520px;padding:32px;display:flex;flex-direction:column;gap:0;margin:16px">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px">
+      <div style="width:48px;height:48px;border-radius:14px;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;flex-shrink:0"><i class="fas fa-hand-wave" style="font-size:20px">👋</i></div>
+      <div>
+        <div style="font-size:18px;font-weight:700;color:var(--text)">Willkommen bei NovaFlow!</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px">Hier sind die wichtigsten Dinge, die du wissen solltest</div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:24px">
+      <div style="display:flex;align-items:flex-start;gap:12px;padding:14px;background:var(--bg3);border-radius:10px;border:1px solid var(--border)">
+        <div style="width:32px;height:32px;border-radius:8px;background:rgba(79,142,247,0.15);display:flex;align-items:center;justify-content:center;color:var(--accent);flex-shrink:0"><i class="fas fa-book"></i></div>
+        <div>
+          <div style="font-size:13px;font-weight:600;margin-bottom:3px">Wissensdatenbank</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.5">Im Menüpunkt <strong>Wissensdatenbank</strong> findest du alle wichtigen Unterlagen: die <strong>Preisliste</strong> (die du jederzeit per E-Mail an Kunden weitergeben kannst), den internen <strong>Angebotsleitfaden</strong> zur Angebotsberechnung sowie weitere Dokumente.</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:12px;padding:14px;background:var(--bg3);border-radius:10px;border:1px solid var(--border)">
+        <div style="width:32px;height:32px;border-radius:8px;background:rgba(34,197,94,0.12);display:flex;align-items:center;justify-content:center;color:var(--green);flex-shrink:0"><i class="fas fa-envelope"></i></div>
+        <div>
+          <div style="font-size:13px;font-weight:600;margin-bottom:3px">E-Mail Vorlagen</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.5">Wenn du einem Kunden eine E-Mail schreiben möchtest, öffne den Lead, klicke auf <strong>E-Mail</strong> und wähle eine passende Vorlage aus dem Dropdown. Die Vorlage füllt sich automatisch mit den Kundendaten — du kannst sie danach frei anpassen.</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:12px;padding:14px;background:var(--bg3);border-radius:10px;border:1px solid var(--border)">
+        <div style="width:32px;height:32px;border-radius:8px;background:rgba(34,197,94,0.12);display:flex;align-items:center;justify-content:center;color:var(--green);flex-shrink:0"><i class="fab fa-whatsapp"></i></div>
+        <div>
+          <div style="font-size:13px;font-weight:600;margin-bottom:3px">Fragen? Kein Problem!</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.5">Falls du Fragen hast oder etwas unklar ist, kannst du jederzeit eine <strong>Rücksprache</strong> über den Chat öffnen oder mir direkt per <strong>WhatsApp</strong> schreiben. Ich helfe dir gerne weiter!<br><span style="color:var(--text3)">— Aleksandra Dalak<span id="onboardingAdminPhone"></span></span></div>
+        </div>
+      </div>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="closeOnboarding()"><i class="fas fa-check"></i> Verstanden, weiter</button>
+  </div>
+</div>
+
 </body>
 </html>
