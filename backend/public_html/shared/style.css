@@ -44,10 +44,14 @@ body {
   color: var(--text);
   font-family: 'Inter', sans-serif;
   min-height: 100vh;
+  min-height: 100svh;
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
+/* Scroll-Lock: aktiv wenn Sidebar oder Modal offen */
+body.no-scroll { overflow: hidden; }
 a { color: var(--accent); text-decoration: none; }
 
 /* ── Layout ──────────────────────────────────────────────────── */
@@ -397,7 +401,7 @@ body.dark .search-bar-kbd { background: var(--bg3); border-color: var(--border2)
 /* ── Mobile topbar + Sidebar-Drawer (nur sichtbar <=800px) ──────── */
 .mobile-topbar { display: none; }
 .mobile-nav-overlay { position: fixed; inset: 0; z-index: 299; background: rgba(7,32,73,0.35); display: none; }
-.mobile-nav-overlay.open { display: block; }
+.mobile-nav-overlay.open { display: block; touch-action: none; overscroll-behavior: contain; }
 
 /* ── Responsive ──────────────────────────────────────────────── */
 @media (max-width: 800px) {
@@ -419,6 +423,7 @@ body.dark .search-bar-kbd { background: var(--bg3); border-color: var(--border2)
   .sidebar {
     position: fixed; top: 0; left: 0; bottom: 0; width: 260px; z-index: 300;
     transform: translateX(-100%); transition: transform 0.22s ease; box-shadow: var(--shadow-lg);
+    overflow-y: auto; overscroll-behavior: contain;
   }
   .sidebar.mobile-open { transform: translateX(0); }
   .main-content { padding: 14px; gap: 14px; }
@@ -432,24 +437,28 @@ body.dark .search-bar-kbd { background: var(--bg3); border-color: var(--border2)
   thead { display: none; }
   tbody, tbody tr, tbody td { display: block; width: 100%; }
   tbody tr {
-    border: 1px solid var(--border); border-radius: 10px;
-    margin-bottom: 10px; padding: 12px 14px; background: var(--bg2);
+    border: 1px solid var(--border); border-radius: 8px;
+    margin-bottom: 6px; padding: 8px 10px; background: var(--bg2);
   }
-  tbody td { padding: 4px 0; border-bottom: none; }
-  tbody td:first-child { display: none; } /* Zeilennummer: nicht relevant auf Mobile */
+  tbody td { padding: 2px 0; border-bottom: none; font-size: 12px; }
+  tbody td:first-child { display: none; }
   tbody td:nth-child(2) {
-    font-size: 14px; font-weight: 700; padding-bottom: 8px; margin-bottom: 6px;
+    font-size: 13px; font-weight: 700; padding-bottom: 5px; margin-bottom: 4px;
     border-bottom: 1px solid var(--border);
   }
-  tbody td:last-child { padding-top: 8px; text-align: right; }
+  tbody td:last-child { padding-top: 5px; text-align: right; }
 
-  /* ── Buttons & Inputs: mind. 44px Höhe für Daumenbedienung ──── */
-  .btn { min-height: 44px; }
-  .btn-sm { min-height: 40px; }
-  .btn-icon { width: 44px; min-height: 44px; }
+  /* ── Buttons & Inputs: Daumenbedienung, aber kompakt in Karten ── */
+  .btn { min-height: 40px; }
+  .btn-sm { min-height: 34px; padding: 4px 10px; }
+  .btn-icon { width: 40px; min-height: 40px; }
   .sidebar-icon-btn { width: 40px; height: 40px; font-size: 14px; }
-  .form-control { min-height: 44px; }
-  select.status-select { min-height: 38px; padding: 6px 10px; }
+  .form-control { min-height: 40px; }
+  select.status-select { min-height: 34px; padding: 4px 8px; }
+
+  /* ── Modal-Overlay: Background-Scroll verhindern ─────────────── */
+  .modal-overlay { overscroll-behavior: contain; touch-action: none; }
+  .modal-box { overscroll-behavior: contain; max-height: calc(100dvh - 32px); }
 
   /* ── Lead-Detail-Panel: Vollbild auf Mobile ──────────────── */
   .slide-panel { width: 100%; }
