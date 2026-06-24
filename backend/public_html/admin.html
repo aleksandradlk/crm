@@ -480,7 +480,8 @@
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="form-group" style="margin:0">
         <label>Kategorie <span style="font-size:11px;color:var(--text3)">(optional)</span></label>
-        <input type="text" id="tmpl-category" class="form-control" placeholder="z.B. Nachfassen">
+        <select id="tmpl-category" class="form-control" onchange="adminCatSelectChange()"></select>
+        <input type="text" id="tmpl-category-new" class="form-control" style="display:none;margin-top:6px" placeholder="Neue Kategorie eingeben…">
       </div>
       <div class="form-group" style="margin:0;display:flex;align-items:flex-end;padding-bottom:1px">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;font-weight:500">
@@ -544,6 +545,10 @@
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;font-size:13px">
           <input type="checkbox" id="u-can-generate-leads" style="width:15px;height:15px;accent-color:var(--accent)">
           <span>Leads generieren (KI)</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;font-size:13px">
+          <input type="checkbox" id="u-can-manage-email-templates" style="width:15px;height:15px;accent-color:var(--accent)">
+          <span>E-Mail-Vorlagen verwalten <span style="color:var(--text3);font-size:11px;font-weight:400">— erstellen, bearbeiten, archivieren (kein Datei-Upload, kein endgültiges Löschen)</span></span>
         </label>
       </div>
     </div>
@@ -1425,6 +1430,7 @@ async function loadUsers() {
             [u.can_view_all_leads,'Alle Leads sehen','fa-eye'],
             [u.can_create_users,'User anlegen','fa-user-plus'],
             [u.can_generate_leads,'Leads generieren','fa-robot'],
+            [u.can_manage_email_templates,'E-Mail-Vorlagen verwalten','fa-envelope'],
           ].filter(p=>p[0]).map(p=>`<span style="font-size:10px;color:var(--text3);margin-left:4px" title="${p[1]}"><i class="fas ${p[2]}"></i></span>`).join(''):''}
         </td>
         <td><span style="color:${u.is_active?'var(--green)':'var(--red)'};font-size:12px">${u.is_active?'Aktiv':'Gesperrt'}</span></td>
@@ -1457,8 +1463,8 @@ function updatePermSection() {
   document.getElementById('permSection').style.display = isCloser ? 'block' : 'none';
 }
 
-const PERM_IDS = ['u-can-edit-contacts','u-can-archive-leads','u-can-reassign-leads','u-can-view-all-leads','u-can-create-users','u-can-generate-leads'];
-const PERM_KEYS = ['can_edit_contacts','can_archive_leads','can_reassign_leads','can_view_all_leads','can_create_users','can_generate_leads'];
+const PERM_IDS  = ['u-can-edit-contacts','u-can-archive-leads','u-can-reassign-leads','u-can-view-all-leads','u-can-create-users','u-can-generate-leads','u-can-manage-email-templates'];
+const PERM_KEYS = ['can_edit_contacts','can_archive_leads','can_reassign_leads','can_view_all_leads','can_create_users','can_generate_leads','can_manage_email_templates'];
 
 function openUserModal(id) {
   editingUserId = id || null;
@@ -1845,16 +1851,39 @@ function applyAdminEmailTemplate() {
   document.getElementById('emailBody').innerHTML  = bodyToHtml(replacePlaceholders(tmpl.body, _panelLead));
 }
 
+function adminBuildCategorySelect(currentCat) {
+  const cats = [...new Set(_emailTemplates.map(t => t.category).filter(Boolean))].sort();
+  const sel = document.getElementById('tmpl-category');
+  sel.innerHTML = '<option value="">— Keine Kategorie —</option>'
+    + cats.map(c => `<option value="${escHtml(c)}"${c === currentCat ? ' selected' : ''}>${escHtml(c)}</option>`).join('')
+    + '<option value="__new__">＋ Neue Kategorie…</option>';
+  if (currentCat && !cats.includes(currentCat)) {
+    sel.innerHTML += `<option value="${escHtml(currentCat)}" selected>${escHtml(currentCat)}</option>`;
+  }
+  if (currentCat) sel.value = currentCat;
+  document.getElementById('tmpl-category-new').style.display = 'none';
+  document.getElementById('tmpl-category-new').value = '';
+}
+function adminCatSelectChange() {
+  const newInput = document.getElementById('tmpl-category-new');
+  if (document.getElementById('tmpl-category').value === '__new__') {
+    newInput.style.display = '';
+    newInput.focus();
+  } else {
+    newInput.style.display = 'none';
+    newInput.value = '';
+  }
+}
 function openTemplateMgmtModal(id) {
   const tmpl = id ? _emailTemplates.find(t => t.id === id) : null;
-  document.getElementById('tmplMgmtId').value       = id || '';
+  document.getElementById('tmplMgmtId').value        = id || '';
   document.getElementById('tmplMgmtTitle').innerHTML = `<i class="fas fa-envelope" style="color:var(--accent);margin-right:8px"></i>${tmpl ? 'Vorlage bearbeiten' : 'Vorlage erstellen'}`;
-  document.getElementById('tmpl-name').value         = tmpl?.name     || '';
-  document.getElementById('tmpl-category').value     = tmpl?.category || '';
-  document.getElementById('tmpl-subject').value      = tmpl?.subject  || '';
-  document.getElementById('tmpl-body').value         = tmpl?.body     || '';
+  document.getElementById('tmpl-name').value         = tmpl?.name    || '';
+  document.getElementById('tmpl-subject').value      = tmpl?.subject || '';
+  document.getElementById('tmpl-body').value         = tmpl?.body    || '';
   document.getElementById('tmpl-active').checked     = tmpl ? !!tmpl.is_active : true;
   document.getElementById('tmplMgmtErr').textContent = '';
+  adminBuildCategorySelect(tmpl?.category || '');
   document.getElementById('templateMgmtModal').classList.add('open');
   setTimeout(() => document.getElementById('tmpl-name').focus(), 50);
 }
@@ -1865,7 +1894,10 @@ async function saveEmailTemplate() {
   const name    = document.getElementById('tmpl-name').value.trim();
   const subject = document.getElementById('tmpl-subject').value.trim();
   const body    = document.getElementById('tmpl-body').value.trim();
-  const category= document.getElementById('tmpl-category').value.trim() || null;
+  const catSel  = document.getElementById('tmpl-category').value;
+  const category= (catSel === '__new__'
+    ? document.getElementById('tmpl-category-new').value.trim()
+    : catSel.trim()) || null;
   const active  = document.getElementById('tmpl-active').checked ? 1 : 0;
   const errEl   = document.getElementById('tmplMgmtErr');
   if (!name || !subject || !body) { errEl.textContent = 'Name, Betreff und Text sind erforderlich'; return; }
@@ -2002,6 +2034,10 @@ async function deleteWikiFile(id) {
 }
 
 async function wikiFileOpen(filename, encodedName, forceDownload) {
+  if (!forceDownload) {
+    window.open(`/api/wiki/files/${encodeURIComponent(filename)}?token=${encodeURIComponent(Auth.getToken())}`, '_blank');
+    return;
+  }
   try {
     const res = await fetch(`/api/wiki/files/${encodeURIComponent(filename)}`, {
       headers: { 'Authorization': 'Bearer ' + Auth.getToken() }
@@ -2009,13 +2045,11 @@ async function wikiFileOpen(filename, encodedName, forceDownload) {
     if (!res.ok) { showToast('Datei nicht verfügbar', 'err'); return; }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
-    if (forceDownload) {
+    {
       const a = document.createElement('a');
       a.href = url;
       a.download = encodedName ? decodeURIComponent(encodedName) : filename;
       a.click();
-    } else {
-      window.open(url, '_blank');
     }
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   } catch(e) { showToast('Fehler beim Laden', 'err'); }
@@ -2031,13 +2065,11 @@ function renderWikiFiles(files, containerId, isAdmin) {
   container.innerHTML = cats.map(cat => {
     const catFiles = files.filter(f => f.category === cat);
     const filesHtml = catFiles.map(f => {
-      const isImage = f.mimetype?.startsWith('image/');
-      const isPdf   = f.mimetype === 'application/pdf';
+      const isImage = f.mimetype?.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(f.filename||'');
+      const isPdf   = f.mimetype === 'application/pdf' || /\.pdf$/i.test(f.filename||'');
       const size    = f.size ? (f.size / 1024).toFixed(0) + ' KB' : '';
       const icon    = isPdf ? 'file-pdf' : isImage ? 'file-image' : 'file-alt';
-      const previewBtn = (isImage || isPdf)
-        ? `<button class="btn btn-ghost btn-sm" title="Vorschau" onclick="wikiFileOpen('${f.filename}')"><i class="fas fa-eye"></i></button>`
-        : '';
+      const previewBtn = `<button class="btn btn-ghost btn-sm" title="Vorschau" onclick="wikiFileOpen('${f.filename}')"><i class="fas fa-eye"></i></button>`;
       const delBtn = isAdmin
         ? `<button class="btn btn-ghost btn-sm" onclick="deleteWikiFile(${f.id})" title="Löschen"><i class="fas fa-trash" style="color:var(--red)"></i></button>`
         : '';

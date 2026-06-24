@@ -430,12 +430,13 @@
 <script>
 const ME = Auth.getUser();
 const CAN = {
-  editContacts: Auth.can('can_edit_contacts'),
-  archive:      Auth.can('can_archive_leads'),
-  reassign:     Auth.can('can_reassign_leads'),
-  viewAll:      Auth.can('can_view_all_leads'),
-  createUsers:  Auth.can('can_create_users'),
-  generateLeads:Auth.can('can_generate_leads'),
+  editContacts:        Auth.can('can_edit_contacts'),
+  archive:             Auth.can('can_archive_leads'),
+  reassign:            Auth.can('can_reassign_leads'),
+  viewAll:             Auth.can('can_view_all_leads'),
+  createUsers:         Auth.can('can_create_users'),
+  generateLeads:       Auth.can('can_generate_leads'),
+  manageTemplates:     Auth.can('can_manage_email_templates'),
 };
 
 function copyPhone(phone) {
@@ -483,7 +484,8 @@ if (ME?.can_generate_leads) { const n = document.getElementById('navGenerateLead
       reassign:      !!fresh.can_reassign_leads,
       viewAll:       !!fresh.can_view_all_leads,
       createUsers:   !!fresh.can_create_users,
-      generateLeads: !!fresh.can_generate_leads,
+      generateLeads:   !!fresh.can_generate_leads,
+      manageTemplates: !!fresh.can_manage_email_templates,
     });
     const n1 = document.getElementById('navCreateUser');
     if (n1) n1.style.display = fresh.can_create_users   ? '' : 'none';
@@ -1465,31 +1467,145 @@ async function changePassword() {
 // ── WIKI ──────────────────────────────────────────────────────
 async function loadWiki() {
   try {
-    const [files, tmpl] = await Promise.all([
+    const requests = [
       api('GET', '/wiki/files'),
       api('GET', '/wiki/template').catch(() => ({})),
-    ]);
+    ];
+    if (CAN.manageTemplates) requests.push(api('GET', '/email-templates').catch(() => []));
+    const [files, tmpl, emailTemplates] = await Promise.all(requests);
+
     const tmplEl = document.getElementById('closerEmailTemplate');
-    if (tmplEl && (tmpl.subject || tmpl.body)) {
-      tmplEl.innerHTML = `
-        <div class="card" style="margin-bottom:14px">
-          <div class="card-header"><div class="card-title"><i class="fas fa-envelope" style="color:var(--accent)"></i> E-Mail Vorlage <span style="font-size:11px;font-weight:400;color:var(--text3)">(nur lesbar)</span></div></div>
-          <div class="card-body" style="padding:14px">
-            <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Platzhalter <code style="background:var(--bg3);padding:1px 5px;border-radius:4px">{company}</code> wird durch Firmennamen ersetzt</div>
-            <div class="form-group" style="margin-bottom:8px"><label>Betreff</label>
-              <input class="form-control" value="${escHtml(tmpl.subject||'')}" readonly style="background:var(--bg3);color:var(--text2)"></div>
-            <div class="form-group" style="margin:0"><label>Nachricht</label>
-              <div class="form-control" style="background:var(--bg3);color:var(--text2);font-size:13px;line-height:1.6;min-height:120px;overflow-y:auto;pointer-events:none">${bodyToHtml(tmpl.body||'')}</div></div>
-          </div>
-        </div>`;
-    } else if (tmplEl) {
-      tmplEl.innerHTML = '';
+    if (tmplEl) {
+      if (CAN.manageTemplates) {
+        _clManagedTemplates = emailTemplates || [];
+        tmplEl.innerHTML = clRenderTemplateMgmtSection();
+      } else if (tmpl.subject || tmpl.body) {
+        tmplEl.innerHTML = `
+          <div class="card" style="margin-bottom:14px">
+            <div class="card-header"><div class="card-title"><i class="fas fa-envelope" style="color:var(--accent)"></i> E-Mail Vorlage <span style="font-size:11px;font-weight:400;color:var(--text3)">(nur lesbar)</span></div></div>
+            <div class="card-body" style="padding:14px">
+              <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Platzhalter <code style="background:var(--bg3);padding:1px 5px;border-radius:4px">{company}</code> wird durch Firmennamen ersetzt</div>
+              <div class="form-group" style="margin-bottom:8px"><label>Betreff</label>
+                <input class="form-control" value="${escHtml(tmpl.subject||'')}" readonly style="background:var(--bg3);color:var(--text2)"></div>
+              <div class="form-group" style="margin:0"><label>Nachricht</label>
+                <div class="form-control" style="background:var(--bg3);color:var(--text2);font-size:13px;line-height:1.6;min-height:120px;overflow-y:auto;pointer-events:none">${bodyToHtml(tmpl.body||'')}</div></div>
+            </div>
+          </div>`;
+      } else {
+        tmplEl.innerHTML = '';
+      }
     }
     renderWikiFiles(files, 'wikiFilesContainer', false);
   } catch(e) { showToast(e.message, 'err'); }
 }
 
+let _clManagedTemplates = [];
+
+function clRenderTemplateMgmtSection() {
+  const rows = _clManagedTemplates.map(t => {
+    const inactive = !t.is_active;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg3);border-radius:8px;margin-bottom:6px;${inactive?'opacity:0.55':''}">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--text1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(t.name)}</div>
+        <div style="font-size:11px;color:var(--text3)">${escHtml(t.subject||'')}${t.category?` · <span style="color:var(--accent)">${escHtml(t.category)}</span>`:''}</div>
+      </div>
+      <button class="btn btn-sm" style="padding:4px 8px;font-size:11px" onclick="clOpenTemplModal(${t.id})" title="Bearbeiten"><i class="fas fa-pen"></i></button>
+      <button class="btn btn-sm" style="padding:4px 8px;font-size:11px;color:${inactive?'var(--accent)':'var(--text3)'}" onclick="clToggleTempl(${t.id},${inactive?1:0})" title="${inactive?'Aktivieren':'Deaktivieren'}"><i class="fas fa-${inactive?'eye':'eye-slash'}"></i></button>
+    </div>`;
+  }).join('');
+  return `<div class="card" style="margin-bottom:14px">
+    <div class="card-header" style="display:flex;align-items:center;justify-content:space-between">
+      <div class="card-title"><i class="fas fa-envelope" style="color:var(--accent)"></i> E-Mail-Vorlagen</div>
+      <button class="btn btn-primary btn-sm" onclick="clOpenTemplModal(null)"><i class="fas fa-plus"></i> Neue Vorlage</button>
+    </div>
+    <div class="card-body" style="padding:12px">
+      ${_clManagedTemplates.length ? rows : '<div style="font-size:13px;color:var(--text3);text-align:center;padding:16px 0">Noch keine Vorlagen vorhanden</div>'}
+    </div>
+  </div>`;
+}
+
+function clBuildCategorySelect(currentCat) {
+  const cats = [...new Set(_clManagedTemplates.map(t => t.category).filter(Boolean))].sort();
+  const sel = document.getElementById('clTemplCategory');
+  sel.innerHTML = '<option value="">— Keine Kategorie —</option>'
+    + cats.map(c => `<option value="${escHtml(c)}"${c === currentCat ? ' selected' : ''}>${escHtml(c)}</option>`).join('')
+    + '<option value="__new__">＋ Neue Kategorie…</option>';
+  if (currentCat && !cats.includes(currentCat)) {
+    sel.innerHTML += `<option value="${escHtml(currentCat)}" selected>${escHtml(currentCat)}</option>`;
+  }
+  if (currentCat) sel.value = currentCat;
+  document.getElementById('clTemplCategoryNew').style.display = 'none';
+  document.getElementById('clTemplCategoryNew').value = '';
+}
+function clCatSelectChange() {
+  const newInput = document.getElementById('clTemplCategoryNew');
+  if (document.getElementById('clTemplCategory').value === '__new__') {
+    newInput.style.display = '';
+    newInput.focus();
+  } else {
+    newInput.style.display = 'none';
+    newInput.value = '';
+  }
+}
+function clOpenTemplModal(id) {
+  const t = id ? _clManagedTemplates.find(x => x.id === id) : null;
+  document.getElementById('clTemplModalTitle').textContent = t ? 'Vorlage bearbeiten' : 'Neue Vorlage';
+  document.getElementById('clTemplId').value      = t ? t.id : '';
+  document.getElementById('clTemplName').value    = t ? (t.name    || '') : '';
+  document.getElementById('clTemplSubject').value = t ? (t.subject || '') : '';
+  document.getElementById('clTemplBody').value    = t ? (t.body    || '') : '';
+  clBuildCategorySelect(t?.category || '');
+  document.getElementById('clTemplModal').style.display = 'flex';
+}
+function clCloseTemplModal() {
+  document.getElementById('clTemplModal').style.display = 'none';
+}
+async function clSaveTempl() {
+  const id      = document.getElementById('clTemplId').value;
+  const name    = document.getElementById('clTemplName').value.trim();
+  const subject = document.getElementById('clTemplSubject').value.trim();
+  const body    = document.getElementById('clTemplBody').value.trim();
+  const catSel  = document.getElementById('clTemplCategory').value;
+  const category= (catSel === '__new__'
+    ? document.getElementById('clTemplCategoryNew').value.trim()
+    : catSel.trim()) || null;
+  if (!name || !subject || !body) { showToast('Name, Betreff und Text sind erforderlich', 'err'); return; }
+  const btn = document.getElementById('clTemplSaveBtn');
+  btn.disabled = true;
+  try {
+    if (id) {
+      await api('PATCH', `/email-templates/${id}`, { name, subject, body, category: category || null });
+    } else {
+      await api('POST', '/email-templates', { name, subject, body, category: category || null });
+    }
+    clCloseTemplModal();
+    showToast('Vorlage gespeichert', 'ok');
+    const templates = await api('GET', '/email-templates').catch(() => []);
+    _clManagedTemplates = templates;
+    const tmplEl = document.getElementById('closerEmailTemplate');
+    if (tmplEl) tmplEl.innerHTML = clRenderTemplateMgmtSection();
+    await loadCloserEmailTemplates();
+  } catch(e) { showToast(e.message, 'err'); }
+  btn.disabled = false;
+}
+async function clToggleTempl(id, newActive) {
+  try {
+    await api('PATCH', `/email-templates/${id}`, { is_active: newActive });
+    const templates = await api('GET', '/email-templates').catch(() => []);
+    _clManagedTemplates = templates;
+    const tmplEl = document.getElementById('closerEmailTemplate');
+    if (tmplEl) tmplEl.innerHTML = clRenderTemplateMgmtSection();
+    showToast(newActive ? 'Vorlage aktiviert' : 'Vorlage deaktiviert', 'ok');
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
 async function wikiFileOpen(filename, encodedName, forceDownload) {
+  if (!forceDownload) {
+    // Vorschau: URL direkt im neuen Tab öffnen — Browser zeigt nativen Viewer (PDF, Bild usw.)
+    window.open(`/api/wiki/files/${encodeURIComponent(filename)}?token=${encodeURIComponent(Auth.getToken())}`, '_blank');
+    return;
+  }
+  // Download: Blob-Weg damit der Dateiname korrekt gesetzt wird
   try {
     const res = await fetch(`/api/wiki/files/${encodeURIComponent(filename)}`, {
       headers: { 'Authorization': 'Bearer ' + Auth.getToken() }
@@ -1497,14 +1613,10 @@ async function wikiFileOpen(filename, encodedName, forceDownload) {
     if (!res.ok) { showToast('Datei nicht verfügbar', 'err'); return; }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
-    if (forceDownload) {
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = encodedName ? decodeURIComponent(encodedName) : filename;
-      a.click();
-    } else {
-      window.open(url, '_blank');
-    }
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = encodedName ? decodeURIComponent(encodedName) : filename;
+    a.click();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   } catch(e) { showToast('Fehler beim Laden', 'err'); }
 }
@@ -1519,13 +1631,11 @@ function renderWikiFiles(files, containerId, isAdmin) {
   container.innerHTML = cats.map(cat => {
     const catFiles = files.filter(f => f.category === cat);
     const filesHtml = catFiles.map(f => {
-      const isImage = f.mimetype?.startsWith('image/');
-      const isPdf   = f.mimetype === 'application/pdf';
+      const isImage = f.mimetype?.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(f.filename||'');
+      const isPdf   = f.mimetype === 'application/pdf' || /\.pdf$/i.test(f.filename||'');
       const size    = f.size ? (f.size / 1024).toFixed(0) + ' KB' : '';
       const icon    = isPdf ? 'file-pdf' : isImage ? 'file-image' : 'file-alt';
-      const previewBtn = (isImage || isPdf)
-        ? `<button class="btn btn-ghost btn-sm" title="Vorschau" onclick="wikiFileOpen('${f.filename}')"><i class="fas fa-eye"></i></button>`
-        : '';
+      const previewBtn = `<button class="btn btn-ghost btn-sm" title="Vorschau" onclick="wikiFileOpen('${f.filename}')"><i class="fas fa-eye"></i></button>`;
       return `
         <div style="padding:10px;background:var(--bg3);border-radius:8px;margin-bottom:6px">
           <div style="display:flex;align-items:center;gap:10px">
@@ -2279,6 +2389,40 @@ document.getElementById('editContactInputCl')?.addEventListener('keydown', funct
         <button class="btn btn-ghost btn-sm" onclick="closeCallDocModalCl()">Überspringen</button>
         <button class="btn btn-primary btn-sm" id="callDocSaveBtnCl" onclick="saveCallDocCl()"><i class="fas fa-check"></i> Speichern</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- E-MAIL VORLAGE MANAGEMENT MODAL (für can_manage_email_templates) -->
+<div class="modal-overlay" id="clTemplModal" style="display:none;z-index:2000" onclick="if(event.target===this)clCloseTemplModal()">
+  <div class="modal" style="width:100%;max-width:560px;max-height:90vh;display:flex;flex-direction:column">
+    <div class="modal-header">
+      <div class="modal-title" id="clTemplModalTitle">Vorlage</div>
+      <button class="btn-icon" onclick="clCloseTemplModal()"><i class="fas fa-times"></i></button>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:20px 24px">
+      <input type="hidden" id="clTemplId">
+      <div class="form-group">
+        <label>Name <span style="color:var(--danger)">*</span></label>
+        <input class="form-control" id="clTemplName" placeholder="z.B. Erstansprache Handwerker">
+      </div>
+      <div class="form-group">
+        <label>Betreff <span style="color:var(--danger)">*</span></label>
+        <input class="form-control" id="clTemplSubject" placeholder="z.B. Neue Website für {company}?">
+      </div>
+      <div class="form-group">
+        <label>Text <span style="color:var(--danger)">*</span></label>
+        <textarea class="form-control" id="clTemplBody" rows="8" placeholder="Vorlage-Text. Platzhalter: {company}, {name}"></textarea>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>Kategorie <span style="font-weight:400;color:var(--text3);font-size:11px">(optional)</span></label>
+        <select class="form-control" id="clTemplCategory" onchange="clCatSelectChange()"></select>
+        <input class="form-control" id="clTemplCategoryNew" style="display:none;margin-top:6px" placeholder="Neue Kategorie eingeben…">
+      </div>
+    </div>
+    <div style="padding:16px 24px;flex-shrink:0;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn" onclick="clCloseTemplModal()">Abbrechen</button>
+      <button class="btn btn-primary" id="clTemplSaveBtn" onclick="clSaveTempl()">Speichern</button>
     </div>
   </div>
 </div>

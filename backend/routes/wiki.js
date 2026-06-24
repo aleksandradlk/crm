@@ -100,10 +100,28 @@ router.put('/template', auth, adminOnly, async (req, res) => {
 });
 
 // GET /api/wiki/files/:filename — authenticated file delivery
-router.get('/files/:filename', auth, (req, res) => {
+// Akzeptiert Auth-Token wahlweise als Bearer-Header ODER ?token= Query-Param (für direkte Tab-Öffnung)
+const jwt = require('jsonwebtoken');
+router.get('/files/:filename', async (req, res) => {
+  try {
+    const raw = req.headers['authorization'] || '';
+    const tokenStr = raw.startsWith('Bearer ') ? raw.slice(7) : (req.query.token || '');
+    if (!tokenStr) return res.status(401).json({ error: 'Kein Token' });
+    const payload = jwt.verify(tokenStr, process.env.JWT_SECRET);
+    const [[user]] = await db.query('SELECT id, is_active FROM users WHERE id=?', [payload.id]);
+    if (!user || !user.is_active) return res.status(401).json({ error: 'Nicht berechtigt' });
+  } catch {
+    return res.status(401).json({ error: 'Token ungültig' });
+  }
+
   const filename = path.basename(req.params.filename);
   const filepath = path.join(UPLOAD_DIR, filename);
   if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'Nicht gefunden' });
+
+  const [[file]] = await db.query('SELECT mimetype FROM wiki_files WHERE filename=?', [filename]).catch(() => [[]]);
+  const mime = file?.mimetype || 'application/octet-stream';
+  res.setHeader('Content-Type', mime);
+  res.setHeader('Content-Disposition', 'inline');
   res.sendFile(filepath);
 });
 

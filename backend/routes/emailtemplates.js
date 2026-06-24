@@ -4,12 +4,12 @@ const { auth, adminOnly } = require('../middleware/auth');
 const { log } = require('../helpers/logger');
 
 // GET /api/email-templates
-// Admin: alle inkl. inaktive; Closer: nur aktive (ohne created_by etc.)
+// Admin + can_manage_email_templates: alle inkl. inaktive; sonst: nur aktive
 router.get('/', auth, async (req, res) => {
   try {
-    const isAdmin = req.user.role === 'admin';
+    const canManage = req.user.role === 'admin' || req.user.can_manage_email_templates;
     const [rows] = await db.query(
-      isAdmin
+      canManage
         ? 'SELECT * FROM email_templates ORDER BY is_active DESC, name ASC'
         : 'SELECT id, name, subject, body, category FROM email_templates WHERE is_active=1 ORDER BY name ASC'
     );
@@ -17,8 +17,10 @@ router.get('/', auth, async (req, res) => {
   } catch(e) { console.error('EmailTemplates GET:', e); res.status(500).json({ error: 'Fehler beim Laden' }); }
 });
 
-// POST /api/email-templates — Admin erstellt Vorlage
-router.post('/', auth, adminOnly, async (req, res) => {
+// POST /api/email-templates — Admin oder can_manage_email_templates
+router.post('/', auth, async (req, res) => {
+  if (req.user.role !== 'admin' && !req.user.can_manage_email_templates)
+    return res.status(403).json({ error: 'Keine Berechtigung für E-Mail-Vorlagen' });
   const { name, subject, body, category } = req.body;
   if (!name?.trim() || !subject?.trim() || !body?.trim())
     return res.status(400).json({ error: 'Name, Betreff und Text sind erforderlich' });
@@ -32,8 +34,10 @@ router.post('/', auth, adminOnly, async (req, res) => {
   } catch(e) { console.error('EmailTemplates POST:', e); res.status(500).json({ error: 'Fehler beim Speichern' }); }
 });
 
-// PATCH /api/email-templates/:id — Admin bearbeitet/aktiviert/deaktiviert
-router.patch('/:id', auth, adminOnly, async (req, res) => {
+// PATCH /api/email-templates/:id — Admin oder can_manage_email_templates; endgültiges Löschen nur Admin
+router.patch('/:id', auth, async (req, res) => {
+  if (req.user.role !== 'admin' && !req.user.can_manage_email_templates)
+    return res.status(403).json({ error: 'Keine Berechtigung für E-Mail-Vorlagen' });
   const id = parseInt(req.params.id);
   const { name, subject, body, category, is_active } = req.body;
   const updates = [];

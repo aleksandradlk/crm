@@ -231,6 +231,7 @@ db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('closer_sees
 
 // ── Audit-Migrationen ─────────────────────────────────────────
 db.query('ALTER TABLE users ADD COLUMN created_by INT NULL').catch(() => {});
+db.query('ALTER TABLE users ADD COLUMN can_manage_email_templates TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
 db.query('ALTER TABLE leads ADD COLUMN archived_at DATETIME NULL').catch(() => {});
 db.query('ALTER TABLE leads ADD COLUMN archived_by INT NULL').catch(() => {});
 db.query('ALTER TABLE leads ADD COLUMN archive_reason VARCHAR(500) NULL').catch(() => {});

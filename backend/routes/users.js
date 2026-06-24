@@ -4,7 +4,7 @@ const db       = require('../db');
 const { auth, adminOnly } = require('../middleware/auth');
 const { log }  = require('../helpers/logger');
 
-const PERM_FIELDS = ['can_edit_contacts','can_archive_leads','can_reassign_leads','can_view_all_leads','can_create_users','can_generate_leads'];
+const PERM_FIELDS = ['can_edit_contacts','can_archive_leads','can_reassign_leads','can_view_all_leads','can_create_users','can_generate_leads','can_manage_email_templates'];
 
 // GET /api/users — alle User (Admin)
 router.get('/', auth, adminOnly, async (req, res) => {
