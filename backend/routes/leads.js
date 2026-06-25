@@ -135,6 +135,86 @@ router.get('/dashboard/closer', auth, async (req, res) => {
   } catch(e) { console.error('Dashboard closer error:', e); res.status(500).json({ error: 'Fehler' }); }
 });
 
+// ── GET /api/leads/next — nächster unbearbeiteter Lead des Closers (Feature 3) ──
+router.get('/next', auth, async (req, res) => {
+  const uid = req.user.id;
+  const currentId = parseInt(req.query.current_id) || 0;
+  try {
+    let [[lead]] = await db.query(
+      `SELECT id FROM leads WHERE assigned_to=? AND archived_at IS NULL
+       AND status NOT IN ('kunde','kein_interesse') AND id > ?
+       ORDER BY id ASC LIMIT 1`, [uid, currentId]
+    );
+    if (!lead) {
+      [[lead]] = await db.query(
+        `SELECT id FROM leads WHERE assigned_to=? AND archived_at IS NULL
+         AND status NOT IN ('kunde','kein_interesse') ORDER BY id ASC LIMIT 1`, [uid]
+      );
+    }
+    res.json({ id: lead?.id || null });
+  } catch(e) { res.status(500).json({ error: 'Fehler' }); }
+});
+
+// ── GET /api/leads/activity-feed — letzte Aktivitäten (Admin, Feature 7) ──
+router.get('/activity-feed', auth, adminOnly, async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT a.id, a.action, a.entity_type, a.entity_id, a.details,
+              a.created_at, u.full_name, l.company
+       FROM activity_log a
+       LEFT JOIN users u ON u.id = a.user_id
+       LEFT JOIN leads l ON l.id = a.entity_id AND a.entity_type = 'lead'
+       ORDER BY a.created_at DESC LIMIT 40`
+    );
+    res.json(rows);
+  } catch(e) { res.status(500).json({ error: 'Fehler' }); }
+});
+
+// ── POST /api/leads/import — CSV-Import (Admin, Feature 8) ──────────────────
+const multerMem = require('multer')({ storage: require('multer').memoryStorage(), limits: { fileSize: 5*1024*1024 } });
+router.post('/import', auth, adminOnly, multerMem.single('csv'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Keine Datei' });
+  const assignTo = parseInt(req.body.assigned_to) || null;
+  try {
+    const text = req.file.buffer.toString('utf-8').replace(/^﻿/, '');
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (!lines.length) return res.status(400).json({ error: 'Leere CSV' });
+    const delim = lines[0].includes(';') ? ';' : ',';
+    const headers = lines[0].split(delim).map(h => h.trim().toLowerCase().replace(/[^a-z]/g,''));
+    const idx = (names) => { for (const n of names) { const i = headers.indexOf(n); if (i>=0) return i; } return -1; };
+    const iComp = idx(['firmenname','company','name','unternehmen']);
+    const iIndu = idx(['branche','industry','kategorie']);
+    const iLoc  = idx(['ort','location','standort','stadt']);
+    const iPhone = idx(['telefonnummer','phone','telefon','tel']);
+    const iMail = idx(['email','e-mail','mail']);
+    const iWeb  = idx(['website','web','url','homepage']);
+    if (iComp < 0) return res.status(400).json({ error: 'Spalte "Firmenname" nicht gefunden' });
+    let imported = 0, skipped = 0;
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(delim).map(c => c.trim().replace(/^"|"$/g,'').trim());
+      const company = iComp >= 0 ? cols[iComp] : '';
+      if (!company) { skipped++; continue; }
+      const phone = iPhone >= 0 ? cols[iPhone] : null;
+      const email = iMail >= 0 ? cols[iMail] : null;
+      const exists = phone || email ? await db.query(
+        `SELECT id FROM leads WHERE archived_at IS NULL AND (${phone?'phone=?':'1=0'}${email?' OR email=?':''})`,
+        [phone, email].filter(Boolean)
+      ).then(([r]) => r.length > 0).catch(() => false) : false;
+      if (exists) { skipped++; continue; }
+      await db.query(
+        `INSERT INTO leads (company, industry, location, phone, email, website, status, assigned_to, created_by, source)
+         VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        [company, iIndu>=0?cols[iIndu]||null:null, iLoc>=0?cols[iLoc]||null:null,
+         phone||null, email||null, iWeb>=0?cols[iWeb]||null:null,
+         'neu', assignTo, req.user.id, 'csv-import']
+      ).catch(() => { skipped++; return null; });
+      imported++;
+    }
+    await log(req.user.id, 'leads_csv_import', 'lead', null, { imported, skipped }, req.ip);
+    res.json({ ok: true, imported, skipped });
+  } catch(e) { console.error('CSV import error:', e); res.status(500).json({ error: 'Importfehler: ' + e.message }); }
+});
+
 // ── POST /api/leads/bulk — mehrere Leads auf einmal speichern (Admin oder can_generate_leads) ──
 router.post('/bulk', auth, async (req, res) => {
   if (req.user.role !== 'admin' && !req.user.can_generate_leads)

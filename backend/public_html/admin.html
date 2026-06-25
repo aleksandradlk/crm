@@ -50,6 +50,10 @@
 .pipeline-card.dragging{opacity:.35}
 .pipeline-card .pc-company{font-weight:700;font-size:13px;margin-bottom:4px}
 .pipeline-card .pc-row{display:flex;align-items:center;gap:6px;color:var(--text3);font-size:11px;margin-top:3px}
+.qf-btn{background:var(--bg3);border:1px solid var(--border2);border-radius:20px;padding:4px 12px;font-size:11px;font-weight:600;color:var(--text3);cursor:pointer;transition:all .15s}
+.qf-btn:hover{border-color:var(--accent);color:var(--accent)}
+.qf-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.qf-btn i{margin-right:4px}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 </head>
@@ -120,7 +124,9 @@
             <option value="">Alle Closer</option>
           </select>
           <button class="btn btn-primary btn-sm" onclick="openAddLeadModal()"><i class="fas fa-plus"></i> Lead hinzufügen</button>
-          <button class="btn btn-ghost btn-sm" onclick="exportCSV()"><i class="fas fa-download"></i> CSV</button>
+          <button class="btn btn-ghost btn-sm" onclick="openCsvImportModal()"><i class="fas fa-upload"></i> CSV Import</button>
+          <button class="btn btn-ghost btn-sm" onclick="exportCSV()"><i class="fas fa-download"></i> CSV Export</button>
+          <button class="btn btn-ghost btn-sm" onclick="toggleActivityFeed()" title="Aktivitäts-Feed"><i class="fas fa-stream"></i></button>
           <div class="view-toggle">
             <button id="allLeadsViewTable" class="active" onclick="setLeadsView('table')"><i class="fas fa-table"></i> Tabelle</button>
             <button id="allLeadsViewPipeline" onclick="setLeadsView('pipeline')"><i class="fas fa-columns"></i> Pipeline</button>
@@ -134,6 +140,15 @@
         <div class="stat-card"><div class="stat-label">Heute neu</div><div class="stat-value sv-accent" id="st-heute" style="color:var(--accent)">—</div></div>
         <div class="stat-card"><div class="stat-label">Rückrufe</div><div class="stat-value" id="st-rueckruf" style="color:var(--amber)">—</div></div>
         <div class="stat-card"><div class="stat-label">Kunden</div><div class="stat-value sv-amber" id="st-kunde">—</div></div>
+      </div>
+
+      <!-- Feature 9: Schnellfilter -->
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="qf-btn active" onclick="adminQuickFilter('all',this)">Alle</button>
+        <button class="qf-btn" onclick="adminQuickFilter('nicht_zugewiesen',this)"><i class="fas fa-user-slash"></i> Nicht zugewiesen</button>
+        <button class="qf-btn" onclick="adminQuickFilter('rueckruf',this)"><i class="fas fa-bell"></i> Rückrufe</button>
+        <button class="qf-btn" onclick="adminQuickFilter('neu_woche',this)"><i class="fas fa-star"></i> Neu diese Woche</button>
+        <button class="qf-btn" onclick="adminQuickFilter('kunden',this)"><i class="fas fa-trophy"></i> Kunden</button>
       </div>
 
       <!-- Bulk-Action-Bar -->
@@ -910,7 +925,8 @@ function renderLeads(leads) {
     return;
   }
   body.innerHTML = leads.map((l, i) => `
-    <tr style="cursor:pointer;${bulkSelectedIds.has(l.id)?'background:rgba(79,142,247,0.07)':''}" onclick="openLeadPanel(${l.id})">
+    <tr draggable="true" ondragstart="_dragLeadId=${l.id};showDragAssignOverlay()" ondragend="hideDragAssignOverlay()"
+        style="cursor:pointer;${bulkSelectedIds.has(l.id)?'background:rgba(79,142,247,0.07)':''}" onclick="openLeadPanel(${l.id})">
       <td onclick="event.stopPropagation()">
         <input type="checkbox" class="lead-cb" data-id="${l.id}" ${bulkSelectedIds.has(l.id)?'checked':''} onchange="toggleBulkSelect(${l.id},this.checked)" style="accent-color:var(--accent)">
       </td>
@@ -1792,6 +1808,122 @@ function exportCSV() {
   showToast(`CSV exportiert (${data.length} Leads)`);
 }
 
+// ── FEATURE 9: ADMIN QUICK FILTERS ───────────────────────────
+function adminQuickFilter(type, btn) {
+  document.querySelectorAll('.qf-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const now = new Date();
+  const weekAgo = new Date(now - 7 * 86400000);
+  let leads = allLeads;
+  if (type === 'nicht_zugewiesen') leads = allLeads.filter(l => !l.assigned_to);
+  else if (type === 'rueckruf') leads = allLeads.filter(l => l.status === 'rueckruf');
+  else if (type === 'neu_woche') leads = allLeads.filter(l => l.status === 'neu' && new Date(l.created_at) >= weekAgo);
+  else if (type === 'kunden') leads = allLeads.filter(l => l.status === 'kunde');
+  renderLeadsTable(leads);
+}
+
+// ── FEATURE 7: AKTIVITÄTS-FEED ────────────────────────────────
+let _feedOpen = false;
+async function toggleActivityFeed() {
+  _feedOpen = !_feedOpen;
+  const panel = document.getElementById('activityFeedPanel');
+  const overlay = document.getElementById('activityFeedOverlay');
+  panel.style.display = _feedOpen ? 'flex' : 'none';
+  overlay.style.display = _feedOpen ? 'block' : 'none';
+  if (_feedOpen) loadActivityFeed();
+}
+async function loadActivityFeed() {
+  const list = document.getElementById('activityFeedList');
+  try {
+    const rows = await api('GET', '/leads/activity-feed');
+    if (!rows.length) { list.innerHTML = '<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">Keine Aktivitäten</div>'; return; }
+    const ACTION_ICONS = { status_changed:'exchange-alt', note_added:'sticky-note', lead_created:'plus', lead_assigned:'user-tag', lead_archived:'archive', email_sent:'envelope', call_logged:'phone' };
+    list.innerHTML = rows.map(r => {
+      const icon = ACTION_ICONS[r.action] || 'dot-circle';
+      const dt = new Date(r.created_at);
+      const timeStr = dt.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'}) + ' ' + dt.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+      let detail = '';
+      try { const d = JSON.parse(r.details || '{}'); detail = d.to || d.note_preview || d.assigned_to || ''; } catch(e) {}
+      return `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="width:28px;height:28px;border-radius:50%;background:rgba(79,142,247,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px">
+          <i class="fas fa-${icon}" style="font-size:11px;color:var(--accent)"></i>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;color:var(--text1)">${escHtml(r.full_name||'System')}</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:1px">${r.company ? `<span style="color:var(--accent)">${escHtml(r.company)}</span> · ` : ''}${r.action.replace(/_/g,' ')}${detail ? ` → ${escHtml(String(detail))}` : ''}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">${timeStr}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { list.innerHTML = '<div style="color:var(--red);font-size:12px;text-align:center">Fehler beim Laden</div>'; }
+}
+
+// ── FEATURE 8: CSV IMPORT ─────────────────────────────────────
+function openCsvImportModal() {
+  document.getElementById('csvImportResult').style.display = 'none';
+  document.getElementById('csvFileInput').value = '';
+  // Populate assign dropdown
+  const sel = document.getElementById('csvAssignTo');
+  sel.innerHTML = '<option value="">— Nicht zuweisen —</option>';
+  allUsers.filter(u => u.role === 'closer' || u.role === 'admin').forEach(u => {
+    sel.innerHTML += `<option value="${u.id}">${escHtml(u.full_name)}</option>`;
+  });
+  document.getElementById('csvImportModal').classList.add('active');
+}
+function closeCsvImportModal() { document.getElementById('csvImportModal').classList.remove('active'); }
+async function runCsvImport() {
+  const file = document.getElementById('csvFileInput').files[0];
+  if (!file) { showToast('Bitte CSV-Datei auswählen', 'err'); return; }
+  const assignTo = document.getElementById('csvAssignTo').value;
+  const btn = document.getElementById('csvImportBtn');
+  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importiere...';
+  const form = new FormData();
+  form.append('csv', file);
+  if (assignTo) form.append('assign_to', assignTo);
+  try {
+    const token = localStorage.getItem('token');
+    const res = await fetch('/api/leads/import', { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: form });
+    const data = await res.json();
+    const div = document.getElementById('csvImportResult');
+    div.style.display = 'block';
+    if (data.ok) {
+      div.style.background = 'rgba(34,197,94,.12)'; div.style.color = 'var(--green)';
+      div.innerHTML = `<i class="fas fa-check-circle"></i> <strong>${data.imported}</strong> Leads importiert, <strong>${data.skipped}</strong> übersprungen (Duplikate)`;
+      loadLeads();
+    } else {
+      div.style.background = 'rgba(239,68,68,.12)'; div.style.color = 'var(--red)';
+      div.innerHTML = `<i class="fas fa-times-circle"></i> Fehler: ${escHtml(data.error || 'Unbekannt')}`;
+    }
+  } catch(e) { showToast('Import fehlgeschlagen: ' + e.message, 'err'); }
+  finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-upload"></i> Importieren'; }
+}
+
+// ── FEATURE 6: DRAG & DROP CLOSER-ZUWEISUNG ──────────────────
+let _dragLeadId = null;
+function showDragAssignOverlay() {
+  const overlay = document.getElementById('dragAssignOverlay');
+  const targets = document.getElementById('dragCloserTargets');
+  targets.innerHTML = allUsers.filter(u => u.role === 'closer' || u.role === 'admin').map(u =>
+    `<div class="drag-closer-target" ondragover="event.preventDefault();this.style.background='rgba(79,142,247,.12)'" ondragleave="this.style.background=''"
+         ondrop="dropAssignLead(${u.id});this.style.background=''"
+         style="padding:7px 10px;border-radius:7px;border:1px solid var(--border2);font-size:12px;color:var(--text2);cursor:pointer;display:flex;align-items:center;gap:8px">
+      <i class="fas fa-user" style="color:var(--accent);font-size:10px"></i> ${escHtml(u.full_name)}
+    </div>`
+  ).join('');
+  overlay.style.display = 'block';
+}
+function hideDragAssignOverlay() { document.getElementById('dragAssignOverlay').style.display = 'none'; }
+async function dropAssignLead(userId) {
+  if (!_dragLeadId) return;
+  hideDragAssignOverlay();
+  try {
+    await api('PATCH', `/leads/${_dragLeadId}/assign`, { assigned_to: userId });
+    showToast(userId ? 'Lead zugewiesen ✓' : 'Zuweisung aufgehoben');
+    loadLeads();
+  } catch(e) { showToast('Fehler: ' + e.message, 'err'); }
+  _dragLeadId = null;
+}
+
 // ── LEAD MANUELL HINZUFÜGEN ───────────────────────────────────
 function openAddLeadModal() {
   ['ml-company','ml-ceo','ml-phone','ml-email','ml-location','ml-industry','ml-website','ml-notes']
@@ -2374,13 +2506,17 @@ async function deleteComment(leadId, cid) {
 // ── SETTINGS MODAL (Admin: nur Benachrichtigungen) ────────────
 async function openSettingsModal() {
   try {
-    const me = await api('GET', '/auth/me');
+    const [me, settings] = await Promise.all([api('GET', '/auth/me'), api('GET', '/settings')]);
     const el = document.getElementById('adminNotifEmail');
     const elP = document.getElementById('adminPhone');
     const elE = document.getElementById('adminEmail');
     if (el)  el.checked = !!me.notify_email;
     if (elP) elP.value  = me.phone || '';
     if (elE) elE.value  = me.email || '';
+    const elGoal = document.getElementById('settingDailyGoal');
+    const elScript = document.getElementById('settingCallScript');
+    if (elGoal)   elGoal.value   = settings.daily_call_goal || '50';
+    if (elScript) elScript.value = settings.call_script || '';
   } catch {}
   document.getElementById('settingsModal').classList.add('open');
 }
@@ -2389,9 +2525,13 @@ async function saveNotifSettings() {
   const notify_email = document.getElementById('adminNotifEmail')?.checked ? 1 : 0;
   const phone        = document.getElementById('adminPhone')?.value.trim() || null;
   const email        = document.getElementById('adminEmail')?.value.trim() || null;
+  const goal         = document.getElementById('settingDailyGoal')?.value.trim() || '50';
+  const script       = document.getElementById('settingCallScript')?.value || '';
   try {
     const me = Auth.getUser();
     await api('PATCH', `/users/${me.id}/notify`, { notify_email, phone, email });
+    await api('PATCH', '/settings/daily_call_goal', { value: goal });
+    await api('PATCH', '/settings/call_script',     { value: script });
     showToast('Einstellungen gespeichert ✓');
     closeSettingsModal();
   } catch(e) { showToast(e.message, 'err'); }
@@ -2927,6 +3067,16 @@ document.getElementById('addLeadModal').addEventListener('click', function(e){ i
       <label>Meine E-Mail <span style="font-size:11px;color:var(--text3);font-weight:400">(für Closer sichtbar)</span></label>
       <input id="adminEmail" class="form-control" type="email" placeholder="name@beispiel.de">
     </div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+    <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)"><i class="fas fa-scroll" style="color:var(--accent);margin-right:6px"></i>Gesprächsleitfaden (für Closer)</div>
+    <div class="form-group">
+      <label>Tagesziel <span style="font-size:11px;color:var(--text3);font-weight:400">(Anrufe pro Tag)</span></label>
+      <input id="settingDailyGoal" class="form-control" type="number" min="1" max="999" placeholder="50">
+    </div>
+    <div class="form-group" style="margin-top:8px">
+      <label>Leitfaden-Text <span style="font-size:11px;color:var(--text3);font-weight:400">(wird im Panel der Closer angezeigt)</span></label>
+      <textarea id="settingCallScript" class="form-control" rows="6" placeholder="1. Hallo, mein Name ist...&#10;2. Ich rufe an wegen...&#10;3. Haben Sie kurz Zeit?" style="resize:vertical;font-size:12px;line-height:1.6"></textarea>
+    </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">
       <button class="btn btn-ghost btn-sm" onclick="closeSettingsModal()">Abbrechen</button>
       <button class="btn btn-primary btn-sm" onclick="saveNotifSettings()"><i class="fas fa-save"></i> Speichern</button>
@@ -3099,6 +3249,59 @@ document.getElementById('editContactInput')?.addEventListener('keydown', functio
       <button class="btn btn-ghost" onclick="closeAdminFeedbackModal()">Abbrechen</button>
     </div>
     <div id="afbModalErr" style="color:var(--red);font-size:12px;margin-top:6px;text-align:center"></div>
+  </div>
+</div>
+
+<!-- Feature 6: Drag & Drop Closer-Zuweisung Overlay -->
+<div id="dragAssignOverlay" style="display:none;position:fixed;bottom:24px;right:24px;z-index:8000;background:var(--bg2);border:1px solid var(--border2);border-radius:12px;box-shadow:var(--shadow-lg);padding:16px;min-width:200px">
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:10px"><i class="fas fa-user-tag"></i> Auf Closer ziehen</div>
+  <div id="dragCloserTargets" style="display:flex;flex-direction:column;gap:6px"></div>
+  <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
+    <div class="drag-closer-target" data-uid="null" ondragover="event.preventDefault()" ondrop="dropAssignLead(null)" style="padding:7px 10px;border-radius:7px;border:1px dashed var(--border2);font-size:12px;color:var(--text3);text-align:center;cursor:pointer">
+      <i class="fas fa-user-slash"></i> Zuweisung aufheben
+    </div>
+  </div>
+</div>
+
+<!-- Feature 7: Aktivitäts-Feed Seitenpanel -->
+<div id="activityFeedPanel" style="display:none;position:fixed;top:0;right:0;width:340px;height:100vh;z-index:7000;background:var(--bg2);border-left:1px solid var(--border2);box-shadow:var(--shadow-lg);display:flex;flex-direction:column">
+  <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+    <div style="font-size:14px;font-weight:700"><i class="fas fa-stream" style="color:var(--accent);margin-right:8px"></i>Aktivitäts-Feed</div>
+    <button class="btn btn-ghost btn-sm" onclick="toggleActivityFeed()"><i class="fas fa-times"></i></button>
+  </div>
+  <div id="activityFeedList" style="flex:1;overflow-y:auto;padding:12px 16px">
+    <div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">Laden...</div>
+  </div>
+</div>
+<div id="activityFeedOverlay" style="display:none;position:fixed;inset:0;z-index:6999" onclick="toggleActivityFeed()"></div>
+
+<!-- Feature 8: CSV Import Modal -->
+<div class="modal-overlay" id="csvImportModal">
+  <div style="background:var(--bg2);border-radius:14px;box-shadow:var(--shadow-lg);padding:28px;width:460px;max-width:96vw">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <h2 style="font-size:16px;font-weight:700;margin:0"><i class="fas fa-upload" style="color:var(--accent);margin-right:8px"></i>CSV-Import</h2>
+      <button class="btn btn-ghost btn-sm" onclick="closeCsvImportModal()"><i class="fas fa-times"></i></button>
+    </div>
+    <div style="background:var(--bg3);border-radius:8px;padding:12px;font-size:12px;color:var(--text2);margin-bottom:16px;line-height:1.6">
+      Erwartete Spalten (Semikolon-getrennt):<br>
+      <code style="color:var(--accent)">Firmenname;Branche;Ort;Telefonnummer;E-Mail;Website</code><br>
+      <span style="color:var(--text3)">Nur Firmenname ist Pflicht. Duplikate (gleiche Telefon/E-Mail) werden übersprungen.</span>
+    </div>
+    <div class="form-group">
+      <label>Closer zuweisen <span style="color:var(--text3);font-weight:400">(optional)</span></label>
+      <select id="csvAssignTo" class="form-control">
+        <option value="">— Nicht zuweisen —</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>CSV-Datei</label>
+      <input type="file" id="csvFileInput" accept=".csv,.txt" class="form-control" style="padding:8px">
+    </div>
+    <div id="csvImportResult" style="display:none;padding:10px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-ghost btn-sm" onclick="closeCsvImportModal()">Abbrechen</button>
+      <button class="btn btn-primary btn-sm" id="csvImportBtn" onclick="runCsvImport()"><i class="fas fa-upload"></i> Importieren</button>
+    </div>
   </div>
 </div>
 </body>
