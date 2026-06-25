@@ -1240,12 +1240,7 @@ function renderDetail(l) {
     </details>` : ''}
 
     <div style="margin-bottom:6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Status setzen</div>
-    <div id="panelStatusBtns" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">${statusBtns}</div>
-    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:16px">
-      ${[['neu','Neu'],['kontaktiert','Kontaktiert'],['nicht_erreicht','Nicht erreicht'],['kein_interesse','Kein Interesse'],['rueckruf','Rückruf'],['kunde','Kunde']].map(([s,label]) =>
-        `<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 7px;opacity:.75" onclick="setStatusAndNext(${l.id},'${s}')" title="${label} setzen &amp; nächsten Lead öffnen">→ ${label}</button>`
-      ).join('')}
-    </div>
+    <div id="panelStatusBtns" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:16px">${statusBtns}</div>
 
     <div style="margin-bottom:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Gesprächsnotiz</div>
     <div style="display:flex;gap:8px;margin-bottom:20px">
