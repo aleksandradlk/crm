@@ -17,6 +17,7 @@ const feedbackRoutes  = require('./routes/feedback');
 const settingsRoutes       = require('./routes/settings');
 const emailTemplateRoutes  = require('./routes/emailtemplates');
 const { startReminderCron } = require('./cron/reminders');
+const { pollIncomingEmails } = require('./cron/emailPoller');
 const cron           = require('node-cron');
 
 const app  = express();
@@ -222,6 +223,21 @@ db.query(`CREATE TABLE IF NOT EXISTS email_templates (
   }).catch(() => {});
 }).catch(() => {});
 
+// ── E-Mail-Eingang-Tabelle ────────────────────────────────────
+db.query(`CREATE TABLE IF NOT EXISTS lead_emails (
+  id           INT AUTO_INCREMENT PRIMARY KEY,
+  lead_id      INT NOT NULL,
+  direction    ENUM('inbound','outbound') DEFAULT 'inbound',
+  from_address VARCHAR(255),
+  to_address   VARCHAR(255),
+  subject      VARCHAR(500),
+  body_text    TEXT,
+  message_id   VARCHAR(500),
+  received_at  DATETIME,
+  created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_message_id (message_id(250))
+)`).catch(() => {});
+
 // ── Settings-Tabelle ─────────────────────────────────────────
 db.query(`CREATE TABLE IF NOT EXISTS app_settings (
   key_name VARCHAR(100) PRIMARY KEY,
@@ -253,4 +269,7 @@ app.listen(PORT, () => {
   console.log(`LeadHunter Pro läuft auf Port ${PORT}`);
   console.log(`Umgebung: ${process.env.NODE_ENV || 'development'}`);
   startReminderCron();
+  // IMAP-Polling alle 5 Minuten
+  cron.schedule('*/5 * * * *', pollIncomingEmails);
+  pollIncomingEmails(); // Sofort beim Start einmal prüfen
 });

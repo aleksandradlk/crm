@@ -51,6 +51,7 @@
 .pipeline-card .pc-company{font-weight:700;font-size:13px;margin-bottom:4px}
 .pipeline-card .pc-row{display:flex;align-items:center;gap:6px;color:var(--text3);font-size:11px;margin-top:3px}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 </head>
 <body>
 <div class="grid-bg"></div><div class="glow"></div>
@@ -70,7 +71,8 @@
     </div>
     <nav class="nav">
       <span class="nav-group-label">Hauptnavigation</span>
-      <div class="nav-item active" onclick="showTab('leads')"><i class="fas fa-database"></i> Alle Leads</div>
+      <div class="nav-item active" onclick="showTab('dashboard')"><i class="fas fa-tachometer-alt"></i> Dashboard</div>
+      <div class="nav-item" onclick="showTab('leads')"><i class="fas fa-database"></i> Alle Leads</div>
       <div class="nav-item" onclick="showTab('myLeads')"><i class="fas fa-user-check"></i> Meine Leads</div>
       <div class="nav-item" onclick="showTab('generate')"><i class="fas fa-search"></i> Generieren</div>
       <div class="nav-sep"></div>
@@ -90,8 +92,17 @@
   <!-- MAIN -->
   <main class="main-content">
 
+    <!-- ── TAB: DASHBOARD ───────────────────────────────── -->
+    <div id="tab-dashboard" class="tab-panel active">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <h1 style="font-size:20px;font-weight:700">Dashboard</h1>
+        <button class="btn btn-ghost btn-sm" onclick="loadDashboard()"><i class="fas fa-sync"></i> Aktualisieren</button>
+      </div>
+      <div id="dashboardContent"></div>
+    </div>
+
     <!-- ── TAB: LEADS ─────────────────────────────────── -->
-    <div id="tab-leads" class="tab-panel active">
+    <div id="tab-leads" class="tab-panel">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
         <h1 style="font-size:20px;font-weight:700">Alle Leads</h1>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -649,9 +660,10 @@ function showTab(name) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
-  const navMap = { leads: 0, myLeads: 1, generate: 2, users: 3, tracking: 4, wiki: 5, chat: 6, feedback: 7, archive: 8 };
+  const navMap = { dashboard: 0, leads: 1, myLeads: 2, generate: 3, users: 4, tracking: 5, wiki: 6, chat: 7, feedback: 8, archive: 9 };
   const items = document.querySelectorAll('.nav-item');
   if (navMap[name] !== undefined) items[navMap[name]]?.classList.add('active');
+  if (name === 'dashboard') loadDashboard();
   if (name === 'leads')    {
     const _s = document.getElementById('searchInput'); if (_s) _s.value = '';
     const _sf = document.getElementById('statusFilter'); if (_sf) _sf.value = '';
@@ -690,6 +702,13 @@ function renderAdminPipeline(leads, boardId) {
         ${l.phone  ? `<div class="pc-row"><i class="fas fa-phone" style="width:12px"></i><a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()" style="color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:11px">${escHtml(l.phone)}</a></div>` : ''}
         ${l.assigned_name ? `<div class="pc-row"><i class="fas fa-user-tag" style="width:12px"></i>${escHtml(l.assigned_name)}</div>` : ''}
         <div class="pc-row"><i class="fas fa-clock" style="width:12px"></i>${fmtDateShort(l.updated_at||l.created_at)}</div>
+        <div style="margin-top:6px;text-align:right">
+          <span onclick="adminQuickNoteToggle(${l.id}, this, event)" title="Schnellnotiz" style="cursor:pointer;color:var(--accent);font-size:13px"><i class="fas fa-sticky-note"></i></span>
+          <textarea class="quick-note-ta" data-lead-id="${l.id}" rows="2" placeholder="Schnellnotiz..." style="display:none;width:100%;margin-top:4px;font-size:11px;resize:none;background:var(--bg2);border:1px solid var(--border2);border-radius:6px;padding:4px 6px;color:var(--text1);box-sizing:border-box"
+            onclick="event.stopPropagation()"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();adminQuickNoteSave(${l.id},this)}"
+            onblur="adminQuickNoteSave(${l.id},this)"></textarea>
+        </div>
       </div>`).join('');
     return `
       <div class="pipeline-col">
@@ -704,6 +723,27 @@ function renderAdminPipeline(leads, boardId) {
         </div>
       </div>`;
   }).join('');
+}
+
+function adminQuickNoteToggle(id, iconEl, event) {
+  event.stopPropagation();
+  const card = iconEl.closest('.pipeline-card');
+  const ta = card.querySelector('.quick-note-ta');
+  if (!ta) return;
+  const visible = ta.style.display !== 'none';
+  ta.style.display = visible ? 'none' : 'block';
+  if (!visible) { ta.value = ''; ta.focus(); }
+}
+
+async function adminQuickNoteSave(id, ta) {
+  const text = ta.value.trim();
+  if (!text) { ta.style.display = 'none'; return; }
+  try {
+    await api('POST', `/leads/${id}/comments`, { text });
+    ta.value = '';
+    ta.style.display = 'none';
+    showToast('Notiz gespeichert ✓');
+  } catch(e) { showToast('Fehler beim Speichern', 'err'); }
 }
 
 function onAdminCardDragStart(e, id) {
@@ -789,7 +829,10 @@ function renderMyLeads() {
       <td style="font-size:12px;color:var(--text2)">${escHtml(l.location||'—')}</td>
       <td onclick="event.stopPropagation()">${statusSelectHtml(l)}</td>
       <td style="font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace">${fmtDateShort(l.created_at)}</td>
-      <td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openLeadPanel(${l.id})"><i class="fas fa-chevron-right"></i></button></td>
+      <td onclick="event.stopPropagation()" style="white-space:nowrap">
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openLeadPanel(${l.id})"><i class="fas fa-chevron-right"></i></button>
+        <span onclick="tableQuickNote(${l.id},this,event)" title="Schnellnotiz" style="cursor:pointer;color:var(--accent);font-size:13px;margin-left:4px;vertical-align:middle"><i class="fas fa-sticky-note"></i></span>
+      </td>
     </tr>`).join('');
 }
 
@@ -882,7 +925,8 @@ function renderLeads(leads) {
       <td onclick="event.stopPropagation()">${statusSelectHtml(l)}</td>
       <td style="font-size:12px;color:var(--text2)">${escHtml(l.assigned_name||'—')}</td>
       <td style="font-size:11px;color:var(--text3)">${fmtDateShort(l.created_at)}</td>
-      <td onclick="event.stopPropagation()">
+      <td onclick="event.stopPropagation()" style="white-space:nowrap">
+        <span onclick="tableQuickNote(${l.id},this,event)" title="Schnellnotiz" style="cursor:pointer;color:var(--accent);font-size:13px;margin-right:6px;vertical-align:middle"><i class="fas fa-sticky-note"></i></span>
         <button class="btn btn-ghost btn-sm" onclick="deleteLead(${l.id})" title="Löschen"><i class="fas fa-trash" style="color:var(--red)"></i></button>
       </td>
     </tr>`).join('');
@@ -1077,6 +1121,45 @@ async function saveCallDoc() {
   } finally { btn.disabled = false; }
 }
 
+function tableQuickNote(id, el, event) {
+  event.stopPropagation();
+  const existing = document.getElementById('qn-popup');
+  if (existing) { existing.remove(); return; }
+  const rect = el.getBoundingClientRect();
+  const popup = document.createElement('div');
+  popup.id = 'qn-popup';
+  popup.style.cssText = `position:fixed;z-index:9999;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.4);padding:8px;width:240px;top:${Math.min(rect.bottom+4, window.innerHeight-130)}px;left:${Math.min(rect.left, window.innerWidth-260)}px`;
+  popup.innerHTML = `<textarea id="qn-popup-ta" rows="3" placeholder="Schnellnotiz..." style="width:100%;font-size:12px;resize:none;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:6px;color:var(--text1);box-sizing:border-box;outline:none"></textarea><div style="font-size:10px;color:var(--text3);margin-top:3px">Enter = Speichern · Esc = Abbrechen</div>`;
+  document.body.appendChild(popup);
+  const ta = document.getElementById('qn-popup-ta');
+  ta.focus();
+  const close = () => { const p = document.getElementById('qn-popup'); if (p) p.remove(); };
+  ta.onkeydown = async e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); const v = ta.value.trim(); close(); if (v) { try { await api('POST', `/leads/${id}/comments`, { text: `📌 ${v}` }); showToast('Notiz gespeichert ✓'); } catch(ex){} } }
+    if (e.key === 'Escape') close();
+  };
+  ta.onblur = async () => { const v = ta.value.trim(); close(); if (v) { try { await api('POST', `/leads/${id}/comments`, { text: `📌 ${v}` }); showToast('Notiz gespeichert ✓'); } catch(ex){} } };
+  setTimeout(() => { document.addEventListener('click', function oc(e){ if (!popup.contains(e.target)){ close(); document.removeEventListener('click',oc); } }); }, 100);
+}
+
+function renderEmailThread(emails) {
+  if (!emails || !emails.length) return '<div style="color:var(--text3);font-size:12px;padding:6px 0">Keine E-Mails vorhanden</div>';
+  return emails.map(m => {
+    const isOut = m.direction === 'outbound';
+    const color = isOut ? 'var(--accent)' : 'var(--green)';
+    const label = isOut ? '↑ Gesendet' : '↓ Empfangen';
+    const date  = m.received_at || m.created_at;
+    return `<div style="margin-bottom:8px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg3);border-left:3px solid ${color}">
+        <span style="font-size:11px;font-weight:700;color:${color}">${label}</span>
+        <span style="font-size:12px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(m.subject||'(kein Betreff)')}</span>
+        <span style="font-size:11px;color:var(--text3);white-space:nowrap">${fmtDate(date)}</span>
+      </div>
+      <div style="padding:8px 10px;font-size:12px;color:var(--text2);line-height:1.5;max-height:120px;overflow-y:auto;white-space:pre-wrap;word-break:break-word">${escHtml((m.body_text||'').slice(0,500))}${(m.body_text||'').length>500?'…':''}</div>
+    </div>`;
+  }).join('');
+}
+
 function renderCallLogs(logs) {
   if (!logs || !logs.length) return '';
   const LABELS = { reached:'Erreicht', 'no-answer':'Nicht erreicht', busy:'Besetzt', failed:'Fehlgeschlagen', wrong_number:'Falsche Nummer', started:'Gestartet', completed:'Gespräch geführt', manual:'Manuell' };
@@ -1187,6 +1270,9 @@ function renderLeadDetail(l) {
       <input type="text" id="newComment-${l.id}" class="form-control" placeholder="Kommentar schreiben...">
       <button class="btn btn-ghost btn-sm" onclick="addComment(${l.id})"><i class="fas fa-paper-plane"></i></button>
     </div>
+    <div style="margin-top:16px;margin-bottom:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">E-Mail-Verlauf</div>
+    <div id="adminEmailThread">${renderEmailThread(l.email_thread||[])}</div>
+
     <div style="margin-bottom:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Reminder</div>
     <div style="margin-bottom:12px">${remindersHtml}</div>
     <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end">
@@ -1433,7 +1519,14 @@ async function loadUsers() {
             [u.can_manage_email_templates,'E-Mail-Vorlagen verwalten','fa-envelope'],
           ].filter(p=>p[0]).map(p=>`<span style="font-size:10px;color:var(--text3);margin-left:4px" title="${p[1]}"><i class="fas ${p[2]}"></i></span>`).join(''):''}
         </td>
-        <td><span style="color:${u.is_active?'var(--green)':'var(--red)'};font-size:12px">${u.is_active?'Aktiv':'Gesperrt'}</span></td>
+        <td>${(()=>{
+          if (!u.is_active) return '<span style="color:var(--red);font-size:12px">Gesperrt</span>';
+          const la = u.last_active ? new Date(u.last_active) : null;
+          const mins = la ? Math.floor((Date.now() - la.getTime()) / 60000) : null;
+          if (mins !== null && mins <= 5)  return '<span style="color:var(--green);font-size:12px"><i class="fas fa-circle" style="font-size:7px;vertical-align:middle;margin-right:4px"></i>Online</span>';
+          if (mins !== null && mins <= 30) return `<span style="color:var(--amber);font-size:12px"><i class="fas fa-circle" style="font-size:7px;vertical-align:middle;margin-right:4px"></i>Vor ${mins} Min.</span>`;
+          return '<span style="color:var(--text3);font-size:12px"><i class="fas fa-circle" style="font-size:7px;vertical-align:middle;margin-right:4px"></i>Offline</span>';
+        })()}</td>
         <td style="font-size:12px;color:var(--text3)">${fmtDate(u.last_login)}</td>
         <td style="font-size:12px;color:var(--text2)">${u.creator_name ? `${escHtml(u.creator_name)}${u.creator_email ? `<br><span style="color:var(--text3);font-size:11px">${escHtml(u.creator_email)}</span>` : ''}` : '<span style="color:var(--text3)">—</span>'}</td>
         <td style="display:flex;gap:6px">
@@ -2033,8 +2126,69 @@ async function deleteWikiFile(id) {
   } catch(e) { showToast(e.message, 'err'); }
 }
 
+async function showWikiNoPreviewModal(filename, displayName) {
+  const existing = document.getElementById('wikiNoPreviewModal');
+  if (existing) existing.remove();
+  const ext = filename.split('.').pop().toLowerCase();
+  const isDocx = /^docx?$/.test(ext);
+  const label = displayName || filename;
+  const safeFile = filename.replace(/'/g, "\\'");
+  const safeEnc  = encodeURIComponent(label);
+
+  const overlay = document.createElement('div');
+  overlay.id = 'wikiNoPreviewModal';
+  overlay.className = 'modal-overlay';
+  overlay.style.cssText = 'display:flex;z-index:9999';
+
+  const dlBtn = `<button class="btn btn-primary" style="margin-top:16px" onclick="document.getElementById('wikiNoPreviewModal').remove();wikiFileOpen('${safeFile}','${safeEnc}',true)"><i class="fas fa-download" style="margin-right:6px"></i>Herunterladen</button>`;
+
+  if (isDocx) {
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:780px;width:95vw;max-height:85vh;display:flex;flex-direction:column">
+        <button class="modal-close" onclick="document.getElementById('wikiNoPreviewModal').remove()"><i class="fas fa-times"></i></button>
+        <div class="modal-title" style="margin-bottom:12px;flex-shrink:0">${escHtml(label)}</div>
+        <div id="wikiDocxBody" style="flex:1;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:24px 28px;background:#fff;color:#111;font-family:Georgia,serif;font-size:14px;line-height:1.7">
+          <div style="color:var(--text3);text-align:center;padding:40px"><i class="fas fa-spinner fa-spin" style="font-size:24px"></i><br><br>Dokument wird geladen…</div>
+        </div>
+        <div style="flex-shrink:0;text-align:right">${dlBtn}</div>
+      </div>`;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+
+    try {
+      const res = await fetch(`/api/wiki/files/${encodeURIComponent(filename)}`, {
+        headers: { 'Authorization': 'Bearer ' + Auth.getToken() }
+      });
+      if (!res.ok) throw new Error('Datei nicht verfügbar');
+      const arrayBuffer = await res.arrayBuffer();
+      const result = await mammoth.convertToHtml({ arrayBuffer });
+      document.getElementById('wikiDocxBody').innerHTML = result.value || '<p style="color:var(--text3)">Dokument ist leer oder konnte nicht gelesen werden.</p>';
+    } catch(e) {
+      const body = document.getElementById('wikiDocxBody');
+      if (body) body.innerHTML = `<p style="color:var(--red);text-align:center">${escHtml(e.message)}</p>`;
+    }
+  } else {
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:420px;text-align:center">
+        <button class="modal-close" onclick="document.getElementById('wikiNoPreviewModal').remove()"><i class="fas fa-times"></i></button>
+        <div style="margin-bottom:16px"><i class="fas fa-file-alt" style="font-size:48px;color:var(--accent);opacity:.7"></i></div>
+        <div class="modal-title" style="margin-bottom:8px">${escHtml(label)}</div>
+        <p style="color:var(--text3);font-size:13px;margin-bottom:8px">${ext.toUpperCase()}-Dateien können nicht direkt im Browser angezeigt werden.<br>Bitte lade die Datei herunter, um sie zu öffnen.</p>
+        ${dlBtn}
+      </div>`;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+  }
+}
+
 async function wikiFileOpen(filename, encodedName, forceDownload) {
   if (!forceDownload) {
+    const ext = filename.split('.').pop().toLowerCase();
+    const isOffice = /^(docx?|xlsx?|pptx?|odt|ods|odp)$/.test(ext);
+    if (isOffice) {
+      showWikiNoPreviewModal(filename, encodedName ? decodeURIComponent(encodedName) : filename);
+      return;
+    }
     window.open(`/api/wiki/files/${encodeURIComponent(filename)}?token=${encodeURIComponent(Auth.getToken())}`, '_blank');
     return;
   }
@@ -2045,14 +2199,95 @@ async function wikiFileOpen(filename, encodedName, forceDownload) {
     if (!res.ok) { showToast('Datei nicht verfügbar', 'err'); return; }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
-    {
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = encodedName ? decodeURIComponent(encodedName) : filename;
-      a.click();
-    }
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = encodedName ? decodeURIComponent(encodedName) : filename;
+    a.click();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   } catch(e) { showToast('Fehler beim Laden', 'err'); }
+}
+
+function openWikiNoteModal(id, currentNote) {
+  const existing = document.getElementById('wikiNoteModal');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'wikiNoteModal';
+  overlay.className = 'modal-overlay';
+  overlay.style.cssText = 'display:flex;z-index:9999';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:480px">
+      <button class="modal-close" onclick="document.getElementById('wikiNoteModal').remove()"><i class="fas fa-times"></i></button>
+      <div class="modal-title" style="margin-bottom:16px">Notiz bearbeiten</div>
+      <div class="form-group">
+        <label>Notiz für Closer <span style="color:var(--text3);font-weight:400">(optional)</span></label>
+        <textarea id="wikiNoteInput" class="form-control" rows="4" placeholder="z.B. Bitte vor dem ersten Kundengespräch lesen.">${escHtml(currentNote || '')}</textarea>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+        <button class="btn btn-ghost" onclick="document.getElementById('wikiNoteModal').remove()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="saveWikiNote(${id})"><i class="fas fa-save" style="margin-right:6px"></i>Speichern</button>
+      </div>
+    </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  document.getElementById('wikiNoteInput').focus();
+}
+
+async function saveWikiNote(id) {
+  const note = document.getElementById('wikiNoteInput')?.value || '';
+  try {
+    const res = await fetch(`/api/wiki/files/${id}`, {
+      method: 'PATCH',
+      headers: { 'Authorization': 'Bearer ' + Auth.getToken(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ note })
+    });
+    if (!res.ok) throw new Error('Fehler beim Speichern');
+    document.getElementById('wikiNoteModal').remove();
+    showToast('Notiz gespeichert ✓');
+    loadWiki();
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+function openWikiReplaceModal(id, displayName) {
+  const existing = document.getElementById('wikiReplaceModal');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'wikiReplaceModal';
+  overlay.className = 'modal-overlay';
+  overlay.style.cssText = 'display:flex;z-index:9999';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:460px">
+      <button class="modal-close" onclick="document.getElementById('wikiReplaceModal').remove()"><i class="fas fa-times"></i></button>
+      <div class="modal-title" style="margin-bottom:6px">Datei austauschen</div>
+      <p style="font-size:13px;color:var(--text3);margin-bottom:16px">Ersetzt die Datei von <strong>${escHtml(displayName)}</strong>. Name, Kategorie und Notiz bleiben erhalten.</p>
+      <div class="form-group">
+        <label>Neue Datei</label>
+        <input type="file" id="wikiReplaceInput" class="form-control">
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+        <button class="btn btn-ghost" onclick="document.getElementById('wikiReplaceModal').remove()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="saveWikiReplace(${id})"><i class="fas fa-upload" style="margin-right:6px"></i>Austauschen</button>
+      </div>
+    </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
+async function saveWikiReplace(id) {
+  const input = document.getElementById('wikiReplaceInput');
+  if (!input?.files[0]) { showToast('Datei auswählen', 'err'); return; }
+  const formData = new FormData();
+  formData.append('file', input.files[0]);
+  try {
+    const res = await fetch(`/api/wiki/files/${id}/replace`, {
+      method: 'PUT',
+      headers: { 'Authorization': 'Bearer ' + Auth.getToken() },
+      body: formData
+    });
+    if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+    document.getElementById('wikiReplaceModal').remove();
+    showToast('Datei ausgetauscht ✓');
+    loadWiki();
+  } catch(e) { showToast(e.message, 'err'); }
 }
 
 function renderWikiFiles(files, containerId, isAdmin) {
@@ -2067,9 +2302,16 @@ function renderWikiFiles(files, containerId, isAdmin) {
     const filesHtml = catFiles.map(f => {
       const isImage = f.mimetype?.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(f.filename||'');
       const isPdf   = f.mimetype === 'application/pdf' || /\.pdf$/i.test(f.filename||'');
+      const isOffice = /\.(docx?|xlsx?|pptx?|odt|ods|odp)$/i.test(f.filename||'');
       const size    = f.size ? (f.size / 1024).toFixed(0) + ' KB' : '';
-      const icon    = isPdf ? 'file-pdf' : isImage ? 'file-image' : 'file-alt';
-      const previewBtn = `<button class="btn btn-ghost btn-sm" title="Vorschau" onclick="wikiFileOpen('${f.filename}')"><i class="fas fa-eye"></i></button>`;
+      const icon    = isPdf ? 'file-pdf' : isImage ? 'file-image' : isOffice ? 'file-word' : 'file-alt';
+      const previewBtn = `<button class="btn btn-ghost btn-sm" title="Vorschau" onclick="wikiFileOpen('${f.filename}','${encodeURIComponent(f.name)}')"><i class="fas fa-eye"></i></button>`;
+      const editNoteBtn = isAdmin
+        ? `<button class="btn btn-ghost btn-sm" title="Notiz bearbeiten" onclick="openWikiNoteModal(${f.id},'${(f.note||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n')}')"><i class="fas fa-pen" style="font-size:11px"></i></button>`
+        : '';
+      const replaceBtn = isAdmin
+        ? `<button class="btn btn-ghost btn-sm" title="Datei austauschen" onclick="openWikiReplaceModal(${f.id},'${(f.name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')"><i class="fas fa-retweet" style="font-size:11px"></i></button>`
+        : '';
       const delBtn = isAdmin
         ? `<button class="btn btn-ghost btn-sm" onclick="deleteWikiFile(${f.id})" title="Löschen"><i class="fas fa-trash" style="color:var(--red)"></i></button>`
         : '';
@@ -2083,6 +2325,8 @@ function renderWikiFiles(files, containerId, isAdmin) {
             </div>
             ${previewBtn}
             <button class="btn btn-ghost btn-sm" title="Download" onclick="wikiFileOpen('${f.filename}','${encodeURIComponent(f.name)}',true)"><i class="fas fa-download"></i></button>
+            ${editNoteBtn}
+            ${replaceBtn}
             ${delBtn}
           </div>
           ${f.note ? `<div style="margin-top:8px;padding:8px 10px;background:rgba(79,142,247,0.07);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--text2);line-height:1.5"><i class="fas fa-info-circle" style="color:var(--accent);margin-right:5px"></i>${escHtml(f.note)}</div>` : ''}
@@ -2398,12 +2642,68 @@ async function saveInviteAdmin() {
   } catch(e) { showToast(e.message, 'err'); }
 }
 
+// ── DASHBOARD ─────────────────────────────────────────────────
+async function loadDashboard() {
+  try {
+    const data = await api('GET', '/leads/dashboard');
+    renderDashboard(data);
+  } catch(e) {
+    const el = document.getElementById('dashboardContent');
+    if (el) el.innerHTML = `<div style="color:var(--red);font-size:13px">Fehler: ${e.message}</div>`;
+  }
+}
+
+function renderDashboard(data) {
+  const el = document.getElementById('dashboardContent');
+  if (!el) return;
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px">
+      <div class="tracking-card" style="flex-direction:column;align-items:flex-start;gap:4px">
+        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.8px">Anrufe heute</div>
+        <div style="font-size:28px;font-weight:700;color:var(--accent)">${data.callsToday}</div>
+      </div>
+      <div class="tracking-card" style="flex-direction:column;align-items:flex-start;gap:4px">
+        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.8px">Abschlüsse diese Woche</div>
+        <div style="font-size:28px;font-weight:700;color:var(--green)">${data.winsThisWeek}</div>
+      </div>
+      <div class="tracking-card" style="flex-direction:column;align-items:flex-start;gap:4px">
+        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.8px">Leads gesamt</div>
+        <div style="font-size:28px;font-weight:700;color:var(--text1)">${data.leadsTotal}</div>
+      </div>
+      <div class="tracking-card" style="flex-direction:column;align-items:flex-start;gap:4px">
+        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.8px">Neue Leads</div>
+        <div style="font-size:28px;font-weight:700;color:var(--amber)">${data.leadsNew}</div>
+      </div>
+    </div>
+    <div class="tracking-card" style="flex-direction:column;align-items:stretch;gap:12px">
+      <div style="font-size:13px;font-weight:700">Closer heute</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="color:var(--text3);font-size:11px;text-transform:uppercase;letter-spacing:.6px">
+            <th style="text-align:left;padding:6px 0;border-bottom:1px solid var(--border)">Name</th>
+            <th style="text-align:right;padding:6px 0;border-bottom:1px solid var(--border)">Anrufe heute</th>
+            <th style="text-align:right;padding:6px 0;border-bottom:1px solid var(--border)">Zugewiesene Leads</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(data.perCloser||[]).map(c => `
+          <tr>
+            <td style="padding:8px 0;border-bottom:1px solid var(--border)">${escHtml(c.full_name||'—')}</td>
+            <td style="padding:8px 0;border-bottom:1px solid var(--border);text-align:right"><span class="badge">${c.callsToday}</span></td>
+            <td style="padding:8px 0;border-bottom:1px solid var(--border);text-align:right">${c.totalLeads}</td>
+          </tr>`).join('') || '<tr><td colspan="3" style="padding:12px 0;color:var(--text3);text-align:center">Keine Closer aktiv</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+}
+
 // ── INIT ──────────────────────────────────────────────────────
 const _b = document.getElementById('leadsTableBody'); if (_b) _b.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3)"><i class="fas fa-spinner fa-spin"></i></td></tr>';
-showTab('leads');
+showTab('dashboard');
 loadClosersForSelect();
 checkReminderNotifications();
 setInterval(checkReminderNotifications, 2 * 60 * 1000);
+setInterval(loadDashboard, 60000);
 
 // ── EINSTELLUNGEN ─────────────────────────────────────────────
 async function loadAppSettings() {

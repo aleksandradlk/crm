@@ -44,6 +44,7 @@
   .table-wrap select.form-control { width: 100px !important; font-size: 10px !important; padding: 2px 3px !important; }
 }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 </head>
 <body>
 <div class="grid-bg"></div><div class="glow"></div>
@@ -77,6 +78,26 @@
   </aside>
 
   <main class="main-content">
+
+    <!-- CLOSER DASHBOARD BAR -->
+    <div id="closerDashBar" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px;padding:12px 16px;background:var(--bg2);border-radius:10px;border:1px solid var(--border)">
+      <div style="text-align:center">
+        <div style="font-size:22px;font-weight:700;color:var(--accent)" id="cdb-today">—</div>
+        <div style="font-size:11px;color:var(--text3)">Anrufe heute</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:22px;font-weight:700;color:var(--accent)" id="cdb-week">—</div>
+        <div style="font-size:11px;color:var(--text3)">Diese Woche</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:22px;font-weight:700;color:var(--green)" id="cdb-wins">—</div>
+        <div style="font-size:11px;color:var(--text3)">Meine Kunden</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:22px;font-weight:700;color:var(--text2)" id="cdb-avg">—</div>
+        <div style="font-size:11px;color:var(--text3)">Ø Anrufe/Tag (30T)</div>
+      </div>
+    </div>
 
     <!-- BANNER: FÄLLIGE RÜCKRUFE -->
     <div id="dueReminderBanner" style="display:none;align-items:center;gap:10px;cursor:pointer;background:rgba(245,166,35,0.12);border:1px solid var(--amber);color:var(--amber);border-radius:10px;padding:11px 16px;margin-bottom:16px;font-size:13px;font-weight:600" onclick="showSection('reminders')">
@@ -687,6 +708,13 @@ function renderPipeline(leads) {
         ${l.ceo ? `<div class="pc-row"><i class="fas fa-user" style="width:12px"></i>${escHtml(l.ceo)}</div>` : ''}
         ${l.phone ? `<div class="pc-row"><i class="fas fa-phone" style="width:12px"></i><a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()" style="color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:11px">${escHtml(l.phone)}</a></div>` : ''}
         <div class="pc-row"><i class="fas fa-clock" style="width:12px"></i>${fmtDateShort(l.updated_at || l.created_at)}</div>
+        <div style="margin-top:6px;text-align:right">
+          <span onclick="quickNoteToggle(${l.id}, this, event)" title="Schnellnotiz" style="cursor:pointer;color:var(--accent);font-size:13px"><i class="fas fa-sticky-note"></i></span>
+          <textarea class="quick-note-ta" data-lead-id="${l.id}" rows="2" placeholder="Schnellnotiz..." style="display:none;width:100%;margin-top:4px;font-size:11px;resize:none;background:var(--bg2);border:1px solid var(--border2);border-radius:6px;padding:4px 6px;color:var(--text1);box-sizing:border-box"
+            onclick="event.stopPropagation()"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();quickNoteSave(${l.id},this)}"
+            onblur="quickNoteSave(${l.id},this)"></textarea>
+        </div>
       </div>`).join('');
     return `
       <div class="pipeline-col">
@@ -697,6 +725,29 @@ function renderPipeline(leads) {
         </div>
       </div>`;
   }).join('');
+}
+
+function quickNoteToggle(id, iconEl, event) {
+  event.stopPropagation();
+  const card = iconEl.closest('.pipeline-card');
+  const ta = card.querySelector('.quick-note-ta');
+  if (!ta) return;
+  const visible = ta.style.display !== 'none';
+  ta.style.display = visible ? 'none' : 'block';
+  if (!visible) { ta.value = ''; ta.focus(); }
+}
+
+async function quickNoteSave(id, ta) {
+  const text = ta.value.trim();
+  if (!text) { ta.style.display = 'none'; return; }
+  try {
+    await api('POST', `/leads/${id}/comments`, { text });
+    showToast('Notiz gespeichert ✓');
+    ta.value = '';
+    ta.style.display = 'none';
+  } catch(e) {
+    showToast('Fehler beim Speichern');
+  }
 }
 
 let _draggedLeadId = null;
@@ -760,10 +811,11 @@ function renderMyLeads(leads) {
       <td class="mob-hide" style="color:var(--text2);font-size:12px">${escHtml(l.location||'—')}</td>
       <td>${statusBadge(l.status)}</td>
       <td class="mob-hide" style="font-size:11px;color:var(--text3)">${fmtDateShort(l.updated_at || l.created_at)}</td>
-      <td onclick="event.stopPropagation()">
-        <select class="form-control" style="padding:4px 8px;font-size:11px;width:130px" onchange="quickStatus(${l.id}, this.value)">
+      <td onclick="event.stopPropagation()" style="white-space:nowrap">
+        <select class="form-control" style="padding:4px 8px;font-size:11px;width:120px" onchange="quickStatus(${l.id}, this.value)">
           ${statusOptions(l.status)}
         </select>
+        <span onclick="tableQuickNote(${l.id},this,event)" title="Schnellnotiz" style="cursor:pointer;color:var(--accent);font-size:13px;margin-left:8px;vertical-align:middle"><i class="fas fa-sticky-note"></i></span>
       </td>
     </tr>`).join('');
 }
@@ -792,7 +844,7 @@ function renderAllLeads(leads) {
       <td class="mob-hide" style="font-size:12px">${l.assigned_name ? `<span style="color:var(--text2)">${escHtml(l.assigned_name)}</span>` : '—'}</td>
       <td>${statusBadge(l.status)}</td>
       <td class="mob-hide" style="font-size:11px;color:var(--text3)">${fmtDateShort(l.updated_at || l.created_at)}</td>
-      <td onclick="event.stopPropagation()">${assignBtn}</td>
+      <td onclick="event.stopPropagation()" style="white-space:nowrap">${assignBtn} <span onclick="tableQuickNote(${l.id},this,event)" title="Schnellnotiz" style="cursor:pointer;color:var(--accent);font-size:13px;margin-left:6px;vertical-align:middle"><i class="fas fa-sticky-note"></i></span></td>
     </tr>`;
   }).join('');
 }
@@ -977,7 +1029,7 @@ function closeCallDocModalCl() {
   _activeCallIdCl = null; _activeCallLeadIdCl = null;
 }
 
-async function saveCallDocCl() {
+async function saveCallDocCl(goNext = false) {
   if (!_activeCallIdCl) return;
   const status   = document.getElementById('callDocStatusCl').value;
   const durVal   = document.getElementById('callDocDurationCl').value.trim();
@@ -998,9 +1050,49 @@ async function saveCallDocCl() {
       document.getElementById('callLogSectionCl').innerHTML = renderCallLogsCl(_panelLead.call_logs);
     }
     closeCallDocModalCl();
+    if (goNext) nextLead();
   } catch(e) {
     document.getElementById('callDocErrorCl').textContent = e.message;
   } finally { btn.disabled = false; }
+}
+
+function tableQuickNote(id, el, event) {
+  event.stopPropagation();
+  const existing = document.getElementById('qn-popup');
+  if (existing) { existing.remove(); return; }
+  const rect = el.getBoundingClientRect();
+  const popup = document.createElement('div');
+  popup.id = 'qn-popup';
+  popup.style.cssText = `position:fixed;z-index:9999;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.4);padding:8px;width:240px;top:${Math.min(rect.bottom+4, window.innerHeight-130)}px;left:${Math.min(rect.left, window.innerWidth-260)}px`;
+  popup.innerHTML = `<textarea id="qn-popup-ta" rows="3" placeholder="Schnellnotiz..." style="width:100%;font-size:12px;resize:none;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:6px;color:var(--text1);box-sizing:border-box;outline:none"></textarea><div style="font-size:10px;color:var(--text3);margin-top:3px">Enter = Speichern · Esc = Abbrechen</div>`;
+  document.body.appendChild(popup);
+  const ta = document.getElementById('qn-popup-ta');
+  ta.focus();
+  const close = () => { const p = document.getElementById('qn-popup'); if (p) p.remove(); };
+  ta.onkeydown = async e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); const v = ta.value.trim(); close(); if (v) { try { await api('POST', `/leads/${id}/comments`, { text: `📌 ${v}` }); showToast('Notiz gespeichert ✓'); } catch(ex){} } }
+    if (e.key === 'Escape') close();
+  };
+  ta.onblur = async () => { const v = ta.value.trim(); close(); if (v) { try { await api('POST', `/leads/${id}/comments`, { text: `📌 ${v}` }); showToast('Notiz gespeichert ✓'); } catch(ex){} } };
+  setTimeout(() => { document.addEventListener('click', function oc(e){ if (!popup.contains(e.target)){ close(); document.removeEventListener('click',oc); } }); }, 100);
+}
+
+function renderEmailThread(emails) {
+  if (!emails || !emails.length) return '<div style="color:var(--text3);font-size:12px;padding:6px 0">Keine E-Mails vorhanden</div>';
+  return emails.map(m => {
+    const isOut = m.direction === 'outbound';
+    const color = isOut ? 'var(--accent)' : 'var(--green)';
+    const label = isOut ? '↑ Gesendet' : '↓ Empfangen';
+    const date  = m.received_at || m.created_at;
+    return `<div style="margin-bottom:8px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg3);border-left:3px solid ${color}">
+        <span style="font-size:11px;font-weight:700;color:${color}">${label}</span>
+        <span style="font-size:12px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(m.subject||'(kein Betreff)')}</span>
+        <span style="font-size:11px;color:var(--text3);white-space:nowrap">${fmtDate(date)}</span>
+      </div>
+      <div style="padding:8px 10px;font-size:12px;color:var(--text2);line-height:1.5;max-height:120px;overflow-y:auto;white-space:pre-wrap;word-break:break-word">${escHtml((m.body_text||'').slice(0,500))}${(m.body_text||'').length>500?'…':''}</div>
+    </div>`;
+  }).join('');
 }
 
 function renderCallLogsCl(logs) {
@@ -1123,6 +1215,9 @@ function renderDetail(l) {
 
     <div style="margin-top:16px;margin-bottom:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Aktivitätsverlauf</div>
     <div id="panelCommentsList">${commentsHtml}</div>
+
+    <div style="margin-top:16px;margin-bottom:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">E-Mail-Verlauf</div>
+    <div id="panelEmailThread">${renderEmailThread(l.email_thread||[])}</div>
 
     <div style="margin-top:16px;margin-bottom:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Reminder</div>
     <div id="panelRemindersList" style="margin-bottom:10px">${remindHtml}</div>
@@ -1599,9 +1694,69 @@ async function clToggleTempl(id, newActive) {
   } catch(e) { showToast(e.message, 'err'); }
 }
 
+async function showWikiNoPreviewModal(filename, displayName) {
+  const existing = document.getElementById('wikiNoPreviewModal');
+  if (existing) existing.remove();
+  const ext = filename.split('.').pop().toLowerCase();
+  const isDocx = /^docx?$/.test(ext);
+  const label = displayName || filename;
+  const safeFile = filename.replace(/'/g, "\\'");
+  const safeEnc  = encodeURIComponent(label);
+
+  const overlay = document.createElement('div');
+  overlay.id = 'wikiNoPreviewModal';
+  overlay.className = 'modal-overlay';
+  overlay.style.cssText = 'display:flex;z-index:9999';
+
+  const dlBtn = `<button class="btn btn-primary" style="margin-top:16px" onclick="document.getElementById('wikiNoPreviewModal').remove();wikiFileOpen('${safeFile}','${safeEnc}',true)"><i class="fas fa-download" style="margin-right:6px"></i>Herunterladen</button>`;
+
+  if (isDocx) {
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:780px;width:95vw;max-height:85vh;display:flex;flex-direction:column">
+        <button class="modal-close" onclick="document.getElementById('wikiNoPreviewModal').remove()"><i class="fas fa-times"></i></button>
+        <div class="modal-title" style="margin-bottom:12px;flex-shrink:0">${escHtml(label)}</div>
+        <div id="wikiDocxBody" style="flex:1;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:24px 28px;background:#fff;color:#111;font-family:Georgia,serif;font-size:14px;line-height:1.7">
+          <div style="color:var(--text3);text-align:center;padding:40px"><i class="fas fa-spinner fa-spin" style="font-size:24px"></i><br><br>Dokument wird geladen…</div>
+        </div>
+        <div style="flex-shrink:0;text-align:right">${dlBtn}</div>
+      </div>`;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+
+    try {
+      const res = await fetch(`/api/wiki/files/${encodeURIComponent(filename)}`, {
+        headers: { 'Authorization': 'Bearer ' + Auth.getToken() }
+      });
+      if (!res.ok) throw new Error('Datei nicht verfügbar');
+      const arrayBuffer = await res.arrayBuffer();
+      const result = await mammoth.convertToHtml({ arrayBuffer });
+      document.getElementById('wikiDocxBody').innerHTML = result.value || '<p style="color:var(--text3)">Dokument ist leer oder konnte nicht gelesen werden.</p>';
+    } catch(e) {
+      const body = document.getElementById('wikiDocxBody');
+      if (body) body.innerHTML = `<p style="color:var(--red);text-align:center">${escHtml(e.message)}</p>`;
+    }
+  } else {
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:420px;text-align:center">
+        <button class="modal-close" onclick="document.getElementById('wikiNoPreviewModal').remove()"><i class="fas fa-times"></i></button>
+        <div style="margin-bottom:16px"><i class="fas fa-file-alt" style="font-size:48px;color:var(--accent);opacity:.7"></i></div>
+        <div class="modal-title" style="margin-bottom:8px">${escHtml(label)}</div>
+        <p style="color:var(--text3);font-size:13px;margin-bottom:8px">${ext.toUpperCase()}-Dateien können nicht direkt im Browser angezeigt werden.<br>Bitte lade die Datei herunter, um sie zu öffnen.</p>
+        ${dlBtn}
+      </div>`;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+  }
+}
+
 async function wikiFileOpen(filename, encodedName, forceDownload) {
   if (!forceDownload) {
-    // Vorschau: URL direkt im neuen Tab öffnen — Browser zeigt nativen Viewer (PDF, Bild usw.)
+    const ext = filename.split('.').pop().toLowerCase();
+    const isOffice = /^(docx?|xlsx?|pptx?|odt|ods|odp)$/.test(ext);
+    if (isOffice) {
+      showWikiNoPreviewModal(filename, encodedName ? decodeURIComponent(encodedName) : filename);
+      return;
+    }
     window.open(`/api/wiki/files/${encodeURIComponent(filename)}?token=${encodeURIComponent(Auth.getToken())}`, '_blank');
     return;
   }
@@ -1633,9 +1788,10 @@ function renderWikiFiles(files, containerId, isAdmin) {
     const filesHtml = catFiles.map(f => {
       const isImage = f.mimetype?.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(f.filename||'');
       const isPdf   = f.mimetype === 'application/pdf' || /\.pdf$/i.test(f.filename||'');
+      const isOffice = /\.(docx?|xlsx?|pptx?|odt|ods|odp)$/i.test(f.filename||'');
       const size    = f.size ? (f.size / 1024).toFixed(0) + ' KB' : '';
-      const icon    = isPdf ? 'file-pdf' : isImage ? 'file-image' : 'file-alt';
-      const previewBtn = `<button class="btn btn-ghost btn-sm" title="Vorschau" onclick="wikiFileOpen('${f.filename}')"><i class="fas fa-eye"></i></button>`;
+      const icon    = isPdf ? 'file-pdf' : isImage ? 'file-image' : isOffice ? 'file-word' : 'file-alt';
+      const previewBtn = `<button class="btn btn-ghost btn-sm" title="Vorschau" onclick="wikiFileOpen('${f.filename}','${encodeURIComponent(f.name)}')"><i class="fas fa-eye"></i></button>`;
       return `
         <div style="padding:10px;background:var(--bg3);border-radius:8px;margin-bottom:6px">
           <div style="display:flex;align-items:center;gap:10px">
@@ -2022,6 +2178,18 @@ async function closeOnboarding() {
 ['myLeadsBody','allLeadsBody'].forEach(id => { const b = document.getElementById(id); if (b) b.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)"><i class="fas fa-spinner fa-spin"></i></td></tr>'; });
 showSection('myLeads');
 loadLeads();
+async function loadCloserDashboard() {
+  try {
+    const d = await api('GET', '/leads/dashboard/closer');
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    set('cdb-today', d.callsToday);
+    set('cdb-week', d.callsWeek);
+    set('cdb-wins', d.winsTotal);
+    set('cdb-avg', d.avgCalls);
+  } catch(e) {}
+}
+loadCloserDashboard();
+setInterval(loadCloserDashboard, 60000);
 setInterval(loadReminders, 5 * 60 * 1000);
 checkReminderNotifications();
 setInterval(checkReminderNotifications, 2 * 60 * 1000);
@@ -2388,6 +2556,7 @@ document.getElementById('editContactInputCl')?.addEventListener('keydown', funct
       <div style="display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border);padding-top:12px">
         <button class="btn btn-ghost btn-sm" onclick="closeCallDocModalCl()">Überspringen</button>
         <button class="btn btn-primary btn-sm" id="callDocSaveBtnCl" onclick="saveCallDocCl()"><i class="fas fa-check"></i> Speichern</button>
+        <button class="btn btn-primary btn-sm" onclick="saveCallDocCl(true)"><i class="fas fa-arrow-right"></i> Speichern & Weiter →</button>
       </div>
     </div>
   </div>

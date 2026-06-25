@@ -80,6 +80,61 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
+// ── GET /api/leads/dashboard — Tages-Dashboard (Admin only) ──────────────────
+router.get('/dashboard', auth, adminOnly, async (req, res) => {
+  try {
+    const [[{ callsToday }]] = await db.query(
+      `SELECT COUNT(*) AS callsToday FROM call_logs WHERE DATE(started_at) = CURDATE()`
+    );
+    const [[{ winsThisWeek }]] = await db.query(
+      `SELECT COUNT(*) AS winsThisWeek FROM leads WHERE status='kunde' AND YEARWEEK(updated_at, 1) = YEARWEEK(NOW(), 1)`
+    );
+    const [[{ leadsTotal }]] = await db.query(
+      `SELECT COUNT(*) AS leadsTotal FROM leads WHERE archived_at IS NULL`
+    );
+    const [[{ leadsNew }]] = await db.query(
+      `SELECT COUNT(*) AS leadsNew FROM leads WHERE status='neu' AND archived_at IS NULL`
+    );
+    const [perCloser] = await db.query(
+      `SELECT u.full_name,
+         COUNT(DISTINCT CASE WHEN DATE(cl.started_at) = CURDATE() THEN cl.id END) AS callsToday,
+         COUNT(DISTINCT l.id) AS totalLeads
+       FROM users u
+       LEFT JOIN call_logs cl ON cl.user_id = u.id
+       LEFT JOIN leads l ON l.assigned_to = u.id AND l.archived_at IS NULL
+       WHERE u.role = 'closer' AND u.is_active = 1
+       GROUP BY u.id, u.full_name
+       ORDER BY callsToday DESC`
+    );
+    res.json({ callsToday, winsThisWeek, leadsTotal, leadsNew, perCloser });
+  } catch(e) {
+    console.error('Dashboard error:', e);
+    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
+  }
+});
+
+// ── GET /api/leads/dashboard/closer — eigene Tagesstatistik (Closer) ──────────
+router.get('/dashboard/closer', auth, async (req, res) => {
+  try {
+    const uid = req.user.id;
+    const [[{ callsToday }]] = await db.query(
+      'SELECT COUNT(*) as callsToday FROM call_logs WHERE user_id=? AND DATE(started_at)=CURDATE()', [uid]);
+    const [[{ callsWeek }]] = await db.query(
+      'SELECT COUNT(*) as callsWeek FROM call_logs WHERE user_id=? AND YEARWEEK(started_at,1)=YEARWEEK(NOW(),1)', [uid]);
+    const [[{ winsTotal }]] = await db.query(
+      "SELECT COUNT(*) as winsTotal FROM leads WHERE assigned_to=? AND status='kunde' AND archived_at IS NULL", [uid]);
+    const [[{ myLeads }]] = await db.query(
+      'SELECT COUNT(*) as myLeads FROM leads WHERE assigned_to=? AND archived_at IS NULL', [uid]);
+    const [[{ avgCalls }]] = await db.query(
+      `SELECT ROUND(AVG(daily_count),1) as avgCalls FROM (
+        SELECT COUNT(*) as daily_count FROM call_logs
+        WHERE user_id=? AND started_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+        GROUP BY DATE(started_at)
+      ) t`, [uid]);
+    res.json({ callsToday, callsWeek, winsTotal, myLeads, avgCalls: avgCalls || 0 });
+  } catch(e) { console.error('Dashboard closer error:', e); res.status(500).json({ error: 'Fehler' }); }
+});
+
 // ── POST /api/leads/bulk — mehrere Leads auf einmal speichern (Admin oder can_generate_leads) ──
 router.post('/bulk', auth, async (req, res) => {
   if (req.user.role !== 'admin' && !req.user.can_generate_leads)
@@ -209,7 +264,11 @@ router.get('/:id', auth, async (req, res) => {
      JOIN users u ON u.id = cl.user_id
      WHERE cl.lead_id = ? ORDER BY cl.started_at DESC`, [id]
   ).catch(() => [[]]);
-  res.json({ ...lead, comments, reminders, call_logs });
+  const [email_thread] = await db.query(
+    `SELECT id, direction, from_address, to_address, subject, body_text, received_at, created_at
+     FROM lead_emails WHERE lead_id = ? ORDER BY COALESCE(received_at, created_at) ASC`, [id]
+  ).catch(() => [[]]);
+  res.json({ ...lead, comments, reminders, call_logs, email_thread });
 });
 
 // ── PATCH /api/leads/:id/status ──────────────────────────────
@@ -404,6 +463,14 @@ router.post('/:id/email', auth, async (req, res) => {
       'INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',
       [id, req.user.id, `📧 E-Mail gesendet: ${subject}`]
     );
+    // Gesendete E-Mail auch in lead_emails loggen
+    await db.query(
+      `INSERT IGNORE INTO lead_emails (lead_id, direction, from_address, to_address, subject, body_text, message_id, received_at)
+       VALUES (?, 'outbound', ?, ?, ?, ?, ?, NOW())`,
+      [id, process.env.SMTP_USER || 'info@novaflowservices.de', to, subject,
+       body.replace(/<[^>]+>/g, '').trim().slice(0, 10000),
+       `out-${Date.now()}-${id}`]
+    ).catch(() => {});
     await log(req.user.id, 'lead_email_sent', 'lead', id, { to, subject }, req.ip);
     res.json({ ok: true });
   } catch(e) {
