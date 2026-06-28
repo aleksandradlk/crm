@@ -77,6 +77,12 @@
       <div class="nav-item" data-sec="feedback" onclick="showSection('feedback')"><i class="fas fa-flag"></i> Feedback / Wünsche</div>
       <div class="nav-item" id="navCreateUser" data-sec="createUser" onclick="showSection('createUser')" style="display:none"><i class="fas fa-user-plus"></i> Benutzer anlegen</div>
       <div class="nav-item" id="navGenerateLeads" data-sec="generateLeads" onclick="showSection('generateLeads')" style="display:none"><i class="fas fa-search"></i> Leads generieren</div>
+      <div class="nav-sep" id="toolsSepCl" style="display:none"></div>
+      <span class="nav-group-label" id="toolsLabelCl" style="display:none">Meine Tools</span>
+      <a class="nav-item" id="navAngebotsTool" href="https://tool.novaflowservices.de" target="_blank" rel="noopener noreferrer" style="display:none">
+        <i class="fas fa-file-invoice"></i> Angebots-Tool
+        <i class="fas fa-external-link-alt" style="margin-left:auto;font-size:10px;opacity:0.5"></i>
+      </a>
     </nav>
     <div class="sidebar-user" id="sidebarUser"></div>
   </aside>
@@ -523,6 +529,19 @@ startActivityTracking();
 // Benutzer anlegen / Leads generieren: nur anzeigen wenn Berechtigung vorhanden
 if (ME?.can_create_users)   { const n = document.getElementById('navCreateUser');   if (n) n.style.display = ''; }
 if (ME?.can_generate_leads) { const n = document.getElementById('navGenerateLeads'); if (n) n.style.display = ''; }
+
+// Angebots-Tool: Sichtbarkeit per Admin-Einstellung steuern
+(async () => {
+  try {
+    const s = await api('GET', '/settings');
+    if (s.closer_sees_tool === 'true') {
+      ['toolsSepCl', 'toolsLabelCl', 'navAngebotsTool'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = '';
+      });
+    }
+  } catch(e) {}
+})();
 
 // Berechtigungen vom Server frisch laden (damit Admin-Änderungen ohne Re-Login greifen)
 (async () => {
