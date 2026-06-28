@@ -244,6 +244,7 @@ db.query(`CREATE TABLE IF NOT EXISTS app_settings (
   value TEXT NOT NULL
 )`).catch(() => {});
 db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('closer_sees_admins','false')").catch(() => {});
+db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('closer_sees_tool','false')").catch(() => {});
 db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('call_script','')").catch(() => {});
 db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('daily_call_goal','50')").catch(() => {});
 

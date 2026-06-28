@@ -317,12 +317,21 @@
         <button class="btn btn-primary btn-sm" onclick="openUserModal()"><i class="fas fa-plus"></i> Neuer Benutzer</button>
       </div>
       <div class="card" style="margin-bottom:16px;padding:14px 16px">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500;margin:0">
-            <input type="checkbox" id="settingCloserSeesAdmins" onchange="saveCloserSeesAdmins()" style="width:16px;height:16px;cursor:pointer">
-            Closer dürfen Admins in Lead-Zuweisungen sehen
-          </label>
-          <span style="font-size:11px;color:var(--text3)">(steuert Zuweisungsfilter & -dropdowns für Closer)</span>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500;margin:0">
+              <input type="checkbox" id="settingCloserSeesAdmins" onchange="saveCloserSeesAdmins()" style="width:16px;height:16px;cursor:pointer">
+              Closer dürfen Admins in Lead-Zuweisungen sehen
+            </label>
+            <span style="font-size:11px;color:var(--text3)">(steuert Zuweisungsfilter & -dropdowns für Closer)</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500;margin:0">
+              <input type="checkbox" id="settingCloserSeesTool" onchange="saveCloserSeesTool()" style="width:16px;height:16px;cursor:pointer">
+              Angebots-Tool für Closer sichtbar machen
+            </label>
+            <span style="font-size:11px;color:var(--text3)">(zeigt Link zu tool.novaflowservices.de in der Closer-Sidebar)</span>
+          </div>
         </div>
       </div>
       <div class="card">
@@ -2857,12 +2866,21 @@ async function loadAppSettings() {
     const s = await api('GET', '/settings');
     const cb = document.getElementById('settingCloserSeesAdmins');
     if (cb) cb.checked = s.closer_sees_admins === 'true';
+    const cb2 = document.getElementById('settingCloserSeesTool');
+    if (cb2) cb2.checked = s.closer_sees_tool === 'true';
   } catch(e) {}
 }
 async function saveCloserSeesAdmins() {
   const val = document.getElementById('settingCloserSeesAdmins')?.checked ? 'true' : 'false';
   try {
     await api('PATCH', '/settings/closer_sees_admins', { value: val });
+    showToast('Einstellung gespeichert ✓');
+  } catch(e) { showToast(e.message, 'err'); }
+}
+async function saveCloserSeesTool() {
+  const val = document.getElementById('settingCloserSeesTool')?.checked ? 'true' : 'false';
+  try {
+    await api('PATCH', '/settings/closer_sees_tool', { value: val });
     showToast('Einstellung gespeichert ✓');
   } catch(e) { showToast(e.message, 'err'); }
 }
