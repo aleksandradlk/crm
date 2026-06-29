@@ -2849,25 +2849,25 @@ function renderDashboard(data) {
         <div style="font-size:28px;font-weight:700;color:var(--amber)">${data.leadsNew}</div>
       </div>
     </div>
-    <div class="tracking-card" style="flex-direction:column;align-items:stretch;gap:12px">
-      <div style="font-size:13px;font-weight:700">Closer heute</div>
-      <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead>
-          <tr style="color:var(--text3);font-size:11px;text-transform:uppercase;letter-spacing:.6px">
-            <th style="text-align:left;padding:6px 0;border-bottom:1px solid var(--border)">Name</th>
-            <th style="text-align:right;padding:6px 0;border-bottom:1px solid var(--border)">Anrufe heute</th>
-            <th style="text-align:right;padding:6px 0;border-bottom:1px solid var(--border)">Zugewiesene Leads</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${(data.perCloser||[]).map(c => `
-          <tr>
-            <td style="padding:8px 0;border-bottom:1px solid var(--border)">${escHtml(c.full_name||'—')}</td>
-            <td style="padding:8px 0;border-bottom:1px solid var(--border);text-align:right"><span class="badge">${c.callsToday}</span></td>
-            <td style="padding:8px 0;border-bottom:1px solid var(--border);text-align:right">${c.totalLeads}</td>
-          </tr>`).join('') || '<tr><td colspan="3" style="padding:12px 0;color:var(--text3);text-align:center">Keine Closer aktiv</td></tr>'}
-        </tbody>
-      </table>
+    <div class="tracking-card" style="flex-direction:column;align-items:stretch;gap:10px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:2px">Closer heute</div>
+      ${(data.perCloser||[]).length ? (data.perCloser||[]).map(c => `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="width:34px;height:34px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0">${escHtml((c.full_name||'?')[0].toUpperCase())}</div>
+        <div style="flex:1;min-width:0;overflow:hidden">
+          <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(c.full_name||'—')}</div>
+        </div>
+        <div style="display:flex;gap:14px;flex-shrink:0;align-items:center">
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Anrufe</div>
+            <span class="badge">${c.callsToday}</span>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Leads</div>
+            <div style="font-size:13px;font-weight:600;color:var(--text)">${c.totalLeads}</div>
+          </div>
+        </div>
+      </div>`).join('') : '<div style="padding:8px 0;color:var(--text3);font-size:13px;text-align:center">Keine Closer aktiv</div>'}
     </div>`;
 }
 
