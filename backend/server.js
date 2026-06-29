@@ -16,6 +16,7 @@ const callRoutes     = require('./routes/calls');
 const feedbackRoutes  = require('./routes/feedback');
 const settingsRoutes       = require('./routes/settings');
 const emailTemplateRoutes  = require('./routes/emailtemplates');
+const toolRoutes           = require('./routes/tools');
 const { startReminderCron } = require('./cron/reminders');
 const { pollIncomingEmails } = require('./cron/emailPoller');
 const cron           = require('node-cron');
@@ -73,6 +74,7 @@ app.use('/api/calls',    callRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/settings',        settingsRoutes);
 app.use('/api/email-templates', emailTemplateRoutes);
+app.use('/api/tools',           toolRoutes);
 
 // ── SPA Fallback ──────────────────────────────────────────────
 app.get('*', (req, res) => {
@@ -245,6 +247,21 @@ db.query(`CREATE TABLE IF NOT EXISTS app_settings (
 )`).catch(() => {});
 db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('closer_sees_admins','false')").catch(() => {});
 db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('closer_sees_tool','false')").catch(() => {});
+
+db.query(`CREATE TABLE IF NOT EXISTS tools (
+  id             INT AUTO_INCREMENT PRIMARY KEY,
+  name           VARCHAR(200) NOT NULL,
+  url            VARCHAR(500) NOT NULL,
+  closer_visible TINYINT(1)  NOT NULL DEFAULT 0,
+  sort_order     INT         NOT NULL DEFAULT 0,
+  created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)`).then(() => {
+  db.query('SELECT COUNT(*) AS cnt FROM tools').then(([[{ cnt }]]) => {
+    if (cnt === 0) {
+      db.query("INSERT INTO tools (name, url, closer_visible) VALUES ('Angebots-Tool', 'https://tool.novaflowservices.de', 0)").catch(() => {});
+    }
+  }).catch(() => {});
+}).catch(() => {});
 db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('call_script','')").catch(() => {});
 db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('daily_call_goal','50')").catch(() => {});
 

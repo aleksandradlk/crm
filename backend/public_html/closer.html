@@ -77,12 +77,7 @@
       <div class="nav-item" data-sec="feedback" onclick="showSection('feedback')"><i class="fas fa-flag"></i> Feedback / Wünsche</div>
       <div class="nav-item" id="navCreateUser" data-sec="createUser" onclick="showSection('createUser')" style="display:none"><i class="fas fa-user-plus"></i> Benutzer anlegen</div>
       <div class="nav-item" id="navGenerateLeads" data-sec="generateLeads" onclick="showSection('generateLeads')" style="display:none"><i class="fas fa-search"></i> Leads generieren</div>
-      <div class="nav-sep" id="toolsSepCl" style="display:none"></div>
-      <span class="nav-group-label" id="toolsLabelCl" style="display:none">Meine Tools</span>
-      <a class="nav-item" id="navAngebotsTool" href="https://tool.novaflowservices.de" target="_blank" rel="noopener noreferrer" style="display:none">
-        <i class="fas fa-file-invoice"></i> Angebots-Tool
-        <i class="fas fa-external-link-alt" style="margin-left:auto;font-size:10px;opacity:0.5"></i>
-      </a>
+      <div id="toolsNavCl"></div>
     </nav>
     <div class="sidebar-user" id="sidebarUser"></div>
   </aside>
@@ -530,16 +525,22 @@ startActivityTracking();
 if (ME?.can_create_users)   { const n = document.getElementById('navCreateUser');   if (n) n.style.display = ''; }
 if (ME?.can_generate_leads) { const n = document.getElementById('navGenerateLeads'); if (n) n.style.display = ''; }
 
-// Angebots-Tool: Sichtbarkeit per Admin-Einstellung steuern
+// Tools: dynamisch aus /api/tools laden und nur closer_visible anzeigen
 (async () => {
   try {
-    const s = await api('GET', '/settings');
-    if (s.closer_sees_tool === 'true') {
-      ['toolsSepCl', 'toolsLabelCl', 'navAngebotsTool'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.style.display = '';
-      });
-    }
+    const tools = await api('GET', '/tools');
+    const visible = tools.filter(t => t.closer_visible);
+    const el = document.getElementById('toolsNavCl');
+    if (!el) return;
+    if (!visible.length) { el.innerHTML = ''; return; }
+    el.innerHTML = `
+      <div class="nav-sep"></div>
+      <span class="nav-group-label">Meine Tools</span>
+      ${visible.map(t => `
+        <a class="nav-item" href="${t.url.replace(/"/g,'&quot;')}" target="_blank" rel="noopener noreferrer" style="text-decoration:none">
+          <i class="fas fa-external-link-alt"></i> ${t.name.replace(/</g,'&lt;')}
+          <i class="fas fa-external-link-alt" style="margin-left:auto;font-size:10px;opacity:0.5"></i>
+        </a>`).join('')}`;
   } catch(e) {}
 })();
 
