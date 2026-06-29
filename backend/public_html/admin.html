@@ -75,26 +75,24 @@
     </div>
     <nav class="nav">
       <span class="nav-group-label">Hauptnavigation</span>
-      <div class="nav-item active" onclick="showTab('dashboard')"><i class="fas fa-tachometer-alt"></i> Dashboard</div>
-      <div class="nav-item" onclick="showTab('leads')"><i class="fas fa-database"></i> Alle Leads</div>
-      <div class="nav-item" onclick="showTab('myLeads')"><i class="fas fa-user-check"></i> Meine Leads</div>
-      <div class="nav-item" onclick="showTab('generate')"><i class="fas fa-search"></i> Generieren</div>
+      <div class="nav-item active" data-tab="dashboard" onclick="showTab('dashboard')"><i class="fas fa-tachometer-alt"></i> Dashboard</div>
+      <div class="nav-item" data-tab="leads" onclick="showTab('leads')"><i class="fas fa-database"></i> Alle Leads</div>
+      <div class="nav-item" data-tab="myLeads" onclick="showTab('myLeads')"><i class="fas fa-user-check"></i> Meine Leads</div>
+      <div class="nav-item" data-tab="generate" onclick="showTab('generate')"><i class="fas fa-search"></i> Generieren</div>
       <div class="nav-sep"></div>
       <span class="nav-group-label">Administration</span>
-      <div class="nav-item" onclick="showTab('users')"><i class="fas fa-users"></i> Benutzer</div>
-      <div class="nav-item" onclick="showTab('tracking')"><i class="fas fa-chart-line"></i> Tracking</div>
+      <div class="nav-item" data-tab="users" onclick="showTab('users')"><i class="fas fa-users"></i> Benutzer</div>
+      <div class="nav-item" data-tab="tracking" onclick="showTab('tracking')"><i class="fas fa-chart-line"></i> Tracking</div>
+      <div class="nav-item" data-tab="tools" onclick="showTab('tools')"><i class="fas fa-toolbox"></i> Tools</div>
       <div class="nav-sep"></div>
       <span class="nav-group-label">Ressourcen</span>
-      <div class="nav-item" onclick="showTab('wiki')"><i class="fas fa-book"></i> Wissensdatenbank</div>
-      <div class="nav-item" onclick="showTab('chat')"><i class="fas fa-comments"></i> Rücksprachen</div>
-      <div class="nav-item" onclick="showTab('feedback')"><i class="fas fa-flag"></i> Feedback-Board</div>
-      <div class="nav-item" onclick="showTab('archive')"><i class="fas fa-archive"></i> Archiv</div>
+      <div class="nav-item" data-tab="wiki" onclick="showTab('wiki')"><i class="fas fa-book"></i> Wissensdatenbank</div>
+      <div class="nav-item" data-tab="chat" onclick="showTab('chat')"><i class="fas fa-comments"></i> Rücksprachen</div>
+      <div class="nav-item" data-tab="feedback" onclick="showTab('feedback')"><i class="fas fa-flag"></i> Feedback-Board</div>
+      <div class="nav-item" data-tab="archive" onclick="showTab('archive')"><i class="fas fa-archive"></i> Archiv</div>
       <div class="nav-sep"></div>
       <span class="nav-group-label">Meine Tools</span>
-      <a class="nav-item" href="https://tool.novaflowservices.de" target="_blank" rel="noopener noreferrer">
-        <i class="fas fa-file-invoice"></i> Angebots-Tool
-        <i class="fas fa-external-link-alt" style="margin-left:auto;font-size:10px;opacity:0.5"></i>
-      </a>
+      <div id="adminToolsNav"></div>
     </nav>
     <div class="sidebar-user" id="sidebarUser"></div>
   </aside>
@@ -459,6 +457,18 @@
       <div id="archiveList"></div>
     </div>
 
+    <div id="tab-tools" class="tab-panel">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+        <h1 style="font-size:20px;font-weight:700">Tools verwalten</h1>
+        <button class="btn btn-primary btn-sm" onclick="openToolModal()"><i class="fas fa-plus"></i> Tool hinzufügen</button>
+      </div>
+      <div class="card" style="overflow:hidden">
+        <div id="toolsTableContainer">
+          <div style="text-align:center;padding:40px;color:var(--text3)"><i class="fas fa-spinner fa-spin"></i></div>
+        </div>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -690,9 +700,8 @@ function showTab(name) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
-  const navMap = { dashboard: 0, leads: 1, myLeads: 2, generate: 3, users: 4, tracking: 5, wiki: 6, chat: 7, feedback: 8, archive: 9 };
-  const items = document.querySelectorAll('.nav-item');
-  if (navMap[name] !== undefined) items[navMap[name]]?.classList.add('active');
+  const navEl = document.querySelector(`.nav-item[data-tab="${name}"]`);
+  if (navEl) navEl.classList.add('active');
   if (name === 'dashboard') loadDashboard();
   if (name === 'leads')    {
     const _s = document.getElementById('searchInput'); if (_s) _s.value = '';
@@ -707,6 +716,7 @@ function showTab(name) {
   if (name === 'chat')     loadChats();
   if (name === 'feedback') loadFeedback();
   if (name === 'archive')  loadArchive();
+  if (name === 'tools')    loadToolsTab();
 }
 
 // ── PIPELINE (geteilt für Alle Leads + Meine Leads) ──────────
@@ -2855,6 +2865,7 @@ function renderDashboard(data) {
 // ── INIT ──────────────────────────────────────────────────────
 const _b = document.getElementById('leadsTableBody'); if (_b) _b.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3)"><i class="fas fa-spinner fa-spin"></i></td></tr>';
 showTab('dashboard');
+loadToolsTab();
 loadClosersForSelect();
 checkReminderNotifications();
 setInterval(checkReminderNotifications, 2 * 60 * 1000);
@@ -2882,6 +2893,115 @@ async function saveCloserSeesTool() {
   try {
     await api('PATCH', '/settings/closer_sees_tool', { value: val });
     showToast('Einstellung gespeichert ✓');
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+// ── TOOLS ─────────────────────────────────────────────────────
+let _toolsList = [];
+
+async function loadToolsTab() {
+  try {
+    _toolsList = await api('GET', '/tools');
+    renderToolsTable(_toolsList);
+    renderAdminToolsSidebar(_toolsList);
+  } catch(e) {
+    const el = document.getElementById('toolsTableContainer');
+    if (el) el.innerHTML = `<div style="padding:24px;color:var(--danger)">${escHtml(e.message)}</div>`;
+  }
+}
+
+function renderToolsTable(tools) {
+  const el = document.getElementById('toolsTableContainer');
+  if (!el) return;
+  if (!tools.length) {
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3)"><i class="fas fa-toolbox" style="font-size:28px;display:block;margin-bottom:10px;opacity:.3"></i>Noch keine Tools vorhanden</div>';
+    return;
+  }
+  el.innerHTML = `<table class="data-table"><thead><tr>
+    <th>Name</th><th>URL</th><th style="text-align:center">Closer sichtbar</th><th style="text-align:right">Aktionen</th>
+  </tr></thead><tbody>
+    ${tools.map(t => `<tr>
+      <td><strong>${escHtml(t.name)}</strong></td>
+      <td style="font-size:12px;color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+        <a href="${escHtml(t.url)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">${escHtml(t.url)}</a>
+      </td>
+      <td style="text-align:center">
+        <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" ${t.closer_visible ? 'checked' : ''} onchange="toggleToolCloserVisible(${t.id}, this.checked)"
+            style="width:16px;height:16px;cursor:pointer">
+          <span style="font-size:12px;color:var(--text2)">${t.closer_visible ? 'Ja' : 'Nein'}</span>
+        </label>
+      </td>
+      <td style="text-align:right">
+        <button class="btn btn-ghost btn-sm" onclick="openToolModal(${t.id})" title="Bearbeiten"><i class="fas fa-edit"></i></button>
+        <button class="btn btn-ghost btn-sm" onclick="deleteTool(${t.id})" title="Löschen" style="color:var(--danger)"><i class="fas fa-trash"></i></button>
+      </td>
+    </tr>`).join('')}
+  </tbody></table>`;
+}
+
+function renderAdminToolsSidebar(tools) {
+  const el = document.getElementById('adminToolsNav');
+  if (!el) return;
+  el.innerHTML = tools.map(t => `
+    <a class="nav-item" href="${escHtml(t.url)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none">
+      <i class="fas fa-external-link-alt"></i> ${escHtml(t.name)}
+      <i class="fas fa-external-link-alt" style="margin-left:auto;font-size:10px;opacity:0.5"></i>
+    </a>`).join('');
+}
+
+function openToolModal(id) {
+  const tool = id ? _toolsList.find(t => t.id === id) : null;
+  document.getElementById('toolModalTitle').textContent = tool ? 'Tool bearbeiten' : 'Tool hinzufügen';
+  document.getElementById('toolModalId').value = tool ? tool.id : '';
+  document.getElementById('toolModalName').value = tool ? tool.name : '';
+  document.getElementById('toolModalUrl').value = tool ? tool.url : '';
+  document.getElementById('toolModalCloserVisible').checked = tool ? !!tool.closer_visible : false;
+  document.getElementById('toolModalErr').textContent = '';
+  document.getElementById('toolModal').classList.add('open');
+}
+
+function closeToolModal() {
+  document.getElementById('toolModal').classList.remove('open');
+}
+
+async function saveTool() {
+  const id = document.getElementById('toolModalId').value;
+  const name = document.getElementById('toolModalName').value.trim();
+  const url = document.getElementById('toolModalUrl').value.trim();
+  const closer_visible = document.getElementById('toolModalCloserVisible').checked;
+  const errEl = document.getElementById('toolModalErr');
+  if (!name || !url) { errEl.textContent = 'Name und URL sind Pflichtfelder'; return; }
+  try {
+    if (id) {
+      await api('PATCH', '/tools/' + id, { name, url, closer_visible });
+    } else {
+      await api('POST', '/tools', { name, url, closer_visible });
+    }
+    closeToolModal();
+    showToast('Tool gespeichert ✓');
+    loadToolsTab();
+  } catch(e) { errEl.textContent = e.message; }
+}
+
+async function toggleToolCloserVisible(id, val) {
+  const tool = _toolsList.find(t => t.id === id);
+  if (!tool) return;
+  try {
+    await api('PATCH', '/tools/' + id, { name: tool.name, url: tool.url, closer_visible: val });
+    tool.closer_visible = val ? 1 : 0;
+    renderToolsTable(_toolsList);
+    renderAdminToolsSidebar(_toolsList);
+    showToast('Gespeichert ✓');
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+async function deleteTool(id) {
+  if (!confirm('Tool wirklich löschen?')) return;
+  try {
+    await api('DELETE', '/tools/' + id);
+    showToast('Tool gelöscht');
+    loadToolsTab();
   } catch(e) { showToast(e.message, 'err'); }
 }
 
@@ -3298,6 +3418,39 @@ document.getElementById('editContactInput')?.addEventListener('keydown', functio
   </div>
 </div>
 <div id="activityFeedOverlay" style="display:none;position:fixed;inset:0;z-index:6999" onclick="toggleActivityFeed()"></div>
+
+<!-- MODAL: Tool verwalten -->
+<div class="modal-overlay" id="toolModal" onclick="if(event.target===this)closeToolModal()">
+  <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:460px;max-width:96vw;display:flex;flex-direction:column">
+    <div style="padding:22px 28px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:36px;height:36px;border-radius:10px;background:rgba(27,115,205,0.12);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:16px"><i class="fas fa-toolbox"></i></div>
+        <div style="font-size:16px;font-weight:700;color:var(--text)" id="toolModalTitle">Tool hinzufügen</div>
+      </div>
+      <button onclick="closeToolModal()" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:13px"><i class="fas fa-times"></i></button>
+    </div>
+    <div style="padding:22px 28px 24px;display:flex;flex-direction:column;gap:14px">
+      <input type="hidden" id="toolModalId">
+      <div class="form-group" style="margin:0">
+        <label>Name</label>
+        <input type="text" id="toolModalName" class="form-control" placeholder="z.B. Angebots-Tool">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>URL</label>
+        <input type="url" id="toolModalUrl" class="form-control" placeholder="https://...">
+      </div>
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;font-weight:500">
+        <input type="checkbox" id="toolModalCloserVisible" style="width:16px;height:16px;cursor:pointer">
+        Für Closer sichtbar
+      </label>
+      <div id="toolModalErr" style="color:var(--danger);font-size:13px"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px">
+        <button class="btn btn-ghost" onclick="closeToolModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="saveTool()"><i class="fas fa-save"></i> Speichern</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Feature 8: CSV Import Modal -->
 <div class="modal-overlay" id="csvImportModal">
