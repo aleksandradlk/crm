@@ -2763,7 +2763,7 @@ document.getElementById('editContactInputCl')?.addEventListener('keydown', funct
 </div>
 
 <!-- WARTUNGSMODUS-OVERLAY -->
-<div id="maintenanceOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(20,31,52,0.97);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:0">
+<div id="maintenanceOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(20,31,52,0.97);align-items:center;justify-content:center;flex-direction:column;gap:0">
   <div style="text-align:center;padding:40px;max-width:480px">
     <div style="font-size:56px;margin-bottom:24px">🔧</div>
     <div style="font-size:22px;font-weight:700;color:#f59e0b;margin-bottom:12px">System-Wartung</div>
@@ -2793,6 +2793,7 @@ async function checkMaintenanceStatus() {
     if (data.maintenance) {
       _maintActive = true;
       overlay.style.display = 'flex';
+      overlay.style.flexDirection = 'column';
       const untilEl = document.getElementById('maintUntilInfo');
       const untilTimeEl = document.getElementById('maintUntilTime');
       if (data.until) {

@@ -33,7 +33,8 @@ async function pollIncomingEmails() {
       // Nur neue Nachrichten seit dem letzten Poll abrufen (nicht alle)
       const uids = await client.search({ since }, { uid: true });
 
-      for await (const msg of client.fetch(uids.length ? uids : [], {
+      if (uids && uids.length > 0) {
+      for await (const msg of client.fetch(uids, {
         envelope: true,
         bodyParts: ['TEXT'],
         headers: ['in-reply-to', 'references', 'x-crm-lead-id'],
@@ -130,6 +131,7 @@ async function pollIncomingEmails() {
            VALUES (?, 'inbound', ?, ?, ?, ?, ?, ?)`,
           [leadId, fromAddr, toAddr, subject, bodyText.slice(0, 10000), messageId, receivedAt]
         ).catch(() => {});
+      }
       }
     } finally {
       lock.release();
