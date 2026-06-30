@@ -55,6 +55,26 @@ async function api(method, path, body) {
     throw new Error('Session abgelaufen');
   }
 
+  // Wartungsmodus: Overlay sofort anzeigen statt generischer Fehlermeldung
+  if (res.status === 503 && data.error === 'maintenance') {
+    const overlay = document.getElementById('maintenanceOverlay');
+    if (overlay) {
+      overlay.style.display = 'flex';
+      overlay.style.flexDirection = 'column';
+      const untilEl = document.getElementById('maintUntilInfo');
+      const untilTimeEl = document.getElementById('maintUntilTime');
+      if (data.until && untilEl && untilTimeEl) {
+        untilTimeEl.textContent = new Date(data.until).toLocaleString('de-DE', {
+          day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'
+        });
+        untilEl.style.display = 'block';
+      } else if (untilEl) {
+        untilEl.style.display = 'none';
+      }
+    }
+    throw new Error('maintenance');
+  }
+
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
 }

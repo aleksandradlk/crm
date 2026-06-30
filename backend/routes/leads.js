@@ -264,6 +264,32 @@ router.get('/reminders', auth, async (req, res) => {
 });
 
 // ── GET /api/leads/archived — archivierte Leads (Admin) ─────
+// ── GET /api/leads/unmatched-emails — Unzugeordnete Emails (Admin) ──
+router.get('/unmatched-emails', auth, adminOnly, async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT id, from_address, to_address, subject, body_text, received_at, created_at
+       FROM unmatched_emails
+       ORDER BY COALESCE(received_at, created_at) DESC
+       LIMIT 200`
+    );
+    res.json(rows);
+  } catch(e) {
+    console.error('Unmatched emails error:', e);
+    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
+  }
+});
+
+// ── DELETE /api/leads/unmatched-emails/:id — Unzugeordnete Email löschen (Admin) ──
+router.delete('/unmatched-emails/:id', auth, adminOnly, async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'Ungültige ID' });
+  try {
+    await db.query('DELETE FROM unmatched_emails WHERE id=?', [id]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: 'Fehler beim Löschen' }); }
+});
+
 router.get('/archived', auth, adminOnly, async (req, res) => {
   try {
     const [rows] = await db.query(
