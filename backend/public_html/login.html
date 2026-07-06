@@ -86,8 +86,9 @@
   }
 
   // Check if setup needed
-  fetch('/api/auth/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
-    .then(r => { if (r.status === 400) document.getElementById('setupLink').style.display = 'block'; })
+  fetch('/api/auth/needs-setup')
+    .then(r => r.json())
+    .then(d => { if (d.needsSetup) document.getElementById('setupLink').style.display = 'block'; })
     .catch(() => {});
 
   document.getElementById('password').addEventListener('keydown', e => {

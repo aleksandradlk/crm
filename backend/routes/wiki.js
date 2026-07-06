@@ -141,8 +141,13 @@ router.get('/files/:filename', async (req, res) => {
     const tokenStr = raw.startsWith('Bearer ') ? raw.slice(7) : (req.query.token || '');
     if (!tokenStr) return res.status(401).json({ error: 'Kein Token' });
     const payload = jwt.verify(tokenStr, process.env.JWT_SECRET);
-    const [[user]] = await db.query('SELECT id, is_active FROM users WHERE id=?', [payload.id]);
-    if (!user || !user.is_active) return res.status(401).json({ error: 'Nicht berechtigt' });
+    const [[user]] = await db.query(
+      `SELECT u.id, u.is_active, s.token AS session_token
+       FROM users u LEFT JOIN sessions s ON s.user_id = u.id
+       WHERE u.id=?`,
+      [payload.id]
+    );
+    if (!user || !user.is_active || user.session_token !== tokenStr) return res.status(401).json({ error: 'Nicht berechtigt' });
   } catch {
     return res.status(401).json({ error: 'Token ungültig' });
   }

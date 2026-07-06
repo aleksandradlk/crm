@@ -40,10 +40,21 @@ async function auth(req, res, next) {
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     const [[user]] = await db.query(
-      'SELECT id, username, full_name, email, role, is_active, can_edit_contacts, can_archive_leads, can_reassign_leads, can_view_all_leads, can_create_users, can_generate_leads, can_manage_email_templates FROM users WHERE id = ?',
+      `SELECT u.id, u.username, u.full_name, u.email, u.role, u.is_active,
+              u.can_edit_contacts, u.can_archive_leads, u.can_reassign_leads, u.can_view_all_leads,
+              u.can_create_users, u.can_generate_leads, u.can_manage_email_templates,
+              s.token AS session_token
+       FROM users u
+       LEFT JOIN sessions s ON s.user_id = u.id
+       WHERE u.id = ?`,
       [payload.id]
     );
     if (!user || !user.is_active) return res.status(401).json({ error: 'Account gesperrt oder nicht gefunden' });
+    // Token muss die aktuell gültige Session sein - nach Logout, Passwortänderung oder
+    // Login auf einem anderen Gerät wird die alte Session-Zeile gelöscht/ersetzt, damit
+    // ein gestohlenes/altes Token nicht einfach weiterverwendet werden kann.
+    if (user.session_token !== token) return res.status(401).json({ error: 'Sitzung beendet, bitte erneut anmelden' });
+    delete user.session_token;
     req.user = user;
 
     // Session-Timestamp aktualisieren (auch während Wartung, damit Closer nicht ausgeloggt werden),
