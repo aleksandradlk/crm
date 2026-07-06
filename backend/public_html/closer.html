@@ -449,7 +449,7 @@
 </div>
 
 <!-- EMAIL MODAL -->
-<div class="modal-overlay" id="emailModal">
+<div class="modal-overlay" id="emailModal" onclick="if(event.target===this)closeEmailModal()">
   <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:560px;max-width:96vw;max-height:92vh;overflow-y:auto;display:flex;flex-direction:column">
     <div style="padding:22px 28px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:10px">
@@ -509,7 +509,6 @@ function copyPhone(phone) {
 }
 let allLeads = [];
 let generatedLeadsCl = [];
-let panelDirty = false;
 let _panelLead = null;
 let _visibleMyLeads  = [];
 let _visibleAllLeads = [];
@@ -998,7 +997,6 @@ function nextLead() {
 function closePanel() {
   document.getElementById('leadOverlay').classList.remove('open');
   document.getElementById('leadPanel').classList.remove('open');
-  if (panelDirty) { panelDirty = false; loadLeads(); }
 }
 
 let _editClLeadId = null, _editClField = null;
@@ -1042,7 +1040,6 @@ async function saveEditContactCl() {
     }
     const l = allLeads.find(l => l.id === _editClLeadId);
     if (l) l[_editClField] = trimmed || null;
-    panelDirty = true;
     closeEditContactModalCl();
   } catch(e) {
     errEl.textContent = e.message;
@@ -1298,8 +1295,14 @@ function renderDetail(l) {
 async function setStatus(id, status) {
   try {
     await api('PATCH', `/leads/${id}/status`, { status });
-    panelDirty = true;
     _panelLead.status = status;
+    const lead = allLeads.find(l => l.id === id);
+    if (lead) { lead.status = status; lead.updated_at = new Date().toISOString(); }
+    filterMyLeads();
+    renderAllLeads(allLeads);
+    updateMyStats(myLeads());
+    updateAllStats(allLeads);
+    updateReminderBadge();
     if (status === 'rueckruf') showRueckrufPopupCl(id);
     // Status-Buttons neu rendern (Highlight-Wechsel)
     const btnHtml = [
@@ -1321,7 +1324,6 @@ async function addComment(id) {
   const text = input.value.trim();
   try {
     const r = await api('POST', `/leads/${id}/comments`, { text });
-    panelDirty = true;
     input.value = '';
     // Kommentar lokal aufbauen (API gibt nur {ok, id} zurück)
     const newComment = { id: r.id, user_id: ME.id, full_name: ME.full_name, text, created_at: new Date().toISOString(), edited_at: null };
@@ -1359,7 +1361,6 @@ async function addReminder(id) {
   if (!at) { showToast('Bitte Datum wählen', 'err'); return; }
   try {
     const r = await api('POST', `/leads/${id}/reminders`, { remind_at: at, note });
-    panelDirty = true;
     showToast('Reminder gesetzt ✓');
     atEl.value = '';
     if (noteEl) noteEl.value = '';
@@ -1403,7 +1404,6 @@ async function quickReminder(id, preset) {
   const at = _quickReminderAt(preset);
   try {
     const r = await api('POST', `/leads/${id}/reminders`, { remind_at: at, note: '' });
-    panelDirty = true;
     showToast('Reminder gesetzt ✓');
     const newReminder = { id: r.id, remind_at: at, note: null, sent: false };
     if (!_panelLead.reminders) _panelLead.reminders = [];
@@ -1884,6 +1884,13 @@ function renderWikiFiles(files, containerId, isAdmin) {
   }).join('');
 }
 
+// Panel lokal aus _panelLead neu rendern, ohne GET /leads/:id erneut abzufragen
+function refreshPanelCl() {
+  if (!_panelLead) return;
+  document.getElementById('panelBody').innerHTML = renderDetail(_panelLead);
+  document.getElementById('panelKeyInfo').innerHTML = renderPanelKeyInfo(_panelLead);
+}
+
 // ── KOMMENTAR EDIT / DELETE ───────────────────────────────────
 function editComment(leadId, cid, currentText) {
   const el = document.getElementById(`comment-text-${cid}`);
@@ -1892,7 +1899,7 @@ function editComment(leadId, cid, currentText) {
     <textarea id="edit-ta-${cid}" class="form-control" rows="2" style="margin-bottom:6px;font-size:13px">${escHtml(currentText)}</textarea>
     <div style="display:flex;gap:6px">
       <button class="btn btn-primary btn-sm" onclick="saveCommentEdit(${leadId},${cid})"><i class="fas fa-check"></i> Speichern</button>
-      <button class="btn btn-ghost btn-sm" onclick="openPanel(${leadId})">Abbrechen</button>
+      <button class="btn btn-ghost btn-sm" onclick="refreshPanelCl()">Abbrechen</button>
     </div>`;
   document.getElementById(`edit-ta-${cid}`)?.focus();
 }
@@ -1902,7 +1909,11 @@ async function saveCommentEdit(leadId, cid) {
   try {
     await api('PATCH', `/leads/${leadId}/comments/${cid}`, { text: val });
     showToast('Kommentar aktualisiert ✓');
-    openPanel(leadId);
+    if (_panelLead?.id === leadId) {
+      const c = (_panelLead.comments || []).find(c => c.id === cid);
+      if (c) { c.text = val; c.edited_at = new Date().toISOString(); }
+      refreshPanelCl();
+    }
   } catch(e) { showToast(e.message, 'err'); }
 }
 async function deleteComment(leadId, cid) {
@@ -1910,7 +1921,10 @@ async function deleteComment(leadId, cid) {
   try {
     await api('DELETE', `/leads/${leadId}/comments/${cid}`);
     showToast('Kommentar gelöscht');
-    openPanel(leadId);
+    if (_panelLead?.id === leadId) {
+      _panelLead.comments = (_panelLead.comments || []).filter(c => c.id !== cid);
+      refreshPanelCl();
+    }
   } catch(e) { showToast(e.message, 'err'); }
 }
 
@@ -1918,7 +1932,10 @@ async function deleteReminder(leadId, rid) {
   try {
     await api('DELETE', `/leads/${leadId}/reminders/${rid}`);
     showToast('Reminder gelöscht');
-    openPanel(leadId);
+    if (_panelLead?.id === leadId) {
+      _panelLead.reminders = (_panelLead.reminders || []).filter(r => r.id !== rid);
+      refreshPanelCl();
+    }
   } catch(e) { showToast(e.message, 'err'); }
 }
 
@@ -2637,6 +2654,11 @@ async function clSaveGeneratedLeads() {
 
 <script>
 document.getElementById('editContactInputCl')?.addEventListener('keydown', function(e){ if(e.key==='Enter') saveEditContactCl(); if(e.key==='Escape') closeEditContactModalCl(); });
+document.addEventListener('keydown', function(e){
+  if (e.key !== 'Escape') return;
+  const open = [...document.querySelectorAll('.modal-overlay.open')].pop();
+  if (open) open.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+});
 </script>
 
 <!-- CALL DOKUMENTATION MODAL (Closer) -->

@@ -84,29 +84,29 @@ router.post('/', auth, async (req, res) => {
 // ── GET /api/leads/dashboard — Tages-Dashboard (Admin only) ──────────────────
 router.get('/dashboard', auth, adminOnly, async (req, res) => {
   try {
-    const [[{ callsToday }]] = await db.query(
-      `SELECT COUNT(*) AS callsToday FROM call_logs WHERE DATE(started_at) = CURDATE()`
-    );
-    const [[{ winsThisWeek }]] = await db.query(
-      `SELECT COUNT(*) AS winsThisWeek FROM leads WHERE status='kunde' AND YEARWEEK(updated_at, 1) = YEARWEEK(NOW(), 1)`
-    );
-    const [[{ leadsTotal }]] = await db.query(
-      `SELECT COUNT(*) AS leadsTotal FROM leads WHERE archived_at IS NULL`
-    );
-    const [[{ leadsNew }]] = await db.query(
-      `SELECT COUNT(*) AS leadsNew FROM leads WHERE status='neu' AND archived_at IS NULL`
-    );
-    const [perCloser] = await db.query(
-      `SELECT u.full_name,
-         COUNT(DISTINCT CASE WHEN DATE(cl.started_at) = CURDATE() THEN cl.id END) AS callsToday,
-         COUNT(DISTINCT l.id) AS totalLeads
-       FROM users u
-       LEFT JOIN call_logs cl ON cl.user_id = u.id
-       LEFT JOIN leads l ON l.assigned_to = u.id AND l.archived_at IS NULL
-       WHERE u.role = 'closer' AND u.is_active = 1
-       GROUP BY u.id, u.full_name
-       ORDER BY callsToday DESC`
-    );
+    const [
+      [[{ callsToday }]],
+      [[{ winsThisWeek }]],
+      [[{ leadsTotal }]],
+      [[{ leadsNew }]],
+      [perCloser],
+    ] = await Promise.all([
+      db.query(`SELECT COUNT(*) AS callsToday FROM call_logs WHERE DATE(started_at) = CURDATE()`),
+      db.query(`SELECT COUNT(*) AS winsThisWeek FROM leads WHERE status='kunde' AND YEARWEEK(updated_at, 1) = YEARWEEK(NOW(), 1)`),
+      db.query(`SELECT COUNT(*) AS leadsTotal FROM leads WHERE archived_at IS NULL`),
+      db.query(`SELECT COUNT(*) AS leadsNew FROM leads WHERE status='neu' AND archived_at IS NULL`),
+      db.query(
+        `SELECT u.full_name,
+           COUNT(DISTINCT CASE WHEN DATE(cl.started_at) = CURDATE() THEN cl.id END) AS callsToday,
+           COUNT(DISTINCT l.id) AS totalLeads
+         FROM users u
+         LEFT JOIN call_logs cl ON cl.user_id = u.id
+         LEFT JOIN leads l ON l.assigned_to = u.id AND l.archived_at IS NULL
+         WHERE u.role = 'closer' AND u.is_active = 1
+         GROUP BY u.id, u.full_name
+         ORDER BY callsToday DESC`
+      ),
+    ]);
     res.json({ callsToday, winsThisWeek, leadsTotal, leadsNew, perCloser });
   } catch(e) {
     console.error('Dashboard error:', e);
@@ -118,20 +118,25 @@ router.get('/dashboard', auth, adminOnly, async (req, res) => {
 router.get('/dashboard/closer', auth, async (req, res) => {
   try {
     const uid = req.user.id;
-    const [[{ callsToday }]] = await db.query(
-      'SELECT COUNT(*) as callsToday FROM call_logs WHERE user_id=? AND DATE(started_at)=CURDATE()', [uid]);
-    const [[{ callsWeek }]] = await db.query(
-      'SELECT COUNT(*) as callsWeek FROM call_logs WHERE user_id=? AND YEARWEEK(started_at,1)=YEARWEEK(NOW(),1)', [uid]);
-    const [[{ winsTotal }]] = await db.query(
-      "SELECT COUNT(*) as winsTotal FROM leads WHERE assigned_to=? AND status='kunde' AND archived_at IS NULL", [uid]);
-    const [[{ myLeads }]] = await db.query(
-      'SELECT COUNT(*) as myLeads FROM leads WHERE assigned_to=? AND archived_at IS NULL', [uid]);
-    const [[{ avgCalls }]] = await db.query(
-      `SELECT ROUND(AVG(daily_count),1) as avgCalls FROM (
-        SELECT COUNT(*) as daily_count FROM call_logs
-        WHERE user_id=? AND started_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-        GROUP BY DATE(started_at)
-      ) t`, [uid]);
+    const [
+      [[{ callsToday }]],
+      [[{ callsWeek }]],
+      [[{ winsTotal }]],
+      [[{ myLeads }]],
+      [[{ avgCalls }]],
+    ] = await Promise.all([
+      db.query('SELECT COUNT(*) as callsToday FROM call_logs WHERE user_id=? AND DATE(started_at)=CURDATE()', [uid]),
+      db.query('SELECT COUNT(*) as callsWeek FROM call_logs WHERE user_id=? AND YEARWEEK(started_at,1)=YEARWEEK(NOW(),1)', [uid]),
+      db.query("SELECT COUNT(*) as winsTotal FROM leads WHERE assigned_to=? AND status='kunde' AND archived_at IS NULL", [uid]),
+      db.query('SELECT COUNT(*) as myLeads FROM leads WHERE assigned_to=? AND archived_at IS NULL', [uid]),
+      db.query(
+        `SELECT ROUND(AVG(daily_count),1) as avgCalls FROM (
+          SELECT COUNT(*) as daily_count FROM call_logs
+          WHERE user_id=? AND started_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+          GROUP BY DATE(started_at)
+        ) t`, [uid]
+      ),
+    ]);
     res.json({ callsToday, callsWeek, winsTotal, myLeads, avgCalls: avgCalls || 0 });
   } catch(e) { console.error('Dashboard closer error:', e); res.status(500).json({ error: 'Fehler' }); }
 });
@@ -396,6 +401,21 @@ router.patch('/:id/status', auth, async (req, res) => {
   await log(req.user.id, 'status_change', 'lead', id,
     { from: lead.status, to: status }, req.ip);
   res.json({ ok: true });
+});
+
+// ── PATCH /api/leads/bulk-assign — mehrere Leads auf einmal zuweisen (Admin) ──
+router.patch('/bulk-assign', auth, adminOnly, async (req, res) => {
+  const { ids, assigned_to } = req.body;
+  const cleanIds = Array.isArray(ids) ? ids.map(id => parseInt(id)).filter(Number.isInteger) : [];
+  if (!cleanIds.length) return res.status(400).json({ error: 'Keine gültigen Lead-IDs' });
+  const assignedTo = (assigned_to === null || assigned_to === undefined || assigned_to === '') ? null : parseInt(assigned_to);
+
+  await db.query(
+    `UPDATE leads SET assigned_to = ? WHERE id IN (${cleanIds.map(() => '?').join(',')})`,
+    [assignedTo, ...cleanIds]
+  );
+  await log(req.user.id, 'lead_bulk_assign', 'lead', null, { ids: cleanIds, assigned_to: assignedTo }, req.ip);
+  res.json({ ok: true, updated: cleanIds.length });
 });
 
 // ── PATCH /api/leads/:id — Update ──────────────────────────

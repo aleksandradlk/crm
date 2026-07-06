@@ -4,6 +4,11 @@ const db  = require('../db');
 // In-Memory-Cache für Wartungsmodus (30-Sekunden-TTL)
 let _maintCache = { active: false, until: '', fetchedAt: 0 };
 
+// Throttle für last_active-Writes: der 30s-Heartbeat (shared/api.js) hält die
+// Spalte ohnehin aktuell, daher reicht ein Write pro Request-Middleware alle 15s.
+const _lastActiveWrites = new Map();
+const LAST_ACTIVE_THROTTLE_MS = 15_000;
+
 async function getMaintenanceStatus() {
   const now = Date.now();
   if (now - _maintCache.fetchedAt < 30_000) return _maintCache;
@@ -41,11 +46,13 @@ async function auth(req, res, next) {
     if (!user || !user.is_active) return res.status(401).json({ error: 'Account gesperrt oder nicht gefunden' });
     req.user = user;
 
-    // Session-Timestamp aktualisieren (auch während Wartung, damit Closer nicht ausgeloggt werden)
-    await db.query(
-      'UPDATE sessions SET last_active = NOW() WHERE user_id = ?',
-      [user.id]
-    );
+    // Session-Timestamp aktualisieren (auch während Wartung, damit Closer nicht ausgeloggt werden),
+    // aber throttled statt bei jedem Request zu schreiben
+    const now = Date.now();
+    if (now - (_lastActiveWrites.get(user.id) || 0) > LAST_ACTIVE_THROTTLE_MS) {
+      _lastActiveWrites.set(user.id, now);
+      db.query('UPDATE sessions SET last_active = NOW() WHERE user_id = ?', [user.id]).catch(() => {});
+    }
 
     // Wartungsmodus: Closer werden blockiert, Admin kommt immer durch
     if (user.role !== 'admin') {

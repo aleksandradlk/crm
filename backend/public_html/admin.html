@@ -494,7 +494,7 @@
 </div>
 
 <!-- EMAIL MODAL -->
-<div class="modal-overlay" id="adminEmailModal">
+<div class="modal-overlay" id="adminEmailModal" onclick="if(event.target===this)closeEmailModal()">
   <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:560px;max-width:96vw;max-height:92vh;overflow-y:auto;display:flex;flex-direction:column">
     <div style="padding:22px 28px 0;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding-bottom:16px;margin-bottom:4px">
       <div style="display:flex;align-items:center;gap:10px">
@@ -564,7 +564,7 @@
 </div>
 
 <!-- USER MODAL -->
-<div class="modal-overlay" id="userModal">
+<div class="modal-overlay" id="userModal" onclick="if(event.target===this)closeUserModal()">
   <div class="modal">
     <button class="modal-close" onclick="closeUserModal()"><i class="fas fa-times"></i></button>
     <div class="modal-title" id="userModalTitle">Neuer Benutzer</div>
@@ -620,7 +620,6 @@
 <script src="/shared/api.js"></script>
 <script>
 let allLeads = [], allUsers = [], generatedLeads = [], editingUserId = null;
-let panelDirty = false;
 let _panelLead = null;
 const ME = Auth.getUser();
 
@@ -1058,7 +1057,6 @@ async function openLeadPanel(id) {
 function closeLeadPanel() {
   document.getElementById('leadOverlay').classList.remove('open');
   document.getElementById('leadPanel').classList.remove('open');
-  if (panelDirty) { panelDirty = false; loadLeads(); }
 }
 
 let _editContactLeadId = null, _editContactField = null;
@@ -1102,7 +1100,6 @@ async function saveEditContact() {
     }
     const l = allLeads.find(l => l.id === _editContactLeadId);
     if (l) l[_editContactField] = trimmed || null;
-    panelDirty = true;
     closeEditContactModal();
   } catch(e) {
     errEl.textContent = e.message;
@@ -1331,11 +1328,21 @@ function renderLeadDetail(l) {
     </div>`;
 }
 
+// Panel lokal aus _panelLead neu rendern, ohne GET /leads/:id erneut abzufragen
+function refreshPanel() {
+  if (!_panelLead) return;
+  document.getElementById('panelContent').innerHTML = renderLeadDetail(_panelLead);
+  document.getElementById('panelKeyInfo').innerHTML = renderPanelKeyInfo(_panelLead);
+}
+
 async function changeStatus(id, status) {
   try {
     await api('PATCH', `/leads/${id}/status`, { status });
-    panelDirty = true;
-    openLeadPanel(id);
+    const lead = allLeads.find(l => l.id === id);
+    if (lead) lead.status = status;
+    updateLeadStats(allLeads);
+    filterLeads();
+    if (_panelLead?.id === id) { _panelLead.status = status; refreshPanel(); }
     if (status === 'rueckruf') showRueckrufPopup(id);
   } catch (e) { showToast(e.message, 'err'); }
 }
@@ -1346,8 +1353,11 @@ async function assignLead(leadId) {
   try {
     await api('PATCH', `/leads/${leadId}`, { assigned_to });
     showToast(assigned_to ? 'Lead zugewiesen ✓' : 'Zuweisung entfernt ✓');
-    panelDirty = true;
-    openLeadPanel(leadId);
+    const assignedName = assigned_to ? allUsers.find(u => u.id === assigned_to)?.full_name || null : null;
+    const lead = allLeads.find(l => l.id === leadId);
+    if (lead) { lead.assigned_to = assigned_to; lead.assigned_name = assignedName; }
+    filterLeads();
+    if (_panelLead?.id === leadId) { _panelLead.assigned_to = assigned_to; _panelLead.assigned_name = assignedName; refreshPanel(); }
   } catch (e) { showToast(e.message, 'err'); }
 }
 
@@ -1356,26 +1366,48 @@ async function assignLeadToMe(leadId) {
   try {
     await api('PATCH', `/leads/${leadId}`, { assigned_to: me.id });
     showToast('Lead dir zugewiesen ✓');
-    panelDirty = true;
-    openLeadPanel(leadId);
+    const lead = allLeads.find(l => l.id === leadId);
+    if (lead) { lead.assigned_to = me.id; lead.assigned_name = me.full_name; }
+    filterLeads();
+    if (_panelLead?.id === leadId) { _panelLead.assigned_to = me.id; _panelLead.assigned_name = me.full_name; refreshPanel(); }
   } catch (e) { showToast(e.message, 'err'); }
 }
 async function addComment(id) {
   const input = document.getElementById(`newComment-${id}`);
   if (!input?.value.trim()) return;
-  try { await api('POST', `/leads/${id}/comments`, { text: input.value.trim() }); panelDirty = true; openLeadPanel(id); }
-  catch (e) { showToast(e.message, 'err'); }
+  const text = input.value.trim();
+  try {
+    const r = await api('POST', `/leads/${id}/comments`, { text });
+    if (_panelLead?.id === id) {
+      if (!_panelLead.comments) _panelLead.comments = [];
+      _panelLead.comments.push({ id: r.id, user_id: ME.id, full_name: ME.full_name, text, created_at: new Date().toISOString(), edited_at: null });
+      refreshPanel();
+      document.getElementById(`newComment-${id}`)?.focus();
+    }
+  } catch (e) { showToast(e.message, 'err'); }
 }
 async function addReminder(id) {
   const at   = document.getElementById(`newRemindAt-${id}`)?.value;
   const note = document.getElementById(`newRemindNote-${id}`)?.value;
   if (!at) { showToast('Datum wählen', 'err'); return; }
-  try { await api('POST', `/leads/${id}/reminders`, { remind_at: at, note }); panelDirty = true; showToast('Reminder gesetzt ✓'); openLeadPanel(id); }
-  catch (e) { showToast(e.message, 'err'); }
+  try {
+    const r = await api('POST', `/leads/${id}/reminders`, { remind_at: at, note });
+    showToast('Reminder gesetzt ✓');
+    if (_panelLead?.id === id) {
+      if (!_panelLead.reminders) _panelLead.reminders = [];
+      _panelLead.reminders.push({ id: r.id, remind_at: at, note: note || null, sent: false });
+      refreshPanel();
+    }
+  } catch (e) { showToast(e.message, 'err'); }
 }
 async function deleteReminder(leadId, rid) {
-  try { await api('DELETE', `/leads/${leadId}/reminders/${rid}`); openLeadPanel(leadId); }
-  catch (e) { showToast(e.message, 'err'); }
+  try {
+    await api('DELETE', `/leads/${leadId}/reminders/${rid}`);
+    if (_panelLead?.id === leadId) {
+      _panelLead.reminders = (_panelLead.reminders || []).filter(r => r.id !== rid);
+      refreshPanel();
+    }
+  } catch (e) { showToast(e.message, 'err'); }
 }
 
 // ── GENERATE ──────────────────────────────────────────────────
@@ -1439,9 +1471,7 @@ async function executeBulkAssign() {
   if (!closerId) { showToast('Bitte einen Closer auswählen', 'err'); return; }
   if (!bulkSelectedIds.size) return;
   try {
-    await Promise.all([...bulkSelectedIds].map(id =>
-      api('PATCH', `/leads/${id}`, { assigned_to: closerId })
-    ));
+    await api('PATCH', '/leads/bulk-assign', { ids: [...bulkSelectedIds], assigned_to: closerId });
     showToast(`${bulkSelectedIds.size} Leads zugewiesen ✓`);
     clearBulkSelection();
     loadLeads();
@@ -1946,9 +1976,9 @@ function openCsvImportModal() {
   allUsers.filter(u => u.role === 'closer' || u.role === 'admin').forEach(u => {
     sel.innerHTML += `<option value="${u.id}">${escHtml(u.full_name)}</option>`;
   });
-  document.getElementById('csvImportModal').classList.add('active');
+  document.getElementById('csvImportModal').classList.add('open');
 }
-function closeCsvImportModal() { document.getElementById('csvImportModal').classList.remove('active'); }
+function closeCsvImportModal() { document.getElementById('csvImportModal').classList.remove('open'); }
 async function runCsvImport() {
   const file = document.getElementById('csvFileInput').files[0];
   if (!file) { showToast('Bitte CSV-Datei auswählen', 'err'); return; }
@@ -2568,7 +2598,7 @@ function editComment(leadId, cid, text) {
     <textarea id="cedit-${cid}" class="form-control" rows="3" style="font-size:13px;margin-bottom:6px">${escHtml(text)}</textarea>
     <div style="display:flex;gap:6px">
       <button class="btn btn-primary btn-sm" onclick="saveCommentEdit(${leadId},${cid})"><i class="fas fa-check"></i> Speichern</button>
-      <button class="btn btn-ghost btn-sm" onclick="openLeadPanel(${leadId})">Abbrechen</button>
+      <button class="btn btn-ghost btn-sm" onclick="refreshPanel()">Abbrechen</button>
     </div>`;
 }
 async function saveCommentEdit(leadId, cid) {
@@ -2579,7 +2609,11 @@ async function saveCommentEdit(leadId, cid) {
   try {
     await api('PATCH', `/leads/${leadId}/comments/${cid}`, { text });
     showToast('Kommentar aktualisiert ✓');
-    openLeadPanel(leadId);
+    if (_panelLead?.id === leadId) {
+      const c = (_panelLead.comments || []).find(c => c.id === cid);
+      if (c) { c.text = text; c.edited_at = new Date().toISOString(); }
+      refreshPanel();
+    }
   } catch(e) { showToast(e.message, 'err'); }
 }
 async function deleteComment(leadId, cid) {
@@ -2587,7 +2621,10 @@ async function deleteComment(leadId, cid) {
   try {
     await api('DELETE', `/leads/${leadId}/comments/${cid}`);
     showToast('Kommentar gelöscht');
-    openLeadPanel(leadId);
+    if (_panelLead?.id === leadId) {
+      _panelLead.comments = (_panelLead.comments || []).filter(c => c.id !== cid);
+      refreshPanel();
+    }
   } catch(e) { showToast(e.message, 'err'); }
 }
 
@@ -3347,7 +3384,7 @@ document.getElementById('addLeadModal').addEventListener('click', function(e){ i
 </div>
 
 <!-- MODAL: Benutzer einladen (Admin) -->
-<div class="modal-overlay" id="inviteChatModalAdmin">
+<div class="modal-overlay" id="inviteChatModalAdmin" onclick="if(event.target===this)document.getElementById('inviteChatModalAdmin').classList.remove('open')">
   <div style="background:var(--bg2);border-radius:14px;box-shadow:var(--shadow-lg);padding:28px;width:420px;max-width:96vw;max-height:80vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <h2 style="font-size:16px;font-weight:700;margin:0"><i class="fas fa-user-plus" style="color:var(--accent);margin-right:8px"></i>Benutzer einladen</h2>
@@ -3379,6 +3416,11 @@ document.getElementById('settingsModal').addEventListener('click', function(e){ 
 document.getElementById('createChatModalAdmin').addEventListener('click', function(e){ if(e.target===this) closeCreateChat(); });
 document.getElementById('chatInputAdmin')?.addEventListener('keydown', function(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendChatMsg(); } });
 document.getElementById('editContactInput')?.addEventListener('keydown', function(e){ if(e.key==='Enter') saveEditContact(); if(e.key==='Escape') closeEditContactModal(); });
+document.addEventListener('keydown', function(e){
+  if (e.key !== 'Escape') return;
+  const open = [...document.querySelectorAll('.modal-overlay.open')].pop();
+  if (open) open.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+});
 </script>
 
 <div class="modal-overlay" id="editContactModal" onclick="if(event.target===this)closeEditContactModal()">
@@ -3536,7 +3578,7 @@ document.getElementById('editContactInput')?.addEventListener('keydown', functio
 </div>
 
 <!-- Feature 8: CSV Import Modal -->
-<div class="modal-overlay" id="csvImportModal">
+<div class="modal-overlay" id="csvImportModal" onclick="if(event.target===this)closeCsvImportModal()">
   <div style="background:var(--bg2);border-radius:14px;box-shadow:var(--shadow-lg);padding:28px;width:460px;max-width:96vw;max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <h2 style="font-size:16px;font-weight:700;margin:0"><i class="fas fa-upload" style="color:var(--accent);margin-right:8px"></i>CSV-Import</h2>
