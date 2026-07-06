@@ -1817,16 +1817,17 @@ async function wikiFileOpen(filename, encodedName, forceDownload) {
       showWikiNoPreviewModal(filename, encodedName ? decodeURIComponent(encodedName) : filename);
       return;
     }
+    const _previewWin = window.open('', '_blank');
     try {
       const _wr = await fetch(`/api/wiki/files/${encodeURIComponent(filename)}`, {
         headers: { 'Authorization': 'Bearer ' + Auth.getToken() }
       });
-      if (!_wr.ok) { showToast('Datei nicht verfügbar', 'err'); return; }
+      if (!_wr.ok) { if (_previewWin) _previewWin.close(); showToast('Datei nicht verfügbar', 'err'); return; }
       const _wb = await _wr.blob();
       const _wu = URL.createObjectURL(_wb);
-      window.open(_wu, '_blank');
+      if (_previewWin) _previewWin.location = _wu; else window.open(_wu, '_blank');
       setTimeout(() => URL.revokeObjectURL(_wu), 30000);
-    } catch { showToast('Datei konnte nicht geöffnet werden', 'err'); }
+    } catch { if (_previewWin) _previewWin.close(); showToast('Datei konnte nicht geöffnet werden', 'err'); }
     return;
   }
   // Download: Blob-Weg damit der Dateiname korrekt gesetzt wird
@@ -2612,7 +2613,7 @@ async function clSaveGeneratedLeads() {
 </style>
 
 <div class="modal-overlay" id="editContactModalCl" onclick="if(event.target===this)closeEditContactModalCl()">
-  <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:420px;max-width:96vw;display:flex;flex-direction:column">
+  <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:420px;max-width:96vw;max-height:90vh;overflow-y:auto;display:flex;flex-direction:column">
     <div style="padding:22px 28px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:10px">
         <div style="width:36px;height:36px;border-radius:10px;background:rgba(27,115,205,0.12);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:16px"><i class="fas fa-edit"></i></div>
@@ -2640,7 +2641,7 @@ document.getElementById('editContactInputCl')?.addEventListener('keydown', funct
 
 <!-- CALL DOKUMENTATION MODAL (Closer) -->
 <div class="modal-overlay" id="callDocModalCl" onclick="if(event.target===this)closeCallDocModalCl()">
-  <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:420px;max-width:96vw;display:flex;flex-direction:column">
+  <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:420px;max-width:96vw;max-height:90vh;overflow-y:auto;display:flex;flex-direction:column">
     <div style="padding:22px 28px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:10px">
         <div style="width:36px;height:36px;border-radius:10px;background:rgba(34,197,94,0.12);display:flex;align-items:center;justify-content:center;color:var(--green);font-size:16px"><i class="fas fa-phone"></i></div>
