@@ -867,7 +867,7 @@ function renderMyLeads(leads) {
         <select class="form-control" style="padding:4px 8px;font-size:11px;width:120px" onchange="quickStatus(${l.id}, this.value)">
           ${statusOptions(l.status)}
         </select>
-        <span onclick="tableQuickNote(${l.id},this,event)" title="Schnellnotiz" style="cursor:pointer;color:var(--accent);font-size:13px;margin-left:8px;vertical-align:middle"><i class="fas fa-sticky-note"></i></span>
+        <span onclick="tableQuickNote(${l.id},this,event)" title="Schnellnotiz" style="cursor:pointer;color:var(--accent);font-size:13px;margin-left:8px;vertical-align:middle;display:inline-flex;align-items:center;justify-content:center;min-width:40px;min-height:40px"><i class="fas fa-sticky-note"></i></span>
       </td>
     </tr>`).join('');
 }
@@ -896,7 +896,7 @@ function renderAllLeads(leads) {
       <td class="mob-hide" style="font-size:12px">${l.assigned_name ? `<span style="color:var(--text2)">${escHtml(l.assigned_name)}</span>` : '—'}</td>
       <td>${statusBadge(l.status)}</td>
       <td class="mob-hide" style="font-size:11px;color:var(--text3)">${fmtDateShort(l.updated_at || l.created_at)}</td>
-      <td onclick="event.stopPropagation()" style="white-space:nowrap">${assignBtn} <span onclick="tableQuickNote(${l.id},this,event)" title="Schnellnotiz" style="cursor:pointer;color:var(--accent);font-size:13px;margin-left:6px;vertical-align:middle"><i class="fas fa-sticky-note"></i></span></td>
+      <td onclick="event.stopPropagation()" style="white-space:nowrap">${assignBtn} <span onclick="tableQuickNote(${l.id},this,event)" title="Schnellnotiz" style="cursor:pointer;color:var(--accent);font-size:13px;margin-left:6px;vertical-align:middle;display:inline-flex;align-items:center;justify-content:center;min-width:40px;min-height:40px"><i class="fas fa-sticky-note"></i></span></td>
     </tr>`;
   }).join('');
 }

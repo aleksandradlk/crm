@@ -356,25 +356,27 @@ router.get('/:id', auth, async (req, res) => {
   );
   if (!lead) return res.status(404).json({ error: 'Nicht gefunden' });
 
-  const [comments] = await db.query(
-    `SELECT c.*, u.full_name, u.username FROM comments c
-     JOIN users u ON u.id = c.user_id
-     WHERE c.lead_id = ? ORDER BY c.created_at ASC`, [id]
-  );
-  const [reminders] = await db.query(
-    `SELECT r.*, u.full_name FROM reminders r
-     JOIN users u ON u.id = r.user_id
-     WHERE r.lead_id = ? ORDER BY r.remind_at ASC`, [id]
-  );
-  const [call_logs] = await db.query(
-    `SELECT cl.*, u.full_name FROM call_logs cl
-     JOIN users u ON u.id = cl.user_id
-     WHERE cl.lead_id = ? ORDER BY cl.started_at DESC`, [id]
-  ).catch(() => [[]]);
-  const [email_thread] = await db.query(
-    `SELECT id, direction, from_address, to_address, subject, body_text, received_at, created_at
-     FROM lead_emails WHERE lead_id = ? ORDER BY COALESCE(received_at, created_at) ASC`, [id]
-  ).catch(() => [[]]);
+  const [[comments], [reminders], [call_logs], [email_thread]] = await Promise.all([
+    db.query(
+      `SELECT c.*, u.full_name, u.username FROM comments c
+       JOIN users u ON u.id = c.user_id
+       WHERE c.lead_id = ? ORDER BY c.created_at ASC`, [id]
+    ),
+    db.query(
+      `SELECT r.*, u.full_name FROM reminders r
+       JOIN users u ON u.id = r.user_id
+       WHERE r.lead_id = ? ORDER BY r.remind_at ASC`, [id]
+    ),
+    db.query(
+      `SELECT cl.*, u.full_name FROM call_logs cl
+       JOIN users u ON u.id = cl.user_id
+       WHERE cl.lead_id = ? ORDER BY cl.started_at DESC`, [id]
+    ).catch(() => [[]]),
+    db.query(
+      `SELECT id, direction, from_address, to_address, subject, body_text, received_at, created_at
+       FROM lead_emails WHERE lead_id = ? ORDER BY COALESCE(received_at, created_at) ASC`, [id]
+    ).catch(() => [[]]),
+  ]);
   res.json({ ...lead, comments, reminders, call_logs, email_thread });
 });
 

@@ -705,7 +705,7 @@ function showTab(name) {
   closeMobileNav();
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('tab-' + name).classList.add('active');
+  document.getElementById('tab-' + name)?.classList.add('active');
   const navEl = document.querySelector(`.nav-item[data-tab="${name}"]`);
   if (navEl) navEl.classList.add('active');
   if (name === 'dashboard') loadDashboard();
