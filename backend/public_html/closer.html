@@ -1566,7 +1566,7 @@ async function setQuickReminderCl(offsetHours) {
   const dt = new Date(Date.now() + offsetHours * 3600 * 1000);
   const remind_at = dt.toISOString().slice(0, 16);
   try {
-    await api('POST', `/leads/${_rueckrufLeadIdCl}/reminder`, { remind_at, note: 'Rückruf' });
+    await api('POST', `/leads/${_rueckrufLeadIdCl}/reminders`, { remind_at, note: 'Rückruf' });
     showToast('Reminder gesetzt ✓');
   } catch(e) { showToast(e.message, 'err'); }
   closeRueckrufPopupCl();

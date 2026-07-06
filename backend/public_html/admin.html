@@ -1466,7 +1466,7 @@ async function setQuickReminder(offsetHours) {
   const dt = new Date(Date.now() + offsetHours * 3600 * 1000);
   const remind_at = dt.toISOString().slice(0, 16);
   try {
-    await api('POST', `/leads/${_rueckrufLeadId}/reminder`, { remind_at, note: 'Rückruf' });
+    await api('POST', `/leads/${_rueckrufLeadId}/reminders`, { remind_at, note: 'Rückruf' });
     showToast('Reminder gesetzt ✓');
   } catch(e) { showToast(e.message, 'err'); }
   closeRueckrufPopup();
@@ -1959,7 +1959,7 @@ async function runCsvImport() {
   form.append('csv', file);
   if (assignTo) form.append('assign_to', assignTo);
   try {
-    const token = localStorage.getItem('token');
+    const token = Auth.getToken();
     const res = await fetch('/api/leads/import', { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: form });
     const data = await res.json();
     const div = document.getElementById('csvImportResult');
@@ -1995,7 +1995,7 @@ async function dropAssignLead(userId) {
   if (!_dragLeadId) return;
   hideDragAssignOverlay();
   try {
-    await api('PATCH', `/leads/${_dragLeadId}/assign`, { assigned_to: userId });
+    await api('PATCH', `/leads/${_dragLeadId}`, { assigned_to: userId });
     showToast(userId ? 'Lead zugewiesen ✓' : 'Zuweisung aufgehoben');
     loadLeads();
   } catch(e) { showToast('Fehler: ' + e.message, 'err'); }
