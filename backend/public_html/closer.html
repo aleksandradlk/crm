@@ -2471,10 +2471,13 @@ function clRenderGenResults(leads) {
   document.getElementById('clGenResultCount').textContent = leads.length;
   document.getElementById('clGenResultsBody').innerHTML = leads.map((l, i) => {
     const labels = leadWarningLabels(l);
+    const confirmed = leadConfirmationLabels(l);
     const warn = labels.length > 0;
-    const flags = labels.length
-      ? labels.map(t => `<span>⚠ ${t}</span>`).join(' ')
-      : '<span style="color:var(--text3)">—</span>';
+    const flagParts = [
+      ...labels.map(t => `<span style="color:var(--red)">⚠ ${t}</span>`),
+      ...confirmed.map(t => `<span style="color:var(--green)">✓ ${t}</span>`),
+    ];
+    const flags = flagParts.length ? flagParts.join(' ') : '<span style="color:var(--text3)">—</span>';
     return `
     <tr style="border-top:1px solid var(--border)${warn ? ';background:rgba(239,68,68,0.06)' : ''}">
       <td style="padding:8px 12px"><input type="checkbox" class="clGenChk" data-i="${i}" ${warn ? '' : 'checked'}></td>

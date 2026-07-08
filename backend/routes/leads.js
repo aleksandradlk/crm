@@ -249,19 +249,22 @@ router.post('/bulk', auth, async (req, res) => {
       }
       // "verified_at" nur setzen, wenn tatsächlich mindestens eine automatisierte Prüfung
       // gelaufen ist — sonst suggeriert ein leeres NULL/NULL/NULL fälschlich "geprüft, ok".
-      const anyCheckRan = l.email_valid != null || l.phone_valid != null || l.domain_valid != null;
+      const anyCheckRan = l.email_valid != null || l.phone_valid != null || l.domain_valid != null
+        || l.phone_confirmed != null || l.email_confirmed != null;
       const [r] = await db.query(
         `INSERT INTO leads
           (company, ceo, email, phone, location, website, linkedin_url,
            industry, employees, revenue, source, confidence, notes,
-           email_valid, phone_valid, domain_valid, verified_at,
+           email_valid, phone_valid, domain_valid,
+           phone_confirmed, email_confirmed, impressum_url, verified_at,
            status, assigned_to, created_by)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [l.company||null, l.ceo||null, l.email||null, l.phone||null,
          l.location||null, l.website||null, l.linkedin_url||null,
          l.industry||null, l.employees||null, l.revenue||null,
          l.source||'web', confidence, l.notes||null,
          l.email_valid ?? null, l.phone_valid ?? null, l.domain_valid ?? null,
+         l.phone_confirmed ?? null, l.email_confirmed ?? null, l.impressum_url ?? null,
          anyCheckRan ? new Date() : null,
          'neu', assigned_to||null, req.user.id]
       );

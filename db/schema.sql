@@ -65,6 +65,12 @@ CREATE TABLE IF NOT EXISTS leads (
   email_valid   TINYINT(1) NULL,
   phone_valid   TINYINT(1) NULL,
   domain_valid  TINYINT(1) NULL,
+  -- Impressum-Abgleich (backend/helpers/impressumCheck.js): true = Telefon/E-Mail wurde
+  -- wortwörtlich auf der Firmen-Website gefunden (belegt die Firma-Kontakt-Zuordnung),
+  -- false = Website hat andere Kontaktdaten, keine passt, NULL = nicht feststellbar.
+  phone_confirmed TINYINT(1) NULL,
+  email_confirmed TINYINT(1) NULL,
+  impressum_url   VARCHAR(500) NULL,
   verified_at   DATETIME NULL,
   status        ENUM('neu','kontaktiert','nicht_erreicht','kein_interesse','rueckruf','kunde') NOT NULL DEFAULT 'neu',
   assigned_to   INT,               -- user.id des Closers

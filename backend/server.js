@@ -300,6 +300,11 @@ db.query('ALTER TABLE leads ADD COLUMN email_valid  TINYINT(1) NULL').catch(() =
 db.query('ALTER TABLE leads ADD COLUMN phone_valid  TINYINT(1) NULL').catch(() => {});
 db.query('ALTER TABLE leads ADD COLUMN domain_valid TINYINT(1) NULL').catch(() => {});
 db.query('ALTER TABLE leads ADD COLUMN verified_at  DATETIME NULL').catch(() => {});
+// Impressum-Abgleich: belegt (statt nur Formatplausibilität), dass Telefon/E-Mail
+// tatsächlich auf der Firmen-Website steht — siehe helpers/impressumCheck.js.
+db.query('ALTER TABLE leads ADD COLUMN phone_confirmed TINYINT(1) NULL').catch(() => {});
+db.query('ALTER TABLE leads ADD COLUMN email_confirmed TINYINT(1) NULL').catch(() => {});
+db.query('ALTER TABLE leads ADD COLUMN impressum_url   VARCHAR(500) NULL').catch(() => {});
 
 // ── Cron: Activity Log nach 7 Tagen bereinigen ───────────────
 cron.schedule('0 3 * * *', async () => {

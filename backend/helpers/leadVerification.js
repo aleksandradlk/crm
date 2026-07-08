@@ -2,6 +2,14 @@
 // Nutzt nur Node-Bordmittel (dns) und Regex — keine externen/kostenpflichtigen Dienste.
 const dns = require('dns').promises;
 const db  = require('../db');
+const { checkImpressum } = require('./impressumCheck');
+
+// Server-weiter Schalter, falls der Betreiber den ausgehenden Website-Abruf
+// (Impressum-Abgleich) nicht möchte. Standardmäßig an, da genau diese Prüfung
+// als einzige die Firma-zu-Kontaktdaten-Zuordnung belegt (statt nur Formatchecks).
+function impressumCheckEnabled() {
+  return process.env.IMPRESSUM_CHECK !== 'false';
+}
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
 const PHONE_RE = /^\+?[0-9][0-9\s\-\/()]{5,19}$/;
@@ -50,17 +58,31 @@ function domainIsResolvable(domain) {
 // Prüft einen einzelnen Lead automatisiert. Liefert null (nicht prüfbar/kein Wert)
 // statt false, wenn keine verlässliche Aussage möglich ist.
 async function verifyLead(lead) {
-  const checks = { email_valid: null, phone_valid: null, domain_valid: null };
+  const checks = {
+    email_valid: null, phone_valid: null, domain_valid: null,
+    // phone_confirmed/email_confirmed: NICHT nur Formatplausibilität, sondern ein Fund
+    // auf der tatsächlichen Firmen-Website (Impressum/Kontakt) — belegt die Zuordnung
+    // "diese Nummer/Adresse gehört zu genau dieser Firma", siehe impressumCheck.js.
+    phone_confirmed: null, email_confirmed: null, impressum_url: null,
+  };
 
   const emailFormatOk = lead.email ? EMAIL_RE.test(lead.email) : null;
   if (lead.email && !emailFormatOk) checks.email_valid = false;
 
-  const [emailDomainOk, domainOk] = await Promise.all([
+  const [emailDomainOk, domainOk, impressum] = await Promise.all([
     lead.email && emailFormatOk ? domainIsResolvable(extractDomain(lead.email)) : null,
     lead.website ? domainIsResolvable(extractDomain(lead.website)) : null,
+    (lead.website && impressumCheckEnabled())
+      ? checkImpressum(lead.website, lead.phone, lead.email).catch(() => null)
+      : null,
   ]);
   if (lead.email && emailFormatOk) checks.email_valid = emailDomainOk;
   if (lead.website) checks.domain_valid = domainOk;
+  if (impressum) {
+    checks.phone_confirmed = impressum.phone_confirmed;
+    checks.email_confirmed = impressum.email_confirmed;
+    checks.impressum_url   = impressum.impressum_url;
+  }
 
   if (lead.phone) {
     checks.phone_valid = PHONE_RE.test(lead.phone.trim());

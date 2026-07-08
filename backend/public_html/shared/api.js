@@ -169,6 +169,20 @@ function leadWarningLabels(l) {
   if (l.email_valid === false)  labels.push('E-Mail ungültig');
   if (l.domain_valid === false) labels.push('Domain nicht erreichbar');
   if (l.phone_valid === false)  labels.push('Telefonformat ungültig');
+  // phone_confirmed/email_confirmed === false bedeutet: die Firmen-Website wurde
+  // erfolgreich abgerufen und listet Kontaktdaten, aber keine davon passt zum
+  // KI-Wert — deutlich aussagekräftiger als ein reiner Formatcheck.
+  if (l.phone_confirmed === false) labels.push('Telefon nicht auf Website gefunden');
+  if (l.email_confirmed === false) labels.push('E-Mail nicht auf Website gefunden');
+  return labels;
+}
+
+// Positive Bestätigungen (kein Warnsignal) — Kontaktdaten, die wörtlich im
+// Impressum/auf der Kontaktseite der Firma gefunden wurden.
+function leadConfirmationLabels(l) {
+  const labels = [];
+  if (l.phone_confirmed === true) labels.push('Telefon laut Website bestätigt');
+  if (l.email_confirmed === true) labels.push('E-Mail laut Website bestätigt');
   return labels;
 }
 

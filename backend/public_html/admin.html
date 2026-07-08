@@ -1255,13 +1255,19 @@ function renderPanelKeyInfo(l) {
 function renderLeadDetail(l) {
   _panelLead = l;
   const checkLabels = leadWarningLabels(l);
-  const checkText = checkLabels.length ? '⚠ ' + checkLabels.join(', ')
+  const confirmLabels = leadConfirmationLabels(l);
+  const checkParts = [
+    ...checkLabels.map(t => '⚠ ' + t),
+    ...confirmLabels.map(t => '✓ ' + t),
+  ];
+  const checkText = checkParts.length ? checkParts.join(', ')
     : (l.verified_at ? '✓ Keine Auffälligkeiten' : null);
 
   const fields = [
     ['Standort', l.location], ['Website', l.website, 'url'], ['LinkedIn', l.linkedin_url, 'url'],
     ['Branche', l.industry], ['Mitarbeiter', l.employees], ['Umsatz', l.revenue],
     ['Automat. Prüfung', checkText],
+    ['Geprüfte Quelle', l.impressum_url, 'url'],
     ['Hinzugefügt von', l.created_name], ['Hinzugefügt am', fmtDate(l.created_at)],
     ['Zugewiesen an', l.assigned_name],
   ];
@@ -1541,10 +1547,13 @@ function renderGenResults(leads, realData) {
   }
   document.getElementById('genResultsBody').innerHTML = leads.map((l, i) => {
     const labels = leadWarningLabels(l);
+    const confirmed = leadConfirmationLabels(l);
     const warn = labels.length > 0;
-    const flags = labels.length
-      ? labels.map(t => `<span>⚠ ${t}</span>`)
-      : ['<span style="color:var(--text3)">—</span>'];
+    const flags = [
+      ...labels.map(t => `<span style="color:var(--red)">⚠ ${t}</span>`),
+      ...confirmed.map(t => `<span style="color:var(--green)">✓ ${t}</span>`),
+    ];
+    if (!flags.length) flags.push('<span style="color:var(--text3)">—</span>');
     return `
     <tr${warn ? ' style="background:rgba(239,68,68,0.06)"' : ''}>
       <td><input type="checkbox" class="genChk" data-i="${i}" ${warn ? '' : 'checked'}></td>
@@ -1554,7 +1563,7 @@ function renderGenResults(leads, realData) {
       <td style="font-size:12px;font-family:'JetBrains Mono',monospace">${escHtml(l.phone||'—')}</td>
       <td style="font-size:12px;color:var(--text2)">${escHtml(l.location||'—')}</td>
       <td>${confBar(l.confidence)}</td>
-      <td style="font-size:11px;color:var(--red)">${flags.join(' ')}</td>
+      <td style="font-size:11px">${flags.join(' ')}</td>
     </tr>`;
   }).join('');
 }

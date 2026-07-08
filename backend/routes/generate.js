@@ -222,9 +222,12 @@ Antworte NUR mit diesem JSON-Array:
       const [checks, duplicate] = await Promise.all([verifyLead(l), findDuplicateLead(l)]);
       return {
         ...l,
-        email_valid:  checks.email_valid,
-        phone_valid:  checks.phone_valid,
-        domain_valid: checks.domain_valid,
+        email_valid:      checks.email_valid,
+        phone_valid:      checks.phone_valid,
+        domain_valid:     checks.domain_valid,
+        phone_confirmed:  checks.phone_confirmed,
+        email_confirmed:  checks.email_confirmed,
+        impressum_url:    checks.impressum_url,
         duplicate_of: duplicate ? duplicate.id : (batchDuplicateOf[i] !== undefined ? `batch#${batchDuplicateOf[i]}` : null),
       };
     });
