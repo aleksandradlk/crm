@@ -174,6 +174,9 @@ function leadWarningLabels(l) {
   // KI-Wert — deutlich aussagekräftiger als ein reiner Formatcheck.
   if (l.phone_confirmed === false) labels.push('Telefon nicht auf Website gefunden');
   if (l.email_confirmed === false) labels.push('E-Mail nicht auf Website gefunden');
+  // area_code_valid === false: Vorwahl gehört nachweislich zu einer anderen Stadt als
+  // im Ort angegeben — läuft offline, wichtig bei Leads ohne (aktuelle) Website.
+  if (l.area_code_valid === false) labels.push('Vorwahl passt nicht zum Ort');
   return labels;
 }
 
@@ -183,6 +186,7 @@ function leadConfirmationLabels(l) {
   const labels = [];
   if (l.phone_confirmed === true) labels.push('Telefon laut Website bestätigt');
   if (l.email_confirmed === true) labels.push('E-Mail laut Website bestätigt');
+  if (l.area_code_valid === true) labels.push('Vorwahl passt zum Ort');
   return labels;
 }
 

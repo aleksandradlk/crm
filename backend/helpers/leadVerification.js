@@ -3,6 +3,7 @@
 const dns = require('dns').promises;
 const db  = require('../db');
 const { checkImpressum } = require('./impressumCheck');
+const { checkAreaCode } = require('./areaCodeCheck');
 
 // Server-weiter Schalter, falls der Betreiber den ausgehenden Website-Abruf
 // (Impressum-Abgleich) nicht möchte. Standardmäßig an, da genau diese Prüfung
@@ -64,6 +65,9 @@ async function verifyLead(lead) {
     // auf der tatsächlichen Firmen-Website (Impressum/Kontakt) — belegt die Zuordnung
     // "diese Nummer/Adresse gehört zu genau dieser Firma", siehe impressumCheck.js.
     phone_confirmed: null, email_confirmed: null, impressum_url: null,
+    // area_code_valid: passt die Vorwahl zum genannten Ort? Läuft komplett offline,
+    // ohne Website — wichtig für Leads ohne (aktuelle) Website, siehe areaCodeCheck.js.
+    area_code_valid: null,
   };
 
   const emailFormatOk = lead.email ? EMAIL_RE.test(lead.email) : null;
@@ -86,6 +90,7 @@ async function verifyLead(lead) {
 
   if (lead.phone) {
     checks.phone_valid = PHONE_RE.test(lead.phone.trim());
+    checks.area_code_valid = checkAreaCode(lead.phone, lead.location);
   }
 
   return checks;

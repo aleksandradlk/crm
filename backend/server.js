@@ -305,6 +305,8 @@ db.query('ALTER TABLE leads ADD COLUMN verified_at  DATETIME NULL').catch(() => 
 db.query('ALTER TABLE leads ADD COLUMN phone_confirmed TINYINT(1) NULL').catch(() => {});
 db.query('ALTER TABLE leads ADD COLUMN email_confirmed TINYINT(1) NULL').catch(() => {});
 db.query('ALTER TABLE leads ADD COLUMN impressum_url   VARCHAR(500) NULL').catch(() => {});
+// Vorwahl-Orts-Check (offline, ohne Website) — siehe helpers/areaCodeCheck.js.
+db.query('ALTER TABLE leads ADD COLUMN area_code_valid TINYINT(1) NULL').catch(() => {});
 
 // ── Cron: Activity Log nach 7 Tagen bereinigen ───────────────
 cron.schedule('0 3 * * *', async () => {

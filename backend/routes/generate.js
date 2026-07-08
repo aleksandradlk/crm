@@ -228,6 +228,7 @@ Antworte NUR mit diesem JSON-Array:
         phone_confirmed:  checks.phone_confirmed,
         email_confirmed:  checks.email_confirmed,
         impressum_url:    checks.impressum_url,
+        area_code_valid:  checks.area_code_valid,
         duplicate_of: duplicate ? duplicate.id : (batchDuplicateOf[i] !== undefined ? `batch#${batchDuplicateOf[i]}` : null),
       };
     });

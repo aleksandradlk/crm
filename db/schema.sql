@@ -71,6 +71,10 @@ CREATE TABLE IF NOT EXISTS leads (
   phone_confirmed TINYINT(1) NULL,
   email_confirmed TINYINT(1) NULL,
   impressum_url   VARCHAR(500) NULL,
+  -- Vorwahl-Orts-Check (backend/helpers/areaCodeCheck.js, komplett offline, ohne
+  -- Website): true = Vorwahl passt zum Ort, false = Vorwahl gehört nachweislich zu
+  -- einer anderen bekannten Stadt, NULL = nicht feststellbar (unbekannter Ort/Vorwahl).
+  area_code_valid TINYINT(1) NULL,
   verified_at   DATETIME NULL,
   status        ENUM('neu','kontaktiert','nicht_erreicht','kein_interesse','rueckruf','kunde') NOT NULL DEFAULT 'neu',
   assigned_to   INT,               -- user.id des Closers
