@@ -295,6 +295,12 @@ db.query('ALTER TABLE leads ADD COLUMN archive_reason VARCHAR(500) NULL').catch(
 db.query('CREATE INDEX idx_leads_archived ON leads (archived_at)').catch(() => {});
 db.query('ALTER TABLE leads ADD FULLTEXT INDEX ft_leads_search (company, ceo, location)').catch(() => {});
 
+// ── Automatisierte Lead-Verifizierung (Anti-Halluzination) ───
+db.query('ALTER TABLE leads ADD COLUMN email_valid  TINYINT(1) NULL').catch(() => {});
+db.query('ALTER TABLE leads ADD COLUMN phone_valid  TINYINT(1) NULL').catch(() => {});
+db.query('ALTER TABLE leads ADD COLUMN domain_valid TINYINT(1) NULL').catch(() => {});
+db.query('ALTER TABLE leads ADD COLUMN verified_at  DATETIME NULL').catch(() => {});
+
 // ── Cron: Activity Log nach 7 Tagen bereinigen ───────────────
 cron.schedule('0 3 * * *', async () => {
   try {

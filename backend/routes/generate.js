@@ -1,6 +1,25 @@
 const router  = require('express').Router();
 const { auth } = require('../middleware/auth');
 const { log } = require('../helpers/logger');
+const { verifyLead, findDuplicateLead, minConfidence, clampConfidence } = require('../helpers/leadVerification');
+
+// Begrenzt gleichzeitige DNS-Lookups/DB-Abfragen, damit eine große Lead-Anzahl
+// (bis zu 100, siehe maxL) nicht den MySQL-Pool (connectionLimit: 10) oder den
+// DNS-Resolver mit Hunderten Parallel-Anfragen überlastet.
+async function mapWithConcurrency(items, limit, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+function normalizeKey(v) { return v ? String(v).trim().toLowerCase() : null; }
 
 const BASE_SYSTEM_PROMPT = `Du bist ein professionelles Business-Intelligence-System für Lead-Recherche.
 Deine Aufgabe: Echte, nachweislich existierende Unternehmen mit verfügbaren öffentlichen Kontaktdaten liefern.
@@ -172,15 +191,50 @@ Antworte NUR mit diesem JSON-Array:
         employees:    l.employees != null ? String(l.employees) : null,
         revenue:      l.revenue || null,
         source:       l.source || srcArr[0] || 'web',
-        confidence:   Math.min(100, Math.max(0, parseInt(l.confidence) || 50)),
+        confidence:   clampConfidence(l.confidence),
         notes:        l.notes || null,
       }))
       .filter(l => l.company);
 
-    await log(req.user.id, 'leads_generate', 'system', null,
-      { query, location, count: leads.length, real_data: hasRealData }, req.ip);
+    // Confidence-Gate: KI-Leads unterhalb der Mindest-Konfidenz gar nicht erst anbieten
+    // (Claude selbst definiert <40 als außerhalb seiner "unsicher"-Stufe, siehe System-Prompt).
+    const minConf = minConfidence();
+    const belowThreshold = leads.filter(l => l.confidence < minConf).length;
+    leads = leads.filter(l => l.confidence >= minConf);
 
-    res.json({ ok: true, leads, real_data: hasRealData });
+    // Duplikate INNERHALB derselben KI-Antwort erkennen (die KI kann dieselbe Firma
+    // zweimal halluzinieren) — unabhängig vom DB-Abgleich weiter unten.
+    const seenKeys = new Map();
+    const batchDuplicateOf = leads.map((l, i) => {
+      const keys = [
+        l.email ? 'email:' + normalizeKey(l.email) : null,
+        l.phone ? 'phone:' + normalizeKey(l.phone).replace(/[^0-9+]/g, '') : null,
+        (l.company && l.location) ? 'cl:' + normalizeKey(l.company) + '|' + normalizeKey(l.location) : null,
+      ].filter(Boolean);
+      const firstSeenAt = keys.map(k => seenKeys.get(k)).find(v => v !== undefined);
+      keys.forEach(k => { if (!seenKeys.has(k)) seenKeys.set(k, i); });
+      return firstSeenAt;
+    });
+
+    // Automatisierte, kostenlose Plausibilitätsprüfung + Duplikatscheck pro Lead
+    // (Concurrency begrenzt, siehe mapWithConcurrency oben).
+    leads = await mapWithConcurrency(leads, 8, async (l, i) => {
+      const [checks, duplicate] = await Promise.all([verifyLead(l), findDuplicateLead(l)]);
+      return {
+        ...l,
+        email_valid:  checks.email_valid,
+        phone_valid:  checks.phone_valid,
+        domain_valid: checks.domain_valid,
+        duplicate_of: duplicate ? duplicate.id : (batchDuplicateOf[i] !== undefined ? `batch#${batchDuplicateOf[i]}` : null),
+      };
+    });
+
+    await log(req.user.id, 'leads_generate', 'system', null,
+      { query, location, count: leads.length, real_data: hasRealData,
+        filtered_low_confidence: belowThreshold, min_confidence: minConf }, req.ip);
+
+    res.json({ ok: true, leads, real_data: hasRealData,
+      filtered_low_confidence: belowThreshold, min_confidence: minConf });
   } catch (err) {
     console.error('Generate error:', err);
     res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });

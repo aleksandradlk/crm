@@ -3,6 +3,7 @@ const db      = require('../db');
 const { auth, adminOnly } = require('../middleware/auth');
 const { log } = require('../helpers/logger');
 const { sendLeadEmail } = require('../helpers/mailer');
+const { findDuplicateLead, minConfidence, clampConfidence } = require('../helpers/leadVerification');
 
 const VALID_STATUSES = ['neu','kontaktiert','nicht_erreicht','kein_interesse','rueckruf','kunde'];
 
@@ -195,17 +196,17 @@ router.post('/import', auth, adminOnly, multerMem.single('csv'), async (req, res
       const cols = lines[i].split(delim).map(c => c.trim().replace(/^"|"$/g,'').trim());
       const company = iComp >= 0 ? cols[iComp] : '';
       if (!company) { skipped++; continue; }
-      const phone = iPhone >= 0 ? cols[iPhone] : null;
-      const email = iMail >= 0 ? cols[iMail] : null;
-      const exists = phone || email ? await db.query(
-        `SELECT id FROM leads WHERE archived_at IS NULL AND (${phone?'phone=?':'1=0'}${email?' OR email=?':''})`,
-        [phone, email].filter(Boolean)
-      ).then(([r]) => r.length > 0).catch(() => false) : false;
-      if (exists) { skipped++; continue; }
+      const phone    = iPhone >= 0 ? cols[iPhone] : null;
+      const email    = iMail  >= 0 ? cols[iMail]  : null;
+      const location = iLoc   >= 0 ? cols[iLoc] || null : null;
+      // Gleicher Duplikat-Check wie bei KI-generierten Leads (siehe leadVerification.js),
+      // statt einer eigenen, abweichenden Prüfung nur auf phone/email.
+      const duplicate = await findDuplicateLead({ company, location, phone: phone || null, email: email || null });
+      if (duplicate) { skipped++; continue; }
       await db.query(
         `INSERT INTO leads (company, industry, location, phone, email, website, status, assigned_to, created_by, source)
          VALUES (?,?,?,?,?,?,?,?,?,?)`,
-        [company, iIndu>=0?cols[iIndu]||null:null, iLoc>=0?cols[iLoc]||null:null,
+        [company, iIndu>=0?cols[iIndu]||null:null, location,
          phone||null, email||null, iWeb>=0?cols[iWeb]||null:null,
          'neu', assignTo, req.user.id, 'csv-import']
       ).catch(() => { skipped++; return null; });
@@ -225,25 +226,50 @@ router.post('/bulk', auth, async (req, res) => {
     return res.status(400).json({ error: 'Keine Leads übergeben' });
 
   try {
+    // Serverseitiges Sicherheitsnetz (unabhängig vom Frontend): Leads unterhalb der
+    // Mindest-Konfidenz und exakte Duplikate werden nicht gespeichert, egal was der
+    // Aufrufer schickt.
+    const minConf = minConfidence();
     const inserted = [];
+    const skipped  = [];
+    // Bewusst sequenziell (kein Promise.all): jeder Insert committet vor der nächsten
+    // Duplikatsprüfung, wodurch auch Duplikate INNERHALB dieses Batches erkannt werden
+    // (z.B. wenn dieselbe halluzinierte Firma zweimal im Array steht). Parallelisieren
+    // würde genau diese Prüfung wieder aushebeln.
     for (const l of leads) {
+      const confidence = clampConfidence(l.confidence);
+      if (confidence < minConf) {
+        skipped.push({ company: l.company || null, reason: 'confidence_below_threshold' });
+        continue;
+      }
+      const duplicate = await findDuplicateLead(l);
+      if (duplicate) {
+        skipped.push({ company: l.company || null, reason: 'duplicate', duplicate_of: duplicate.id });
+        continue;
+      }
+      // "verified_at" nur setzen, wenn tatsächlich mindestens eine automatisierte Prüfung
+      // gelaufen ist — sonst suggeriert ein leeres NULL/NULL/NULL fälschlich "geprüft, ok".
+      const anyCheckRan = l.email_valid != null || l.phone_valid != null || l.domain_valid != null;
       const [r] = await db.query(
         `INSERT INTO leads
           (company, ceo, email, phone, location, website, linkedin_url,
            industry, employees, revenue, source, confidence, notes,
+           email_valid, phone_valid, domain_valid, verified_at,
            status, assigned_to, created_by)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [l.company||null, l.ceo||null, l.email||null, l.phone||null,
          l.location||null, l.website||null, l.linkedin_url||null,
          l.industry||null, l.employees||null, l.revenue||null,
-         l.source||'web', l.confidence||50, l.notes||null,
+         l.source||'web', confidence, l.notes||null,
+         l.email_valid ?? null, l.phone_valid ?? null, l.domain_valid ?? null,
+         anyCheckRan ? new Date() : null,
          'neu', assigned_to||null, req.user.id]
       );
       inserted.push(r.insertId);
     }
     await log(req.user.id, 'leads_bulk_create', 'lead', null,
-      { count: inserted.length, assigned_to }, req.ip);
-    res.status(201).json({ ok: true, ids: inserted });
+      { count: inserted.length, skipped: skipped.length, assigned_to }, req.ip);
+    res.status(201).json({ ok: true, ids: inserted, skipped });
   } catch(e) {
     console.error('Bulk insert error:', e);
     res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });

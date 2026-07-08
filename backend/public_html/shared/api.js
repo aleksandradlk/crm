@@ -160,6 +160,18 @@ function confBar(val) {
   </div>`;
 }
 
+// Einzige Quelle für "was ist an diesem (KI-generierten) Lead auffällig" — von der
+// Generieren-Vorschau, dem Protokoll und der Lead-Detailansicht gemeinsam genutzt,
+// damit sich die Warnkriterien nicht auseinanderentwickeln.
+function leadWarningLabels(l) {
+  const labels = [];
+  if (l.duplicate_of)           labels.push('Duplikat');
+  if (l.email_valid === false)  labels.push('E-Mail ungültig');
+  if (l.domain_valid === false) labels.push('Domain nicht erreichbar');
+  if (l.phone_valid === false)  labels.push('Telefonformat ungültig');
+  return labels;
+}
+
 function ageBadge(dateStr) {
   if (!dateStr) return '';
   const days = Math.floor((Date.now() - new Date(dateStr)) / 86400000);

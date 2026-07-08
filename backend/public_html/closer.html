@@ -378,16 +378,19 @@
           <div class="card" id="clGenResultsCard" style="display:none">
             <div class="card-header">
               <div class="card-title"><i class="fas fa-list" style="color:var(--accent)"></i> Ergebnisse (<span id="clGenResultCount">0</span>)</div>
-              <button class="btn btn-primary btn-sm" id="clSaveLeadsBtn" onclick="clSaveGeneratedLeads()"><i class="fas fa-save"></i> Alle speichern</button>
+              <button class="btn btn-primary btn-sm" id="clSaveLeadsBtn" onclick="clSaveGeneratedLeads()"><i class="fas fa-save"></i> Ausgewählte speichern</button>
             </div>
             <div class="card-body" style="padding:0;overflow-x:auto">
               <table style="width:100%;border-collapse:collapse;font-size:13px">
                 <thead><tr style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);background:var(--bg3)">
+                  <th style="padding:8px 12px"><input type="checkbox" id="clGenChkAll" checked onchange="clToggleAllGenLeads(this.checked)"></th>
                   <th style="padding:8px 12px;text-align:left">Unternehmen</th>
                   <th style="padding:8px 12px;text-align:left">Ansprechpartner</th>
                   <th style="padding:8px 12px;text-align:left">E-Mail</th>
                   <th style="padding:8px 12px;text-align:left">Telefon</th>
                   <th style="padding:8px 12px;text-align:left">Standort</th>
+                  <th style="padding:8px 12px;text-align:left">Konfidenz</th>
+                  <th style="padding:8px 12px;text-align:left">Prüfung</th>
                 </tr></thead>
                 <tbody id="clGenResultsBody"></tbody>
               </table>
@@ -2443,8 +2446,14 @@ async function clGenerateLeads() {
       extra:   document.getElementById('clgen-extra').value.trim(),
     });
     generatedLeadsCl = data.leads || [];
-    clGenLog(`${generatedLeadsCl.length} Leads gefunden`, 'ok');
-    generatedLeadsCl.forEach(l => clGenLog(`✓ ${l.company} (${l.location||'?'})`, 'ok'));
+    clGenLog(`${generatedLeadsCl.length} Leads gefunden${data.real_data ? ' — Live-Daten' : ' — KI-Wissen'}`, 'ok');
+    if (data.filtered_low_confidence) {
+      clGenLog(`${data.filtered_low_confidence} Lead(s) mit Konfidenz < ${data.min_confidence}% automatisch verworfen`, 'err');
+    }
+    generatedLeadsCl.forEach(l => {
+      const flags = leadWarningLabels(l);
+      clGenLog(`✓ ${l.company} (${l.location||'?'})${flags.length ? ' — ⚠ ' + flags.join(', ') : ''}`, flags.length ? 'err' : 'ok');
+    });
     clRenderGenResults(generatedLeadsCl);
     document.getElementById('clGenResultsCard').style.display = 'block';
   } catch(e) {
@@ -2454,30 +2463,50 @@ async function clGenerateLeads() {
   btn.disabled = false; btn.innerHTML = '<i class="fas fa-search"></i> Leads generieren';
 }
 
+function clToggleAllGenLeads(checked) {
+  document.querySelectorAll('.clGenChk').forEach(cb => cb.checked = checked);
+}
+
 function clRenderGenResults(leads) {
   document.getElementById('clGenResultCount').textContent = leads.length;
-  document.getElementById('clGenResultsBody').innerHTML = leads.map(l => `
-    <tr style="border-top:1px solid var(--border)">
+  document.getElementById('clGenResultsBody').innerHTML = leads.map((l, i) => {
+    const labels = leadWarningLabels(l);
+    const warn = labels.length > 0;
+    const flags = labels.length
+      ? labels.map(t => `<span>⚠ ${t}</span>`).join(' ')
+      : '<span style="color:var(--text3)">—</span>';
+    return `
+    <tr style="border-top:1px solid var(--border)${warn ? ';background:rgba(239,68,68,0.06)' : ''}">
+      <td style="padding:8px 12px"><input type="checkbox" class="clGenChk" data-i="${i}" ${warn ? '' : 'checked'}></td>
       <td style="padding:8px 12px;font-weight:600">${escHtml(l.company||'—')}</td>
       <td style="padding:8px 12px;color:var(--text2)">${escHtml(l.ceo||'—')}</td>
       <td style="padding:8px 12px;font-size:12px">${l.email ? `<a href="mailto:${escHtml(l.email)}" style="color:var(--accent)">${escHtml(l.email)}</a>` : '—'}</td>
       <td style="padding:8px 12px;font-size:12px;font-family:'JetBrains Mono',monospace">${escHtml(l.phone||'—')}</td>
       <td style="padding:8px 12px;font-size:12px;color:var(--text2)">${escHtml(l.location||'—')}</td>
-    </tr>`).join('');
+      <td style="padding:8px 12px">${confBar(l.confidence)}</td>
+      <td style="padding:8px 12px;font-size:11px;color:var(--red)">${flags}</td>
+    </tr>`;
+  }).join('');
 }
 
 async function clSaveGeneratedLeads() {
   if (!generatedLeadsCl.length) return;
+  const selected = [...document.querySelectorAll('.clGenChk')]
+    .filter(cb => cb.checked)
+    .map(cb => generatedLeadsCl[parseInt(cb.dataset.i)]);
+  if (!selected.length) { showToast('Keine Leads ausgewählt', 'err'); return; }
+
   const btn = document.getElementById('clSaveLeadsBtn');
   btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Speichere...';
   try {
-    await api('POST', '/leads/bulk', { leads: generatedLeadsCl, assigned_to: ME?.id || null });
-    showToast(`${generatedLeadsCl.length} Leads gespeichert ✓`);
+    const res = await api('POST', '/leads/bulk', { leads: selected, assigned_to: ME?.id || null });
+    const skipped = res.skipped || [];
+    showToast(`${res.ids.length} Lead(s) gespeichert${skipped.length ? `, ${skipped.length} übersprungen (Duplikat/Konfidenz)` : ''} ✓`);
     document.getElementById('clGenResultsCard').style.display = 'none';
     generatedLeadsCl = [];
     loadLeads();
   } catch(e) { showToast(e.message, 'err'); }
-  btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Alle speichern';
+  btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Ausgewählte speichern';
 }
 </script>
 

@@ -293,11 +293,11 @@
             <div class="card-header">
               <div class="card-title"><i class="fas fa-list" style="color:var(--green)"></i> Vorschau <span class="badge" id="genResultCount">0</span></div>
               <button class="btn btn-primary btn-sm" id="saveLeadsBtn" onclick="saveGeneratedLeads()">
-                <i class="fas fa-save"></i> Alle speichern
+                <i class="fas fa-save"></i> Ausgewählte speichern
               </button>
             </div>
             <div class="table-wrap">
-              <table><thead><tr><th>Unternehmen</th><th>GF</th><th>E-Mail</th><th>Telefon</th><th>Standort</th><th>Konfidenz</th></tr></thead>
+              <table><thead><tr><th><input type="checkbox" id="genChkAll" checked onchange="toggleAllGenLeads(this.checked)"></th><th>Unternehmen</th><th>GF</th><th>E-Mail</th><th>Telefon</th><th>Standort</th><th>Konfidenz</th><th>Prüfung</th></tr></thead>
               <tbody id="genResultsBody"></tbody></table>
             </div>
           </div>
@@ -1254,9 +1254,14 @@ function renderPanelKeyInfo(l) {
 
 function renderLeadDetail(l) {
   _panelLead = l;
+  const checkLabels = leadWarningLabels(l);
+  const checkText = checkLabels.length ? '⚠ ' + checkLabels.join(', ')
+    : (l.verified_at ? '✓ Keine Auffälligkeiten' : null);
+
   const fields = [
     ['Standort', l.location], ['Website', l.website, 'url'], ['LinkedIn', l.linkedin_url, 'url'],
     ['Branche', l.industry], ['Mitarbeiter', l.employees], ['Umsatz', l.revenue],
+    ['Automat. Prüfung', checkText],
     ['Hinzugefügt von', l.created_name], ['Hinzugefügt am', fmtDate(l.created_at)],
     ['Zugewiesen an', l.assigned_name],
   ];
@@ -1508,7 +1513,13 @@ async function generateLeads() {
     generatedLeads = data.leads || [];
     document.getElementById('gen-progress').style.width = '100%';
     genLog(`${generatedLeads.length} Leads gefunden${data.real_data ? ' — Live-Daten aus Google/Maps' : ' — KI-Wissen (API Key konfigurieren für Live-Daten)'}`, 'ok');
-    generatedLeads.forEach(l => genLog(`✓ ${l.company} (${l.location||'?'}) Konfidenz: ${l.confidence}%`, 'ok'));
+    if (data.filtered_low_confidence) {
+      genLog(`${data.filtered_low_confidence} Lead(s) mit Konfidenz < ${data.min_confidence}% automatisch verworfen`, 'err');
+    }
+    generatedLeads.forEach(l => {
+      const flags = leadWarningLabels(l);
+      genLog(`✓ ${l.company} (${l.location||'?'}) Konfidenz: ${l.confidence}%${flags.length ? ' — ⚠ ' + flags.join(', ') : ''}`, flags.length ? 'err' : 'ok');
+    });
     renderGenResults(generatedLeads, data.real_data);
     document.getElementById('genResultsCard').style.display = 'block';
   } catch (e) {
@@ -1528,29 +1539,48 @@ function renderGenResults(leads, realData) {
   } else {
     document.getElementById('genResultCount').textContent = leads.length;
   }
-  document.getElementById('genResultsBody').innerHTML = leads.map(l => `
-    <tr>
+  document.getElementById('genResultsBody').innerHTML = leads.map((l, i) => {
+    const labels = leadWarningLabels(l);
+    const warn = labels.length > 0;
+    const flags = labels.length
+      ? labels.map(t => `<span>⚠ ${t}</span>`)
+      : ['<span style="color:var(--text3)">—</span>'];
+    return `
+    <tr${warn ? ' style="background:rgba(239,68,68,0.06)"' : ''}>
+      <td><input type="checkbox" class="genChk" data-i="${i}" ${warn ? '' : 'checked'}></td>
       <td style="font-weight:600">${escHtml(l.company||'—')}</td>
       <td style="color:var(--text2)">${escHtml(l.ceo||'—')}</td>
       <td style="font-size:12px">${l.email ? `<a href="mailto:${escHtml(l.email)}">${escHtml(l.email)}</a>` : '—'}</td>
       <td style="font-size:12px;font-family:'JetBrains Mono',monospace">${escHtml(l.phone||'—')}</td>
       <td style="font-size:12px;color:var(--text2)">${escHtml(l.location||'—')}</td>
       <td>${confBar(l.confidence)}</td>
-    </tr>`).join('');
+      <td style="font-size:11px;color:var(--red)">${flags.join(' ')}</td>
+    </tr>`;
+  }).join('');
+}
+
+function toggleAllGenLeads(checked) {
+  document.querySelectorAll('.genChk').forEach(cb => cb.checked = checked);
 }
 
 async function saveGeneratedLeads() {
   if (!generatedLeads.length) return;
+  const selected = [...document.querySelectorAll('.genChk')]
+    .filter(cb => cb.checked)
+    .map(cb => generatedLeads[parseInt(cb.dataset.i)]);
+  if (!selected.length) { showToast('Keine Leads ausgewählt', 'err'); return; }
+
   const assignTo = document.getElementById('gen-assign').value || null;
   const btn = document.getElementById('saveLeadsBtn');
   btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Speichere...';
   try {
-    await api('POST', '/leads/bulk', { leads: generatedLeads, assigned_to: assignTo });
-    showToast(`${generatedLeads.length} Leads gespeichert ✓`);
+    const res = await api('POST', '/leads/bulk', { leads: selected, assigned_to: assignTo });
+    const skipped = res.skipped || [];
+    showToast(`${res.ids.length} Lead(s) gespeichert${skipped.length ? `, ${skipped.length} übersprungen (Duplikat/Konfidenz)` : ''} ✓`);
     document.getElementById('genResultsCard').style.display = 'none';
     generatedLeads = [];
   } catch (e) { showToast(e.message, 'err'); }
-  btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Alle speichern';
+  btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Ausgewählte speichern';
 }
 
 // ── USERS ─────────────────────────────────────────────────────
