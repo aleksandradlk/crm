@@ -33,7 +33,11 @@ Wichtige Werte in `.env`:
 - `DB_HOST` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` → von Schritt 1
 - `JWT_SECRET` → beliebiger langer zufälliger String (min. 32 Zeichen)
 - `CLAUDE_API_KEY` → von console.anthropic.com
-- `SMTP_HOST` / `SMTP_PASS` → SMTP-Zugangsdaten für info@novaflowservices.de
+- `SMTP_HOST` / `SMTP_PASS` → SMTP-Zugangsdaten für info@novaflowservices.de (ausgehende Mails)
+- `IMAP_HOST` / `IMAP_USER` / `IMAP_PASS` → IMAP-Zugangsdaten desselben Postfachs (eingehende Kunden-Mails).
+  **Ohne diese Werte kommen keine Kunden-Antworten ins CRM!** Der Server prüft das Postfach alle 2 Minuten
+  und ordnet Antworten automatisch dem richtigen Lead zu (E-Mail-Verlauf im Lead, wie ein Ticketsystem).
+  Status sichtbar im Admin unter Tracking → „Unzugeordnete E-Mails".
 - `BASE_URL` → z.B. https://leads.novaflowservices.de
 
 ---

@@ -1840,13 +1840,27 @@ function downloadActivityLog() {
 async function loadUnmatchedEmails() {
   const card = document.getElementById('unmatchedEmailsCard');
   if (!card) return;
+
+  // Status des E-Mail-Eingangs (IMAP konfiguriert? letzter Abruf? Fehler?)
+  let statusHtml = '';
+  try {
+    const st = await api('GET', '/leads/email-status');
+    if (!st.configured) {
+      statusHtml = `<div style="padding:12px 16px;border-bottom:1px solid var(--border);font-size:12px;color:#f59e0b"><i class="fas fa-exclamation-triangle" style="margin-right:6px"></i><strong>E-Mail-Eingang nicht konfiguriert:</strong> IMAP_HOST, IMAP_USER und IMAP_PASS in der .env auf dem Server eintragen und neu starten — sonst kommen keine Kunden-Mails ins CRM.</div>`;
+    } else if (st.last_error) {
+      statusHtml = `<div style="padding:12px 16px;border-bottom:1px solid var(--border);font-size:12px;color:var(--red)"><i class="fas fa-times-circle" style="margin-right:6px"></i><strong>E-Mail-Abruf fehlgeschlagen</strong> (${escHtml(st.mailbox||'')}): ${escHtml(st.last_error)}</div>`;
+    } else {
+      statusHtml = `<div style="padding:12px 16px;border-bottom:1px solid var(--border);font-size:12px;color:var(--text2)"><i class="fas fa-check-circle" style="color:var(--green);margin-right:6px"></i>E-Mail-Eingang aktiv (${escHtml(st.mailbox||'')}) · Letzter Abruf: ${st.last_poll ? fmtDate(st.last_poll) : 'noch keiner — läuft alle 2 Minuten'}</div>`;
+    }
+  } catch(_) {}
+
   try {
     const rows = await api('GET', '/leads/unmatched-emails');
     if (!rows.length) {
-      card.innerHTML = '<div style="color:var(--text3);padding:20px;text-align:center;font-size:13px"><i class="fas fa-check-circle" style="color:var(--green);margin-right:6px"></i>Keine unzugeordneten E-Mails</div>';
+      card.innerHTML = statusHtml + '<div style="color:var(--text3);padding:20px;text-align:center;font-size:13px"><i class="fas fa-check-circle" style="color:var(--green);margin-right:6px"></i>Keine unzugeordneten E-Mails</div>';
       return;
     }
-    card.innerHTML = `
+    card.innerHTML = statusHtml + `
       <div class="table-wrap">
         <table>
           <thead><tr><th>Eingang</th><th>Von</th><th>Betreff</th><th>Nachricht</th><th></th></tr></thead>
@@ -1857,7 +1871,10 @@ async function loadUnmatchedEmails() {
                 <td style="font-size:12px">${escHtml(m.from_address||'')}</td>
                 <td style="font-size:12px">${escHtml(m.subject||'(kein Betreff)')}</td>
                 <td style="font-size:12px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml((m.body_text||'').slice(0,120))}</td>
-                <td><button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteUnmatchedEmail(${parseInt(m.id)})"><i class="fas fa-trash"></i></button></td>
+                <td style="white-space:nowrap">
+                  <button class="btn btn-ghost btn-sm" title="Einem Lead zuordnen" onclick="openAssignEmailModal(${parseInt(m.id)}, this)"><i class="fas fa-link"></i> Zuordnen</button>
+                  <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteUnmatchedEmail(${parseInt(m.id)})"><i class="fas fa-trash"></i></button>
+                </td>
               </tr>
             `).join('')}
           </tbody>
@@ -1866,6 +1883,68 @@ async function loadUnmatchedEmails() {
   } catch(e) {
     card.innerHTML = `<div style="color:var(--red);padding:16px;font-size:13px">Fehler: ${escHtml(e.message)}</div>`;
   }
+}
+
+// Unzugeordnete E-Mail manuell einem Lead zuordnen
+async function openAssignEmailModal(emailId) {
+  // Leads nachladen falls der Leads-Tab noch nicht geöffnet war
+  if (!allLeads.length) {
+    try { allLeads = await api('GET', '/leads?limit=500'); } catch(_) {}
+  }
+  const existing = document.getElementById('assignEmailModal');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'assignEmailModal';
+  overlay.className = 'modal-overlay';
+  overlay.style.cssText = 'display:flex;z-index:9999';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:480px">
+      <button class="modal-close" onclick="document.getElementById('assignEmailModal').remove()"><i class="fas fa-times"></i></button>
+      <div class="modal-title" style="margin-bottom:16px">E-Mail einem Lead zuordnen</div>
+      <div class="form-group">
+        <label>Lead suchen (Firma, GF oder E-Mail)</label>
+        <input id="assignEmailSearch" class="form-control" placeholder="z.B. Muster GmbH" oninput="renderAssignEmailResults(${parseInt(emailId)})">
+      </div>
+      <div id="assignEmailResults" style="max-height:260px;overflow-y:auto;margin-top:8px"></div>
+    </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  renderAssignEmailResults(emailId);
+  document.getElementById('assignEmailSearch').focus();
+}
+function renderAssignEmailResults(emailId) {
+  const box = document.getElementById('assignEmailResults');
+  if (!box) return;
+  const q = (document.getElementById('assignEmailSearch')?.value || '').toLowerCase().trim();
+  const matches = allLeads
+    .filter(l => !q
+      || (l.company||'').toLowerCase().includes(q)
+      || (l.ceo||'').toLowerCase().includes(q)
+      || (l.email||'').toLowerCase().includes(q))
+    .slice(0, 30);
+  if (!matches.length) {
+    box.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:12px;text-align:center">Kein Lead gefunden</div>';
+    return;
+  }
+  box.innerHTML = matches.map(l => `
+    <div onclick="assignUnmatchedEmail(${parseInt(emailId)}, ${parseInt(l.id)})"
+         style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px"
+         onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+      <div style="min-width:0">
+        <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(l.company||'(ohne Firma)')}</div>
+        <div style="font-size:11px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(l.ceo||'')} ${l.email ? '· '+escHtml(l.email) : ''}</div>
+      </div>
+      <i class="fas fa-link" style="color:var(--accent);flex-shrink:0"></i>
+    </div>
+  `).join('');
+}
+async function assignUnmatchedEmail(emailId, leadId) {
+  try {
+    await api('POST', `/leads/unmatched-emails/${emailId}/assign`, { lead_id: leadId });
+    document.getElementById('assignEmailModal')?.remove();
+    showToast('E-Mail dem Lead zugeordnet ✓');
+    loadUnmatchedEmails();
+  } catch(e) { showToast(e.message,'err'); }
 }
 async function deleteUnmatchedEmail(id) {
   if (!confirm('Eintrag löschen?')) return;

@@ -22,7 +22,7 @@ const settingsRoutes       = require('./routes/settings');
 const emailTemplateRoutes  = require('./routes/emailtemplates');
 const toolRoutes           = require('./routes/tools');
 const { startReminderCron } = require('./cron/reminders');
-const { pollIncomingEmails } = require('./cron/emailPoller');
+const { pollIncomingEmails, isConfigured: imapConfigured } = require('./cron/emailPoller');
 const cron           = require('node-cron');
 
 const app  = express();
@@ -310,7 +310,10 @@ app.listen(PORT, () => {
   console.log(`LeadHunter Pro läuft auf Port ${PORT}`);
   console.log(`Umgebung: ${process.env.NODE_ENV || 'development'}`);
   startReminderCron();
-  // IMAP-Polling alle 5 Minuten
+  if (!imapConfigured()) {
+    console.warn('WARNUNG: IMAP_HOST / IMAP_USER / IMAP_PASS nicht in .env gesetzt — eingehende Kunden-E-Mails werden NICHT abgerufen!');
+  }
+  // IMAP-Polling alle 2 Minuten
   cron.schedule('*/2 * * * *', pollIncomingEmails);
   pollIncomingEmails(); // Sofort beim Start einmal prüfen
 });

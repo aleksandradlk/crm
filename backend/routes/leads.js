@@ -263,6 +263,27 @@ router.get('/reminders', auth, async (req, res) => {
   } catch(e) { console.error('Reminders error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
+// ── GET /api/leads/email-status — Status des E-Mail-Eingangs (Admin) ──
+router.get('/email-status', auth, adminOnly, async (req, res) => {
+  try {
+    const configured = !!(process.env.IMAP_HOST && process.env.IMAP_USER && process.env.IMAP_PASS);
+    const [rows] = await db.query(
+      "SELECT key_name, value FROM app_settings WHERE key_name IN ('imap_last_poll','imap_last_error')"
+    );
+    const s = {};
+    rows.forEach(r => { s[r.key_name] = r.value; });
+    res.json({
+      configured,
+      mailbox: configured ? process.env.IMAP_USER : null,
+      last_poll: s.imap_last_poll || null,
+      last_error: s.imap_last_error || null,
+    });
+  } catch(e) {
+    console.error('Email status error:', e);
+    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
+  }
+});
+
 // ── GET /api/leads/archived — archivierte Leads (Admin) ─────
 // ── GET /api/leads/unmatched-emails — Unzugeordnete Emails (Admin) ──
 router.get('/unmatched-emails', auth, adminOnly, async (req, res) => {
@@ -276,6 +297,32 @@ router.get('/unmatched-emails', auth, adminOnly, async (req, res) => {
     res.json(rows);
   } catch(e) {
     console.error('Unmatched emails error:', e);
+    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
+  }
+});
+
+// ── POST /api/leads/unmatched-emails/:id/assign — Email einem Lead zuordnen (Admin) ──
+router.post('/unmatched-emails/:id/assign', auth, adminOnly, async (req, res) => {
+  const id     = parseInt(req.params.id);
+  const leadId = parseInt(req.body?.lead_id);
+  if (!Number.isFinite(id) || id <= 0)         return res.status(400).json({ error: 'Ungültige ID' });
+  if (!Number.isFinite(leadId) || leadId <= 0) return res.status(400).json({ error: 'Ungültige Lead-ID' });
+  try {
+    const [[mail]] = await db.query('SELECT * FROM unmatched_emails WHERE id=?', [id]);
+    if (!mail) return res.status(404).json({ error: 'E-Mail nicht gefunden' });
+    const [[lead]] = await db.query('SELECT id FROM leads WHERE id=? AND archived_at IS NULL', [leadId]);
+    if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
+
+    await db.query(
+      `INSERT IGNORE INTO lead_emails (lead_id, direction, from_address, to_address, subject, body_text, message_id, received_at)
+       VALUES (?, 'inbound', ?, ?, ?, ?, ?, ?)`,
+      [leadId, mail.from_address, mail.to_address, mail.subject, mail.body_text, mail.message_id, mail.received_at]
+    );
+    await db.query('DELETE FROM unmatched_emails WHERE id=?', [id]);
+    await log(req.user.id, 'email_assign', 'lead', leadId, { unmatched_id: id, from: mail.from_address }, req.ip);
+    res.json({ ok: true });
+  } catch(e) {
+    console.error('Assign unmatched email error:', e);
     res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
   }
 });

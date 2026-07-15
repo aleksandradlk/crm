@@ -20,7 +20,8 @@
     "mysql2": "^3.6.5",
     "node-cron": "^3.0.3",
     "nodemailer": "^6.9.7",
-    "imapflow": "^1.0.164"
+    "imapflow": "^1.0.164",
+    "mailparser": "^3.7.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
