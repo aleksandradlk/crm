@@ -522,11 +522,15 @@ router.post('/:id/reminders', auth, async (req, res) => {
 
 // ── DELETE /api/leads/:id/reminders/:rid ────────────────────
 router.delete('/:id/reminders/:rid', auth, async (req, res) => {
-  await db.query(
-    'DELETE FROM reminders WHERE id=? AND user_id=?',
-    [parseInt(req.params.rid), req.user.id]
-  );
-  res.json({ ok: true });
+  const rid = parseInt(req.params.rid);
+  try {
+    const [[r]] = await db.query('SELECT id, user_id FROM reminders WHERE id=?', [rid]);
+    if (!r) return res.status(404).json({ error: 'Reminder nicht gefunden' });
+    if (req.user.role !== 'admin' && r.user_id !== req.user.id)
+      return res.status(403).json({ error: 'Nur eigene Reminder löschbar' });
+    await db.query('DELETE FROM reminders WHERE id=?', [rid]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 // ── PATCH /api/leads/:id/assign — Closer übernimmt Lead ─────
