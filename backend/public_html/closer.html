@@ -45,7 +45,7 @@
   .mob-hide { display: none !important; }
   .table-wrap table td, .table-wrap table th { padding: 6px 5px; }
   .table-wrap table { font-size: 12px; }
-  .table-wrap select.form-control { width: 100px !important; font-size: 10px !important; padding: 2px 3px !important; }
+  .table-wrap select.form-control { width: 100% !important; font-size: 12px !important; padding: 4px 8px !important; }
 }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
@@ -140,7 +140,7 @@
           </select>
           <div class="view-toggle">
             <button id="myViewTableBtn" class="active" onclick="setMyLeadsView('table')"><i class="fas fa-table"></i> Tabelle</button>
-            <button id="myViewPipelineBtn" onclick="setMyLeadsView('pipeline')"><i class="fas fa-columns"></i> Pipeline</button>
+            <button id="myViewPipelineBtn" class="mob-hide" onclick="setMyLeadsView('pipeline')"><i class="fas fa-columns"></i> Pipeline</button>
           </div>
           <button class="btn btn-ghost btn-sm" onclick="loadLeads()"><i class="fas fa-sync"></i></button>
         </div>
