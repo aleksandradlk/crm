@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const db     = require('../db');
-const { auth } = require('../middleware/auth');
+const { auth, adminOnly } = require('../middleware/auth');
 
 const AGENTS = ['Recherche', 'Content', 'Kundenservice', 'Buchhaltung'];
 
@@ -13,12 +13,13 @@ router.post('/', async (req, res) => {
   const { agent, action, detail, status } = req.body;
   if (!agent || !AGENTS.includes(agent)) return res.status(400).json({ error: `agent muss einer von: ${AGENTS.join(', ')} sein` });
   if (!action) return res.status(400).json({ error: 'action fehlt' });
+  const validStatus = ['ok', 'error', 'pending'].includes(status) ? status : 'ok';
   try {
-    await db.query(
+    const [r] = await db.query(
       'INSERT INTO agent_log (agent, action, detail, status) VALUES (?,?,?,?)',
-      [agent, action, detail || null, status === 'error' ? 'error' : 'ok']
+      [agent, action, detail || null, validStatus]
     );
-    res.json({ ok: true });
+    res.json({ ok: true, id: r.insertId });
   } catch (e) { res.status(500).json({ error: 'Fehler beim Speichern' }); }
 });
 
@@ -30,6 +31,24 @@ router.get('/', auth, async (req, res) => {
     );
     res.json(rows);
   } catch (e) { res.status(500).json({ error: 'Fehler beim Laden' }); }
+});
+
+// PATCH /api/agent-log/:id/approve — Vorschlag freigeben (Admin)
+router.patch('/:id/approve', auth, adminOnly, async (req, res) => {
+  try {
+    const [r] = await db.query("UPDATE agent_log SET status='ok' WHERE id=? AND status='pending'", [req.params.id]);
+    if (!r.affectedRows) return res.status(404).json({ error: 'Kein wartender Eintrag gefunden' });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Fehler beim Freigeben' }); }
+});
+
+// PATCH /api/agent-log/:id/reject — Vorschlag ablehnen (Admin)
+router.patch('/:id/reject', auth, adminOnly, async (req, res) => {
+  try {
+    const [r] = await db.query("UPDATE agent_log SET status='rejected' WHERE id=? AND status='pending'", [req.params.id]);
+    if (!r.affectedRows) return res.status(404).json({ error: 'Kein wartender Eintrag gefunden' });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Fehler beim Ablehnen' }); }
 });
 
 module.exports = router;

@@ -298,6 +298,7 @@ db.query(`CREATE TABLE IF NOT EXISTS agent_log (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )`).catch(() => {});
 db.query('CREATE INDEX idx_agent_log_created_at ON agent_log (created_at)').catch(() => {});
+db.query("ALTER TABLE agent_log MODIFY COLUMN status ENUM('ok','error','pending','rejected') NOT NULL DEFAULT 'ok'").catch(() => {});
 
 // ── Audit-Migrationen ─────────────────────────────────────────
 db.query('ALTER TABLE users ADD COLUMN created_by INT NULL').catch(() => {});

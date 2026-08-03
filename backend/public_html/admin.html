@@ -3174,20 +3174,39 @@ function renderAgentLog() {
   const list = filter ? allAgentLog.filter(a => a.agent === filter) : allAgentLog;
   const el = document.getElementById('agentLogList');
   if (!list.length) { el.innerHTML = '<div style="color:var(--text3);padding:24px;text-align:center">Noch keine Agenten-Aktivität</div>'; return; }
+  const STATUS_BADGE = {
+    error:    '<span style="font-size:10px;background:var(--red);color:#fff;border-radius:6px;padding:1px 6px">Fehler</span>',
+    pending:  '<span style="font-size:10px;background:var(--amber);color:#fff;border-radius:6px;padding:1px 6px">Wartet auf Freigabe</span>',
+    rejected: '<span style="font-size:10px;background:var(--text3);color:#fff;border-radius:6px;padding:1px 6px">Abgelehnt</span>',
+  };
   el.innerHTML = list.map(a => `
     <div class="card" style="padding:14px 16px;margin-bottom:8px;display:flex;align-items:flex-start;gap:12px">
-      <i class="fas ${AGENT_ICONS[a.agent]||'fa-robot'}" style="color:${a.status==='error'?'var(--red)':'var(--accent)'};margin-top:2px"></i>
+      <i class="fas ${AGENT_ICONS[a.agent]||'fa-robot'}" style="color:${a.status==='error'?'var(--red)':a.status==='pending'?'var(--amber)':'var(--accent)'};margin-top:2px"></i>
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px">
           <span style="font-weight:700;font-size:13px">${escHtml(a.agent)}</span>
           <span style="font-size:11px;color:var(--text3)">${fmtDate(a.created_at)}</span>
-          ${a.status==='error' ? '<span style="font-size:10px;background:var(--red);color:#fff;border-radius:6px;padding:1px 6px">Fehler</span>' : ''}
+          ${STATUS_BADGE[a.status] || ''}
         </div>
         <div style="font-size:13px;color:var(--text2)">${escHtml(a.action)}</div>
         ${a.detail ? `<div style="font-size:12px;color:var(--text3);margin-top:4px;white-space:pre-wrap">${escHtml(a.detail)}</div>` : ''}
+        ${a.status==='pending' ? `
+          <div style="margin-top:8px;display:flex;gap:6px">
+            <button class="btn btn-primary btn-sm" onclick="approveAgentLog(${a.id})"><i class="fas fa-check"></i> Freigeben</button>
+            <button class="btn btn-ghost btn-sm" onclick="rejectAgentLog(${a.id})"><i class="fas fa-times"></i> Ablehnen</button>
+          </div>` : ''}
       </div>
     </div>
   `).join('');
+}
+
+async function approveAgentLog(id) {
+  try { await api('PATCH', `/agent-log/${id}/approve`); showToast('Freigegeben'); loadAgentLog(); }
+  catch(e) { showToast(e.message, 'err'); }
+}
+async function rejectAgentLog(id) {
+  try { await api('PATCH', `/agent-log/${id}/reject`); showToast('Abgelehnt'); loadAgentLog(); }
+  catch(e) { showToast(e.message, 'err'); }
 }
 
 async function loadFeedback() {
