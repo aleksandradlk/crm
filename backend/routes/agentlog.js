@@ -38,6 +38,20 @@ router.post('/manual', auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Fehler beim Speichern' }); }
 });
 
+// GET /api/agent-log/diag — Diagnose-Abfrage für Claude Code (Agent-Key statt CRM-Login)
+router.get('/diag', async (req, res) => {
+  const key = req.headers['x-agent-key'];
+  if (!process.env.AGENT_LOG_KEY || key !== process.env.AGENT_LOG_KEY) {
+    return res.status(401).json({ error: 'Ungültiger Agent-Key' });
+  }
+  try {
+    const [rows] = await db.query(
+      'SELECT id, agent, action, status, created_at FROM agent_log ORDER BY created_at DESC LIMIT 20'
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: 'Fehler beim Laden' }); }
+});
+
 // GET /api/agent-log — letzte Einträge (alle eingeloggten CRM-User)
 router.get('/', auth, async (req, res) => {
   try {
