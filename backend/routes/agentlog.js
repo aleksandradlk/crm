@@ -23,11 +23,28 @@ router.post('/', async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Fehler beim Speichern' }); }
 });
 
+// POST /api/agent-log/manual — Eintrag durch eingeloggten CRM-User selbst
+router.post('/manual', auth, async (req, res) => {
+  const { agent, action, detail, status } = req.body;
+  if (!agent || !AGENTS.includes(agent)) return res.status(400).json({ error: `agent muss einer von: ${AGENTS.join(', ')} sein` });
+  if (!action) return res.status(400).json({ error: 'action fehlt' });
+  const validStatus = ['ok', 'pending'].includes(status) ? status : 'ok';
+  try {
+    const [r] = await db.query(
+      'INSERT INTO agent_log (agent, action, detail, status, created_by) VALUES (?,?,?,?,?)',
+      [agent, action, detail || null, validStatus, req.user.id]
+    );
+    res.json({ ok: true, id: r.insertId });
+  } catch (e) { res.status(500).json({ error: 'Fehler beim Speichern' }); }
+});
+
 // GET /api/agent-log — letzte Einträge (alle eingeloggten CRM-User)
 router.get('/', auth, async (req, res) => {
   try {
     const [rows] = await db.query(
-      'SELECT id, agent, action, detail, status, created_at FROM agent_log ORDER BY created_at DESC LIMIT 100'
+      `SELECT al.id, al.agent, al.action, al.detail, al.status, al.created_at, u.full_name AS created_by_name
+       FROM agent_log al LEFT JOIN users u ON u.id = al.created_by
+       ORDER BY al.created_at DESC LIMIT 100`
     );
     res.json(rows);
   } catch (e) { res.status(500).json({ error: 'Fehler beim Laden' }); }

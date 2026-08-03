@@ -460,6 +460,7 @@
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
         <h1 style="font-size:20px;font-weight:700">Agenten</h1>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="openAgentLogModal()"><i class="fas fa-plus"></i> Neu</button>
           <select id="agentFilter" class="form-control" style="width:180px" onchange="renderAgentLog()">
             <option value="">Alle Agenten</option>
             <option value="Recherche">Recherche</option>
@@ -3185,7 +3186,7 @@ function renderAgentLog() {
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px">
           <span style="font-weight:700;font-size:13px">${escHtml(a.agent)}</span>
-          <span style="font-size:11px;color:var(--text3)">${fmtDate(a.created_at)}</span>
+          <span style="font-size:11px;color:var(--text3)">${fmtDate(a.created_at)}${a.created_by_name ? ' · von ' + escHtml(a.created_by_name) : ''}</span>
           ${STATUS_BADGE[a.status] || ''}
         </div>
         <div style="font-size:13px;color:var(--text2)">${escHtml(a.action)}</div>
@@ -3207,6 +3208,32 @@ async function approveAgentLog(id) {
 async function rejectAgentLog(id) {
   try { await api('PATCH', `/agent-log/${id}/reject`); showToast('Abgelehnt'); loadAgentLog(); }
   catch(e) { showToast(e.message, 'err'); }
+}
+
+function openAgentLogModal() {
+  document.getElementById('al-agent').value = 'Content';
+  document.getElementById('al-action').value = '';
+  document.getElementById('al-detail').value = '';
+  document.getElementById('al-status').value = 'ok';
+  document.getElementById('alModalErr').textContent = '';
+  document.getElementById('agentLogModal').classList.add('open');
+}
+function closeAgentLogModal() { document.getElementById('agentLogModal').classList.remove('open'); }
+
+async function submitAgentLog() {
+  const action = document.getElementById('al-action').value.trim();
+  if (!action) { document.getElementById('alModalErr').textContent = 'Titel ist erforderlich'; return; }
+  try {
+    await api('POST', '/agent-log/manual', {
+      agent: document.getElementById('al-agent').value,
+      action,
+      detail: document.getElementById('al-detail').value.trim() || null,
+      status: document.getElementById('al-status').value,
+    });
+    showToast('Eintrag angelegt');
+    closeAgentLogModal();
+    loadAgentLog();
+  } catch(e) { document.getElementById('alModalErr').textContent = e.message; }
 }
 
 async function loadFeedback() {
@@ -3549,6 +3576,43 @@ document.getElementById('editContactInput')?.addEventListener('keydown', functio
       <button class="btn btn-ghost" onclick="closeAdminFeedbackModal()">Abbrechen</button>
     </div>
     <div id="afbModalErr" style="color:var(--red);font-size:12px;margin-top:6px;text-align:center"></div>
+  </div>
+</div>
+
+<!-- MODAL: Agenten-Log manuell anlegen -->
+<div class="modal-overlay" id="agentLogModal" onclick="if(event.target===this)closeAgentLogModal()">
+  <div class="modal" style="max-width:480px">
+    <button class="modal-close" onclick="closeAgentLogModal()"><i class="fas fa-times"></i></button>
+    <div class="modal-title">Agenten-Eintrag anlegen</div>
+    <div class="form-group">
+      <label>Agent *</label>
+      <select id="al-agent" class="form-control">
+        <option value="Recherche">Recherche</option>
+        <option value="Content" selected>Content</option>
+        <option value="Kundenservice">Kundenservice</option>
+        <option value="Buchhaltung">Buchhaltung</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Titel *</label>
+      <input type="text" id="al-action" class="form-control" placeholder="z.B. Instagram-Post: 3 Anzeichen für veraltete Website">
+    </div>
+    <div class="form-group">
+      <label>Details <span style="color:var(--text3);font-weight:400">(optional)</span></label>
+      <textarea id="al-detail" class="form-control" rows="4" placeholder="Stichpunkte, Text, Link etc."></textarea>
+    </div>
+    <div class="form-group">
+      <label>Status</label>
+      <select id="al-status" class="form-control">
+        <option value="ok">Erledigt / aktiv</option>
+        <option value="pending">Wartet auf Freigabe</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-primary" style="flex:1" onclick="submitAgentLog()"><i class="fas fa-check"></i> Anlegen</button>
+      <button class="btn btn-ghost" onclick="closeAgentLogModal()">Abbrechen</button>
+    </div>
+    <div id="alModalErr" style="color:var(--red);font-size:12px;margin-top:6px;text-align:center"></div>
   </div>
 </div>
 
