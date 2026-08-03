@@ -16,6 +16,7 @@ const callRoutes     = require('./routes/calls');
 const feedbackRoutes  = require('./routes/feedback');
 const settingsRoutes       = require('./routes/settings');
 const emailTemplateRoutes  = require('./routes/emailtemplates');
+const agentLogRoutes       = require('./routes/agentlog');
 const { startReminderCron } = require('./cron/reminders');
 const { pollIncomingEmails } = require('./cron/emailPoller');
 const cron           = require('node-cron');
@@ -73,6 +74,7 @@ app.use('/api/calls',    callRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/settings',        settingsRoutes);
 app.use('/api/email-templates', emailTemplateRoutes);
+app.use('/api/agent-log',       agentLogRoutes);
 
 // ── SPA Fallback ──────────────────────────────────────────────
 app.get('*', (req, res) => {
@@ -246,6 +248,17 @@ db.query(`CREATE TABLE IF NOT EXISTS app_settings (
 db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('closer_sees_admins','false')").catch(() => {});
 db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('call_script','')").catch(() => {});
 db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('daily_call_goal','50')").catch(() => {});
+
+// ── Agent-Log-Tabelle (Green Bureau: Recherche/Content/Kundenservice/Buchhaltung) ──
+db.query(`CREATE TABLE IF NOT EXISTS agent_log (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  agent      VARCHAR(50) NOT NULL,
+  action     VARCHAR(255) NOT NULL,
+  detail     TEXT NULL,
+  status     ENUM('ok','error') NOT NULL DEFAULT 'ok',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)`).catch(() => {});
+db.query('CREATE INDEX idx_agent_log_created_at ON agent_log (created_at)').catch(() => {});
 
 // ── Audit-Migrationen ─────────────────────────────────────────
 db.query('ALTER TABLE users ADD COLUMN created_by INT NULL').catch(() => {});

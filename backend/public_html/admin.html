@@ -88,6 +88,7 @@
       <div class="nav-item" onclick="showTab('wiki')"><i class="fas fa-book"></i> Wissensdatenbank</div>
       <div class="nav-item" onclick="showTab('chat')"><i class="fas fa-comments"></i> Rücksprachen</div>
       <div class="nav-item" onclick="showTab('feedback')"><i class="fas fa-flag"></i> Feedback-Board</div>
+      <div class="nav-item" onclick="showTab('agents')"><i class="fas fa-robot"></i> Agenten</div>
       <div class="nav-item" onclick="showTab('archive')"><i class="fas fa-archive"></i> Archiv</div>
     </nav>
     <div class="sidebar-user" id="sidebarUser"></div>
@@ -435,6 +436,24 @@
       <div id="feedbackList"></div>
     </div>
 
+    <!-- ── TAB: AGENTEN ─────────────────────────────── -->
+    <div id="tab-agents" class="tab-panel">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <h1 style="font-size:20px;font-weight:700">Agenten</h1>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <select id="agentFilter" class="form-control" style="width:180px" onchange="renderAgentLog()">
+            <option value="">Alle Agenten</option>
+            <option value="Recherche">Recherche</option>
+            <option value="Content">Content</option>
+            <option value="Kundenservice">Kundenservice</option>
+            <option value="Buchhaltung">Buchhaltung</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="loadAgentLog()"><i class="fas fa-sync"></i></button>
+        </div>
+      </div>
+      <div id="agentLogList"></div>
+    </div>
+
     <!-- ── TAB: ARCHIV ──────────────────────────────── -->
     <div id="tab-archive" class="tab-panel">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
@@ -675,7 +694,7 @@ function showTab(name) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
-  const navMap = { dashboard: 0, leads: 1, myLeads: 2, generate: 3, users: 4, tracking: 5, wiki: 6, chat: 7, feedback: 8, archive: 9 };
+  const navMap = { dashboard: 0, leads: 1, myLeads: 2, generate: 3, users: 4, tracking: 5, wiki: 6, chat: 7, feedback: 8, agents: 9, archive: 10 };
   const items = document.querySelectorAll('.nav-item');
   if (navMap[name] !== undefined) items[navMap[name]]?.classList.add('active');
   if (name === 'dashboard') loadDashboard();
@@ -691,6 +710,7 @@ function showTab(name) {
   if (name === 'wiki')     { loadWiki(); loadEmailTemplatesForAdmin(); }
   if (name === 'chat')     loadChats();
   if (name === 'feedback') loadFeedback();
+  if (name === 'agents')   loadAgentLog();
   if (name === 'archive')  loadArchive();
 }
 
@@ -2918,6 +2938,41 @@ let allFeedback = [];
 const FB_TAG_LABELS = { offen:'Offen', in_planung:'In Planung', erledigt:'Erledigt', nicht_moeglich:'Nicht möglich' };
 const FB_TAG_COLORS = { offen:'var(--accent)', in_planung:'var(--amber)', erledigt:'var(--green)', nicht_moeglich:'var(--red)' };
 const FB_TYPE_LABELS = { bug:'Bug', wunsch:'Wunsch' };
+
+// ── AGENTEN-LOG (Green Bureau) ───────────────────────────────
+let allAgentLog = [];
+const AGENT_ICONS = {
+  Recherche: 'fa-magnifying-glass', Content: 'fa-pen-nib',
+  Kundenservice: 'fa-headset', Buchhaltung: 'fa-file-invoice-dollar'
+};
+
+async function loadAgentLog() {
+  try {
+    allAgentLog = await api('GET', '/agent-log');
+    renderAgentLog();
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+function renderAgentLog() {
+  const filter = document.getElementById('agentFilter')?.value || '';
+  const list = filter ? allAgentLog.filter(a => a.agent === filter) : allAgentLog;
+  const el = document.getElementById('agentLogList');
+  if (!list.length) { el.innerHTML = '<div style="color:var(--text3);padding:24px;text-align:center">Noch keine Agenten-Aktivität</div>'; return; }
+  el.innerHTML = list.map(a => `
+    <div class="card" style="padding:14px 16px;margin-bottom:8px;display:flex;align-items:flex-start;gap:12px">
+      <i class="fas ${AGENT_ICONS[a.agent]||'fa-robot'}" style="color:${a.status==='error'?'var(--red)':'var(--accent)'};margin-top:2px"></i>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px">
+          <span style="font-weight:700;font-size:13px">${escHtml(a.agent)}</span>
+          <span style="font-size:11px;color:var(--text3)">${fmtDate(a.created_at)}</span>
+          ${a.status==='error' ? '<span style="font-size:10px;background:var(--red);color:#fff;border-radius:6px;padding:1px 6px">Fehler</span>' : ''}
+        </div>
+        <div style="font-size:13px;color:var(--text2)">${escHtml(a.action)}</div>
+        ${a.detail ? `<div style="font-size:12px;color:var(--text3);margin-top:4px;white-space:pre-wrap">${escHtml(a.detail)}</div>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
 
 async function loadFeedback() {
   try {
