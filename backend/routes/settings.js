@@ -1,6 +1,16 @@
 const router = require('express').Router();
 const db     = require('../db');
-const { auth, adminOnly } = require('../middleware/auth');
+const { auth, adminOnly, invalidateMaintenanceCache, getMaintenanceStatus } = require('../middleware/auth');
+
+// GET /api/settings/status — öffentlicher Endpunkt (kein Auth) für Wartungsmodus-Abfrage
+router.get('/status', async (req, res) => {
+  const maint = await getMaintenanceStatus();
+  const isExpired = maint.until && new Date(maint.until) <= new Date();
+  res.json({
+    maintenance: maint.active && !isExpired,
+    until: maint.until || null,
+  });
+});
 
 // GET /api/settings — öffentliche Einstellungen (alle Auth-User)
 router.get('/', auth, async (req, res) => {
@@ -22,6 +32,10 @@ router.patch('/:key', auth, adminOnly, async (req, res) => {
       'INSERT INTO app_settings (key_name, value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=?',
       [key, String(value), String(value)]
     );
+    // Bei Wartungsmodus-Änderung Cache sofort invalidieren
+    if (key === 'maintenance_mode' || key === 'maintenance_until') {
+      invalidateMaintenanceCache();
+    }
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: 'Fehler beim Speichern' }); }
 });

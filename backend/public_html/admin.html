@@ -75,21 +75,25 @@
     </div>
     <nav class="nav">
       <span class="nav-group-label">Hauptnavigation</span>
-      <div class="nav-item active" onclick="showTab('dashboard')"><i class="fas fa-tachometer-alt"></i> Dashboard</div>
-      <div class="nav-item" onclick="showTab('leads')"><i class="fas fa-database"></i> Alle Leads</div>
-      <div class="nav-item" onclick="showTab('myLeads')"><i class="fas fa-user-check"></i> Meine Leads</div>
-      <div class="nav-item" onclick="showTab('generate')"><i class="fas fa-search"></i> Generieren</div>
+      <div class="nav-item active" data-tab="dashboard" onclick="showTab('dashboard')"><i class="fas fa-tachometer-alt"></i> Dashboard</div>
+      <div class="nav-item" data-tab="leads" onclick="showTab('leads')"><i class="fas fa-database"></i> Alle Leads</div>
+      <div class="nav-item" data-tab="myLeads" onclick="showTab('myLeads')"><i class="fas fa-user-check"></i> Meine Leads</div>
+      <div class="nav-item" data-tab="generate" onclick="showTab('generate')"><i class="fas fa-search"></i> Generieren</div>
       <div class="nav-sep"></div>
       <span class="nav-group-label">Administration</span>
-      <div class="nav-item" onclick="showTab('users')"><i class="fas fa-users"></i> Benutzer</div>
-      <div class="nav-item" onclick="showTab('tracking')"><i class="fas fa-chart-line"></i> Tracking</div>
+      <div class="nav-item" data-tab="users" onclick="showTab('users')"><i class="fas fa-users"></i> Benutzer</div>
+      <div class="nav-item" data-tab="tracking" onclick="showTab('tracking')"><i class="fas fa-chart-line"></i> Tracking</div>
+      <div class="nav-item" data-tab="tools" onclick="showTab('tools')"><i class="fas fa-toolbox"></i> Tools</div>
       <div class="nav-sep"></div>
       <span class="nav-group-label">Ressourcen</span>
-      <div class="nav-item" onclick="showTab('wiki')"><i class="fas fa-book"></i> Wissensdatenbank</div>
-      <div class="nav-item" onclick="showTab('chat')"><i class="fas fa-comments"></i> Rücksprachen</div>
-      <div class="nav-item" onclick="showTab('feedback')"><i class="fas fa-flag"></i> Feedback-Board</div>
-      <div class="nav-item" onclick="showTab('agents')"><i class="fas fa-robot"></i> Agenten</div>
-      <div class="nav-item" onclick="showTab('archive')"><i class="fas fa-archive"></i> Archiv</div>
+      <div class="nav-item" data-tab="wiki" onclick="showTab('wiki')"><i class="fas fa-book"></i> Wissensdatenbank</div>
+      <div class="nav-item" data-tab="chat" onclick="showTab('chat')"><i class="fas fa-comments"></i> Rücksprachen</div>
+      <div class="nav-item" data-tab="feedback" onclick="showTab('feedback')"><i class="fas fa-flag"></i> Feedback-Board</div>
+      <div class="nav-item" data-tab="agents" onclick="showTab('agents')"><i class="fas fa-robot"></i> Agenten</div>
+      <div class="nav-item" data-tab="archive" onclick="showTab('archive')"><i class="fas fa-archive"></i> Archiv</div>
+      <div class="nav-sep"></div>
+      <span class="nav-group-label">Meine Tools</span>
+      <div id="adminToolsNav"></div>
     </nav>
     <div class="sidebar-user" id="sidebarUser"></div>
   </aside>
@@ -248,11 +252,8 @@
             <div class="section-label" style="margin-top:4px">Quellen</div>
             <div class="sources-grid">
               <div class="source-btn active" data-src="google" onclick="this.classList.toggle('active')"><i class="fab fa-google"></i> Google</div>
-              <div class="source-btn active" data-src="linkedin" onclick="this.classList.toggle('active')"><i class="fab fa-linkedin"></i> LinkedIn</div>
-              <div class="source-btn active" data-src="xing" onclick="this.classList.toggle('active')"><i class="fas fa-briefcase"></i> XING</div>
-              <div class="source-btn" data-src="facebook" onclick="this.classList.toggle('active')"><i class="fab fa-facebook"></i> Facebook</div>
               <div class="source-btn active" data-src="web" onclick="this.classList.toggle('active')"><i class="fas fa-globe"></i> Web</div>
-              <div class="source-btn" data-src="maps" onclick="this.classList.toggle('active')"><i class="fas fa-map-marker-alt"></i> Maps</div>
+              <div class="source-btn active" data-src="maps" onclick="this.classList.toggle('active')"><i class="fas fa-map-marker-alt"></i> Maps</div>
             </div>
 
             <div class="section-label">Felder</div>
@@ -312,12 +313,21 @@
         <button class="btn btn-primary btn-sm" onclick="openUserModal()"><i class="fas fa-plus"></i> Neuer Benutzer</button>
       </div>
       <div class="card" style="margin-bottom:16px;padding:14px 16px">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500;margin:0">
-            <input type="checkbox" id="settingCloserSeesAdmins" onchange="saveCloserSeesAdmins()" style="width:16px;height:16px;cursor:pointer">
-            Closer dürfen Admins in Lead-Zuweisungen sehen
-          </label>
-          <span style="font-size:11px;color:var(--text3)">(steuert Zuweisungsfilter & -dropdowns für Closer)</span>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500;margin:0">
+              <input type="checkbox" id="settingCloserSeesAdmins" onchange="saveCloserSeesAdmins()" style="width:16px;height:16px;cursor:pointer">
+              Closer dürfen Admins in Lead-Zuweisungen sehen
+            </label>
+            <span style="font-size:11px;color:var(--text3)">(steuert Zuweisungsfilter & -dropdowns für Closer)</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500;margin:0">
+              <input type="checkbox" id="settingCloserSeesTool" onchange="saveCloserSeesTool()" style="width:16px;height:16px;cursor:pointer">
+              Angebots-Tool für Closer sichtbar machen
+            </label>
+            <span style="font-size:11px;color:var(--text3)">(zeigt Link zu tool.novaflowservices.de in der Closer-Sidebar)</span>
+          </div>
         </div>
       </div>
       <div class="card">
@@ -349,6 +359,15 @@
           <table><thead><tr><th>Zeit</th><th>Benutzer</th><th>Aktion</th><th>Details</th></tr></thead>
           <tbody id="activityBody"></tbody></table>
         </div>
+      </div>
+
+      <!-- Unzugeordnete E-Mails -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:28px 0 12px">
+        <h2 style="font-size:16px;font-weight:600;margin:0"><i class="fas fa-envelope-open-text" style="color:var(--accent);margin-right:8px"></i>Unzugeordnete E-Mails</h2>
+        <button class="btn btn-ghost btn-sm" onclick="loadUnmatchedEmails()"><i class="fas fa-sync"></i> Aktualisieren</button>
+      </div>
+      <div class="card" id="unmatchedEmailsCard">
+        <div style="color:var(--text3);padding:20px;text-align:center;font-size:13px">Wird geladen…</div>
       </div>
     </div>
 
@@ -461,6 +480,18 @@
         <button class="btn btn-ghost btn-sm" onclick="loadArchive()"><i class="fas fa-sync"></i> Aktualisieren</button>
       </div>
       <div id="archiveList"></div>
+    </div>
+
+    <div id="tab-tools" class="tab-panel">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+        <h1 style="font-size:20px;font-weight:700">Tools verwalten</h1>
+        <button class="btn btn-primary btn-sm" onclick="openToolModal()"><i class="fas fa-plus"></i> Tool hinzufügen</button>
+      </div>
+      <div class="card" style="overflow:hidden">
+        <div id="toolsTableContainer">
+          <div style="text-align:center;padding:40px;color:var(--text3)"><i class="fas fa-spinner fa-spin"></i></div>
+        </div>
+      </div>
     </div>
 
   </main>
@@ -694,9 +725,8 @@ function showTab(name) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
-  const navMap = { dashboard: 0, leads: 1, myLeads: 2, generate: 3, users: 4, tracking: 5, wiki: 6, chat: 7, feedback: 8, agents: 9, archive: 10 };
-  const items = document.querySelectorAll('.nav-item');
-  if (navMap[name] !== undefined) items[navMap[name]]?.classList.add('active');
+  const navEl = document.querySelector(`.nav-item[data-tab="${name}"]`);
+  if (navEl) navEl.classList.add('active');
   if (name === 'dashboard') loadDashboard();
   if (name === 'leads')    {
     const _s = document.getElementById('searchInput'); if (_s) _s.value = '';
@@ -706,12 +736,13 @@ function showTab(name) {
   }
   if (name === 'myLeads')  renderMyLeads();
   if (name === 'users')    { loadUsers(); loadAppSettings(); }
-  if (name === 'tracking') loadTracking();
+  if (name === 'tracking') { loadTracking(); loadUnmatchedEmails(); }
   if (name === 'wiki')     { loadWiki(); loadEmailTemplatesForAdmin(); }
   if (name === 'chat')     loadChats();
   if (name === 'feedback') loadFeedback();
   if (name === 'agents')   loadAgentLog();
   if (name === 'archive')  loadArchive();
+  if (name === 'tools')    loadToolsTab();
 }
 
 // ── PIPELINE (geteilt für Alle Leads + Meine Leads) ──────────
@@ -1496,9 +1527,9 @@ async function generateLeads() {
     });
     generatedLeads = data.leads || [];
     document.getElementById('gen-progress').style.width = '100%';
-    genLog(`${generatedLeads.length} Leads gefunden`, 'ok');
+    genLog(`${generatedLeads.length} Leads gefunden${data.real_data ? ' — Live-Daten aus Google/Maps' : ' — KI-Wissen (API Key konfigurieren für Live-Daten)'}`, 'ok');
     generatedLeads.forEach(l => genLog(`✓ ${l.company} (${l.location||'?'}) Konfidenz: ${l.confidence}%`, 'ok'));
-    renderGenResults(generatedLeads);
+    renderGenResults(generatedLeads, data.real_data);
     document.getElementById('genResultsCard').style.display = 'block';
   } catch (e) {
     genLog(`Fehler: ${e.message}`, 'err');
@@ -1507,8 +1538,16 @@ async function generateLeads() {
   btn.disabled = false; btn.innerHTML = '<i class="fas fa-search"></i> Leads generieren';
 }
 
-function renderGenResults(leads) {
-  document.getElementById('genResultCount').textContent = leads.length;
+function renderGenResults(leads, realData) {
+  const cardTitle = document.querySelector('#genResultsCard .card-title');
+  if (cardTitle) {
+    const badge = realData
+      ? `<span style="background:var(--green);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:6px">Live-Daten</span>`
+      : `<span style="background:var(--amber);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:6px">KI-Wissen</span>`;
+    cardTitle.innerHTML = `<i class="fas fa-list" style="color:var(--green)"></i> Vorschau <span class="badge" id="genResultCount">${leads.length}</span>${badge}`;
+  } else {
+    document.getElementById('genResultCount').textContent = leads.length;
+  }
   document.getElementById('genResultsBody').innerHTML = leads.map(l => `
     <tr>
       <td style="font-weight:600">${escHtml(l.company||'—')}</td>
@@ -1815,6 +1854,45 @@ function downloadActivityLog() {
       link.click();
     })
     .catch(e => showToast('Download fehlgeschlagen', 'err'));
+}
+
+// ── UNZUGEORDNETE E-MAILS ─────────────────────────────────────
+async function loadUnmatchedEmails() {
+  const card = document.getElementById('unmatchedEmailsCard');
+  if (!card) return;
+  try {
+    const rows = await api('GET', '/leads/unmatched-emails');
+    if (!rows.length) {
+      card.innerHTML = '<div style="color:var(--text3);padding:20px;text-align:center;font-size:13px"><i class="fas fa-check-circle" style="color:var(--green);margin-right:6px"></i>Keine unzugeordneten E-Mails</div>';
+      return;
+    }
+    card.innerHTML = `
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Eingang</th><th>Von</th><th>Betreff</th><th>Nachricht</th><th></th></tr></thead>
+          <tbody>
+            ${rows.map(m => `
+              <tr>
+                <td style="white-space:nowrap;font-size:12px">${fmtDate(m.received_at||m.created_at)}</td>
+                <td style="font-size:12px">${escHtml(m.from_address||'')}</td>
+                <td style="font-size:12px">${escHtml(m.subject||'(kein Betreff)')}</td>
+                <td style="font-size:12px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml((m.body_text||'').slice(0,120))}</td>
+                <td><button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteUnmatchedEmail(${parseInt(m.id)})"><i class="fas fa-trash"></i></button></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch(e) {
+    card.innerHTML = `<div style="color:var(--red);padding:16px;font-size:13px">Fehler: ${escHtml(e.message)}</div>`;
+  }
+}
+async function deleteUnmatchedEmail(id) {
+  if (!confirm('Eintrag löschen?')) return;
+  try {
+    await api('DELETE', `/leads/unmatched-emails/${id}`);
+    loadUnmatchedEmails();
+  } catch(e) { showToast(e.message,'err'); }
 }
 
 // ── CSV EXPORT ────────────────────────────────────────────────
@@ -2341,7 +2419,16 @@ async function wikiFileOpen(filename, encodedName, forceDownload) {
       showWikiNoPreviewModal(filename, encodedName ? decodeURIComponent(encodedName) : filename);
       return;
     }
-    window.open(`/api/wiki/files/${encodeURIComponent(filename)}?token=${encodeURIComponent(Auth.getToken())}`, '_blank');
+    try {
+      const _wr = await fetch(`/api/wiki/files/${encodeURIComponent(filename)}`, {
+        headers: { 'Authorization': 'Bearer ' + Auth.getToken() }
+      });
+      if (!_wr.ok) { showToast('Datei nicht verfügbar', 'err'); return; }
+      const _wb = await _wr.blob();
+      const _wu = URL.createObjectURL(_wb);
+      window.open(_wu, '_blank');
+      setTimeout(() => URL.revokeObjectURL(_wu), 30000);
+    } catch { showToast('Datei konnte nicht geöffnet werden', 'err'); }
     return;
   }
   try {
@@ -2537,6 +2624,12 @@ async function openSettingsModal() {
     const elScript = document.getElementById('settingCallScript');
     if (elGoal)   elGoal.value   = settings.daily_call_goal || '50';
     if (elScript) elScript.value = settings.call_script || '';
+    const elMaint = document.getElementById('settingMaintenanceMode');
+    const elMaintUntil = document.getElementById('settingMaintenanceUntil');
+    if (elMaint) elMaint.checked = settings.maintenance_mode === 'true';
+    if (elMaintUntil) elMaintUntil.value = settings.maintenance_until
+      ? new Date(settings.maintenance_until).toISOString().slice(0,16)
+      : '';
   } catch {}
   document.getElementById('settingsModal').classList.add('open');
 }
@@ -2552,6 +2645,10 @@ async function saveNotifSettings() {
     await api('PATCH', `/users/${me.id}/notify`, { notify_email, phone, email });
     await api('PATCH', '/settings/daily_call_goal', { value: goal });
     await api('PATCH', '/settings/call_script',     { value: script });
+    const maintMode  = document.getElementById('settingMaintenanceMode')?.checked ? 'true' : 'false';
+    const maintUntil = document.getElementById('settingMaintenanceUntil')?.value || '';
+    await api('PATCH', '/settings/maintenance_mode',  { value: maintMode });
+    await api('PATCH', '/settings/maintenance_until', { value: maintUntil });
     showToast('Einstellungen gespeichert ✓');
     closeSettingsModal();
   } catch(e) { showToast(e.message, 'err'); }
@@ -2835,31 +2932,32 @@ function renderDashboard(data) {
         <div style="font-size:28px;font-weight:700;color:var(--amber)">${data.leadsNew}</div>
       </div>
     </div>
-    <div class="tracking-card" style="flex-direction:column;align-items:stretch;gap:12px">
-      <div style="font-size:13px;font-weight:700">Closer heute</div>
-      <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead>
-          <tr style="color:var(--text3);font-size:11px;text-transform:uppercase;letter-spacing:.6px">
-            <th style="text-align:left;padding:6px 0;border-bottom:1px solid var(--border)">Name</th>
-            <th style="text-align:right;padding:6px 0;border-bottom:1px solid var(--border)">Anrufe heute</th>
-            <th style="text-align:right;padding:6px 0;border-bottom:1px solid var(--border)">Zugewiesene Leads</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${(data.perCloser||[]).map(c => `
-          <tr>
-            <td style="padding:8px 0;border-bottom:1px solid var(--border)">${escHtml(c.full_name||'—')}</td>
-            <td style="padding:8px 0;border-bottom:1px solid var(--border);text-align:right"><span class="badge">${c.callsToday}</span></td>
-            <td style="padding:8px 0;border-bottom:1px solid var(--border);text-align:right">${c.totalLeads}</td>
-          </tr>`).join('') || '<tr><td colspan="3" style="padding:12px 0;color:var(--text3);text-align:center">Keine Closer aktiv</td></tr>'}
-        </tbody>
-      </table>
+    <div class="tracking-card" style="flex-direction:column;align-items:stretch;gap:10px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:2px">Closer heute</div>
+      ${(data.perCloser||[]).length ? (data.perCloser||[]).map(c => `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="width:34px;height:34px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0">${escHtml((c.full_name||'?')[0].toUpperCase())}</div>
+        <div style="flex:1;min-width:0;overflow:hidden">
+          <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(c.full_name||'—')}</div>
+        </div>
+        <div style="display:flex;gap:14px;flex-shrink:0;align-items:center">
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Anrufe</div>
+            <span class="badge">${c.callsToday}</span>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Leads</div>
+            <div style="font-size:13px;font-weight:600;color:var(--text)">${c.totalLeads}</div>
+          </div>
+        </div>
+      </div>`).join('') : '<div style="padding:8px 0;color:var(--text3);font-size:13px;text-align:center">Keine Closer aktiv</div>'}
     </div>`;
 }
 
 // ── INIT ──────────────────────────────────────────────────────
 const _b = document.getElementById('leadsTableBody'); if (_b) _b.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3)"><i class="fas fa-spinner fa-spin"></i></td></tr>';
 showTab('dashboard');
+loadToolsTab();
 loadClosersForSelect();
 checkReminderNotifications();
 setInterval(checkReminderNotifications, 2 * 60 * 1000);
@@ -2871,6 +2969,8 @@ async function loadAppSettings() {
     const s = await api('GET', '/settings');
     const cb = document.getElementById('settingCloserSeesAdmins');
     if (cb) cb.checked = s.closer_sees_admins === 'true';
+    const cb2 = document.getElementById('settingCloserSeesTool');
+    if (cb2) cb2.checked = s.closer_sees_tool === 'true';
   } catch(e) {}
 }
 async function saveCloserSeesAdmins() {
@@ -2878,6 +2978,122 @@ async function saveCloserSeesAdmins() {
   try {
     await api('PATCH', '/settings/closer_sees_admins', { value: val });
     showToast('Einstellung gespeichert ✓');
+  } catch(e) { showToast(e.message, 'err'); }
+}
+async function saveCloserSeesTool() {
+  const val = document.getElementById('settingCloserSeesTool')?.checked ? 'true' : 'false';
+  try {
+    await api('PATCH', '/settings/closer_sees_tool', { value: val });
+    showToast('Einstellung gespeichert ✓');
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+// ── TOOLS ─────────────────────────────────────────────────────
+let _toolsList = [];
+
+async function loadToolsTab() {
+  try {
+    _toolsList = await api('GET', '/tools');
+    renderToolsTable(_toolsList);
+    renderAdminToolsSidebar(_toolsList);
+  } catch(e) {
+    const el = document.getElementById('toolsTableContainer');
+    if (el) el.innerHTML = `<div style="padding:24px;color:var(--danger)">${escHtml(e.message)}</div>`;
+  }
+}
+
+function renderToolsTable(tools) {
+  const el = document.getElementById('toolsTableContainer');
+  if (!el) return;
+  if (!tools.length) {
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3)"><i class="fas fa-toolbox" style="font-size:28px;display:block;margin-bottom:10px;opacity:.3"></i>Noch keine Tools vorhanden</div>';
+    return;
+  }
+  el.innerHTML = `<table class="data-table"><thead><tr>
+    <th>Name</th><th>URL</th><th style="text-align:center">Closer sichtbar</th><th style="text-align:right">Aktionen</th>
+  </tr></thead><tbody>
+    ${tools.map(t => `<tr>
+      <td><strong>${escHtml(t.name)}</strong></td>
+      <td style="font-size:12px;color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+        <a href="${escHtml(t.url)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">${escHtml(t.url)}</a>
+      </td>
+      <td style="text-align:center">
+        <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" ${t.closer_visible ? 'checked' : ''} onchange="toggleToolCloserVisible(${t.id}, this.checked)"
+            style="width:16px;height:16px;cursor:pointer">
+          <span style="font-size:12px;color:var(--text2)">${t.closer_visible ? 'Ja' : 'Nein'}</span>
+        </label>
+      </td>
+      <td style="text-align:right">
+        <button class="btn btn-ghost btn-sm" onclick="openToolModal(${t.id})" title="Bearbeiten"><i class="fas fa-edit"></i></button>
+        <button class="btn btn-ghost btn-sm" onclick="deleteTool(${t.id})" title="Löschen" style="color:var(--danger)"><i class="fas fa-trash"></i></button>
+      </td>
+    </tr>`).join('')}
+  </tbody></table>`;
+}
+
+function renderAdminToolsSidebar(tools) {
+  const el = document.getElementById('adminToolsNav');
+  if (!el) return;
+  el.innerHTML = tools.map(t => `
+    <a class="nav-item" href="${escHtml(t.url)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none">
+      <i class="fas fa-external-link-alt"></i> ${escHtml(t.name)}
+      <i class="fas fa-external-link-alt" style="margin-left:auto;font-size:10px;opacity:0.5"></i>
+    </a>`).join('');
+}
+
+function openToolModal(id) {
+  const tool = id ? _toolsList.find(t => t.id === id) : null;
+  document.getElementById('toolModalTitle').textContent = tool ? 'Tool bearbeiten' : 'Tool hinzufügen';
+  document.getElementById('toolModalId').value = tool ? tool.id : '';
+  document.getElementById('toolModalName').value = tool ? tool.name : '';
+  document.getElementById('toolModalUrl').value = tool ? tool.url : '';
+  document.getElementById('toolModalCloserVisible').checked = tool ? !!tool.closer_visible : false;
+  document.getElementById('toolModalErr').textContent = '';
+  document.getElementById('toolModal').classList.add('open');
+}
+
+function closeToolModal() {
+  document.getElementById('toolModal').classList.remove('open');
+}
+
+async function saveTool() {
+  const id = document.getElementById('toolModalId').value;
+  const name = document.getElementById('toolModalName').value.trim();
+  const url = document.getElementById('toolModalUrl').value.trim();
+  const closer_visible = document.getElementById('toolModalCloserVisible').checked;
+  const errEl = document.getElementById('toolModalErr');
+  if (!name || !url) { errEl.textContent = 'Name und URL sind Pflichtfelder'; return; }
+  try {
+    if (id) {
+      await api('PATCH', '/tools/' + id, { name, url, closer_visible });
+    } else {
+      await api('POST', '/tools', { name, url, closer_visible });
+    }
+    closeToolModal();
+    showToast('Tool gespeichert ✓');
+    loadToolsTab();
+  } catch(e) { errEl.textContent = e.message; }
+}
+
+async function toggleToolCloserVisible(id, val) {
+  const tool = _toolsList.find(t => t.id === id);
+  if (!tool) return;
+  try {
+    await api('PATCH', '/tools/' + id, { name: tool.name, url: tool.url, closer_visible: val });
+    tool.closer_visible = val ? 1 : 0;
+    renderToolsTable(_toolsList);
+    renderAdminToolsSidebar(_toolsList);
+    showToast('Gespeichert ✓');
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+async function deleteTool(id) {
+  if (!confirm('Tool wirklich löschen?')) return;
+  try {
+    await api('DELETE', '/tools/' + id);
+    showToast('Tool gelöscht');
+    loadToolsTab();
   } catch(e) { showToast(e.message, 'err'); }
 }
 
@@ -3104,7 +3320,7 @@ document.getElementById('addLeadModal').addEventListener('click', function(e){ i
 
 <!-- MODAL: Einstellungen (Admin) -->
 <div class="modal-overlay" id="settingsModal">
-  <div style="background:var(--bg2);border-radius:14px;box-shadow:var(--shadow-lg);padding:28px;width:400px;max-width:96vw">
+  <div style="background:var(--bg2);border-radius:14px;box-shadow:var(--shadow-lg);padding:28px;width:400px;max-width:96vw;max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <h2 style="font-size:16px;font-weight:700;margin:0"><i class="fas fa-cog" style="color:var(--accent);margin-right:8px"></i>Einstellungen</h2>
       <button class="btn btn-ghost btn-sm" onclick="closeSettingsModal()"><i class="fas fa-times"></i></button>
@@ -3131,6 +3347,16 @@ document.getElementById('addLeadModal').addEventListener('click', function(e){ i
     <div class="form-group" style="margin-top:8px">
       <label>Leitfaden-Text <span style="font-size:11px;color:var(--text3);font-weight:400">(wird im Panel der Closer angezeigt)</span></label>
       <textarea id="settingCallScript" class="form-control" rows="6" placeholder="1. Hallo, mein Name ist...&#10;2. Ich rufe an wegen...&#10;3. Haben Sie kurz Zeit?" style="resize:vertical;font-size:12px;line-height:1.6"></textarea>
+    </div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+    <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)"><i class="fas fa-tools" style="color:#f59e0b;margin-right:6px"></i>System-Wartung</div>
+    <label style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer;font-size:13px">
+      <input type="checkbox" id="settingMaintenanceMode" style="accent-color:#f59e0b">
+      Wartungsmodus aktiv <span style="font-size:11px;color:var(--text3);font-weight:400">(Closer können nicht auf das CRM zugreifen)</span>
+    </label>
+    <div class="form-group" style="margin-top:8px">
+      <label>Verfügbar ab (voraussichtlich) <span style="font-size:11px;color:var(--text3);font-weight:400">(Wartung endet automatisch zu diesem Zeitpunkt)</span></label>
+      <input id="settingMaintenanceUntil" class="form-control" type="datetime-local">
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">
       <button class="btn btn-ghost btn-sm" onclick="closeSettingsModal()">Abbrechen</button>
@@ -3319,7 +3545,7 @@ document.getElementById('editContactInput')?.addEventListener('keydown', functio
 </div>
 
 <!-- Feature 7: Aktivitäts-Feed Seitenpanel -->
-<div id="activityFeedPanel" style="display:none;position:fixed;top:0;right:0;width:340px;height:100vh;z-index:7000;background:var(--bg2);border-left:1px solid var(--border2);box-shadow:var(--shadow-lg);display:flex;flex-direction:column">
+<div id="activityFeedPanel" style="display:none;position:fixed;top:0;right:0;width:340px;height:100vh;z-index:7000;background:var(--bg2);border-left:1px solid var(--border2);box-shadow:var(--shadow-lg);flex-direction:column">
   <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
     <div style="font-size:14px;font-weight:700"><i class="fas fa-stream" style="color:var(--accent);margin-right:8px"></i>Aktivitäts-Feed</div>
     <button class="btn btn-ghost btn-sm" onclick="toggleActivityFeed()"><i class="fas fa-times"></i></button>
@@ -3329,6 +3555,39 @@ document.getElementById('editContactInput')?.addEventListener('keydown', functio
   </div>
 </div>
 <div id="activityFeedOverlay" style="display:none;position:fixed;inset:0;z-index:6999" onclick="toggleActivityFeed()"></div>
+
+<!-- MODAL: Tool verwalten -->
+<div class="modal-overlay" id="toolModal" onclick="if(event.target===this)closeToolModal()">
+  <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:460px;max-width:96vw;display:flex;flex-direction:column">
+    <div style="padding:22px 28px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:36px;height:36px;border-radius:10px;background:rgba(27,115,205,0.12);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:16px"><i class="fas fa-toolbox"></i></div>
+        <div style="font-size:16px;font-weight:700;color:var(--text)" id="toolModalTitle">Tool hinzufügen</div>
+      </div>
+      <button onclick="closeToolModal()" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:13px"><i class="fas fa-times"></i></button>
+    </div>
+    <div style="padding:22px 28px 24px;display:flex;flex-direction:column;gap:14px">
+      <input type="hidden" id="toolModalId">
+      <div class="form-group" style="margin:0">
+        <label>Name</label>
+        <input type="text" id="toolModalName" class="form-control" placeholder="z.B. Angebots-Tool">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>URL</label>
+        <input type="url" id="toolModalUrl" class="form-control" placeholder="https://...">
+      </div>
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;font-weight:500">
+        <input type="checkbox" id="toolModalCloserVisible" style="width:16px;height:16px;cursor:pointer">
+        Für Closer sichtbar
+      </label>
+      <div id="toolModalErr" style="color:var(--danger);font-size:13px"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px">
+        <button class="btn btn-ghost" onclick="closeToolModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="saveTool()"><i class="fas fa-save"></i> Speichern</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Feature 8: CSV Import Modal -->
 <div class="modal-overlay" id="csvImportModal">

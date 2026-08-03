@@ -2,9 +2,13 @@ const cron          = require('node-cron');
 const db            = require('../db');
 const { sendReminder } = require('../helpers/mailer');
 
+let _running = false;
+
 // Läuft jede Minute — prüft fällige Reminder
 function startReminderCron() {
   cron.schedule('* * * * *', async () => {
+    if (_running) return;
+    _running = true;
     try {
       const [due] = await db.query(
         `SELECT r.id, r.note, r.remind_at,
@@ -18,8 +22,8 @@ function startReminderCron() {
 
       for (const r of due) {
         if (!r.email) {
-          // Kein Zustellkanal — Reminder bleibt ausstehend (sent=0), damit er nicht verschwindet
-          console.log(`Reminder (id=${r.id}) übersprungen — User hat keine E-Mail-Adresse, bleibt ausstehend`);
+          await db.query('UPDATE reminders SET sent = 1 WHERE id = ?', [r.id]);
+          console.log(`Reminder (id=${r.id}) als in-App zugestellt markiert — User hat keine E-Mail-Adresse`);
           continue;
         }
         try {
@@ -38,6 +42,8 @@ function startReminderCron() {
       }
     } catch (e) {
       console.error('Cron error:', e.message);
+    } finally {
+      _running = false;
     }
   });
 

@@ -1,4 +1,8 @@
 require('dotenv').config();
+if (!process.env.JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET ist nicht gesetzt.');
+  process.exit(1);
+}
 const express     = require('express');
 const cors        = require('cors');
 const helmet      = require('helmet');
@@ -17,6 +21,7 @@ const feedbackRoutes  = require('./routes/feedback');
 const settingsRoutes       = require('./routes/settings');
 const emailTemplateRoutes  = require('./routes/emailtemplates');
 const agentLogRoutes       = require('./routes/agentlog');
+const toolRoutes           = require('./routes/tools');
 const { startReminderCron } = require('./cron/reminders');
 const { pollIncomingEmails } = require('./cron/emailPoller');
 const cron           = require('node-cron');
@@ -42,7 +47,7 @@ app.use(helmet({
 }));
 app.use(compression());
 app.use(cors({
-  origin: process.env.BASE_URL || '*',
+  origin: process.env.BASE_URL || (process.env.NODE_ENV !== 'production' ? true : false),
   methods: ['GET','POST','PATCH','DELETE','PUT','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization'],
 }));
@@ -50,8 +55,10 @@ app.set('trust proxy', 1);
 app.use(express.json());
 
 // Rate limiting
-app.use('/api/auth/login', rateLimit({ windowMs: 15*60*1000, max: 20 }));
-app.use('/api/generate',   rateLimit({ windowMs: 60*1000, max: 5 }));
+app.use('/api/auth/login',    rateLimit({ windowMs: 15*60*1000, max: 20 }));
+app.use('/api/auth/setup',    rateLimit({ windowMs: 15*60*1000, max: 5 }));
+app.use('/api/auth/password', rateLimit({ windowMs: 15*60*1000, max: 10 }));
+app.use('/api/generate',      rateLimit({ windowMs: 60*1000, max: 5 }));
 
 // ── Static Frontend ───────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public_html'), {
@@ -75,6 +82,7 @@ app.use('/api/feedback', feedbackRoutes);
 app.use('/api/settings',        settingsRoutes);
 app.use('/api/email-templates', emailTemplateRoutes);
 app.use('/api/agent-log',       agentLogRoutes);
+app.use('/api/tools',           toolRoutes);
 
 // ── SPA Fallback ──────────────────────────────────────────────
 app.get('*', (req, res) => {
@@ -240,12 +248,43 @@ db.query(`CREATE TABLE IF NOT EXISTS lead_emails (
   UNIQUE KEY uq_message_id (message_id(250))
 )`).catch(() => {});
 
+// ── Unzugeordnete eingehende E-Mails ─────────────────────────
+db.query(`CREATE TABLE IF NOT EXISTS unmatched_emails (
+  id           INT AUTO_INCREMENT PRIMARY KEY,
+  from_address VARCHAR(255),
+  to_address   VARCHAR(255),
+  subject      VARCHAR(500),
+  body_text    TEXT,
+  message_id   VARCHAR(500),
+  received_at  DATETIME,
+  created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_unmatched_mid (message_id(250))
+)`).catch(() => {});
+
 // ── Settings-Tabelle ─────────────────────────────────────────
 db.query(`CREATE TABLE IF NOT EXISTS app_settings (
   key_name VARCHAR(100) PRIMARY KEY,
   value TEXT NOT NULL
 )`).catch(() => {});
 db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('closer_sees_admins','false')").catch(() => {});
+db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('closer_sees_tool','false')").catch(() => {});
+db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('maintenance_mode','false')").catch(() => {});
+db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('maintenance_until','')").catch(() => {});
+
+db.query(`CREATE TABLE IF NOT EXISTS tools (
+  id             INT AUTO_INCREMENT PRIMARY KEY,
+  name           VARCHAR(200) NOT NULL,
+  url            VARCHAR(500) NOT NULL,
+  closer_visible TINYINT(1)  NOT NULL DEFAULT 0,
+  sort_order     INT         NOT NULL DEFAULT 0,
+  created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)`).then(() => {
+  db.query('SELECT COUNT(*) AS cnt FROM tools').then(([[{ cnt }]]) => {
+    if (cnt === 0) {
+      db.query("INSERT INTO tools (name, url, closer_visible) VALUES ('Angebots-Tool', 'https://tool.novaflowservices.de', 0)").catch(() => {});
+    }
+  }).catch(() => {});
+}).catch(() => {});
 db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('call_script','')").catch(() => {});
 db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('daily_call_goal','50')").catch(() => {});
 
@@ -273,7 +312,7 @@ db.query('ALTER TABLE leads ADD FULLTEXT INDEX ft_leads_search (company, ceo, lo
 cron.schedule('0 3 * * *', async () => {
   try {
     const [r] = await db.query(
-      'DELETE FROM activity_log WHERE created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)'
+      'DELETE FROM activity_log WHERE created_at < DATE_SUB(NOW(), INTERVAL 90 DAY)'
     );
     console.log(`Activity cleanup: ${r.affectedRows} Einträge gelöscht`);
   } catch(e) { console.error('Activity cleanup error:', e.message); }
@@ -285,6 +324,6 @@ app.listen(PORT, () => {
   console.log(`Umgebung: ${process.env.NODE_ENV || 'development'}`);
   startReminderCron();
   // IMAP-Polling alle 5 Minuten
-  cron.schedule('*/5 * * * *', pollIncomingEmails);
+  cron.schedule('*/2 * * * *', pollIncomingEmails);
   pollIncomingEmails(); // Sofort beim Start einmal prüfen
 });

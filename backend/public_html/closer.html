@@ -45,7 +45,7 @@
   .mob-hide { display: none !important; }
   .table-wrap table td, .table-wrap table th { padding: 6px 5px; }
   .table-wrap table { font-size: 12px; }
-  .table-wrap select.form-control { width: 100px !important; font-size: 10px !important; padding: 2px 3px !important; }
+  .table-wrap select.form-control { width: 100% !important; font-size: 12px !important; padding: 4px 8px !important; }
 }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
@@ -77,6 +77,7 @@
       <div class="nav-item" data-sec="feedback" onclick="showSection('feedback')"><i class="fas fa-flag"></i> Feedback / Wünsche</div>
       <div class="nav-item" id="navCreateUser" data-sec="createUser" onclick="showSection('createUser')" style="display:none"><i class="fas fa-user-plus"></i> Benutzer anlegen</div>
       <div class="nav-item" id="navGenerateLeads" data-sec="generateLeads" onclick="showSection('generateLeads')" style="display:none"><i class="fas fa-search"></i> Leads generieren</div>
+      <div id="toolsNavCl"></div>
     </nav>
     <div class="sidebar-user" id="sidebarUser"></div>
   </aside>
@@ -139,7 +140,7 @@
           </select>
           <div class="view-toggle">
             <button id="myViewTableBtn" class="active" onclick="setMyLeadsView('table')"><i class="fas fa-table"></i> Tabelle</button>
-            <button id="myViewPipelineBtn" onclick="setMyLeadsView('pipeline')"><i class="fas fa-columns"></i> Pipeline</button>
+            <button id="myViewPipelineBtn" class="mob-hide" onclick="setMyLeadsView('pipeline')"><i class="fas fa-columns"></i> Pipeline</button>
           </div>
           <button class="btn btn-ghost btn-sm" onclick="loadLeads()"><i class="fas fa-sync"></i></button>
         </div>
@@ -523,6 +524,25 @@ startActivityTracking();
 // Benutzer anlegen / Leads generieren: nur anzeigen wenn Berechtigung vorhanden
 if (ME?.can_create_users)   { const n = document.getElementById('navCreateUser');   if (n) n.style.display = ''; }
 if (ME?.can_generate_leads) { const n = document.getElementById('navGenerateLeads'); if (n) n.style.display = ''; }
+
+// Tools: dynamisch aus /api/tools laden und nur closer_visible anzeigen
+(async () => {
+  try {
+    const tools = await api('GET', '/tools');
+    const visible = tools.filter(t => t.closer_visible);
+    const el = document.getElementById('toolsNavCl');
+    if (!el) return;
+    if (!visible.length) { el.innerHTML = ''; return; }
+    el.innerHTML = `
+      <div class="nav-sep"></div>
+      <span class="nav-group-label">Meine Tools</span>
+      ${visible.map(t => `
+        <a class="nav-item" href="${t.url.replace(/"/g,'&quot;')}" target="_blank" rel="noopener noreferrer" style="text-decoration:none">
+          <i class="fas fa-external-link-alt"></i> ${t.name.replace(/</g,'&lt;')}
+          <i class="fas fa-external-link-alt" style="margin-left:auto;font-size:10px;opacity:0.5"></i>
+        </a>`).join('')}`;
+  } catch(e) {}
+})();
 
 // Berechtigungen vom Server frisch laden (damit Admin-Änderungen ohne Re-Login greifen)
 (async () => {
@@ -1797,7 +1817,16 @@ async function wikiFileOpen(filename, encodedName, forceDownload) {
       showWikiNoPreviewModal(filename, encodedName ? decodeURIComponent(encodedName) : filename);
       return;
     }
-    window.open(`/api/wiki/files/${encodeURIComponent(filename)}?token=${encodeURIComponent(Auth.getToken())}`, '_blank');
+    try {
+      const _wr = await fetch(`/api/wiki/files/${encodeURIComponent(filename)}`, {
+        headers: { 'Authorization': 'Bearer ' + Auth.getToken() }
+      });
+      if (!_wr.ok) { showToast('Datei nicht verfügbar', 'err'); return; }
+      const _wb = await _wr.blob();
+      const _wu = URL.createObjectURL(_wb);
+      window.open(_wu, '_blank');
+      setTimeout(() => URL.revokeObjectURL(_wu), 30000);
+    } catch { showToast('Datei konnte nicht geöffnet werden', 'err'); }
     return;
   }
   // Download: Blob-Weg damit der Dateiname korrekt gesetzt wird
@@ -2733,10 +2762,59 @@ document.getElementById('editContactInputCl')?.addEventListener('keydown', funct
   </div>
 </div>
 
+<!-- WARTUNGSMODUS-OVERLAY -->
+<div id="maintenanceOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(20,31,52,0.97);align-items:center;justify-content:center;flex-direction:column;gap:0">
+  <div style="text-align:center;padding:40px;max-width:480px">
+    <div style="font-size:56px;margin-bottom:24px">🔧</div>
+    <div style="font-size:22px;font-weight:700;color:#f59e0b;margin-bottom:12px">System-Wartung</div>
+    <div style="font-size:15px;color:#c8d3e8;margin-bottom:20px;line-height:1.6">
+      Das CRM-System wird gerade gewartet.<br>Bitte habe etwas Geduld.
+    </div>
+    <div id="maintUntilInfo" style="display:none;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:14px 20px;font-size:13px;color:#fbbf24;margin-bottom:0">
+      <i class="fas fa-clock" style="margin-right:6px"></i>
+      Voraussichtlich verfügbar ab: <strong id="maintUntilTime"></strong>
+    </div>
+  </div>
+</div>
+
 <script>
 if (ME && !ME.onboarding_shown) {
   document.getElementById('onboardingModal').classList.add('open');
 }
+
+// ── WARTUNGSMODUS-PRÜFUNG ─────────────────────────────────────
+let _maintActive = false;
+async function checkMaintenanceStatus() {
+  try {
+    const res = await fetch('/api/settings/status');
+    const data = await res.json();
+    const overlay = document.getElementById('maintenanceOverlay');
+    if (!overlay) return;
+    if (data.maintenance) {
+      _maintActive = true;
+      overlay.style.display = 'flex';
+      overlay.style.flexDirection = 'column';
+      const untilEl = document.getElementById('maintUntilInfo');
+      const untilTimeEl = document.getElementById('maintUntilTime');
+      if (data.until) {
+        const d = new Date(data.until);
+        untilTimeEl.textContent = d.toLocaleString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+        untilEl.style.display = 'block';
+      } else {
+        untilEl.style.display = 'none';
+      }
+    } else {
+      if (_maintActive) {
+        // Wartung gerade beendet — Seite neu laden damit Closer normal arbeiten können
+        window.location.reload();
+      }
+      _maintActive = false;
+      overlay.style.display = 'none';
+    }
+  } catch {}
+}
+checkMaintenanceStatus();
+setInterval(checkMaintenanceStatus, 60 * 1000);
 </script>
 </body>
 </html>
