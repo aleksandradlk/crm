@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const db     = require('../db');
 const { auth, adminOnly } = require('../middleware/auth');
+const canva  = require('../helpers/canva');
 
 const AGENTS = ['Recherche', 'Content', 'Kundenservice', 'Buchhaltung'];
 
@@ -65,11 +66,28 @@ router.get('/', auth, async (req, res) => {
 });
 
 // PATCH /api/agent-log/:id/approve — Vorschlag freigeben (Admin)
+// Bei Content-Einträgen wird zusätzlich ein Canva-Design aus der hinterlegten Vorlage erstellt.
 router.patch('/:id/approve', auth, adminOnly, async (req, res) => {
   try {
-    const [r] = await db.query("UPDATE agent_log SET status='ok' WHERE id=? AND status='pending'", [req.params.id]);
-    if (!r.affectedRows) return res.status(404).json({ error: 'Kein wartender Eintrag gefunden' });
-    res.json({ ok: true });
+    const [[entry]] = await db.query("SELECT * FROM agent_log WHERE id=? AND status='pending'", [req.params.id]);
+    if (!entry) return res.status(404).json({ error: 'Kein wartender Eintrag gefunden' });
+
+    let designUrl = null;
+    let designError = null;
+    if (entry.agent === 'Content') {
+      try {
+        const [[setting]] = await db.query("SELECT value FROM app_settings WHERE key_name='canva_brand_template_id'");
+        if (!setting) throw new Error('Keine Canva-Vorlage ausgewählt (Einstellungen → Canva)');
+        const design = await canva.createDesignFromTemplate(setting.value, entry.action, entry.detail);
+        designUrl = design.urls?.edit_url || design.url || null;
+      } catch (e) { designError = e.message; }
+    }
+
+    await db.query(
+      'UPDATE agent_log SET status=?, design_url=? WHERE id=?',
+      [designError ? 'error' : 'ok', designUrl, req.params.id]
+    );
+    res.json({ ok: true, designUrl, designError });
   } catch (e) { res.status(500).json({ error: 'Fehler beim Freigeben' }); }
 });
 

@@ -22,6 +22,7 @@ const settingsRoutes       = require('./routes/settings');
 const emailTemplateRoutes  = require('./routes/emailtemplates');
 const agentLogRoutes       = require('./routes/agentlog');
 const toolRoutes           = require('./routes/tools');
+const canvaRoutes          = require('./routes/canva');
 const { startReminderCron } = require('./cron/reminders');
 const { pollIncomingEmails } = require('./cron/emailPoller');
 const cron           = require('node-cron');
@@ -83,6 +84,7 @@ app.use('/api/settings',        settingsRoutes);
 app.use('/api/email-templates', emailTemplateRoutes);
 app.use('/api/agent-log',       agentLogRoutes);
 app.use('/api/tools',           toolRoutes);
+app.use('/api/canva',           canvaRoutes);
 
 // ── SPA Fallback ──────────────────────────────────────────────
 app.get('*', (req, res) => {
@@ -300,6 +302,15 @@ db.query(`CREATE TABLE IF NOT EXISTS agent_log (
 db.query('CREATE INDEX idx_agent_log_created_at ON agent_log (created_at)').catch(() => {});
 db.query("ALTER TABLE agent_log MODIFY COLUMN status ENUM('ok','error','pending','rejected') NOT NULL DEFAULT 'ok'").catch(() => {});
 db.query('ALTER TABLE agent_log ADD COLUMN created_by INT NULL').catch(() => {});
+db.query('ALTER TABLE agent_log ADD COLUMN design_url VARCHAR(500) NULL').catch(() => {});
+
+// ── Canva-Anbindung (Green Bureau Content-Agent) ──────────────
+db.query(`CREATE TABLE IF NOT EXISTS canva_auth (
+  id            INT PRIMARY KEY,
+  access_token  TEXT NOT NULL,
+  refresh_token TEXT NOT NULL,
+  expires_at    DATETIME NOT NULL
+)`).catch(() => {});
 
 // ── Audit-Migrationen ─────────────────────────────────────────
 db.query('ALTER TABLE users ADD COLUMN created_by INT NULL').catch(() => {});

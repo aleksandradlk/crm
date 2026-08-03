@@ -471,6 +471,7 @@
           <button class="btn btn-ghost btn-sm" onclick="loadAgentLog()"><i class="fas fa-sync"></i></button>
         </div>
       </div>
+      <div id="canvaStatusBar" class="card" style="padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"></div>
       <div id="agentLogList"></div>
     </div>
 
@@ -3168,6 +3169,48 @@ async function loadAgentLog() {
     allAgentLog = await api('GET', '/agent-log');
     renderAgentLog();
   } catch(e) { showToast(e.message, 'err'); }
+  loadCanvaStatus();
+}
+
+async function loadCanvaStatus() {
+  const bar = document.getElementById('canvaStatusBar');
+  if (!bar) return;
+  try {
+    const { connected } = await api('GET', '/canva/status');
+    if (!connected) {
+      bar.innerHTML = `<i class="fas fa-plug" style="color:var(--text3)"></i>
+        <span style="font-size:13px;flex:1">Canva ist noch nicht verbunden — Freigabe erstellt dann noch kein Design.</span>
+        <button class="btn btn-primary btn-sm" onclick="connectCanva()"><i class="fas fa-link"></i> Mit Canva verbinden</button>`;
+      return;
+    }
+    const templates = await api('GET', '/canva/brand-templates');
+    const currentId = document.getElementById('canvaTemplateSelect')?.value;
+    bar.innerHTML = `<i class="fas fa-check-circle" style="color:var(--green)"></i>
+      <span style="font-size:13px">Canva verbunden</span>
+      <span style="font-size:13px;color:var(--text3)">· Vorlage für Content-Designs:</span>
+      <select id="canvaTemplateSelect" class="form-control" style="width:220px" onchange="selectCanvaTemplate(this.value)">
+        <option value="">— auswählen —</option>
+        ${templates.map(t => `<option value="${t.id}" ${t.id===currentId?'selected':''}>${escHtml(t.title||t.id)}</option>`).join('')}
+      </select>`;
+  } catch(e) {
+    bar.innerHTML = `<span style="font-size:13px;color:var(--red)">Canva-Status konnte nicht geladen werden: ${escHtml(e.message)}</span>`;
+  }
+}
+
+async function connectCanva() {
+  try {
+    const { url } = await api('GET', '/canva/connect');
+    window.open(url, '_blank');
+    showToast('Canva-Fenster geöffnet — nach Bestätigung dort auf Aktualisieren klicken');
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+async function selectCanvaTemplate(templateId) {
+  if (!templateId) return;
+  try {
+    await api('PATCH', '/canva/brand-template', { templateId });
+    showToast('Vorlage gespeichert');
+  } catch(e) { showToast(e.message, 'err'); }
 }
 
 function renderAgentLog() {
@@ -3191,9 +3234,10 @@ function renderAgentLog() {
         </div>
         <div style="font-size:13px;color:var(--text2)">${escHtml(a.action)}</div>
         ${a.detail ? `<div style="font-size:12px;color:var(--text3);margin-top:4px;white-space:pre-wrap">${escHtml(a.detail)}</div>` : ''}
+        ${a.design_url ? `<a href="${escHtml(a.design_url)}" target="_blank" class="btn btn-ghost btn-sm" style="margin-top:8px;display:inline-flex"><i class="fas fa-image"></i> Canva-Design öffnen</a>` : ''}
         ${a.status==='pending' ? `
           <div style="margin-top:8px;display:flex;gap:6px">
-            <button class="btn btn-primary btn-sm" onclick="approveAgentLog(${a.id})"><i class="fas fa-check"></i> Freigeben</button>
+            <button class="btn btn-primary btn-sm" id="approve-btn-${a.id}" onclick="approveAgentLog(${a.id})"><i class="fas fa-check"></i> Freigeben</button>
             <button class="btn btn-ghost btn-sm" onclick="rejectAgentLog(${a.id})"><i class="fas fa-times"></i> Ablehnen</button>
           </div>` : ''}
       </div>
@@ -3202,8 +3246,15 @@ function renderAgentLog() {
 }
 
 async function approveAgentLog(id) {
-  try { await api('PATCH', `/agent-log/${id}/approve`); showToast('Freigegeben'); loadAgentLog(); }
-  catch(e) { showToast(e.message, 'err'); }
+  const btn = document.getElementById(`approve-btn-${id}`);
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Design wird erstellt…'; }
+  try {
+    const res = await api('PATCH', `/agent-log/${id}/approve`);
+    if (res.designError) showToast('Freigegeben, aber Canva-Design fehlgeschlagen: ' + res.designError, 'err');
+    else if (res.designUrl) showToast('Freigegeben — Canva-Design erstellt');
+    else showToast('Freigegeben');
+    loadAgentLog();
+  } catch(e) { showToast(e.message, 'err'); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check"></i> Freigeben'; } }
 }
 async function rejectAgentLog(id) {
   try { await api('PATCH', `/agent-log/${id}/reject`); showToast('Abgelehnt'); loadAgentLog(); }
