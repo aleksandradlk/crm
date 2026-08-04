@@ -34,6 +34,21 @@ router.get('/callback', async (req, res) => {
   }
 });
 
+// GET /api/canva/debug-config — zeigt Env-Var-Werte zur Fehlersuche (temporär, per AGENT_LOG_KEY geschützt)
+router.get('/debug-config', (req, res) => {
+  const key = req.headers['x-agent-key'];
+  if (!process.env.AGENT_LOG_KEY || key !== process.env.AGENT_LOG_KEY) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const secret = process.env.CANVA_CLIENT_SECRET || '';
+  res.json({
+    redirect_uri: JSON.stringify(process.env.CANVA_REDIRECT_URI || null),
+    client_id: JSON.stringify(process.env.CANVA_CLIENT_ID || null),
+    client_secret_length: secret.length,
+    client_secret_preview: secret ? `${secret.slice(0, 3)}...${secret.slice(-3)}` : null,
+  });
+});
+
 // GET /api/canva/status — ist Canva verbunden?
 router.get('/status', auth, async (req, res) => {
   try {
