@@ -79,6 +79,11 @@ function escHtml(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+function absUrl(s) {
+  const v = String(s || '').trim();
+  return /^https?:\/\//i.test(v) ? v : `https://${v}`;
+}
+
 function statusBadge(status) {
   const labels = {
     neu: 'Neu', kontaktiert: 'Kontaktiert', nicht_erreicht: 'Nicht erreicht',

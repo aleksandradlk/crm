@@ -405,7 +405,7 @@ function renderLeadDetail(l) {
   const fieldsHtml = fields.filter(([,v]) => v).map(([k,v,t]) => {
     let val = escHtml(v);
     if (t === 'email') val = `<a href="mailto:${escHtml(v)}">${escHtml(v)}</a>`;
-    if (t === 'url')   val = `<a href="${escHtml(v)}" target="_blank">${escHtml(v)}</a>`;
+    if (t === 'url')   val = `<a href="${escHtml(absUrl(v))}" target="_blank">${escHtml(v)}</a>`;
     return `<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px">
       <span style="color:var(--text3)">${k}</span><span style="text-align:right;max-width:220px;word-break:break-all">${val}</span></div>`;
   }).join('');
