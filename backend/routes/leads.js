@@ -564,7 +564,25 @@ router.post('/:id/email', auth, async (req, res) => {
       return res.status(403).json({ error: 'E-Mail nur bei eigenen oder unzugewiesenen Leads erlaubt' });
 
     const [[user]] = await db.query('SELECT full_name FROM users WHERE id=?', [req.user.id]);
-    const realMessageId = await sendLeadEmail({ to, subject, body, leadId: id });
+
+    // Letzte eingegangene Nachricht dieses Leads suchen — daran hängt die Antwort,
+    // damit der Kunde sie in seinem Mailprogramm im selben Thread sieht.
+    const [[lastInbound]] = await db.query(
+      `SELECT message_id FROM lead_emails
+       WHERE lead_id=? AND direction='inbound' AND message_id IS NOT NULL AND message_id<>''
+       ORDER BY COALESCE(received_at, created_at) DESC LIMIT 1`, [id]
+    ).catch(() => [[null]]);
+    const [priorIds] = await db.query(
+      `SELECT message_id FROM lead_emails
+       WHERE lead_id=? AND message_id IS NOT NULL AND message_id<>''
+       ORDER BY COALESCE(received_at, created_at) ASC LIMIT 20`, [id]
+    ).catch(() => [[]]);
+
+    const realMessageId = await sendLeadEmail({
+      to, subject, body, leadId: id,
+      inReplyTo:  lastInbound?.message_id || undefined,
+      references: (priorIds || []).map(r => r.message_id),
+    });
 
     await db.query(
       'INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',

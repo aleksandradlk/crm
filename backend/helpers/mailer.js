@@ -49,16 +49,25 @@ async function sendReminder({ to, toName, leadCompany, note, remindAt }) {
 
 // Sendet eine Lead-E-Mail und gibt die echte Message-ID zurück.
 // Betrifft subject wird "[NF-{leadId}]" angehängt damit Antworten sicher zugeordnet werden können.
-async function sendLeadEmail({ to, subject, body, leadId }) {
+// inReplyTo/references: Message-IDs der bisherigen Konversation. Nur gesetzt, wenn
+// vorhanden — dann hängt die Antwort im Mailprogramm des Kunden am richtigen Thread
+// statt eine neue Konversation aufzumachen.
+async function sendLeadEmail({ to, subject, body, leadId, inReplyTo, references }) {
   const domain = (process.env.SMTP_USER || 'info@novaflowservices.de').split('@')[1] || 'novaflowservices.de';
   const msgId  = `<crm-lead-${leadId}-${Date.now()}@${domain}>`;
   const taggedSubject = subject.includes('[NF-') ? subject : `${subject} [NF-${leadId}]`;
+
+  const refList = (Array.isArray(references) ? references : [references, inReplyTo])
+    .filter(Boolean)
+    .filter((v, i, a) => a.indexOf(v) === i);
 
   const info = await transporter.sendMail({
     from:    `"NovaFlow Services" <${process.env.SMTP_USER}>`,
     to,
     subject: taggedSubject,
     messageId: msgId,
+    ...(inReplyTo   ? { inReplyTo }               : {}),
+    ...(refList.length ? { references: refList }  : {}),
     headers: { 'X-CRM-Lead-ID': String(leadId) },
     html: `
       <div style="font-family:Arial,sans-serif;max-width:580px;margin:0 auto;color:#141f34">
