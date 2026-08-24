@@ -1,158 +1,104 @@
 const router  = require('express').Router();
+const Anthropic = require('@anthropic-ai/sdk');
 const { auth } = require('../middleware/auth');
 const { log } = require('../helpers/logger');
 
-const BASE_SYSTEM_PROMPT = `Du bist ein professionelles Business-Intelligence-System für Lead-Recherche.
-Deine Aufgabe: Echte, nachweislich existierende Unternehmen mit verfügbaren öffentlichen Kontaktdaten liefern.
+const FIELD_LABELS = {
+  company:   'Unternehmensname',
+  ceo:       'Geschäftsführer / Ansprechpartner',
+  email:     'E-Mail-Adresse',
+  phone:     'Telefonnummer',
+  location:  'Standort / Adresse',
+  linkedin:  'LinkedIn-URL',
+  revenue:   'Jahresumsatz (nur falls öffentlich bekannt)',
+  employees: 'Mitarbeiterzahl',
+};
+const DEFAULT_FIELDS = ['company', 'ceo', 'email', 'phone', 'location'];
+
+const SYSTEM_PROMPT = `Du bist ein professionelles Business-Intelligence-System für Lead-Recherche.
+Dir steht ein Web-Search-Tool zur Verfügung — nutze es aktiv, um JEDES Unternehmen zu
+verifizieren, bevor du es in die Ergebnisliste aufnimmst.
 
 ABSOLUT VERBOTEN:
 - Daten erfinden oder halluzinieren
-- Generische Dummy-E-Mails
-- Fiktive Telefonnummern
-- Nicht existierende Unternehmen
+- Ein Unternehmen aufnehmen, das du nicht per Suche verifizieren konntest
+- Generische Dummy-E-Mails oder fiktive Telefonnummern
 
 REGELN:
-- Nur real existierende Firmen aus deinem Wissen
-- E-Mails NUR wenn öffentlich im Impressum bekannt
-- Telefon NUR wenn öffentlich bekannt
+- Suche für jedes Kandidaten-Unternehmen mindestens einmal, um Existenz und Kontaktdaten
+  zu bestätigen (z.B. über Impressum, Firmenwebsite, Google-Maps-Eintrag)
+- E-Mail/Telefon NUR übernehmen, wenn sie in den Suchergebnissen belegt sind
 - Fehlende Werte als null
-- confidence: 85-100=gut verifiziert, 65-84=bekannt, 40-64=unsicher
-- Lieber 3 echte Leads als 10 erfundene
-- Antworte NUR mit einem validen JSON-Array`;
+- confidence: 85-100 = direkt in Suchergebnissen bestätigt, 65-84 = aus Kontext erschließbar,
+  40-64 = unsicher — darunter das Unternehmen lieber weglassen
+- Lieber 3 verifizierte Leads als 10 ungeprüfte
+- Antworte am Ende NUR mit einem validen JSON-Array, keine Erklärungen danach`;
 
-const EXTRACT_SYSTEM_PROMPT = `Du bist ein Datenextraktions-System für Business-Leads.
-Du erhältst ECHTE Live-Suchergebnisse und extrahierst daraus strukturierte Unternehmens-Daten.
+function buildUserPrompt({ query, location, size, maxL, extra, fields }) {
+  const wanted = (Array.isArray(fields) && fields.length ? fields : DEFAULT_FIELDS)
+    .map(f => FIELD_LABELS[f] || f).join(', ');
 
-REGELN:
-- Extrahiere NUR was in den Suchergebnissen steht — erfinde NICHTS
-- E-Mails und Telefonnummern nur wenn explizit in den Ergebnissen enthalten
-- Fehlende Felder als null
-- Duplikate entfernen — jedes Unternehmen nur einmal
-- confidence: 85-100=direkt aus Ergebnissen, 65-84=aus Kontext erschließbar, 40-64=unsicher
-- Antworte NUR mit einem validen JSON-Array`;
+  return `Recherchiere per Web-Suche bis zu ${maxL} ECHTE, existierende Unternehmen und verifiziere jedes davon:
 
-async function fetchSerperResults(query, location) {
-  const serperKey = process.env.SERPER_API_KEY;
-  if (!serperKey) return null;
-  try {
-    const q = location ? `${query} ${location}` : query;
-    const res = await fetch('https://google.serper.dev/search', {
-      method: 'POST',
-      headers: { 'X-API-KEY': serperKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ q, gl: 'de', hl: 'de', num: 20 }),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.organic || [];
-  } catch { return null; }
+Suchbegriff: "${query}"
+${location ? `Standort: "${location}"` : ''}
+${size ? `Unternehmensgröße: ${size}` : ''}
+${extra ? `Zusätzliche Kriterien: ${extra}` : ''}
+
+Gewünschte Felder (so vollständig wie recherchierbar): ${wanted}
+
+Antworte NUR mit diesem JSON-Array:
+[{"company":"Name","ceo":null,"email":null,"phone":null,"location":"Stadt","website":null,"linkedin_url":null,"industry":"Branche","employees":null,"revenue":null,"source":"web","confidence":70,"notes":null}]`;
 }
 
-async function fetchPlacesResults(query, location) {
-  const placesKey = process.env.GOOGLE_PLACES_API_KEY;
-  if (!placesKey) return null;
-  try {
-    const q = location ? `${query} ${location}` : query;
-    const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(q)}&key=${placesKey}&language=de&region=de`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const data = await res.json();
-    return (data.results || []).slice(0, 20);
-  } catch { return null; }
-}
-
-// POST /api/generate — KI-Lead-Generierung (Admin oder can_generate_leads)
+// POST /api/generate — KI-Lead-Generierung mit Live-Web-Suche (Admin oder can_generate_leads)
 router.post('/', auth, async (req, res) => {
   if (req.user.role !== 'admin' && !req.user.can_generate_leads)
     return res.status(403).json({ error: 'Keine Berechtigung für Lead-Generierung' });
 
-  const { query, location, size, max_leads, sources, fields, extra } = req.body;
+  const { query, location, size, max_leads, fields, extra } = req.body;
   if (!query) return res.status(400).json({ error: 'Suchbegriff fehlt' });
 
   const apiKey = process.env.CLAUDE_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'Claude API Key nicht konfiguriert (.env)' });
 
-  const maxL    = Math.min(parseInt(max_leads) || 10, 100);
-  const srcArr  = Array.isArray(sources) ? sources : ['web'];
-  const useGoogle = srcArr.includes('google') || srcArr.includes('web');
-  const useMaps   = srcArr.includes('maps');
+  const maxL = Math.min(parseInt(max_leads) || 10, 100);
+  // Suchen sind mit $10 / 1000 Anfragen abgerechnet — an die gewünschte Lead-Zahl gekoppelt,
+  // aber gedeckelt, damit ein einzelner Generieren-Klick nie außer Kontrolle gerät.
+  const maxSearches = Math.min(Math.max(maxL, 3), 20);
 
-  // Fetch live data in parallel
-  const [serperResults, placesResults] = await Promise.all([
-    useGoogle ? fetchSerperResults(query, location) : Promise.resolve(null),
-    useMaps   ? fetchPlacesResults(query, location) : Promise.resolve(null),
-  ]);
-
-  const hasRealData = (serperResults && serperResults.length > 0) ||
-                      (placesResults  && placesResults.length  > 0);
-
-  let systemPrompt, userPrompt;
-
-  if (hasRealData) {
-    systemPrompt = EXTRACT_SYSTEM_PROMPT;
-
-    let contextBlock = '';
-    if (serperResults && serperResults.length > 0) {
-      contextBlock += '\n=== GOOGLE SUCHERGEBNISSE (LIVE) ===\n';
-      serperResults.slice(0, 15).forEach((r, i) => {
-        contextBlock += `\n[${i + 1}] ${r.title}\nURL: ${r.link}\nBeschreibung: ${r.snippet || ''}\n`;
-      });
-    }
-    if (placesResults && placesResults.length > 0) {
-      contextBlock += '\n=== GOOGLE MAPS ERGEBNISSE (LIVE) ===\n';
-      placesResults.forEach((p, i) => {
-        contextBlock += `\n[${i + 1}] ${p.name}\nAdresse: ${p.formatted_address || ''}\n`;
-        if (p.formatted_phone_number) contextBlock += `Telefon: ${p.formatted_phone_number}\n`;
-        if (p.website) contextBlock += `Website: ${p.website}\n`;
-        if (p.rating) contextBlock += `Bewertung: ${p.rating} (${p.user_ratings_total || 0} Bewertungen)\n`;
-      });
-    }
-
-    userPrompt = `Extrahiere bis zu ${maxL} Unternehmen aus diesen ECHTEN Live-Suchergebnissen:
-
-Ursprüngliche Suche: "${query}"${location ? ` in "${location}"` : ''}
-${size ? `Unternehmensgröße: ${size}` : ''}
-${extra ? `Zusätzliche Kriterien: ${extra}` : ''}
-${contextBlock}
-Antworte NUR mit diesem JSON-Array:
-[{"company":"Name","ceo":null,"email":null,"phone":null,"location":"Stadt","website":null,"linkedin_url":null,"industry":"Branche","employees":null,"revenue":null,"source":"google","confidence":85,"notes":null}]`;
-  } else {
-    systemPrompt = BASE_SYSTEM_PROMPT;
-    userPrompt = `Recherchiere bis zu ${maxL} ECHTE Unternehmen aus deinem Wissen:
-
-Suchbegriff: "${query}"
-${location ? `Standort: "${location}"` : ''}
-${size ? `Größe: ${size}` : ''}
-${extra ? `Kriterien: ${extra}` : ''}
-Quellen: ${srcArr.join(', ')}
-
-Antworte NUR mit diesem JSON-Array:
-[{"company":"Name","ceo":null,"email":null,"phone":null,"location":"Stadt","website":null,"linkedin_url":null,"industry":"Branche","employees":null,"revenue":null,"source":"web","confidence":70,"notes":null}]`;
-  }
+  const client = new Anthropic({ apiKey });
+  const tools  = [{ type: 'web_search_20250305', name: 'web_search', max_uses: maxSearches }];
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 4000,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
+    let messages = [{ role: 'user', content: buildUserPrompt({ query, location, size, maxL, extra, fields }) }];
+    let response  = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 4000,
+      system: SYSTEM_PROMPT,
+      tools,
+      messages,
     });
 
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.error?.message || `Claude API HTTP ${response.status}`);
+    // Der serverseitige Such-Loop pausiert nach 10 internen Iterationen (pause_turn) —
+    // bei vielen angeforderten Leads ggf. mehrfach fortsetzen.
+    let continuations = 0;
+    while (response.stop_reason === 'pause_turn' && continuations < 3) {
+      messages = [...messages, { role: 'assistant', content: response.content }];
+      response = await client.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 4000,
+        system: SYSTEM_PROMPT,
+        tools,
+        messages,
+      });
+      continuations++;
     }
 
-    const data    = await response.json();
-    const rawText = data.content?.find(b => b.type === 'text')?.text || '';
+    const searchesUsed = response.usage?.server_tool_use?.web_search_requests || 0;
+    const realData = searchesUsed > 0;
 
+    const rawText = response.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
     const jsonMatch = rawText.match(/\[[\s\S]*\]/);
     if (!jsonMatch) throw new Error('Kein JSON-Array in Antwort');
 
@@ -171,19 +117,21 @@ Antworte NUR mit diesem JSON-Array:
         industry:     l.industry || null,
         employees:    l.employees != null ? String(l.employees) : null,
         revenue:      l.revenue || null,
-        source:       l.source || srcArr[0] || 'web',
+        source:       l.source || 'web',
         confidence:   Math.min(100, Math.max(0, parseInt(l.confidence) || 50)),
         notes:        l.notes || null,
       }))
       .filter(l => l.company);
 
     await log(req.user.id, 'leads_generate', 'system', null,
-      { query, location, count: leads.length, real_data: hasRealData }, req.ip);
+      { query, location, count: leads.length, real_data: realData, web_searches: searchesUsed }, req.ip);
 
-    res.json({ ok: true, leads, real_data: hasRealData });
+    res.json({ ok: true, leads, real_data: realData });
   } catch (err) {
     console.error('Generate error:', err);
-    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
+    const status = err instanceof Anthropic.APIError ? (err.status || 500) : 500;
+    const message = err instanceof Anthropic.APIError ? err.message : 'Ein Fehler ist aufgetreten.';
+    res.status(status).json({ error: message });
   }
 });
 
