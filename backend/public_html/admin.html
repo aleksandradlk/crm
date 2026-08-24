@@ -227,7 +227,7 @@
     <!-- ── TAB: GENERATE ──────────────────────────────── -->
     <div id="tab-generate" class="tab-panel">
       <h1 style="font-size:20px;font-weight:700;margin-bottom:20px">Leads generieren</h1>
-      <div style="display:grid;grid-template-columns:320px 1fr;gap:20px;align-items:start">
+      <div class="gen-grid" style="display:grid;grid-template-columns:320px 1fr;gap:20px;align-items:start">
 
         <div class="card">
           <div class="card-header"><div class="card-title"><i class="fas fa-sliders-h" style="color:var(--accent)"></i> Suchparameter</div></div>
@@ -941,7 +941,7 @@ async function loadLeads() {
     if (adminLeadsViewMode === 'pipeline') renderAdminPipeline(allLeads, 'allLeadsPipelineBoard');
   } catch (e) {
     const body = document.getElementById('leadsTableBody');
-    if (body) body.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--red)">
+    if (body) body.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--red)">
       <i class="fas fa-exclamation-triangle" style="display:block;font-size:28px;margin-bottom:10px"></i>
       <strong>Verbindungsfehler:</strong> ${escHtml(e.message)}<br>
       <button class="btn btn-ghost btn-sm" style="margin-top:12px" onclick="loadLeads()"><i class="fas fa-sync"></i> Erneut versuchen</button>
@@ -961,7 +961,9 @@ function filterLeads() {
   if (search)  filtered = filtered.filter(l =>
     (l.company||'').toLowerCase().includes(search) ||
     (l.ceo||'').toLowerCase().includes(search) ||
-    (l.location||'').toLowerCase().includes(search)
+    (l.location||'').toLowerCase().includes(search) ||
+    (l.phone||'').toLowerCase().includes(search) ||
+    (l.email||'').toLowerCase().includes(search)
   );
   if (status)  filtered = filtered.filter(l => l.status === status);
   if (closer)  filtered = filtered.filter(l => String(l.assigned_to) === closer);
@@ -1488,7 +1490,7 @@ async function setQuickReminder(offsetHours) {
   const dt = new Date(Date.now() + offsetHours * 3600 * 1000);
   const remind_at = dt.toISOString().slice(0, 16);
   try {
-    await api('POST', `/leads/${_rueckrufLeadId}/reminder`, { remind_at, note: 'Rückruf' });
+    await api('POST', `/leads/${_rueckrufLeadId}/reminders`, { remind_at, note: 'Rückruf' });
     showToast('Reminder gesetzt ✓');
   } catch(e) { showToast(e.message, 'err'); }
   closeRueckrufPopup();
@@ -1902,9 +1904,9 @@ function exportCSV() {
   const data = currentFilteredLeads.length ? currentFilteredLeads : allLeads;
   if (!data.length) { showToast('Keine Daten', 'err'); return; }
   const h = ['Unternehmen','GF','E-Mail','Telefon','Standort','Status','Zugewiesen','Hinzugefügt','Website','LinkedIn','Branche','Konfidenz'];
-  const rows = data.map(l => [l.company,l.ceo,l.email,l.phone,l.location,l.status,l.assigned_name,fmtDate(l.created_at),l.website,l.linkedin_url,l.industry,l.confidence].map(v=>`"${(v||'').toString().replace(/"/g,'""""')}"`).join(','));
+  const rows = data.map(l => [l.company,l.ceo,l.email,l.phone,l.location,l.status,l.assigned_name,fmtDate(l.created_at),l.website,l.linkedin_url,l.industry,l.confidence].map(v=>`"${(v||'').toString().replace(/"/g,'""')}"`).join(','));
   const blob = new Blob(['﻿' + [h.join(','),...rows].join('\n')], { type:'text/csv;charset=utf-8;' });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `leads_\.csv`; a.click();
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `leads_${new Date().toISOString().slice(0,10)}.csv`; a.click();
   showToast(`CSV exportiert (${data.length} Leads)`);
 }
 
@@ -3533,7 +3535,7 @@ document.getElementById('editContactInput')?.addEventListener('keydown', functio
 </script>
 
 <div class="modal-overlay" id="editContactModal" onclick="if(event.target===this)closeEditContactModal()">
-  <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:420px;max-width:96vw;display:flex;flex-direction:column">
+  <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:420px;max-width:96vw;max-height:90vh;overflow-y:auto;display:flex;flex-direction:column">
     <div style="padding:22px 28px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:10px">
         <div style="width:36px;height:36px;border-radius:10px;background:rgba(27,115,205,0.12);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:16px"><i class="fas fa-edit"></i></div>
@@ -3557,7 +3559,7 @@ document.getElementById('editContactInput')?.addEventListener('keydown', functio
 
 <!-- CALL DOKUMENTATION MODAL -->
 <div class="modal-overlay" id="callDocModal" onclick="if(event.target===this)closeCallDocModal()">
-  <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:420px;max-width:96vw;display:flex;flex-direction:column">
+  <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:420px;max-width:96vw;max-height:90vh;overflow-y:auto;display:flex;flex-direction:column">
     <div style="padding:22px 28px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:10px">
         <div style="width:36px;height:36px;border-radius:10px;background:rgba(34,197,94,0.12);display:flex;align-items:center;justify-content:center;color:var(--green);font-size:16px"><i class="fas fa-phone"></i></div>

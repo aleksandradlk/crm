@@ -483,6 +483,11 @@ body.dark .search-bar-kbd { background: var(--bg3); border-color: var(--border2)
 
   /* ── Modal: volle Breite, nichts abgeschnitten ───────────── */
   .modal { width: 100%; max-width: 100%; padding: 20px; }
+
+  /* ── Leads-generieren: feste 2-Spalten-Grids brechen auf Mobile um,
+     statt rechts abgeschnitten zu werden (overflow-x ist am Body/
+     .main-content bewusst hidden, es gibt also kein Scrollen dorthin) ── */
+  .gen-grid { grid-template-columns: 1fr !important; }
 }
 
 @media (max-width: 480px) {

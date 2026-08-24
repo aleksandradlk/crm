@@ -41,11 +41,12 @@
 .qf-btn i{margin-right:4px}
 
 /* ── Mobile Lead-Liste ── */
-@media (max-width: 767px) {
+@media (max-width: 800px) {
   .mob-hide { display: none !important; }
   .table-wrap table td, .table-wrap table th { padding: 6px 5px; }
   .table-wrap table { font-size: 12px; }
   .table-wrap select.form-control { width: 100% !important; font-size: 12px !important; padding: 4px 8px !important; }
+  .clgen-grid { grid-template-columns: 1fr !important; }
 }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
@@ -345,7 +346,7 @@
     <!-- LEADS GENERIEREN (nur bei can_generate_leads) -->
     <div id="sec-generateLeads" style="display:none">
       <h1 style="font-size:20px;font-weight:700;margin-bottom:20px">Leads generieren</h1>
-      <div style="display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start">
+      <div class="clgen-grid" style="display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start">
         <div class="card">
           <div class="card-header"><div class="card-title"><i class="fas fa-sliders-h" style="color:var(--accent)"></i> Suchparameter</div></div>
           <div class="card-body">
@@ -1566,7 +1567,7 @@ async function setQuickReminderCl(offsetHours) {
   const dt = new Date(Date.now() + offsetHours * 3600 * 1000);
   const remind_at = dt.toISOString().slice(0, 16);
   try {
-    await api('POST', `/leads/${_rueckrufLeadIdCl}/reminder`, { remind_at, note: 'Rückruf' });
+    await api('POST', `/leads/${_rueckrufLeadIdCl}/reminders`, { remind_at, note: 'Rückruf' });
     showToast('Reminder gesetzt ✓');
   } catch(e) { showToast(e.message, 'err'); }
   closeRueckrufPopupCl();
@@ -2280,21 +2281,28 @@ async function setStatusAndNext(id, status) {
 }
 
 // Feature 9: Schnellfilter
-function quickFilter(scope, type, btn) {
+async function quickFilter(scope, type, btn) {
   document.querySelectorAll('.qf-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   const now = new Date();
-  const todayStr = now.toDateString();
   const weekAgo = new Date(now - 7 * 86400000);
+  let dueLeadIds = null;
+  if (type === 'rueckruf_heute') {
+    try {
+      const reminders = await api('GET', '/leads/reminders');
+      const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
+      dueLeadIds = new Set(reminders.filter(r => new Date(r.remind_at).getTime() <= todayEnd.getTime()).map(r => r.lead_id));
+    } catch(e) { dueLeadIds = new Set(); }
+  }
   if (scope === 'my') {
     let leads = myLeads();
-    if (type === 'rueckruf_heute') leads = leads.filter(l => l.status === 'rueckruf' && new Date(l.updated_at) >= new Date(now.toDateString()));
+    if (type === 'rueckruf_heute') leads = leads.filter(l => l.status === 'rueckruf' && dueLeadIds.has(l.id));
     else if (type === 'nicht_erreicht') leads = leads.filter(l => l.status === 'nicht_erreicht');
     else if (type === 'neu_woche') leads = leads.filter(l => l.status === 'neu' && new Date(l.created_at) >= weekAgo);
     renderMyLeads(leads);
   } else {
     let leads = _visibleAllLeads.length ? _visibleAllLeads : allLeads;
-    if (type === 'rueckruf_heute') leads = allLeads.filter(l => l.status === 'rueckruf');
+    if (type === 'rueckruf_heute') leads = allLeads.filter(l => l.status === 'rueckruf' && dueLeadIds.has(l.id));
     else if (type === 'nicht_zugewiesen') leads = allLeads.filter(l => !l.assigned_to);
     else if (type === 'neu_woche') leads = allLeads.filter(l => l.status === 'neu' && new Date(l.created_at) >= weekAgo);
     else leads = allLeads;
@@ -2612,7 +2620,7 @@ async function clSaveGeneratedLeads() {
 </style>
 
 <div class="modal-overlay" id="editContactModalCl" onclick="if(event.target===this)closeEditContactModalCl()">
-  <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:420px;max-width:96vw;display:flex;flex-direction:column">
+  <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:420px;max-width:96vw;max-height:90vh;overflow-y:auto;display:flex;flex-direction:column">
     <div style="padding:22px 28px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:10px">
         <div style="width:36px;height:36px;border-radius:10px;background:rgba(27,115,205,0.12);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:16px"><i class="fas fa-edit"></i></div>
@@ -2640,7 +2648,7 @@ document.getElementById('editContactInputCl')?.addEventListener('keydown', funct
 
 <!-- CALL DOKUMENTATION MODAL (Closer) -->
 <div class="modal-overlay" id="callDocModalCl" onclick="if(event.target===this)closeCallDocModalCl()">
-  <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:420px;max-width:96vw;display:flex;flex-direction:column">
+  <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:420px;max-width:96vw;max-height:90vh;overflow-y:auto;display:flex;flex-direction:column">
     <div style="padding:22px 28px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:10px">
         <div style="width:36px;height:36px;border-radius:10px;background:rgba(34,197,94,0.12);display:flex;align-items:center;justify-content:center;color:var(--green);font-size:16px"><i class="fas fa-phone"></i></div>
