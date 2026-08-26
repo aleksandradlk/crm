@@ -2451,7 +2451,8 @@ async function clGenerateLeads() {
       extra:   document.getElementById('clgen-extra').value.trim(),
     });
     generatedLeadsCl = data.leads || [];
-    clGenLog(`${generatedLeadsCl.length} Leads gefunden`, 'ok');
+    clGenLog(`${generatedLeadsCl.length} Leads gefunden${data.real_data ? ' — per Web-Suche verifiziert' : ' — Web-Suche ohne Treffer, nur KI-Wissen'}`, 'ok');
+    if (data.dropped_low_confidence > 0) clGenLog(`${data.dropped_low_confidence} Kandidat(en) wegen Konfidenz < 80% verworfen`, 'info');
     generatedLeadsCl.forEach(l => clGenLog(`✓ ${l.company} (${l.location||'?'})`, 'ok'));
     clRenderGenResults(generatedLeadsCl);
     document.getElementById('clGenResultsCard').style.display = 'block';
