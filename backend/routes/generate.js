@@ -14,6 +14,9 @@ const FIELD_LABELS = {
   employees: 'Mitarbeiterzahl',
 };
 const DEFAULT_FIELDS = ['company', 'ceo', 'email', 'phone', 'location'];
+// Alles unter dieser Schwelle wird serverseitig verworfen, unabhängig davon, was das
+// Modell selbst als confidence angibt — die Selbsteinschätzung allein ist kein verlässlicher Filter.
+const MIN_CONFIDENCE = 80;
 
 const SYSTEM_PROMPT = `Du bist ein professionelles Business-Intelligence-System für Lead-Recherche.
 Dir steht ein Web-Search-Tool zur Verfügung — nutze es aktiv, um JEDES Unternehmen zu
@@ -23,14 +26,18 @@ ABSOLUT VERBOTEN:
 - Daten erfinden oder halluzinieren
 - Ein Unternehmen aufnehmen, das du nicht per Suche verifizieren konntest
 - Generische Dummy-E-Mails oder fiktive Telefonnummern
+- Einen Firmennamen aus Kategorie + Straße konstruieren (z.B. "Malerbetrieb Musterstraße"),
+  wenn du keinen echten, per Suche bestätigten Firmennamen gefunden hast
 
 REGELN:
 - Suche für jedes Kandidaten-Unternehmen mindestens einmal, um Existenz und Kontaktdaten
-  zu bestätigen (z.B. über Impressum, Firmenwebsite, Google-Maps-Eintrag)
+  zu bestätigen (z.B. über Impressum, Firmenwebsite, Google-Maps-Eintrag, Branchenverzeichnis)
 - E-Mail/Telefon NUR übernehmen, wenn sie in den Suchergebnissen belegt sind
 - Fehlende Werte als null
-- confidence: 85-100 = direkt in Suchergebnissen bestätigt, 65-84 = aus Kontext erschließbar,
-  40-64 = unsicher — darunter das Unternehmen lieber weglassen
+- confidence: 85-100 = Firmenname UND mindestens ein Kontaktdatum direkt in Suchergebnissen
+  bestätigt, 65-84 = Firma bestätigt, aber Details aus Kontext erschlossen, 40-64 = unsicher
+- Nur Ergebnisse mit confidence ≥ ${MIN_CONFIDENCE} werden überhaupt gespeichert — alles
+  darunter lässt du direkt weg, anstatt es unsicher ins Ergebnis zu schreiben
 - Lieber 3 verifizierte Leads als 10 ungeprüfte
 - Antworte am Ende NUR mit einem validen JSON-Array, keine Erklärungen danach`;
 
@@ -123,10 +130,15 @@ router.post('/', auth, async (req, res) => {
       }))
       .filter(l => l.company);
 
-    await log(req.user.id, 'leads_generate', 'system', null,
-      { query, location, count: leads.length, real_data: realData, web_searches: searchesUsed }, req.ip);
+    const candidateCount = leads.length;
+    leads = leads.filter(l => l.confidence >= MIN_CONFIDENCE);
+    const droppedLowConfidence = candidateCount - leads.length;
 
-    res.json({ ok: true, leads, real_data: realData });
+    await log(req.user.id, 'leads_generate', 'system', null,
+      { query, location, count: leads.length, dropped_low_confidence: droppedLowConfidence,
+        real_data: realData, web_searches: searchesUsed }, req.ip);
+
+    res.json({ ok: true, leads, real_data: realData, dropped_low_confidence: droppedLowConfidence });
   } catch (err) {
     console.error('Generate error:', err);
     const status = err instanceof Anthropic.APIError ? (err.status || 500) : 500;

@@ -1531,7 +1531,8 @@ async function generateLeads() {
     });
     generatedLeads = data.leads || [];
     document.getElementById('gen-progress').style.width = '100%';
-    genLog(`${generatedLeads.length} Leads gefunden${data.real_data ? ' — Live-Daten aus Google/Maps' : ' — KI-Wissen (API Key konfigurieren für Live-Daten)'}`, 'ok');
+    genLog(`${generatedLeads.length} Leads gefunden${data.real_data ? ' — per Web-Suche verifiziert' : ' — Web-Suche ohne Treffer, nur KI-Wissen'}`, 'ok');
+    if (data.dropped_low_confidence > 0) genLog(`${data.dropped_low_confidence} Kandidat(en) wegen Konfidenz < 80% verworfen`, 'info');
     generatedLeads.forEach(l => genLog(`✓ ${l.company} (${l.location||'?'}) Konfidenz: ${l.confidence}%`, 'ok'));
     renderGenResults(generatedLeads, data.real_data);
     document.getElementById('genResultsCard').style.display = 'block';
