@@ -638,6 +638,7 @@
   </div>
 </div>
 
+<script src="/shared/vendor/twilio-voice.min.js"></script>
 <script src="/shared/api.js"></script>
 <script>
 let allLeads = [], allUsers = [], generatedLeads = [], editingUserId = null;
@@ -1146,9 +1147,25 @@ async function startCall(leadId, phone) {
   } catch(e) {
     showToast(e.message, 'err'); return;
   }
+
+  // Anruf direkt im Browser versuchen (falls Telefonie eingerichtet + eigene
+  // Absender-Nummer hinterlegt ist) — sonst wie bisher manuell dokumentieren
+  if (await voiceIsEnabled()) {
+    try {
+      const { durationSeconds } = await softphoneStartCall(phone);
+      openCallDocModal(phone, Math.round(durationSeconds / 60));
+      return;
+    } catch(e) {
+      showToast(e.message + ' — bitte manuell anrufen.', 'info');
+    }
+  }
+  openCallDocModal(phone);
+}
+
+function openCallDocModal(phone, prefillMinutes) {
   document.getElementById('callDocPhone').textContent = phone || '';
   document.getElementById('callDocStatus').value      = 'reached';
-  document.getElementById('callDocDuration').value    = '';
+  document.getElementById('callDocDuration').value    = prefillMinutes || '';
   document.getElementById('callDocNote').value        = '';
   document.getElementById('callDocError').textContent = '';
   document.getElementById('callDocModal').classList.add('open');
@@ -2635,6 +2652,16 @@ async function openSettingsModal() {
     if (elMaintUntil) elMaintUntil.value = settings.maintenance_until
       ? new Date(settings.maintenance_until).toISOString().slice(0,16)
       : '';
+
+    const voiceSection = document.getElementById('sett-voice-section');
+    if (await voiceIsEnabled()) {
+      voiceSection.style.display = '';
+      document.getElementById('sett-verify-result').innerHTML = '';
+      document.getElementById('sett-verify-phone').value = '';
+      await loadCallerIdOptions(document.getElementById('sett-caller-number'), me.caller_number || '');
+    } else {
+      voiceSection.style.display = 'none';
+    }
   } catch {}
   document.getElementById('settingsModal').classList.add('open');
 }
@@ -2654,6 +2681,13 @@ async function saveNotifSettings() {
     const maintUntil = document.getElementById('settingMaintenanceUntil')?.value || '';
     await api('PATCH', '/settings/maintenance_mode',  { value: maintMode });
     await api('PATCH', '/settings/maintenance_until', { value: maintUntil });
+    const callerNumberEl = document.getElementById('sett-caller-number');
+    if (callerNumberEl && document.getElementById('sett-voice-section').style.display !== 'none') {
+      const callerNumber = callerNumberEl.value;
+      await api('PATCH', `/users/${me.id}/caller-number`, { caller_number: callerNumber || null });
+      me.caller_number = callerNumber || null;
+      Auth.setSession(Auth.getToken(), me);
+    }
     showToast('Einstellungen gespeichert ✓');
     closeSettingsModal();
   } catch(e) { showToast(e.message, 'err'); }
@@ -3437,6 +3471,23 @@ document.getElementById('addLeadModal').addEventListener('click', function(e){ i
     <div class="form-group" style="margin-top:8px">
       <label>Meine E-Mail <span style="font-size:11px;color:var(--text3);font-weight:400">(für Closer sichtbar)</span></label>
       <input id="adminEmail" class="form-control" type="email" placeholder="name@beispiel.de">
+    </div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+    <div id="sett-voice-section" style="display:none;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:var(--text2)"><i class="fas fa-phone" style="color:var(--accent);margin-right:6px"></i>Anrufen im Browser</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Nummer, mit der beim Anrufen aus dem CRM heraus angezeigt wird.</div>
+      <div class="form-group" style="margin-bottom:10px">
+        <label>Absender-Rufnummer</label>
+        <select id="sett-caller-number" class="form-control"></select>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>Neue Nummer verifizieren <span style="font-weight:400;color:var(--text3)">(optional)</span></label>
+        <div style="display:flex;gap:6px">
+          <input type="tel" id="sett-verify-phone" class="form-control" placeholder="+491701234567">
+          <button class="btn btn-ghost btn-sm" style="flex-shrink:0" onclick="startCallerIdVerification('sett-verify-phone','sett-verify-result')"><i class="fas fa-check-circle"></i> Verifizieren</button>
+        </div>
+        <div id="sett-verify-result" style="font-size:12px;color:var(--text2);margin-top:8px;line-height:1.5"></div>
+      </div>
     </div>
     <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
     <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)"><i class="fas fa-scroll" style="color:var(--accent);margin-right:6px"></i>Gesprächsleitfaden (für Closer)</div>

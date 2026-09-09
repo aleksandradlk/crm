@@ -199,6 +199,18 @@ router.patch('/:id/notify', auth, async (req, res) => {
   res.json({ ok: true });
 });
 
+// PATCH /api/users/:id/caller-number — eigene Absender-Rufnummer für Browser-Anrufe setzen
+router.patch('/:id/caller-number', auth, async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (req.user.id !== id && req.user.role !== 'admin')
+    return res.status(403).json({ error: 'Nicht berechtigt' });
+  const val = (req.body.caller_number || '').trim();
+  if (val && !/^\+[1-9]\d{6,14}$/.test(val))
+    return res.status(400).json({ error: 'Bitte Nummer im internationalen Format eingeben, z. B. +491701234567' });
+  await db.query('UPDATE users SET caller_number=? WHERE id=?', [val || null, id]);
+  res.json({ ok: true });
+});
+
 // DELETE /api/users/:id (Admin, kann sich nicht selbst löschen)
 router.delete('/:id', auth, adminOnly, async (req, res) => {
   const id = parseInt(req.params.id);

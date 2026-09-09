@@ -294,3 +294,143 @@ function updateThemeBtn() {
     btn.textContent = isDark ? '☀️' : '🌙';
   }
 }
+
+// ── Browser-Telefonie (Twilio Voice SDK) ───────────────────────
+let _voiceEnabledCache = null;
+let _twilioDevice       = null;
+let _activeTwilioCall   = null;
+let _softphoneTimer     = null;
+
+async function voiceIsEnabled() {
+  if (_voiceEnabledCache !== null) return _voiceEnabledCache;
+  try {
+    const r = await api('GET', '/voice/status');
+    _voiceEnabledCache = !!r.enabled;
+  } catch { _voiceEnabledCache = false; }
+  return _voiceEnabledCache;
+}
+
+async function ensureTwilioDevice() {
+  if (_twilioDevice) return _twilioDevice;
+  if (typeof Twilio === 'undefined' || !Twilio.Device)
+    throw new Error('Telefonie-Modul konnte nicht geladen werden');
+  const { token } = await api('GET', '/voice/token');
+  _twilioDevice = new Twilio.Device(token, { codecPreferences: ['opus', 'pcmu'] });
+  _twilioDevice.on('tokenWillExpire', async () => {
+    try { const r = await api('GET', '/voice/token'); _twilioDevice.updateToken(r.token); } catch {}
+  });
+  _twilioDevice.on('error', e => showToast('Telefonie-Fehler: ' + (e.message || e), 'err'));
+  return _twilioDevice;
+}
+
+// Startet einen Anruf im Browser. Löst mit { durationSeconds } auf, sobald das Gespräch
+// beendet ist. Wirft einen Error, wenn kein Browser-Anruf möglich ist — der Aufrufer soll
+// in dem Fall auf die bisherige manuelle Anruf-Dokumentation zurückfallen.
+async function softphoneStartCall(phoneNumber) {
+  const me = Auth.getUser();
+  if (!me?.caller_number)
+    throw new Error('Keine Absender-Rufnummer eingestellt (Einstellungen → Anrufen im Browser)');
+  const device = await ensureTwilioDevice();
+  if (device.state !== 'registered') await device.register();
+  const call = await device.connect({ params: { To: phoneNumber, CallerId: me.caller_number } });
+  _activeTwilioCall = call;
+  _showSoftphoneBar(phoneNumber);
+
+  const startedAt = Date.now();
+  return new Promise(resolve => {
+    const finish = () => {
+      _activeTwilioCall = null;
+      _hideSoftphoneBar();
+      resolve({ durationSeconds: Math.round((Date.now() - startedAt) / 1000) });
+    };
+    call.on('accept',     () => _setSoftphoneStatus('Verbunden'));
+    call.on('disconnect', finish);
+    call.on('cancel',     finish);
+    call.on('reject',     finish);
+    call.on('error', e => { showToast('Anruf-Fehler: ' + (e.message || e), 'err'); finish(); });
+  });
+}
+
+function softphoneHangup() {
+  if (_activeTwilioCall) _activeTwilioCall.disconnect();
+}
+
+function softphoneToggleMute() {
+  if (!_activeTwilioCall) return;
+  const muted = !_activeTwilioCall.isMuted();
+  _activeTwilioCall.mute(muted);
+  const btn = document.getElementById('_softphoneMuteBtn');
+  if (btn) btn.innerHTML = muted ? '<i class="fas fa-microphone-slash"></i>' : '<i class="fas fa-microphone"></i>';
+}
+
+function _setSoftphoneStatus(text) {
+  const el = document.getElementById('_softphoneStatus');
+  if (el) el.textContent = text;
+}
+
+function _showSoftphoneBar(phoneNumber) {
+  let bar = document.getElementById('_softphoneBar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = '_softphoneBar';
+    bar.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:99999;background:var(--bg2);border:1px solid var(--border2);border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,0.3);padding:12px 18px;display:flex;align-items:center;gap:14px;font-size:14px';
+    document.body.appendChild(bar);
+  }
+  bar.innerHTML = `
+    <i class="fas fa-phone-volume" style="color:var(--green)"></i>
+    <div>
+      <div style="font-weight:700" id="_softphoneStatus">Rufe an…</div>
+      <div style="font-size:12px;color:var(--text3);font-family:'JetBrains Mono',monospace">${escHtml(phoneNumber)} · <span id="_softphoneTime">00:00</span></div>
+    </div>
+    <button id="_softphoneMuteBtn" onclick="softphoneToggleMute()" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;width:36px;height:36px;cursor:pointer;color:var(--text2)" title="Stummschalten"><i class="fas fa-microphone"></i></button>
+    <button onclick="softphoneHangup()" style="background:var(--red);border:none;border-radius:8px;width:36px;height:36px;cursor:pointer;color:#fff" title="Auflegen"><i class="fas fa-phone-slash"></i></button>
+  `;
+  bar.style.display = 'flex';
+  const start = Date.now();
+  clearInterval(_softphoneTimer);
+  _softphoneTimer = setInterval(() => {
+    const el = document.getElementById('_softphoneTime');
+    if (!el) return;
+    const s = Math.round((Date.now() - start) / 1000);
+    el.textContent = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  }, 1000);
+}
+
+function _hideSoftphoneBar() {
+  clearInterval(_softphoneTimer);
+  const bar = document.getElementById('_softphoneBar');
+  if (bar) bar.style.display = 'none';
+}
+
+// ── Absender-Rufnummer (Caller ID) — Einstellungen ─────────────
+async function loadCallerIdOptions(selectEl, currentValue) {
+  selectEl.innerHTML = '<option value="">Lädt…</option>';
+  try {
+    const list = await api('GET', '/voice/caller-ids');
+    const opts = ['<option value="">— keine ausgewählt —</option>'];
+    if (currentValue && !list.some(n => n.phone_number === currentValue)) {
+      opts.push(`<option value="${escHtml(currentValue)}" selected>${escHtml(currentValue)}</option>`);
+    }
+    opts.push(...list.map(n =>
+      `<option value="${escHtml(n.phone_number)}" ${n.phone_number === currentValue ? 'selected' : ''}>${escHtml(n.phone_number)} (${escHtml(n.type)})</option>`
+    ));
+    selectEl.innerHTML = opts.join('');
+  } catch {
+    selectEl.innerHTML = '<option value="">Nummern konnten nicht geladen werden</option>';
+  }
+}
+
+async function startCallerIdVerification(phoneInputId, resultElId) {
+  const input    = document.getElementById(phoneInputId);
+  const resultEl = document.getElementById(resultElId);
+  const phone    = input.value.trim();
+  if (!phone) return;
+  resultEl.textContent = 'Starte Verifizierung…';
+  try {
+    const r = await api('POST', '/voice/caller-ids/verify', { phone_number: phone });
+    resultEl.innerHTML = `Twilio ruft dich jetzt unter <b>${escHtml(r.phone_number)}</b> an. Abnehmen und den vorgelesenen Code über die Tastatur bestätigen: <b style="font-size:16px;letter-spacing:2px">${escHtml(r.validation_code)}</b>`;
+    showToast('Verifizierungsanruf gestartet ✓');
+  } catch(e) {
+    resultEl.textContent = e.message;
+  }
+}

@@ -79,9 +79,13 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
 }
 ```
+
+`X-Forwarded-Proto` ist wichtig, damit Node erkennt, dass die Verbindung eigentlich HTTPS ist (z.B. für die Twilio-Signaturprüfung bei Browser-Anrufen, siehe unten).
 
 ---
 
@@ -144,6 +148,12 @@ leadhunter/
 - Kommentare pro Lead schreiben
 - Reminder setzen (In-App + E-Mail)
 - Keine Lead-Generierung, keine anderen User sehen
+
+### Browser-Anrufe (Telefonie):
+- Anrufen direkt aus dem Browser per Headset, ohne Handy — optional, siehe `.env.example`
+- Jeder User stellt in Einstellungen ein, mit welcher Rufnummer er/sie rausruft
+- Neue Absendernummern lassen sich direkt im CRM verifizieren (Anruf mit Code von Twilio)
+- Ohne Twilio-Konfiguration funktioniert "Anrufen" weiterhin wie bisher über die Telefon-App
 
 ### Sicherheit:
 - Auto-Logout nach 15 Min. Inaktivität (konfigurierbar in .env)
