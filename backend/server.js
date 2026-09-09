@@ -17,6 +17,7 @@ const generateRoutes = require('./routes/generate');
 const wikiRoutes     = require('./routes/wiki');
 const chatRoutes     = require('./routes/chat');
 const callRoutes     = require('./routes/calls');
+const voiceRoutes    = require('./routes/voice');
 const feedbackRoutes  = require('./routes/feedback');
 const settingsRoutes       = require('./routes/settings');
 const emailTemplateRoutes  = require('./routes/emailtemplates');
@@ -39,7 +40,9 @@ app.use(helmet({
       styleSrc:    ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdnjs.cloudflare.com"],
       fontSrc:     ["'self'", "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com"],
       imgSrc:      ["'self'", "data:", "blob:"],
-      connectSrc:  ["'self'"],
+      // Twilio Voice SDK (Browser-Anrufe): Signaling läuft über wechselnde
+      // *.twilio.com-Subdomains (Edge-Standort-abhängig), daher Wildcard nötig.
+      connectSrc:  ["'self'", "https://*.twilio.com", "wss://*.twilio.com"],
       objectSrc:   ["'none'"],
       baseUri:     ["'self'"],
       frameAncestors: ["'none'"],
@@ -79,6 +82,7 @@ app.use('/api/generate', generateRoutes);
 app.use('/api/wiki',     wikiRoutes);
 app.use('/api/chats',    chatRoutes);
 app.use('/api/calls',    callRoutes);
+app.use('/api/voice',    voiceRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/settings',        settingsRoutes);
 app.use('/api/email-templates', emailTemplateRoutes);
@@ -320,6 +324,9 @@ db.query('ALTER TABLE leads ADD COLUMN archived_by INT NULL').catch(() => {});
 db.query('ALTER TABLE leads ADD COLUMN archive_reason VARCHAR(500) NULL').catch(() => {});
 db.query('CREATE INDEX idx_leads_archived ON leads (archived_at)').catch(() => {});
 db.query('ALTER TABLE leads ADD FULLTEXT INDEX ft_leads_search (company, ceo, location)').catch(() => {});
+
+// ── Browser-Telefonie (Twilio) ────────────────────────────────
+db.query('ALTER TABLE users ADD COLUMN caller_number VARCHAR(32) NULL').catch(() => {});
 
 // ── Cron: Activity Log nach 7 Tagen bereinigen ───────────────
 cron.schedule('0 3 * * *', async () => {

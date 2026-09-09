@@ -481,6 +481,7 @@
   </div>
 </div>
 
+<script src="/shared/vendor/twilio-voice.min.js"></script>
 <script src="/shared/api.js"></script>
 <script>
 const ME = Auth.getUser();
@@ -1063,9 +1064,25 @@ async function startCallCl(leadId, phone) {
   } catch(e) {
     showToast(e.message, 'err'); return;
   }
+
+  // Anruf direkt im Browser versuchen (falls Telefonie eingerichtet + eigene
+  // Absender-Nummer hinterlegt ist) — sonst wie bisher manuell dokumentieren
+  if (await voiceIsEnabled()) {
+    try {
+      const { durationSeconds } = await softphoneStartCall(phone);
+      openCallDocModalCl(phone, Math.round(durationSeconds / 60));
+      return;
+    } catch(e) {
+      showToast(e.message + ' — bitte manuell anrufen.', 'info');
+    }
+  }
+  openCallDocModalCl(phone);
+}
+
+function openCallDocModalCl(phone, prefillMinutes) {
   document.getElementById('callDocPhoneCl').textContent  = phone || '';
   document.getElementById('callDocStatusCl').value       = 'reached';
-  document.getElementById('callDocDurationCl').value     = '';
+  document.getElementById('callDocDurationCl').value     = prefillMinutes || '';
   document.getElementById('callDocNoteCl').value         = '';
   document.getElementById('callDocErrorCl').textContent  = '';
   document.getElementById('callDocModalCl').classList.add('open');
@@ -1928,6 +1945,16 @@ async function openSettingsModal() {
     const me = await api('GET', '/auth/me');
     document.getElementById('sett-notify-email').checked = !!me.notify_email;
     document.getElementById('sett-phone').value          = me.phone || '';
+
+    const voiceSection = document.getElementById('sett-voice-section');
+    if (await voiceIsEnabled()) {
+      voiceSection.style.display = '';
+      document.getElementById('sett-verify-result').innerHTML = '';
+      document.getElementById('sett-verify-phone').value = '';
+      await loadCallerIdOptions(document.getElementById('sett-caller-number'), me.caller_number || '');
+    } else {
+      voiceSection.style.display = 'none';
+    }
   } catch {}
   document.getElementById('settingsModal').classList.add('open');
 }
@@ -1935,11 +1962,18 @@ function closeSettingsModal() { document.getElementById('settingsModal').classLi
 async function saveNotifSettings() {
   const me = Auth.getUser();
   const phone = document.getElementById('sett-phone').value.trim();
+  const callerNumberEl = document.getElementById('sett-caller-number');
   try {
     await api('PATCH', `/users/${me.id}/notify`, {
       notify_email: document.getElementById('sett-notify-email').checked ? 1 : 0,
       phone: phone || null,
     });
+    if (callerNumberEl && callerNumberEl.closest('#sett-voice-section').style.display !== 'none') {
+      const callerNumber = callerNumberEl.value;
+      await api('PATCH', `/users/${me.id}/caller-number`, { caller_number: callerNumber || null });
+      me.caller_number = callerNumber || null;
+      Auth.setSession(Auth.getToken(), me);
+    }
     showToast('Einstellungen gespeichert ✓');
     closeSettingsModal();
   } catch(e) { showToast(e.message, 'err'); }
@@ -2557,6 +2591,24 @@ async function clSaveGeneratedLeads() {
       </label>
       <div class="form-group" style="margin-bottom:0"><label>Meine Telefonnummer</label><input type="tel" id="sett-phone" class="form-control" placeholder="+49 ..."></div>
     </div>
+
+    <div id="sett-voice-section" style="border-top:1px solid var(--border);padding-top:16px;margin-top:16px;display:none">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:6px">Anrufen im Browser</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Nummer, mit der beim Anrufen aus dem CRM heraus angezeigt wird.</div>
+      <div class="form-group" style="margin-bottom:10px">
+        <label>Absender-Rufnummer</label>
+        <select id="sett-caller-number" class="form-control"></select>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>Neue Nummer verifizieren <span style="font-weight:400;color:var(--text3)">(optional)</span></label>
+        <div style="display:flex;gap:6px">
+          <input type="tel" id="sett-verify-phone" class="form-control" placeholder="+491701234567">
+          <button class="btn btn-ghost btn-sm" style="flex-shrink:0" onclick="startCallerIdVerification('sett-verify-phone','sett-verify-result')"><i class="fas fa-check-circle"></i> Verifizieren</button>
+        </div>
+        <div id="sett-verify-result" style="font-size:12px;color:var(--text2);margin-top:8px;line-height:1.5"></div>
+      </div>
+    </div>
+
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
       <button class="btn btn-ghost btn-sm" onclick="closeSettingsModal()">Abbrechen</button>
       <button class="btn btn-primary btn-sm" onclick="saveNotifSettings()"><i class="fas fa-save"></i> Speichern</button>
