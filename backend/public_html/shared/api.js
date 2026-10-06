@@ -439,3 +439,56 @@ function renderChatMessages(msgs, myId) {
     </div>`;
   }).join('');
 }
+
+// ── Filter-Chips (steuern ein verstecktes Select) ─────────────
+function chipFilter(btn, selectId, cb) {
+  const sel = document.getElementById(selectId);
+  if (sel) sel.value = btn.dataset.value || '';
+  btn.parentElement.querySelectorAll('.qf-btn').forEach(b => b.classList.toggle('active', b === btn));
+  if (typeof cb === 'function') cb();
+}
+function setChipCounts(containerId, counts) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
+  c.querySelectorAll('.qf-btn').forEach(b => {
+    const v = b.dataset.value || '';
+    const s = b.querySelector('.qf-count');
+    if (s) s.textContent = v ? (counts[v] || 0) : (counts._all || 0);
+  });
+}
+
+// ── Feedback-Board: gemeinsamer Renderer ──────────────────────
+const FB_TAGS = {
+  offen:          { label: 'Offen',         cls: 'fb-offen' },
+  in_planung:     { label: 'In Planung',    cls: 'fb-planung' },
+  erledigt:       { label: 'Erledigt',      cls: 'fb-erledigt' },
+  nicht_moeglich: { label: 'Nicht möglich', cls: 'fb-nein' },
+};
+function renderFeedbackCard(f, o = {}) {
+  const tag = FB_TAGS[f.tag] || { label: f.tag || '—', cls: '' };
+  const isBug = f.type === 'bug';
+  let side = '';
+  if (o.admin) {
+    side = `<div class="fb-admin">
+      <select class="form-control" onchange="updateFeedbackTag(${f.id},this.value)">${Object.entries(FB_TAGS).map(([v, t]) => `<option value="${v}"${f.tag === v ? ' selected' : ''}>${t.label}</option>`).join('')}</select>
+      <input type="text" class="form-control" placeholder="Antwort / Admin-Notiz …" value="${escHtml(f.admin_note || '')}" onblur="updateFeedbackNote(${f.id},this.value)" onkeydown="if(event.key==='Enter')this.blur()">
+      <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteFeedback(${f.id})"><i class="fas fa-trash"></i> Löschen</button>
+    </div>`;
+  } else if (o.deleteFn) {
+    side = `<div class="fb-admin" style="width:auto"><button class="btn btn-ghost btn-sm btn-icon" title="Löschen" style="color:var(--red)" onclick="${o.deleteFn}(${f.id})"><i class="fas fa-trash"></i></button></div>`;
+  }
+  return `<div class="fb-card ${tag.cls}">
+    <div class="fb-type ${isBug ? 'bug' : 'wunsch'}"><i class="fas fa-${isBug ? 'bug' : 'lightbulb'}"></i></div>
+    <div class="fb-main">
+      <div class="fb-head">
+        <span class="fb-tag ${tag.cls}">${escHtml(tag.label)}</span>
+        <span class="fb-kind">${isBug ? 'Bug' : 'Wunsch'}</span>
+        <span class="fb-meta">${f.author_name ? escHtml(f.author_name) + ' · ' : ''}${fmtDateShort(f.created_at)}</span>
+      </div>
+      <div class="fb-title">${escHtml(f.title)}</div>
+      ${f.description ? `<div class="fb-desc">${escHtml(f.description)}</div>` : ''}
+      ${f.admin_note ? `<div class="fb-note"><i class="fas fa-reply"></i><b>Antwort:</b> ${escHtml(f.admin_note)}</div>` : ''}
+    </div>
+    ${side}
+  </div>`;
+}
