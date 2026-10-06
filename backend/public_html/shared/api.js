@@ -103,7 +103,7 @@ function customConfirm(message, { title = 'Bitte bestätigen', okLabel = 'Bestä
     if (!overlay) {
       overlay = document.createElement('div');
       overlay.id = '_customConfirmOverlay';
-      overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(7,32,73,0.35);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:16px';
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(26,35,48,0.45);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:16px';
       overlay.innerHTML = `
         <div id="_customConfirmBox" style="background:var(--bg2);border:1px solid var(--border2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.28);width:100%;max-width:420px;padding:28px 28px 24px;display:flex;flex-direction:column;gap:0">
           <div id="_customConfirmTitle" style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:12px"></div>
@@ -168,8 +168,8 @@ function confBar(val) {
 function ageBadge(dateStr) {
   if (!dateStr) return '';
   const days = Math.floor((Date.now() - new Date(dateStr)) / 86400000);
-  if (days >= 30) return `<span style="background:#ef4444;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;white-space:nowrap;vertical-align:middle" title="${days} Tage keine Aktivität"><i class="fas fa-fire"></i> ${days}T</span>`;
-  if (days >= 14) return `<span style="background:#f59e0b;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;white-space:nowrap;vertical-align:middle" title="${days} Tage keine Aktivität"><i class="fas fa-clock"></i> ${days}T</span>`;
+  if (days >= 30) return `<span style="background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;white-space:nowrap;vertical-align:middle" title="${days} Tage keine Aktivität"><i class="fas fa-fire"></i> ${days}T</span>`;
+  if (days >= 14) return `<span style="background:var(--amber);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;white-space:nowrap;vertical-align:middle" title="${days} Tage keine Aktivität"><i class="fas fa-clock"></i> ${days}T</span>`;
   return '';
 }
 
@@ -235,11 +235,11 @@ function _showSessionWarningBanner(expiresAt) {
   const remaining = Math.max(1, Math.round((expiresAt - Date.now()) / 60000));
   const banner = document.createElement('div');
   banner.id = '_sessionWarningBanner';
-  banner.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:99999;background:#d97706;color:#fff;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.25);padding:14px 20px;display:flex;align-items:center;gap:14px;font-size:14px;font-weight:500;max-width:90vw;white-space:nowrap';
+  banner.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:99999;background:var(--copper);color:#fff;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.25);padding:14px 20px;display:flex;align-items:center;gap:14px;font-size:14px;font-weight:500;max-width:90vw;white-space:nowrap';
   banner.innerHTML = `
     <i class="fas fa-clock" style="font-size:18px;flex-shrink:0"></i>
     <span>Deine Session läuft in <strong>${remaining} Minuten</strong> ab.</span>
-    <button onclick="logout()" style="background:#fff;color:#92400e;border:none;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">Jetzt neu anmelden</button>
+    <button onclick="logout()" style="background:#fff;color:var(--copper-deep);border:none;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">Jetzt neu anmelden</button>
     <button onclick="document.getElementById('_sessionWarningBanner').remove()" style="background:rgba(255,255,255,0.2);color:#fff;border:none;border-radius:8px;width:28px;height:28px;font-size:16px;cursor:pointer;flex-shrink:0">&times;</button>
   `;
   document.body.appendChild(banner);

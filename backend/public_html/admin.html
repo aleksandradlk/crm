@@ -3,48 +3,48 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title></title>
+<title>NovaFlow CRM · Administrator</title>
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <link rel="stylesheet" href="/shared/style.css">
 <style>
 .source-btn{display:flex;align-items:center;gap:6px;padding:7px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text2);cursor:pointer;transition:all 0.15s;user-select:none}
-.source-btn.active{background:rgba(79,142,247,0.12);border-color:rgba(79,142,247,0.4);color:var(--accent)}
+.source-btn.active{background:color-mix(in srgb, var(--accent) 12%, transparent);border-color:color-mix(in srgb, var(--accent) 40%, transparent);color:var(--accent)}
 .sources-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:12px}
 .section-label{font-size:10px;font-weight:600;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase;margin-bottom:8px}
-.log-body{background:var(--bg3);border-radius:8px;padding:12px;font-family:'JetBrains Mono',monospace;font-size:11px;min-height:80px;max-height:120px;overflow-y:auto;display:flex;flex-direction:column;gap:3px}
+.log-body{background:var(--bg3);border-radius:8px;padding:12px;font-family:var(--font-mono);font-size:11px;min-height:80px;max-height:120px;overflow-y:auto;display:flex;flex-direction:column;gap:3px}
 .log-line{display:flex;gap:8px}
 .log-t{color:var(--text3);min-width:60px}
 .log-ok{color:var(--green)}.log-info{color:var(--accent)}.log-warn{color:var(--amber)}.log-err{color:var(--red)}
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
-.tab-btn.active{background:rgba(79,142,247,0.12);border-color:rgba(79,142,247,0.4);color:var(--accent);font-weight:600}
+.tab-btn.active{background:color-mix(in srgb, var(--accent) 12%, transparent);border-color:color-mix(in srgb, var(--accent) 40%, transparent);color:var(--accent);font-weight:600}
 .tab-panel{display:none}.tab-panel.active{display:block}
-.tracking-card{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.tracking-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:14px;display:flex;align-items:center;gap:12px;margin-bottom:8px}
 .tr-name{font-size:13px;font-weight:600;margin-bottom:2px}
 .tr-meta{font-size:11px;color:var(--text3)}
 .tr-right{margin-left:auto;text-align:right}
-.tr-time{font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--text2)}
+.tr-time{font-size:12px;font-family:var(--font-mono);color:var(--text2)}
 .fields-check{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px}
 .check-item{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2);cursor:pointer}
 .check-item input{accent-color:var(--accent);width:14px;height:14px}
 .user-row td{vertical-align:middle}
 .role-badge{padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600}
-.rb-admin{background:rgba(245,158,11,0.15);color:var(--amber)}
-.rb-closer{background:rgba(79,142,247,0.15);color:var(--accent)}
+.rb-admin{background:color-mix(in srgb, var(--amber) 15%, transparent);color:var(--amber)}
+.rb-closer{background:color-mix(in srgb, var(--accent) 15%, transparent);color:var(--accent)}
 .progress-wrap{margin-top:6px}
 .progress-bg{background:var(--bg4);height:3px;border-radius:2px}
-.progress-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width 0.4s}
+.progress-fill{height:100%;border-radius:2px;background:var(--accent);transition:width 0.4s}
 .view-toggle{display:flex;border:1px solid var(--border2);border-radius:8px;overflow:hidden}
 .view-toggle button{background:var(--bg3);border:none;color:var(--text3);padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px}
-.view-toggle button.active{background:var(--accent);color:#fff}
+.view-toggle button.active{background:var(--accent);color:var(--accent-fg)}
 /* Pipeline */
 .pipeline-board{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px}
 .pipeline-col{flex:0 0 230px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);display:flex;flex-direction:column;max-height:calc(100vh - 280px);min-height:200px}
 .pipeline-col-header{padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;color:var(--text2)}
 .pipeline-col-body{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:8px;min-height:80px;transition:background .15s}
-.pipeline-col-body.drag-over{background:rgba(79,142,247,0.1)}
+.pipeline-col-body.drag-over{background:color-mix(in srgb, var(--accent) 10%, transparent)}
 .pipeline-card{background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;cursor:grab;font-size:12px}
 .pipeline-card:active{cursor:grabbing}
 .pipeline-card.dragging{opacity:.35}
@@ -52,7 +52,7 @@
 .pipeline-card .pc-row{display:flex;align-items:center;gap:6px;color:var(--text3);font-size:11px;margin-top:3px}
 .qf-btn{background:var(--bg3);border:1px solid var(--border2);border-radius:20px;padding:4px 12px;font-size:11px;font-weight:600;color:var(--text3);cursor:pointer;transition:all .15s}
 .qf-btn:hover{border-color:var(--accent);color:var(--accent)}
-.qf-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.qf-btn.active{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
 .qf-btn i{margin-right:4px}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
@@ -64,14 +64,18 @@
   <!-- MOBILE TOPBAR -->
   <div class="mobile-topbar">
     <button class="hamburger-btn" onclick="toggleMobileNav()"><i class="fas fa-bars"></i></button>
-    <span class="mobile-topbar-title">Administrator</span>
+    <img class="mobile-topbar-logo" src="/LogoOB.PNG" alt="">
+    <div><div class="mobile-topbar-title">NovaFlow CRM</div><div class="mobile-topbar-sub">Administrator</div></div>
   </div>
   <div class="mobile-nav-overlay" id="mobileNavOverlay" onclick="closeMobileNav()"></div>
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar">
     <div class="logo">
-      <img src="/LogoKomplett-klein.PNG" alt="NovaFlow" style="max-width:100%;max-height:56px;width:auto;height:auto;display:block;margin-bottom:6px">
-      <div class="logo-sub">Administrator</div>
+      <img class="logo-mark" src="/LogoOB.PNG" alt="NovaFlow">
+      <div class="logo-wordmark">
+        <div class="logo-text">NovaFlow <span>CRM</span></div>
+        <div class="logo-sub">Administrator</div>
+      </div>
     </div>
     <nav class="nav">
       <span class="nav-group-label">Hauptnavigation</span>
@@ -104,7 +108,7 @@
     <!-- ── TAB: DASHBOARD ───────────────────────────────── -->
     <div id="tab-dashboard" class="tab-panel active">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-        <h1 style="font-size:20px;font-weight:700">Dashboard</h1>
+        <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Dashboard</h1>
         <button class="btn btn-ghost btn-sm" onclick="loadDashboard()"><i class="fas fa-sync"></i> Aktualisieren</button>
       </div>
       <div id="dashboardContent"></div>
@@ -113,7 +117,7 @@
     <!-- ── TAB: LEADS ─────────────────────────────────── -->
     <div id="tab-leads" class="tab-panel">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
-        <h1 style="font-size:20px;font-weight:700">Alle Leads</h1>
+        <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Alle Leads</h1>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <input type="text" id="searchInput" class="form-control" style="width:200px" placeholder="Suchen..." autocomplete="new-password" oninput="filterLeads()">
           <select id="statusFilter" class="form-control" style="width:150px" onchange="filterLeads()">
@@ -157,7 +161,7 @@
       </div>
 
       <!-- Bulk-Action-Bar -->
-      <div id="bulkBar" style="display:none;align-items:center;gap:10px;background:rgba(79,142,247,0.1);border:1px solid rgba(79,142,247,0.35);border-radius:10px;padding:10px 14px;margin-bottom:12px;flex-wrap:wrap">
+      <div id="bulkBar" style="display:none;align-items:center;gap:10px;background:color-mix(in srgb, var(--accent) 10%, transparent);border:1px solid color-mix(in srgb, var(--accent) 35%, transparent);border-radius:10px;padding:10px 14px;margin-bottom:12px;flex-wrap:wrap">
         <span id="bulkCount" style="font-size:13px;font-weight:600;color:var(--accent)">0 ausgewählt</span>
         <span style="color:var(--border2)">|</span>
         <span style="font-size:13px;color:var(--text2)">Zuweisen an:</span>
@@ -192,7 +196,7 @@
     <!-- ── TAB: MEINE LEADS ─────────────────────────── -->
     <div id="tab-myLeads" class="tab-panel">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
-        <h1 style="font-size:20px;font-weight:700">Meine Leads</h1>
+        <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Meine Leads</h1>
         <div style="display:flex;gap:8px;align-items:center">
           <div class="view-toggle">
             <button id="myLeadsViewTable" class="active" onclick="setMyLeadsView('table')"><i class="fas fa-table"></i> Tabelle</button>
@@ -226,7 +230,7 @@
 
     <!-- ── TAB: GENERATE ──────────────────────────────── -->
     <div id="tab-generate" class="tab-panel">
-      <h1 style="font-size:20px;font-weight:700;margin-bottom:20px">Leads generieren</h1>
+      <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em;margin-bottom:20px">Leads generieren</h1>
       <div class="gen-grid" style="display:grid;grid-template-columns:320px 1fr;gap:20px;align-items:start">
 
         <div class="card">
@@ -309,7 +313,7 @@
     <!-- ── TAB: USERS ─────────────────────────────────── -->
     <div id="tab-users" class="tab-panel">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-        <h1 style="font-size:20px;font-weight:700">Benutzerverwaltung</h1>
+        <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Benutzerverwaltung</h1>
         <button class="btn btn-primary btn-sm" onclick="openUserModal()"><i class="fas fa-plus"></i> Neuer Benutzer</button>
       </div>
       <div class="card" style="margin-bottom:16px;padding:14px 16px">
@@ -341,7 +345,7 @@
     <!-- ── TAB: TRACKING ──────────────────────────────── -->
     <div id="tab-tracking" class="tab-panel">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-        <h1 style="font-size:20px;font-weight:700">Aktivitäts-Tracking</h1>
+        <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Aktivitäts-Tracking</h1>
         <div style="display:flex;gap:8px;align-items:center">
           <select id="trackingUserFilter" class="input" style="font-size:13px;padding:6px 10px" onchange="loadTracking()">
             <option value="">Alle Benutzer</option>
@@ -373,7 +377,7 @@
 
     <!-- ── TAB: WIKI ─────────────────────────────────── -->
     <div id="tab-wiki" class="tab-panel">
-      <h1 style="font-size:20px;font-weight:700;margin-bottom:20px">Wissensdatenbank</h1>
+      <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em;margin-bottom:20px">Wissensdatenbank</h1>
 
       <!-- E-Mail Vorlagen -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
@@ -412,7 +416,7 @@
     <div id="tab-chat" class="tab-panel">
       <div id="chatListView">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-          <h1 style="font-size:20px;font-weight:700">Rücksprachen</h1>
+          <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Rücksprachen</h1>
           <button class="btn btn-primary btn-sm" onclick="openCreateChat()"><i class="fas fa-plus"></i> Neues Gespräch</button>
         </div>
         <div id="chatList"></div>
@@ -420,7 +424,7 @@
       <div id="chatDetailView" style="display:none">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
           <button class="btn btn-ghost btn-sm" onclick="backToChats()"><i class="fas fa-arrow-left"></i> Zurück</button>
-          <h1 style="font-size:18px;font-weight:700;flex:1;margin:0" id="chatDetailTitle"></h1>
+          <h1 style="font-size:18px;font-weight:600;letter-spacing:-0.02em;flex:1;margin:0" id="chatDetailTitle"></h1>
           <button class="btn btn-ghost btn-sm" id="chatInviteBtn" onclick="openChatInvite()"><i class="fas fa-user-plus"></i> Einladen</button>
           <button class="btn btn-ghost btn-sm" id="chatCloseBtn" onclick="closeChatRoom()" style="color:var(--red)"><i class="fas fa-times-circle"></i> Beenden</button>
         </div>
@@ -439,7 +443,7 @@
     <!-- ── TAB: FEEDBACK-BOARD ───────────────────────── -->
     <div id="tab-feedback" class="tab-panel">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-        <h1 style="font-size:20px;font-weight:700">Feedback-Board</h1>
+        <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Feedback-Board</h1>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn btn-primary btn-sm" onclick="openAdminFeedbackModal()"><i class="fas fa-plus"></i> Neu eintragen</button>
           <select id="fbTagFilter" class="form-control" style="width:160px" onchange="renderFeedbackList()">
@@ -458,7 +462,7 @@
     <!-- ── TAB: AGENTEN ─────────────────────────────── -->
     <div id="tab-agents" class="tab-panel">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-        <h1 style="font-size:20px;font-weight:700">Agenten</h1>
+        <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Agenten</h1>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn btn-primary btn-sm" onclick="openAgentLogModal()"><i class="fas fa-plus"></i> Neu</button>
           <select id="agentFilter" class="form-control" style="width:180px" onchange="renderAgentLog()">
@@ -478,7 +482,7 @@
     <!-- ── TAB: ARCHIV ──────────────────────────────── -->
     <div id="tab-archive" class="tab-panel">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-        <h1 style="font-size:20px;font-weight:700">Archivierte Leads</h1>
+        <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Archivierte Leads</h1>
         <button class="btn btn-ghost btn-sm" onclick="loadArchive()"><i class="fas fa-sync"></i> Aktualisieren</button>
       </div>
       <div id="archiveList"></div>
@@ -486,7 +490,7 @@
 
     <div id="tab-tools" class="tab-panel">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
-        <h1 style="font-size:20px;font-weight:700">Tools verwalten</h1>
+        <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Tools verwalten</h1>
         <button class="btn btn-primary btn-sm" onclick="openToolModal()"><i class="fas fa-plus"></i> Tool hinzufügen</button>
       </div>
       <div class="card" style="overflow:hidden">
@@ -519,7 +523,7 @@
   <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:560px;max-width:96vw;max-height:92vh;overflow-y:auto;display:flex;flex-direction:column">
     <div style="padding:22px 28px 0;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding-bottom:16px;margin-bottom:4px">
       <div style="display:flex;align-items:center;gap:10px">
-        <div style="width:36px;height:36px;border-radius:10px;background:rgba(27,115,205,0.12);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:16px"><i class="fas fa-envelope"></i></div>
+        <div style="width:36px;height:36px;border-radius:10px;background:color-mix(in srgb, var(--accent) 12%, transparent);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:16px"><i class="fas fa-envelope"></i></div>
         <div>
           <div style="font-size:16px;font-weight:700;color:var(--text)">E-Mail senden</div>
           <div style="font-size:11px;color:var(--text3);margin-top:1px">Vorlage wählen oder manuell bearbeiten</div>
@@ -767,7 +771,7 @@ function renderAdminPipeline(leads, boardId) {
            onclick="openLeadPanel(${l.id})">
         <div class="pc-company">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}</div>
         ${l.ceo    ? `<div class="pc-row"><i class="fas fa-user" style="width:12px"></i>${escHtml(l.ceo)}</div>` : ''}
-        ${l.phone  ? `<div class="pc-row"><i class="fas fa-phone" style="width:12px"></i><a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()" style="color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:11px">${escHtml(l.phone)}</a></div>` : ''}
+        ${l.phone  ? `<div class="pc-row"><i class="fas fa-phone" style="width:12px"></i><a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()" style="color:var(--accent);font-family:var(--font-mono);font-size:11px">${escHtml(l.phone)}</a></div>` : ''}
         ${l.assigned_name ? `<div class="pc-row"><i class="fas fa-user-tag" style="width:12px"></i>${escHtml(l.assigned_name)}</div>` : ''}
         <div class="pc-row"><i class="fas fa-clock" style="width:12px"></i>${fmtDateShort(l.updated_at||l.created_at)}</div>
         <div style="margin-top:6px;text-align:right">
@@ -890,13 +894,13 @@ function renderMyLeads() {
   }
   body.innerHTML = mine.map((l, i) => `
     <tr style="cursor:pointer" onclick="openLeadPanel(${l.id})">
-      <td style="color:var(--text3);font-size:11px;font-family:'JetBrains Mono',monospace">${String(i+1).padStart(2,'0')}</td>
+      <td style="color:var(--text3);font-size:11px;font-family:var(--font-mono)">${String(i+1).padStart(2,'0')}</td>
       <td style="font-weight:600">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}</td>
       <td style="color:var(--text2)">${escHtml(l.ceo||'—')}</td>
       <td>${l.phone ? `<a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()" style="color:var(--accent);font-size:12px">${escHtml(l.phone)}</a>` : ''}</td>
       <td style="font-size:12px;color:var(--text2)">${escHtml(l.location||'—')}</td>
       <td onclick="event.stopPropagation()">${statusSelectHtml(l)}</td>
-      <td style="font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace">${fmtDateShort(l.created_at)}</td>
+      <td style="font-size:11px;color:var(--text3);font-family:var(--font-mono)">${fmtDateShort(l.created_at)}</td>
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
         <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openLeadPanel(${l.id})"><i class="fas fa-chevron-right"></i></button>
         <span onclick="tableQuickNote(${l.id},this,event)" title="Schnellnotiz" style="cursor:pointer;color:var(--accent);font-size:13px;margin-left:4px;vertical-align:middle"><i class="fas fa-sticky-note"></i></span>
@@ -981,16 +985,16 @@ function renderLeads(leads) {
   }
   body.innerHTML = leads.map((l, i) => `
     <tr draggable="true" ondragstart="_dragLeadId=${l.id};showDragAssignOverlay()" ondragend="hideDragAssignOverlay()"
-        style="cursor:pointer;${bulkSelectedIds.has(l.id)?'background:rgba(79,142,247,0.07)':''}" onclick="openLeadPanel(${l.id})">
+        style="cursor:pointer;${bulkSelectedIds.has(l.id)?'background:color-mix(in srgb, var(--accent) 7%, transparent)':''}" onclick="openLeadPanel(${l.id})">
       <td onclick="event.stopPropagation()">
         <input type="checkbox" class="lead-cb" data-id="${l.id}" ${bulkSelectedIds.has(l.id)?'checked':''} onchange="toggleBulkSelect(${l.id},this.checked)" style="accent-color:var(--accent)">
       </td>
-      <td style="color:var(--text3);font-size:11px;font-family:'JetBrains Mono',monospace">${String(i+1).padStart(2,'0')}</td>
+      <td style="color:var(--text3);font-size:11px;font-family:var(--font-mono)">${String(i+1).padStart(2,'0')}</td>
       <td style="font-weight:600">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}</td>
       <td style="color:var(--text2)">${escHtml(l.ceo||'—')}</td>
       <td>
         ${l.email ? `<a href="mailto:${escHtml(l.email)}" onclick="event.stopPropagation()" style="color:var(--accent);font-size:12px">${escHtml(l.email)}</a>` : ''}
-        ${l.phone ? `<div style="color:var(--text2);font-size:11px;font-family:'JetBrains Mono',monospace">${escHtml(l.phone)}</div>` : ''}
+        ${l.phone ? `<div style="color:var(--text2);font-size:11px;font-family:var(--font-mono)">${escHtml(l.phone)}</div>` : ''}
       </td>
       <td style="color:var(--text2);font-size:12px">${escHtml(l.location||'—')}</td>
       <td onclick="event.stopPropagation()">${statusSelectHtml(l)}</td>
@@ -1029,8 +1033,8 @@ function renderFunnel(leads) {
     const n   = counts[key] || 0;
     const pct = total > 0 ? Math.round(n / total * 100) : 0;
     const bar = total > 0 ? Math.round(n / total * 100) : 0;
-    const color = key === 'kunde' ? 'var(--green,#22c55e)'
-                : key === 'kein_interesse' ? 'var(--red,#ef4444)'
+    const color = key === 'kunde' ? 'var(--green,#1f9a5f)'
+                : key === 'kein_interesse' ? 'var(--red,#c43d3d)'
                 : 'var(--accent)';
     return `
       <div style="display:grid;grid-template-columns:140px 40px 1fr 48px;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)">
@@ -1558,7 +1562,7 @@ function renderGenResults(leads, realData) {
       <td style="font-weight:600">${escHtml(l.company||'—')}</td>
       <td style="color:var(--text2)">${escHtml(l.ceo||'—')}</td>
       <td style="font-size:12px">${l.email ? `<a href="mailto:${escHtml(l.email)}">${escHtml(l.email)}</a>` : '—'}</td>
-      <td style="font-size:12px;font-family:'JetBrains Mono',monospace">${escHtml(l.phone||'—')}</td>
+      <td style="font-size:12px;font-family:var(--font-mono)">${escHtml(l.phone||'—')}</td>
       <td style="font-size:12px;color:var(--text2)">${escHtml(l.location||'—')}</td>
       <td>${confBar(l.confidence)}</td>
     </tr>`).join('');
@@ -1586,9 +1590,9 @@ async function loadUsers() {
     body.innerHTML = allUsers.map(u => `
       <tr class="user-row">
         <td style="font-weight:600">${escHtml(u.full_name)}</td>
-        <td style="font-family:'JetBrains Mono',monospace;font-size:12px">${escHtml(u.username)}</td>
+        <td style="font-family:var(--font-mono);font-size:12px">${escHtml(u.username)}</td>
         <td style="font-size:12px">${u.email ? `<a href="mailto:${escHtml(u.email)}">${escHtml(u.email)}</a>` : '<span style="color:var(--text3)">—</span>'}</td>
-        <td style="font-size:12px;font-family:'JetBrains Mono',monospace">${u.phone ? escHtml(u.phone) : '<span style="color:var(--text3)">—</span>'}</td>
+        <td style="font-size:12px;font-family:var(--font-mono)">${u.phone ? escHtml(u.phone) : '<span style="color:var(--text3)">—</span>'}</td>
         <td><span class="role-badge ${u.role==='admin'?'rb-admin':'rb-closer'}">${u.role==='admin'?'Admin':'Closer'}</span>${u.role==='closer'?[
             [u.can_edit_contacts,'Kontaktdaten bearbeiten','fa-address-card'],
             [u.can_archive_leads,'Leads archivieren','fa-archive'],
@@ -1778,7 +1782,7 @@ async function loadTracking() {
         : (u.last_login ? `Letzter Login: ${fmtDateShort(u.last_login)}` : 'Noch nie eingeloggt');
       const leadsCount   = stats.leads.size;
       const lastActLabel = stats.lastAction ? fmtDate(stats.lastAction) : null;
-      const cardBorder   = onlineStatus === 'online' ? 'border-color:var(--green,#22c55e)' : '';
+      const cardBorder   = onlineStatus === 'online' ? 'border-color:var(--green,#1f9a5f)' : '';
       const clickCount = parseInt(sess?.click_count) || 0;
       return `
         <div class="tracking-card" style="flex-direction:column;align-items:stretch;gap:10px;${cardBorder};cursor:pointer" onclick="filterTrackingUser('${u.id}')">
@@ -1825,7 +1829,7 @@ async function loadTracking() {
       try { const d = JSON.parse(a.detail); detail = Object.entries(d).filter(([,v])=>v!=null).map(([k,v])=>`${k}: ${v}`).join(', '); } catch {}
       return `
         <tr>
-          <td style="font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--text3)">${fmtDate(a.created_at)}</td>
+          <td style="font-size:12px;font-family:var(--font-mono);color:var(--text3)">${fmtDate(a.created_at)}</td>
           <td style="font-weight:600;font-size:13px">${escHtml(a.full_name)}</td>
           <td><span class="badge" style="font-size:10px">${ACTION_LABELS[a.action]||a.action}</span></td>
           <td style="font-size:12px;color:var(--text2)">${escHtml(detail)}</td>
@@ -1948,7 +1952,7 @@ async function loadActivityFeed() {
       let detail = '';
       try { const d = JSON.parse(r.details || '{}'); detail = d.to || d.note_preview || d.assigned_to || ''; } catch(e) {}
       return `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
-        <div style="width:28px;height:28px;border-radius:50%;background:rgba(79,142,247,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px">
+        <div style="width:28px;height:28px;border-radius:50%;background:color-mix(in srgb, var(--accent) 12%, transparent);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px">
           <i class="fas fa-${icon}" style="font-size:11px;color:var(--accent)"></i>
         </div>
         <div style="flex:1;min-width:0">
@@ -1990,11 +1994,11 @@ async function runCsvImport() {
     const div = document.getElementById('csvImportResult');
     div.style.display = 'block';
     if (data.ok) {
-      div.style.background = 'rgba(34,197,94,.12)'; div.style.color = 'var(--green)';
+      div.style.background = 'color-mix(in srgb, var(--green) 12%, transparent)'; div.style.color = 'var(--green)';
       div.innerHTML = `<i class="fas fa-check-circle"></i> <strong>${data.imported}</strong> Leads importiert, <strong>${data.skipped}</strong> übersprungen (Duplikate)`;
       loadLeads();
     } else {
-      div.style.background = 'rgba(239,68,68,.12)'; div.style.color = 'var(--red)';
+      div.style.background = 'color-mix(in srgb, var(--red) 12%, transparent)'; div.style.color = 'var(--red)';
       div.innerHTML = `<i class="fas fa-times-circle"></i> Fehler: ${escHtml(data.error || 'Unbekannt')}`;
     }
   } catch(e) { showToast('Import fehlgeschlagen: ' + e.message, 'err'); }
@@ -2007,7 +2011,7 @@ function showDragAssignOverlay() {
   const overlay = document.getElementById('dragAssignOverlay');
   const targets = document.getElementById('dragCloserTargets');
   targets.innerHTML = allUsers.filter(u => u.role === 'closer' || u.role === 'admin').map(u =>
-    `<div class="drag-closer-target" ondragover="event.preventDefault();this.style.background='rgba(79,142,247,.12)'" ondragleave="this.style.background=''"
+    `<div class="drag-closer-target" ondragover="event.preventDefault();this.style.background='color-mix(in srgb, var(--accent) 12%, transparent)'" ondragleave="this.style.background=''"
          ondrop="dropAssignLead(${u.id});this.style.background=''"
          style="padding:7px 10px;border-radius:7px;border:1px solid var(--border2);font-size:12px;color:var(--text2);cursor:pointer;display:flex;align-items:center;gap:8px">
       <i class="fas fa-user" style="color:var(--accent);font-size:10px"></i> ${escHtml(u.full_name)}
@@ -2573,7 +2577,7 @@ function renderWikiFiles(files, containerId, isAdmin) {
             ${replaceBtn}
             ${delBtn}
           </div>
-          ${f.note ? `<div style="margin-top:8px;padding:8px 10px;background:rgba(79,142,247,0.07);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--text2);line-height:1.5"><i class="fas fa-info-circle" style="color:var(--accent);margin-right:5px"></i>${escHtml(f.note)}</div>` : ''}
+          ${f.note ? `<div style="margin-top:8px;padding:8px 10px;background:color-mix(in srgb, var(--accent) 7%, transparent);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--text2);line-height:1.5"><i class="fas fa-info-circle" style="color:var(--accent);margin-right:5px"></i>${escHtml(f.note)}</div>` : ''}
         </div>`;
     }).join('');
     return `
@@ -2941,7 +2945,7 @@ function renderDashboard(data) {
       <div style="font-size:13px;font-weight:700;margin-bottom:2px">Closer heute</div>
       ${(data.perCloser||[]).length ? (data.perCloser||[]).map(c => `
       <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
-        <div style="width:34px;height:34px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0">${escHtml((c.full_name||'?')[0].toUpperCase())}</div>
+        <div style="width:34px;height:34px;border-radius:50%;background:var(--accent);color:var(--accent-fg);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0">${escHtml((c.full_name||'?')[0].toUpperCase())}</div>
         <div style="flex:1;min-width:0;overflow:hidden">
           <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(c.full_name||'—')}</div>
         </div>
@@ -3313,7 +3317,7 @@ function renderFeedbackList() {
           </div>
           <div style="font-weight:600;margin-bottom:4px">${escHtml(f.title)}</div>
           ${f.description ? `<div style="font-size:13px;color:var(--text2);white-space:pre-wrap">${escHtml(f.description)}</div>` : ''}
-          ${f.admin_note ? `<div style="margin-top:8px;padding:8px 10px;background:rgba(79,142,247,0.08);border-radius:8px;font-size:12px;color:var(--text2)"><b>Admin-Notiz:</b> ${escHtml(f.admin_note)}</div>` : ''}
+          ${f.admin_note ? `<div style="margin-top:8px;padding:8px 10px;background:color-mix(in srgb, var(--accent) 8%, transparent);border-radius:8px;font-size:12px;color:var(--text2)"><b>Admin-Notiz:</b> ${escHtml(f.admin_note)}</div>` : ''}
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;min-width:160px">
           <select class="form-control" style="font-size:12px" onchange="updateFeedbackTag(${f.id},this.value)">
@@ -3393,7 +3397,7 @@ async function submitAdminFeedback() {
 <div class="modal-overlay" id="addLeadModal">
   <div style="background:var(--bg2);border-radius:14px;box-shadow:var(--shadow-lg);padding:28px;width:500px;max-width:96vw;max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-      <h2 style="font-size:16px;font-weight:700;margin:0"><i class="fas fa-plus" style="color:var(--accent);margin-right:8px"></i>Lead manuell hinzufügen</h2>
+      <h2 style="font-size:16px;font-weight:600;margin:0"><i class="fas fa-plus" style="color:var(--accent);margin-right:8px"></i>Lead manuell hinzufügen</h2>
       <button class="btn btn-ghost btn-sm" onclick="closeAddLeadModal()"><i class="fas fa-times"></i></button>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -3422,7 +3426,7 @@ document.getElementById('addLeadModal').addEventListener('click', function(e){ i
 <div class="modal-overlay" id="settingsModal">
   <div style="background:var(--bg2);border-radius:14px;box-shadow:var(--shadow-lg);padding:28px;width:400px;max-width:96vw;max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-      <h2 style="font-size:16px;font-weight:700;margin:0"><i class="fas fa-cog" style="color:var(--accent);margin-right:8px"></i>Einstellungen</h2>
+      <h2 style="font-size:16px;font-weight:600;margin:0"><i class="fas fa-cog" style="color:var(--accent);margin-right:8px"></i>Einstellungen</h2>
       <button class="btn btn-ghost btn-sm" onclick="closeSettingsModal()"><i class="fas fa-times"></i></button>
     </div>
     <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)">Benachrichtigungen</div>
@@ -3449,9 +3453,9 @@ document.getElementById('addLeadModal').addEventListener('click', function(e){ i
       <textarea id="settingCallScript" class="form-control" rows="6" placeholder="1. Hallo, mein Name ist...&#10;2. Ich rufe an wegen...&#10;3. Haben Sie kurz Zeit?" style="resize:vertical;font-size:12px;line-height:1.6"></textarea>
     </div>
     <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
-    <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)"><i class="fas fa-tools" style="color:#f59e0b;margin-right:6px"></i>System-Wartung</div>
+    <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)"><i class="fas fa-tools" style="color:var(--amber);margin-right:6px"></i>System-Wartung</div>
     <label style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer;font-size:13px">
-      <input type="checkbox" id="settingMaintenanceMode" style="accent-color:#f59e0b">
+      <input type="checkbox" id="settingMaintenanceMode" style="accent-color:var(--amber)">
       Wartungsmodus aktiv <span style="font-size:11px;color:var(--text3);font-weight:400">(Closer können nicht auf das CRM zugreifen)</span>
     </label>
     <div class="form-group" style="margin-top:8px">
@@ -3469,7 +3473,7 @@ document.getElementById('addLeadModal').addEventListener('click', function(e){ i
 <div class="modal-overlay" id="createChatModalAdmin">
   <div style="background:var(--bg2);border-radius:14px;box-shadow:var(--shadow-lg);padding:28px;width:480px;max-width:96vw;max-height:85vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-      <h2 style="font-size:16px;font-weight:700;margin:0"><i class="fas fa-comments" style="color:var(--accent);margin-right:8px"></i>Neue Rücksprache</h2>
+      <h2 style="font-size:16px;font-weight:600;margin:0"><i class="fas fa-comments" style="color:var(--accent);margin-right:8px"></i>Neue Rücksprache</h2>
       <button class="btn btn-ghost btn-sm" onclick="closeCreateChat()"><i class="fas fa-times"></i></button>
     </div>
     <div class="form-group">
@@ -3504,7 +3508,7 @@ document.getElementById('addLeadModal').addEventListener('click', function(e){ i
 <div class="modal-overlay" id="inviteChatModalAdmin">
   <div style="background:var(--bg2);border-radius:14px;box-shadow:var(--shadow-lg);padding:28px;width:420px;max-width:96vw;max-height:80vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-      <h2 style="font-size:16px;font-weight:700;margin:0"><i class="fas fa-user-plus" style="color:var(--accent);margin-right:8px"></i>Benutzer einladen</h2>
+      <h2 style="font-size:16px;font-weight:600;margin:0"><i class="fas fa-user-plus" style="color:var(--accent);margin-right:8px"></i>Benutzer einladen</h2>
       <button class="btn btn-ghost btn-sm" onclick="document.getElementById('inviteChatModalAdmin').classList.remove('open')"><i class="fas fa-times"></i></button>
     </div>
     <div class="form-group">
@@ -3539,7 +3543,7 @@ document.getElementById('editContactInput')?.addEventListener('keydown', functio
   <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:420px;max-width:96vw;max-height:90vh;overflow-y:auto;display:flex;flex-direction:column">
     <div style="padding:22px 28px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:10px">
-        <div style="width:36px;height:36px;border-radius:10px;background:rgba(27,115,205,0.12);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:16px"><i class="fas fa-edit"></i></div>
+        <div style="width:36px;height:36px;border-radius:10px;background:color-mix(in srgb, var(--accent) 12%, transparent);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:16px"><i class="fas fa-edit"></i></div>
         <div id="editContactTitle" style="font-size:16px;font-weight:700;color:var(--text)">Kontakt bearbeiten</div>
       </div>
       <button onclick="closeEditContactModal()" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:13px"><i class="fas fa-times"></i></button>
@@ -3563,7 +3567,7 @@ document.getElementById('editContactInput')?.addEventListener('keydown', functio
   <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:420px;max-width:96vw;max-height:90vh;overflow-y:auto;display:flex;flex-direction:column">
     <div style="padding:22px 28px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:10px">
-        <div style="width:36px;height:36px;border-radius:10px;background:rgba(34,197,94,0.12);display:flex;align-items:center;justify-content:center;color:var(--green);font-size:16px"><i class="fas fa-phone"></i></div>
+        <div style="width:36px;height:36px;border-radius:10px;background:color-mix(in srgb, var(--green) 12%, transparent);display:flex;align-items:center;justify-content:center;color:var(--green);font-size:16px"><i class="fas fa-phone"></i></div>
         <div style="font-size:16px;font-weight:700;color:var(--text)">Anruf dokumentieren</div>
       </div>
       <button onclick="closeCallDocModal()" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:13px"><i class="fas fa-times"></i></button>
@@ -3572,7 +3576,7 @@ document.getElementById('editContactInput')?.addEventListener('keydown', functio
       <div style="background:var(--bg3);border-radius:10px;padding:12px 16px">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:6px">Telefonnummer</div>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <span id="callDocPhone" style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:var(--text);letter-spacing:.5px"></span>
+          <span id="callDocPhone" style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--text);letter-spacing:.5px"></span>
           <button onclick="copyCallPhone()" style="background:none;border:1px solid var(--border2);border-radius:6px;cursor:pointer;color:var(--text3);padding:3px 10px;font-size:11px;white-space:nowrap" title="Nummer kopieren"><i class="fas fa-copy"></i> Kopieren</button>
         </div>
         <div style="font-size:11px;color:var(--text3);margin-top:8px"><i class="fas fa-info-circle" style="margin-right:4px"></i>Rufe die Nummer manuell über dein Handy oder deine Telefon-App an und dokumentiere das Ergebnis hier.</div>
@@ -3698,7 +3702,7 @@ document.getElementById('editContactInput')?.addEventListener('keydown', functio
   <div style="background:var(--bg2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:460px;max-width:96vw;display:flex;flex-direction:column">
     <div style="padding:22px 28px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:10px">
-        <div style="width:36px;height:36px;border-radius:10px;background:rgba(27,115,205,0.12);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:16px"><i class="fas fa-toolbox"></i></div>
+        <div style="width:36px;height:36px;border-radius:10px;background:color-mix(in srgb, var(--accent) 12%, transparent);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:16px"><i class="fas fa-toolbox"></i></div>
         <div style="font-size:16px;font-weight:700;color:var(--text)" id="toolModalTitle">Tool hinzufügen</div>
       </div>
       <button onclick="closeToolModal()" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:13px"><i class="fas fa-times"></i></button>
@@ -3730,7 +3734,7 @@ document.getElementById('editContactInput')?.addEventListener('keydown', functio
 <div class="modal-overlay" id="csvImportModal">
   <div style="background:var(--bg2);border-radius:14px;box-shadow:var(--shadow-lg);padding:28px;width:460px;max-width:96vw">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-      <h2 style="font-size:16px;font-weight:700;margin:0"><i class="fas fa-upload" style="color:var(--accent);margin-right:8px"></i>CSV-Import</h2>
+      <h2 style="font-size:16px;font-weight:600;margin:0"><i class="fas fa-upload" style="color:var(--accent);margin-right:8px"></i>CSV-Import</h2>
       <button class="btn btn-ghost btn-sm" onclick="closeCsvImportModal()"><i class="fas fa-times"></i></button>
     </div>
     <div style="background:var(--bg3);border-radius:8px;padding:12px;font-size:12px;color:var(--text2);margin-bottom:16px;line-height:1.6">

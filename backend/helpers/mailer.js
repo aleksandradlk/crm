@@ -31,11 +31,11 @@ async function sendReminder({ to, toName, leadCompany, note, remindAt }) {
     to,
     subject: stripHeaders(`⏰ Reminder: ${leadCompany}`),
     html: `
-      <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:24px;background:#f9f9f9;border-radius:8px">
+      <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:24px;background:#f5f7fa;border-radius:8px">
         <img src="cid:${LOGO_CID}" alt="NovaFlow Services" width="160" style="display:block;margin-bottom:20px">
-        <h2 style="color:#4f8ef7;margin-bottom:8px">Erinnerung</h2>
+        <h2 style="color:#2c3a55;margin-bottom:8px">Erinnerung</h2>
         <p style="color:#333;margin-bottom:16px">Hallo ${esc(toName)},</p>
-        <div style="background:#fff;border-left:4px solid #4f8ef7;padding:16px;border-radius:4px;margin-bottom:16px">
+        <div style="background:#fff;border-left:4px solid #2c3a55;padding:16px;border-radius:4px;margin-bottom:16px">
           <strong>Lead:</strong> ${esc(leadCompany)}<br>
           <strong>Fällig:</strong> ${dateStr}<br>
           ${note ? `<strong>Notiz:</strong> ${esc(note)}` : ''}
@@ -70,11 +70,11 @@ async function sendLeadEmail({ to, subject, body, leadId, inReplyTo, references 
     ...(refList.length ? { references: refList }  : {}),
     headers: { 'X-CRM-Lead-ID': String(leadId) },
     html: `
-      <div style="font-family:Arial,sans-serif;max-width:580px;margin:0 auto;color:#141f34">
+      <div style="font-family:Arial,sans-serif;max-width:580px;margin:0 auto;color:#1a2330">
         ${body.includes('<') ? body : body.split('\n').map(l => l.trim() ? `<p style="margin:0 0 12px">${l}</p>` : '<br>').join('')}
-        <hr style="border:none;border-top:1px solid #e2e7f0;margin:24px 0">
+        <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
         <img src="cid:${LOGO_CID}" alt="NovaFlow Services" width="160" style="display:block;margin-bottom:12px">
-        <p style="color:#8e9ab5;font-size:12px">NovaFlow Services · info@novaflowservices.de</p>
+        <p style="color:#59616e;font-size:12px">NovaFlow Services · info@novaflowservices.de</p>
       </div>
     `,
     attachments: [LOGO_ATTACHMENT],
