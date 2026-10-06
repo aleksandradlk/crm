@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf9">
+<link rel="stylesheet" href="/shared/style.css?v=nf10">
 <style>
 .notif-panel{position:fixed;top:0;right:0;bottom:0;width:340px;background:var(--bg2);border-left:1px solid var(--border2);z-index:150;transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;padding:20px}
 .notif-panel.open{transform:translateX(0)}
@@ -100,9 +100,10 @@
     </div>
 
     <!-- BANNER: FÄLLIGE RÜCKRUFE -->
-    <div id="dueReminderBanner" style="display:none;align-items:center;gap:10px;cursor:pointer;background:color-mix(in srgb, var(--amber) 12%, transparent);border:1px solid var(--amber);color:var(--amber);border-radius:10px;padding:11px 16px;margin-bottom:16px;font-size:13px;font-weight:600" onclick="showSection('reminders')">
-      <i class="fas fa-flag"></i> <span id="dueReminderCount">0</span> Rückrufe heute fällig
-      <i class="fas fa-chevron-right" style="margin-left:auto;font-size:11px;opacity:.7"></i>
+    <div id="dueReminderBanner" class="due-banner" onclick="showSection('reminders')">
+      <i class="fas fa-bell"></i>
+      <span><span id="dueReminderCount">0</span> <span id="dueReminderLabel">Rückrufe heute fällig</span></span>
+      <i class="fas fa-chevron-right chev"></i>
     </div>
 
     <!-- MEINE LEADS -->
@@ -254,7 +255,11 @@
 
     <!-- REMINDERS -->
     <div id="sec-reminders" style="display:none">
-      <h1 class="page-title" data-eyebrow="Aufgaben">Meine Reminder</h1>
+      <div class="page-header">
+        <div><h1 data-eyebrow="Aufgaben">Meine Reminder</h1><p class="page-desc">Alle offenen Rückrufe und Erinnerungen, nach Fälligkeit sortiert.</p></div>
+        <div class="page-actions"><button class="btn btn-ghost btn-sm btn-icon" onclick="loadReminders()" title="Aktualisieren"><i class="fas fa-sync"></i></button></div>
+      </div>
+      <div class="dash-kpis" id="remStats"></div>
       <div id="remindersList"></div>
     </div>
 
@@ -493,7 +498,7 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf9"></script>
+<script src="/shared/api.js?v=nf10"></script>
 <script>
 const ME = Auth.getUser();
 const CAN = {
@@ -1529,35 +1534,102 @@ async function loadReminders() {
   try {
     const reminders = await api('GET', '/leads/reminders');
     const el = document.getElementById('remindersList');
+    const stats = document.getElementById('remStats');
+    const badge = document.getElementById('reminderBadge');
+
+    const startToday = new Date(); startToday.setHours(0,0,0,0);
+    const endToday = new Date(); endToday.setHours(23,59,59,999);
+    const endTomorrow = endToday.getTime() + 86400000;
+    const endWeek = endToday.getTime() + 6 * 86400000;
+    const bucketOf = r => {
+      const t = new Date(r.remind_at).getTime();
+      if (t < startToday.getTime()) return 'overdue';
+      if (t <= endToday.getTime()) return 'today';
+      if (t <= endTomorrow) return 'tomorrow';
+      if (t <= endWeek) return 'week';
+      return 'later';
+    };
+    const groups = { overdue: [], today: [], tomorrow: [], week: [], later: [] };
+    reminders.forEach(r => groups[bucketOf(r)].push(r));
+
+    if (stats) {
+      const kpi = (cls, icon, label, value, sub) =>
+        `<div class="kpi-card ${cls}"><div class="kpi-head"><span class="kpi-label">${label}</span><span class="kpi-icon"><i class="fas ${icon}"></i></span></div><div class="kpi-value">${value}</div><div class="kpi-sub">${sub}</div></div>`;
+      stats.innerHTML =
+        kpi('c-red', 'fa-exclamation-circle', 'Überfällig', groups.overdue.length, groups.overdue.length ? 'bitte zuerst abarbeiten' : 'nichts liegen geblieben') +
+        kpi('c-copper', 'fa-sun', 'Heute', groups.today.length, 'fällig bis Mitternacht') +
+        kpi('', 'fa-calendar-week', 'Nächste 7 Tage', groups.tomorrow.length + groups.week.length, `<b>${groups.tomorrow.length}</b> davon morgen`) +
+        kpi('c-ink', 'fa-bell', 'Offen gesamt', reminders.length, `<b>${groups.later.length}</b> später`);
+    }
+
+    if (badge) {
+      badge.textContent = reminders.length;
+      badge.style.display = reminders.length ? 'inline' : 'none';
+    }
+
     if (!reminders.length) {
-      el.innerHTML = '<div style="color:var(--text3);text-align:center;padding:40px"><i class="fas fa-bell" style="font-size:30px;display:block;margin-bottom:12px;opacity:.3"></i>Keine offenen Reminder</div>';
-      document.getElementById('reminderBadge').style.display = 'none';
+      el.innerHTML = '<div class="wiki-empty"><i class="fas fa-bell-slash"></i>Keine offenen Reminder. Rückrufe legst du direkt im Lead an, sie erscheinen dann hier.</div>';
       return;
     }
-    el.innerHTML = reminders.map(r => `
-      <div class="card" style="margin-bottom:10px">
-        <div class="card-body" style="padding:14px;display:flex;align-items:center;gap:14px">
-          <i class="fas fa-bell" style="color:var(--amber);font-size:18px;flex-shrink:0"></i>
-          <div style="flex:1;min-width:0">
-            <div style="font-weight:600;margin-bottom:2px">${escHtml(r.company||'—')}</div>
-            <div style="font-size:12px;color:var(--amber);margin-bottom:3px"><i class="fas fa-clock"></i> ${fmtDate(r.remind_at)}</div>
-            ${r.phone ? `
-            <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
-              <a href="tel:${escHtml(r.phone)}" style="font-size:13px;font-family:var(--font-mono);color:var(--text2);text-decoration:none" onclick="event.stopPropagation()">${escHtml(r.phone)}</a>
-              <button class="btn btn-ghost btn-sm" style="padding:2px 7px;font-size:11px;min-height:unset" onclick="event.stopPropagation();copyPhone('${escHtml(r.phone)}')" title="Kopieren"><i class="fas fa-copy"></i></button>
-            </div>` : ''}
-            ${r.note ? `<div style="font-size:12px;color:var(--text2);margin-top:3px">${escHtml(r.note)}</div>` : ''}
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-            ${statusBadge(r.status)}
-            <button class="btn btn-ghost btn-sm" onclick="openPanel(${r.lead_id})" title="Lead öffnen"><i class="fas fa-external-link-alt"></i></button>
-          </div>
-        </div>
-      </div>`).join('');
 
-    const badge = document.getElementById('reminderBadge');
-    badge.textContent = reminders.length;
-    badge.style.display = 'inline';
+    const GROUPS = [
+      ['overdue',  'Überfällig',     'fa-exclamation-circle'],
+      ['today',    'Heute',          'fa-sun'],
+      ['tomorrow', 'Morgen',         'fa-arrow-right'],
+      ['week',     'Nächste 7 Tage', 'fa-calendar-week'],
+      ['later',    'Später',         'fa-calendar'],
+    ];
+    el.innerHTML = GROUPS.filter(([k]) => groups[k].length).map(([k, label, icon]) => `
+      <div class="rem-group wiki-section is-${k}">
+        <div class="wiki-section-head"><div class="wiki-section-title"><i class="fas ${icon}"></i>${label} <span class="badge">${groups[k].length}</span></div></div>
+        <div class="rem-list">${groups[k].map(r => renderReminderCard(r, k)).join('')}</div>
+      </div>`).join('');
+  } catch (e) { showToast(e.message, 'err'); }
+}
+
+function relDue(d) {
+  const diffMin = Math.round((d.getTime() - Date.now()) / 60000);
+  const abs = Math.abs(diffMin);
+  let s;
+  if (abs < 60) s = `${abs} Min.`;
+  else if (abs < 24 * 60) { const h = Math.round(abs / 60); s = `${h} Std.`; }
+  else { const days = Math.round(abs / 1440); s = `${days} ${days === 1 ? 'Tag' : 'Tagen'}`; }
+  return diffMin < 0 ? `überfällig seit ${s}` : `in ${s}`;
+}
+
+function renderReminderCard(r, bucket) {
+  const d = new Date(r.remind_at);
+  const day = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+  const time = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  const cls = bucket === 'overdue' ? ' is-overdue' : bucket === 'today' ? ' is-today' : '';
+  const phone = r.phone ? escHtml(r.phone) : '';
+  return `
+    <div class="rem-card${cls}" onclick="openPanel(${r.lead_id})">
+      <div class="rem-when"><b>${bucket === 'today' ? time : day}</b><span>${bucket === 'today' ? 'heute' : time}</span></div>
+      <div class="rem-main">
+        <div class="rem-title">${escHtml(r.company||'—')} ${statusBadge(r.status)}</div>
+        ${r.note ? `<div class="rem-note">${escHtml(r.note)}</div>` : ''}
+        <div class="rem-meta">
+          <span class="rem-rel"><i class="fas fa-clock"></i>${relDue(d)}</span>
+          ${phone ? `<a href="tel:${phone}" onclick="event.stopPropagation()">${phone}</a>` : ''}
+        </div>
+      </div>
+      <div class="rem-actions" onclick="event.stopPropagation()">
+        ${phone ? `<a class="btn btn-ghost btn-sm btn-icon" href="tel:${phone}" title="Anrufen"><i class="fas fa-phone"></i></a>
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="copyPhone('${phone}')" title="Nummer kopieren"><i class="fas fa-copy"></i></button>` : ''}
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="finishReminder(${r.lead_id}, ${r.id})" title="Erledigt, Reminder entfernen"><i class="fas fa-check"></i></button>
+        <button class="btn btn-ghost btn-sm" onclick="openPanel(${r.lead_id})"><i class="fas fa-external-link-alt"></i> Lead öffnen</button>
+      </div>
+    </div>`;
+}
+
+async function finishReminder(leadId, rid) {
+  const ok = await customConfirm('Reminder als erledigt markieren? Er wird aus deiner Liste entfernt.', { title: 'Reminder erledigt', okLabel: 'Erledigt' });
+  if (!ok) return;
+  try {
+    await api('DELETE', `/leads/${leadId}/reminders/${rid}`);
+    showToast('Reminder erledigt ✓');
+    loadReminders();
   } catch (e) { showToast(e.message, 'err'); }
 }
 
@@ -1931,6 +2003,8 @@ function updateDueReminderBanner(reminders) {
   const due = reminders.filter(r => new Date(r.remind_at).getTime() <= todayEnd.getTime());
   if (due.length) {
     document.getElementById('dueReminderCount').textContent = due.length;
+    const lbl = document.getElementById('dueReminderLabel');
+    if (lbl) lbl.textContent = due.length === 1 ? 'Rückruf heute fällig' : 'Rückrufe heute fällig';
     banner.style.display = 'flex';
   } else {
     banner.style.display = 'none';
@@ -1959,19 +2033,15 @@ function showReminderPopup(due) {
   if (!container) return;
   due.slice(0, 3).forEach(r => {
     const card = document.createElement('div');
-    card.style.cssText = 'background:var(--bg2);border:1px solid var(--amber);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow-lg);margin-bottom:10px;max-width:320px;animation:slideIn .25s ease';
-    card.innerHTML = `
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
-        <div>
-          <div style="font-size:12px;font-weight:700;color:var(--amber);margin-bottom:2px"><i class="fas fa-bell"></i> Reminder fällig</div>
-          <div style="font-size:13px;font-weight:600">${escHtml(r.company||'—')}</div>
-          ${r.note ? `<div style="font-size:12px;color:var(--text2);margin-top:2px">${escHtml(r.note)}</div>` : ''}
-          <div style="font-size:11px;color:var(--text3);margin-top:3px">${fmtDate(r.remind_at)}</div>
-        </div>
-        <button onclick="this.closest('[data-notif]').remove()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;padding:0;line-height:1">×</button>
-      </div>
-      <button class="btn btn-ghost btn-sm" style="margin-top:8px;width:100%" onclick="openPanel(${r.lead_id});this.closest('[data-notif]').remove()">Lead öffnen</button>`;
+    card.className = 'rem-toast';
     card.setAttribute('data-notif', r.id);
+    card.innerHTML = `
+      <div class="rem-toast-eyebrow"><i class="fas fa-bell"></i> Reminder fällig</div>
+      <div class="rem-toast-title">${escHtml(r.company||'—')}</div>
+      ${r.note ? `<div class="rem-toast-note">${escHtml(r.note)}</div>` : ''}
+      <div class="rem-toast-time">${fmtDate(r.remind_at)}</div>
+      <button type="button" class="rem-toast-x" onclick="this.closest('[data-notif]').remove()" title="Schließen"><i class="fas fa-times"></i></button>
+      <button class="btn btn-primary btn-sm" onclick="openPanel(${r.lead_id});this.closest('[data-notif]').remove()"><i class="fas fa-external-link-alt"></i> Lead öffnen</button>`;
     container.appendChild(card);
     setTimeout(() => card.remove(), 30000);
   });
@@ -2488,7 +2558,7 @@ async function clSaveGeneratedLeads() {
 
 
 <!-- Reminder Notification Container -->
-<div id="reminderNotifContainer" style="position:fixed;bottom:24px;right:24px;z-index:600;max-width:340px"></div>
+<div id="reminderNotifContainer" class="rem-toast-stack"></div>
 
 <!-- MODAL: Einstellungen -->
 <div class="modal-overlay" id="settingsModal" onclick="if(event.target===this)closeSettingsModal()">

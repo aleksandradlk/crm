@@ -1330,6 +1330,60 @@ body.dark .feed-overlay { background: rgba(0,0,0,0.45); }
   .feed-panel { width: 100vw; }
 }
 
+/* ── Reminder ───────────────────────────────────────────────── */
+.kpi-card.c-red .kpi-icon { color: var(--red); background: color-mix(in srgb, var(--red) 11%, transparent); }
+.kpi-card.c-red .kpi-value { color: var(--red); }
+.due-banner { display: none; align-items: center; gap: 12px; cursor: pointer; background: color-mix(in srgb, var(--copper) 10%, transparent); border: 1px solid color-mix(in srgb, var(--copper) 35%, transparent); color: var(--copper-deep); border-radius: 12px; padding: 10px 14px; margin-bottom: 16px; font-size: 13px; font-weight: 600; transition: background 0.15s, border-color 0.15s; }
+.due-banner:hover { background: color-mix(in srgb, var(--copper) 15%, transparent); border-color: var(--copper); }
+.due-banner > i:first-child { width: 30px; height: 30px; border-radius: 9px; background: var(--copper); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
+.due-banner .chev { margin-left: auto; font-size: 11px; opacity: 0.7; }
+body.dark .due-banner { color: var(--copper-light); }
+.rem-group { margin-bottom: 26px; }
+.rem-group .wiki-section-title .badge { margin-left: 2px; }
+.rem-group.is-overdue .wiki-section-title > i { color: var(--red); background: color-mix(in srgb, var(--red) 11%, transparent); }
+.rem-group.is-today .wiki-section-title > i { color: var(--copper); background: color-mix(in srgb, var(--copper) 12%, transparent); }
+.rem-list { display: flex; flex-direction: column; gap: 8px; }
+.rem-card { display: grid; grid-template-columns: 88px minmax(0, 1fr) auto; gap: 16px; align-items: center; background: var(--bg2); border: 1px solid var(--border); border-left: 3px solid var(--navy-light); border-radius: 14px; padding: 12px 14px 12px 12px; box-shadow: var(--shadow); cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s; }
+.rem-card:hover { box-shadow: 0 6px 18px rgba(26,35,48,0.08); transform: translateY(-1px); }
+.rem-card.is-overdue { border-left-color: var(--red); }
+.rem-card.is-today { border-left-color: var(--copper); }
+.rem-when { text-align: center; padding: 7px 4px; border-radius: 10px; background: var(--bg3); }
+.rem-when b { display: block; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--text); }
+.rem-when span { display: block; font-size: 11px; color: var(--text3); font-family: var(--font-mono); margin-top: 3px; }
+.rem-card.is-overdue .rem-when { background: color-mix(in srgb, var(--red) 10%, transparent); }
+.rem-card.is-overdue .rem-when b { color: var(--red); }
+.rem-card.is-today .rem-when { background: color-mix(in srgb, var(--copper) 12%, transparent); }
+.rem-card.is-today .rem-when b { color: var(--copper); }
+.rem-main { min-width: 0; }
+.rem-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; }
+.rem-note { font-size: 12.5px; color: var(--text2); margin-top: 3px; line-height: 1.45; overflow-wrap: anywhere; }
+.rem-meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 7px; font-size: 12px; color: var(--text3); }
+.rem-meta a { color: var(--text2); font-family: var(--font-mono); font-size: 12px; text-decoration: none; }
+.rem-meta a:hover { color: var(--navy); }
+.rem-rel { display: inline-flex; align-items: center; gap: 5px; }
+.rem-card.is-overdue .rem-rel { color: var(--red); font-weight: 600; }
+.rem-card.is-today .rem-rel { color: var(--copper); font-weight: 600; }
+.rem-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.rem-actions .btn-icon { width: 34px; height: 34px; }
+.rem-actions .btn-sm { height: 34px; }
+.rem-toast-stack { position: fixed; bottom: 24px; right: 24px; z-index: 600; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+.rem-toast { position: relative; background: var(--bg2); border: 1px solid var(--border); border-left: 3px solid var(--copper); border-radius: 12px; padding: 12px 14px; box-shadow: var(--shadow-lg); width: 320px; max-width: calc(100vw - 32px); animation: rem-in 0.25s ease; }
+.rem-toast-eyebrow { font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--copper); display: flex; align-items: center; gap: 6px; }
+.rem-toast-title { font-size: 13px; font-weight: 600; margin-top: 5px; padding-right: 26px; }
+.rem-toast-note { font-size: 12px; color: var(--text2); margin-top: 2px; line-height: 1.4; }
+.rem-toast-time { font-size: 11px; color: var(--text3); margin-top: 4px; font-family: var(--font-mono); }
+.rem-toast-x { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; border-radius: 7px; border: 0; background: transparent; color: var(--text3); cursor: pointer; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; }
+.rem-toast-x:hover { background: var(--bg3); color: var(--text); }
+.rem-toast .btn { margin-top: 10px; width: 100%; }
+@keyframes rem-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (max-width: 640px) {
+  .rem-card { grid-template-columns: 72px minmax(0, 1fr); gap: 12px; padding: 12px; }
+  .rem-when b { font-size: 15px; }
+  .rem-actions { grid-column: 1 / -1; justify-content: flex-end; padding-top: 8px; border-top: 1px solid var(--border); }
+  .rem-toast-stack { left: 16px; right: 16px; bottom: 16px; align-items: stretch; }
+  .rem-toast { width: auto; }
+}
+
 /* ── Reduzierte Bewegung ─────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
