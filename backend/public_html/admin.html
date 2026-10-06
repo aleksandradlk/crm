@@ -107,8 +107,8 @@
 
     <!-- ── TAB: DASHBOARD ───────────────────────────────── -->
     <div id="tab-dashboard" class="tab-panel active">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-        <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Dashboard</h1>
+      <div class="page-header">
+        <div><h1 data-eyebrow="Übersicht">Dashboard</h1><p class="page-desc" id="dashDate"></p></div>
         <button class="btn btn-ghost btn-sm" onclick="loadDashboard()"><i class="fas fa-sync"></i> Aktualisieren</button>
       </div>
       <div id="dashboardContent"></div>
@@ -116,32 +116,35 @@
 
     <!-- ── TAB: LEADS ─────────────────────────────────── -->
     <div id="tab-leads" class="tab-panel">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
-        <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Alle Leads</h1>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <input type="text" id="searchInput" class="form-control" style="width:200px" placeholder="Suchen..." autocomplete="new-password" oninput="filterLeads()">
-          <select id="statusFilter" class="form-control" style="width:150px" onchange="filterLeads()">
-            <option value="">Alle Status</option>
-            <option value="neu">Neu</option>
-            <option value="kontaktiert">Kontaktiert</option>
-            <option value="nicht_erreicht">Nicht erreicht</option>
-            <option value="kein_interesse">Kein Interesse</option>
-            <option value="rueckruf">Rückruf</option>
-            <option value="kunde">Kunde</option>
-          </select>
-          <select id="closerFilter" class="form-control" style="width:150px" onchange="filterLeads()">
-            <option value="">Alle Closer</option>
-          </select>
-          <button class="btn btn-primary btn-sm" onclick="openAddLeadModal()"><i class="fas fa-plus"></i> Lead hinzufügen</button>
+      <div class="page-header">
+        <h1 data-eyebrow="Leads">Alle Leads</h1>
+        <div class="page-actions">
           <button class="btn btn-ghost btn-sm" onclick="openCsvImportModal()"><i class="fas fa-upload"></i> CSV Import</button>
           <button class="btn btn-ghost btn-sm" onclick="exportCSV()"><i class="fas fa-download"></i> CSV Export</button>
-          <button class="btn btn-ghost btn-sm" onclick="toggleActivityFeed()" title="Aktivitäts-Feed"><i class="fas fa-stream"></i></button>
-          <div class="view-toggle">
-            <button id="allLeadsViewTable" class="active" onclick="setLeadsView('table')"><i class="fas fa-table"></i> Tabelle</button>
-            <button id="allLeadsViewPipeline" onclick="setLeadsView('pipeline')"><i class="fas fa-columns"></i> Pipeline</button>
-          </div>
-          <button class="btn btn-ghost btn-sm" onclick="loadLeads()"><i class="fas fa-sync"></i></button>
+          <button class="btn btn-primary btn-sm" onclick="openAddLeadModal()"><i class="fas fa-plus"></i> Lead hinzufügen</button>
         </div>
+      </div>
+      <div class="toolbar">
+        <div class="search-bar"><i class="fas fa-search search-bar-icon"></i><input type="text" id="searchInput" class="form-control" placeholder="Leads durchsuchen …" autocomplete="new-password" oninput="filterLeads()"></div>
+        <select id="statusFilter" class="form-control" onchange="filterLeads()">
+          <option value="">Alle Status</option>
+          <option value="neu">Neu</option>
+          <option value="kontaktiert">Kontaktiert</option>
+          <option value="nicht_erreicht">Nicht erreicht</option>
+          <option value="kein_interesse">Kein Interesse</option>
+          <option value="rueckruf">Rückruf</option>
+          <option value="kunde">Kunde</option>
+        </select>
+        <select id="closerFilter" class="form-control" onchange="filterLeads()">
+          <option value="">Alle Closer</option>
+        </select>
+        <div class="toolbar-spacer"></div>
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="toggleActivityFeed()" title="Aktivitäts-Feed"><i class="fas fa-stream"></i></button>
+        <div class="view-toggle">
+          <button id="allLeadsViewTable" class="active" onclick="setLeadsView('table')"><i class="fas fa-table"></i> Tabelle</button>
+          <button id="allLeadsViewPipeline" onclick="setLeadsView('pipeline')"><i class="fas fa-columns"></i> Pipeline</button>
+        </div>
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="loadLeads()" title="Aktualisieren"><i class="fas fa-sync"></i></button>
       </div>
 
       <div class="stats-grid" style="margin-bottom:16px">
@@ -195,9 +198,9 @@
 
     <!-- ── TAB: MEINE LEADS ─────────────────────────── -->
     <div id="tab-myLeads" class="tab-panel">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
-        <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Meine Leads</h1>
-        <div style="display:flex;gap:8px;align-items:center">
+      <div class="page-header">
+        <h1 data-eyebrow="Leads">Meine Leads</h1>
+        <div class="page-actions">
           <div class="view-toggle">
             <button id="myLeadsViewTable" class="active" onclick="setMyLeadsView('table')"><i class="fas fa-table"></i> Tabelle</button>
             <button id="myLeadsViewPipeline" onclick="setMyLeadsView('pipeline')"><i class="fas fa-columns"></i> Pipeline</button>
@@ -230,7 +233,7 @@
 
     <!-- ── TAB: GENERATE ──────────────────────────────── -->
     <div id="tab-generate" class="tab-panel">
-      <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em;margin-bottom:20px">Leads generieren</h1>
+      <h1 class="page-title" data-eyebrow="Leads">Leads generieren</h1>
       <div class="gen-grid" style="display:grid;grid-template-columns:320px 1fr;gap:20px;align-items:start">
 
         <div class="card">
@@ -312,8 +315,8 @@
 
     <!-- ── TAB: USERS ─────────────────────────────────── -->
     <div id="tab-users" class="tab-panel">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-        <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Benutzerverwaltung</h1>
+      <div class="page-header">
+        <h1 data-eyebrow="Administration">Benutzerverwaltung</h1>
         <button class="btn btn-primary btn-sm" onclick="openUserModal()"><i class="fas fa-plus"></i> Neuer Benutzer</button>
       </div>
       <div class="card" style="margin-bottom:16px;padding:14px 16px">
@@ -344,10 +347,10 @@
 
     <!-- ── TAB: TRACKING ──────────────────────────────── -->
     <div id="tab-tracking" class="tab-panel">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-        <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Aktivitäts-Tracking</h1>
-        <div style="display:flex;gap:8px;align-items:center">
-          <select id="trackingUserFilter" class="input" style="font-size:13px;padding:6px 10px" onchange="loadTracking()">
+      <div class="page-header">
+        <h1 data-eyebrow="Administration">Aktivitäts-Tracking</h1>
+        <div class="page-actions">
+          <select id="trackingUserFilter" class="form-control" onchange="loadTracking()">
             <option value="">Alle Benutzer</option>
           </select>
           <button class="btn btn-ghost btn-sm" onclick="downloadActivityLog()"><i class="fas fa-download"></i> CSV</button>
@@ -377,7 +380,7 @@
 
     <!-- ── TAB: WIKI ─────────────────────────────────── -->
     <div id="tab-wiki" class="tab-panel">
-      <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em;margin-bottom:20px">Wissensdatenbank</h1>
+      <h1 class="page-title" data-eyebrow="Ressourcen">Wissensdatenbank</h1>
 
       <!-- E-Mail Vorlagen -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
@@ -415,8 +418,8 @@
     <!-- ── TAB: CHAT ─────────────────────────────────── -->
     <div id="tab-chat" class="tab-panel">
       <div id="chatListView">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-          <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Rücksprachen</h1>
+        <div class="page-header">
+          <h1 data-eyebrow="Ressourcen">Rücksprachen</h1>
           <button class="btn btn-primary btn-sm" onclick="openCreateChat()"><i class="fas fa-plus"></i> Neues Gespräch</button>
         </div>
         <div id="chatList"></div>
@@ -424,7 +427,7 @@
       <div id="chatDetailView" style="display:none">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
           <button class="btn btn-ghost btn-sm" onclick="backToChats()"><i class="fas fa-arrow-left"></i> Zurück</button>
-          <h1 style="font-size:18px;font-weight:600;letter-spacing:-0.02em;flex:1;margin:0" id="chatDetailTitle"></h1>
+          <h1 class="h1-inline" id="chatDetailTitle"></h1>
           <button class="btn btn-ghost btn-sm" id="chatInviteBtn" onclick="openChatInvite()"><i class="fas fa-user-plus"></i> Einladen</button>
           <button class="btn btn-ghost btn-sm" id="chatCloseBtn" onclick="closeChatRoom()" style="color:var(--red)"><i class="fas fa-times-circle"></i> Beenden</button>
         </div>
@@ -442,9 +445,9 @@
 
     <!-- ── TAB: FEEDBACK-BOARD ───────────────────────── -->
     <div id="tab-feedback" class="tab-panel">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-        <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Feedback-Board</h1>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <div class="page-header">
+        <h1 data-eyebrow="Ressourcen">Feedback-Board</h1>
+        <div class="page-actions">
           <button class="btn btn-primary btn-sm" onclick="openAdminFeedbackModal()"><i class="fas fa-plus"></i> Neu eintragen</button>
           <select id="fbTagFilter" class="form-control" style="width:160px" onchange="renderFeedbackList()">
             <option value="">Alle Tags</option>
@@ -461,9 +464,9 @@
 
     <!-- ── TAB: AGENTEN ─────────────────────────────── -->
     <div id="tab-agents" class="tab-panel">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-        <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Agenten</h1>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <div class="page-header">
+        <h1 data-eyebrow="Ressourcen">Agenten</h1>
+        <div class="page-actions">
           <button class="btn btn-primary btn-sm" onclick="openAgentLogModal()"><i class="fas fa-plus"></i> Neu</button>
           <select id="agentFilter" class="form-control" style="width:180px" onchange="renderAgentLog()">
             <option value="">Alle Agenten</option>
@@ -481,16 +484,16 @@
 
     <!-- ── TAB: ARCHIV ──────────────────────────────── -->
     <div id="tab-archive" class="tab-panel">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-        <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Archivierte Leads</h1>
+      <div class="page-header">
+        <h1 data-eyebrow="Ressourcen">Archivierte Leads</h1>
         <button class="btn btn-ghost btn-sm" onclick="loadArchive()"><i class="fas fa-sync"></i> Aktualisieren</button>
       </div>
       <div id="archiveList"></div>
     </div>
 
     <div id="tab-tools" class="tab-panel">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
-        <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Tools verwalten</h1>
+      <div class="page-header">
+        <h1 data-eyebrow="Administration">Tools verwalten</h1>
         <button class="btn btn-primary btn-sm" onclick="openToolModal()"><i class="fas fa-plus"></i> Tool hinzufügen</button>
       </div>
       <div class="card" style="overflow:hidden">
@@ -2966,6 +2969,7 @@ function renderDashboard(data) {
 // ── INIT ──────────────────────────────────────────────────────
 const _b = document.getElementById('leadsTableBody'); if (_b) _b.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3)"><i class="fas fa-spinner fa-spin"></i></td></tr>';
 showTab('dashboard');
+(function(){ const el = document.getElementById('dashDate'); if (el) el.textContent = new Date().toLocaleDateString('de-DE', { weekday:'long', day:'numeric', month:'long', year:'numeric' }); })();
 loadToolsTab();
 loadClosersForSelect();
 checkReminderNotifications();
