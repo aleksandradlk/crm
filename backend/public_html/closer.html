@@ -90,7 +90,7 @@
   <main class="main-content">
 
     <!-- CLOSER DASHBOARD BAR -->
-    <div id="closerDashBar" style="margin-bottom:16px;padding:12px 16px;background:var(--bg2);border-radius:10px;border:1px solid var(--border)">
+    <div id="closerDashBar" class="card" style="margin-bottom:20px;padding:14px 18px">
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:10px">
         <div style="text-align:center">
           <div style="font-size:22px;font-weight:700;color:var(--accent)" id="cdb-today">—</div>
@@ -129,26 +129,29 @@
 
     <!-- MEINE LEADS -->
     <div id="sec-myLeads">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
-        <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Meine Leads</h1>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div class="page-header">
+        <h1 data-eyebrow="Leads">Meine Leads</h1>
+        <div class="page-actions">
           <button class="btn btn-primary btn-sm" onclick="openAddLeadModal()"><i class="fas fa-plus"></i> Lead hinzufügen</button>
-          <input type="text" id="mySearch" class="form-control" style="width:160px" placeholder="Suchen..." autocomplete="new-password" oninput="filterMyLeads()">
-          <select id="myStatusFilter" class="form-control" style="width:140px" onchange="filterMyLeads()">
-            <option value="">Alle Status</option>
-            <option value="neu">Neu</option>
-            <option value="kontaktiert">Kontaktiert</option>
-            <option value="nicht_erreicht">Nicht erreicht</option>
-            <option value="kein_interesse">Kein Interesse</option>
-            <option value="rueckruf">Rückruf</option>
-            <option value="kunde">Kunde</option>
-          </select>
-          <div class="view-toggle">
-            <button id="myViewTableBtn" class="active" onclick="setMyLeadsView('table')"><i class="fas fa-table"></i> Tabelle</button>
-            <button id="myViewPipelineBtn" class="mob-hide" onclick="setMyLeadsView('pipeline')"><i class="fas fa-columns"></i> Pipeline</button>
-          </div>
-          <button class="btn btn-ghost btn-sm" onclick="loadLeads()"><i class="fas fa-sync"></i></button>
         </div>
+      </div>
+      <div class="toolbar">
+        <div class="search-bar"><i class="fas fa-search search-bar-icon"></i><input type="text" id="mySearch" class="form-control" placeholder="Leads durchsuchen …" autocomplete="new-password" oninput="filterMyLeads()"></div>
+        <select id="myStatusFilter" class="form-control" onchange="filterMyLeads()">
+          <option value="">Alle Status</option>
+          <option value="neu">Neu</option>
+          <option value="kontaktiert">Kontaktiert</option>
+          <option value="nicht_erreicht">Nicht erreicht</option>
+          <option value="kein_interesse">Kein Interesse</option>
+          <option value="rueckruf">Rückruf</option>
+          <option value="kunde">Kunde</option>
+        </select>
+        <div class="toolbar-spacer"></div>
+        <div class="view-toggle">
+          <button id="myViewTableBtn" class="active" onclick="setMyLeadsView('table')"><i class="fas fa-table"></i> Tabelle</button>
+          <button id="myViewPipelineBtn" class="mob-hide" onclick="setMyLeadsView('pipeline')"><i class="fas fa-columns"></i> Pipeline</button>
+        </div>
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="loadLeads()" title="Aktualisieren"><i class="fas fa-sync"></i></button>
       </div>
 
       <div class="stats-grid" style="margin-bottom:16px">
@@ -190,25 +193,26 @@
 
     <!-- ALLE LEADS -->
     <div id="sec-allLeads" style="display:none">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
-        <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Alle Leads</h1>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <input type="text" id="allSearch" class="form-control" style="width:180px" placeholder="Suchen..." autocomplete="new-password" oninput="filterAllLeads()">
-          <select id="allStatusFilter" class="form-control" style="width:150px" onchange="filterAllLeads()">
-            <option value="">Alle Status</option>
-            <option value="neu">Neu</option>
-            <option value="kontaktiert">Kontaktiert</option>
-            <option value="nicht_erreicht">Nicht erreicht</option>
-            <option value="kein_interesse">Kein Interesse</option>
-            <option value="rueckruf">Rückruf</option>
-            <option value="kunde">Kunde</option>
-          </select>
-          <select id="allAssignFilter" class="form-control" style="width:150px" onchange="filterAllLeads()">
-            <option value="">Alle Zuweisungen</option>
-            <option value="none">Nicht zugewiesen</option>
-          </select>
-          <button class="btn btn-ghost btn-sm" onclick="loadLeads()"><i class="fas fa-sync"></i></button>
-        </div>
+      <div class="page-header">
+        <h1 data-eyebrow="Leads">Alle Leads</h1>
+      </div>
+      <div class="toolbar">
+        <div class="search-bar"><i class="fas fa-search search-bar-icon"></i><input type="text" id="allSearch" class="form-control" placeholder="Leads durchsuchen …" autocomplete="new-password" oninput="filterAllLeads()"></div>
+        <select id="allStatusFilter" class="form-control" onchange="filterAllLeads()">
+          <option value="">Alle Status</option>
+          <option value="neu">Neu</option>
+          <option value="kontaktiert">Kontaktiert</option>
+          <option value="nicht_erreicht">Nicht erreicht</option>
+          <option value="kein_interesse">Kein Interesse</option>
+          <option value="rueckruf">Rückruf</option>
+          <option value="kunde">Kunde</option>
+        </select>
+        <select id="allAssignFilter" class="form-control" onchange="filterAllLeads()">
+          <option value="">Alle Zuweisungen</option>
+          <option value="none">Nicht zugewiesen</option>
+        </select>
+        <div class="toolbar-spacer"></div>
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="loadLeads()" title="Aktualisieren"><i class="fas fa-sync"></i></button>
       </div>
 
       <div class="stats-grid" style="margin-bottom:16px">
@@ -244,7 +248,7 @@
 
     <!-- WIKI -->
     <div id="sec-wiki" style="display:none">
-      <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em;margin-bottom:20px">Wissensdatenbank</h1>
+      <h1 class="page-title" data-eyebrow="Ressourcen">Wissensdatenbank</h1>
 
       <!-- Pinned Willkommenskarte -->
       <div style="background:color-mix(in srgb, var(--accent) 8%, transparent);border:1px solid color-mix(in srgb, var(--accent) 35%, transparent);border-radius:12px;padding:18px 20px;margin-bottom:20px">
@@ -265,15 +269,15 @@
 
     <!-- REMINDERS -->
     <div id="sec-reminders" style="display:none">
-      <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em;margin-bottom:20px">Meine Reminder</h1>
+      <h1 class="page-title" data-eyebrow="Aufgaben">Meine Reminder</h1>
       <div id="remindersList"></div>
     </div>
 
     <!-- CHAT -->
     <div id="sec-chat" style="display:none">
       <div id="chatListView">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-          <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Rücksprachen</h1>
+        <div class="page-header">
+          <h1 data-eyebrow="Ressourcen">Rücksprachen</h1>
           <button class="btn btn-primary btn-sm" onclick="openCreateChat()"><i class="fas fa-plus"></i> Neues Gespräch</button>
         </div>
         <div id="chatList"></div>
@@ -281,7 +285,7 @@
       <div id="chatDetailView" style="display:none">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
           <button class="btn btn-ghost btn-sm" onclick="backToChats()"><i class="fas fa-arrow-left"></i> Zurück</button>
-          <h1 style="font-size:18px;font-weight:600;letter-spacing:-0.02em;flex:1;margin:0" id="chatDetailTitle"></h1>
+          <h1 class="h1-inline" id="chatDetailTitle"></h1>
           <button class="btn btn-ghost btn-sm" id="chatInviteBtn" onclick="openChatInvite()"><i class="fas fa-user-plus"></i> Einladen</button>
           <button class="btn btn-ghost btn-sm" id="chatCloseBtn" onclick="closeChatRoom()" title="Gespräch beenden" style="color:var(--red)"><i class="fas fa-times-circle"></i> Beenden</button>
         </div>
@@ -299,9 +303,9 @@
 
     <!-- FEEDBACK -->
     <div id="sec-feedback" style="display:none">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px">
-        <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Feedback-Board</h1>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <div class="page-header">
+        <h1 data-eyebrow="Ressourcen">Feedback-Board</h1>
+        <div class="page-actions">
           <button class="btn btn-primary btn-sm" onclick="openFeedbackModal()"><i class="fas fa-plus"></i> Neu eintragen</button>
           <select id="myFbFilter" class="form-control" style="width:160px" onchange="loadMyFeedback()">
             <option value="">Alle Tags</option>
@@ -318,7 +322,7 @@
 
     <!-- BENUTZER ANLEGEN (nur bei can_create_users) -->
     <div id="sec-createUser" style="display:none;max-width:480px">
-      <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em;margin-bottom:20px">Benutzer anlegen</h1>
+      <h1 class="page-title" data-eyebrow="Administration">Benutzer anlegen</h1>
       <div class="card">
         <div class="card-body" style="padding:20px">
           <div class="form-group">
@@ -349,7 +353,7 @@
 
     <!-- LEADS GENERIEREN (nur bei can_generate_leads) -->
     <div id="sec-generateLeads" style="display:none">
-      <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em;margin-bottom:20px">Leads generieren</h1>
+      <h1 class="page-title" data-eyebrow="Leads">Leads generieren</h1>
       <div class="clgen-grid" style="display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start">
         <div class="card">
           <div class="card-header"><div class="card-title"><i class="fas fa-sliders-h" style="color:var(--accent)"></i> Suchparameter</div></div>
