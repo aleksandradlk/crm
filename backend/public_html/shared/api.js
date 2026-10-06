@@ -169,8 +169,8 @@ function confBar(val) {
 function ageBadge(dateStr) {
   if (!dateStr) return '';
   const days = Math.floor((Date.now() - new Date(dateStr)) / 86400000);
-  if (days >= 30) return `<span style="background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;white-space:nowrap;vertical-align:middle" title="${days} Tage keine Aktivität"><i class="fas fa-fire"></i> ${days}T</span>`;
-  if (days >= 14) return `<span style="background:var(--amber);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;white-space:nowrap;vertical-align:middle" title="${days} Tage keine Aktivität"><i class="fas fa-clock"></i> ${days}T</span>`;
+  if (days >= 30) return `<span class="age-badge hot" title="${days} Tage keine Aktivität"><i class="fas fa-fire"></i> ${days}T</span>`;
+  if (days >= 14) return `<span class="age-badge warm" title="${days} Tage keine Aktivität"><i class="fas fa-clock"></i> ${days}T</span>`;
   return '';
 }
 

@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf8">
+<link rel="stylesheet" href="/shared/style.css?v=nf9">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -17,24 +17,6 @@
 .tr-meta{font-size:11px;color:var(--text3)}
 .tr-right{margin-left:auto;text-align:right}
 .tr-time{font-size:12px;font-family:var(--font-mono);color:var(--text2)}
-.view-toggle{display:flex;border:1px solid var(--border2);border-radius:8px;overflow:hidden}
-.view-toggle button{background:var(--bg3);border:none;color:var(--text3);padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px}
-.view-toggle button.active{background:var(--accent);color:var(--accent-fg)}
-/* Pipeline */
-.pipeline-board{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;overscroll-behavior-x:contain}
-.pipeline-col{flex:1 1 0;min-width:176px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);display:flex;flex-direction:column;max-height:calc(100vh - 280px);min-height:200px}
-.pipeline-col-header{padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;color:var(--text2)}
-.pipeline-col-body{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:8px;min-height:80px;transition:background .15s}
-.pipeline-col-body.drag-over{background:color-mix(in srgb, var(--accent) 10%, transparent)}
-.pipeline-card{background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;cursor:grab;font-size:12px}
-.pipeline-card:active{cursor:grabbing}
-.pipeline-card.dragging{opacity:.35}
-.pipeline-card .pc-company{font-weight:700;font-size:13px;margin-bottom:4px}
-.pipeline-card .pc-row{display:flex;align-items:center;gap:6px;color:var(--text3);font-size:11px;margin-top:3px}
-.qf-btn{background:var(--bg3);border:1px solid var(--border2);border-radius:20px;padding:4px 12px;font-size:11px;font-weight:600;color:var(--text3);cursor:pointer;transition:all .15s}
-.qf-btn:hover{border-color:var(--accent);color:var(--accent)}
-.qf-btn.active{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
-.qf-btn i{margin-right:4px}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 </head>
@@ -101,13 +83,21 @@
     <!-- ── TAB: LEADS ─────────────────────────────────── -->
     <div id="tab-leads" class="tab-panel">
       <div class="page-header">
-        <h1 data-eyebrow="Leads">Alle Leads</h1>
+        <div><h1 data-eyebrow="Leads">Alle Leads</h1><p class="page-desc">Komplette Lead-Datenbank mit Status, Zuweisung und Funnel.</p></div>
         <div class="page-actions">
           <button class="btn btn-ghost btn-sm" onclick="openCsvImportModal()"><i class="fas fa-upload"></i> CSV Import</button>
           <button class="btn btn-ghost btn-sm" onclick="exportCSV()"><i class="fas fa-download"></i> CSV Export</button>
           <button class="btn btn-primary btn-sm" onclick="openAddLeadModal()"><i class="fas fa-plus"></i> Lead hinzufügen</button>
         </div>
       </div>
+
+      <div class="dash-kpis">
+        <div class="kpi-card "><div class="kpi-head"><span class="kpi-label">Gesamt</span><span class="kpi-icon"><i class="fas fa-layer-group"></i></span></div><div class="kpi-value" id="st-total">—</div><div class="kpi-sub"><b id="st-unassigned">—</b> nicht zugewiesen</div></div>
+        <div class="kpi-card c-ink"><div class="kpi-head"><span class="kpi-label">Heute neu</span><span class="kpi-icon"><i class="fas fa-star"></i></span></div><div class="kpi-value" id="st-heute">—</div><div class="kpi-sub"><b id="st-woche">—</b> in den letzten 7 Tagen</div></div>
+        <div class="kpi-card c-copper"><div class="kpi-head"><span class="kpi-label">Rückrufe</span><span class="kpi-icon"><i class="fas fa-phone-volume"></i></span></div><div class="kpi-value" id="st-rueckruf">—</div><div class="kpi-sub">offen im Status „Rückruf“</div></div>
+        <div class="kpi-card c-green"><div class="kpi-head"><span class="kpi-label">Kunden</span><span class="kpi-icon"><i class="fas fa-trophy"></i></span></div><div class="kpi-value" id="st-kunde">—</div><div class="kpi-sub">Abschlussquote <b id="st-quote">—</b></div></div>
+      </div>
+
       <div class="toolbar">
         <div class="search-bar"><i class="fas fa-search search-bar-icon"></i><input type="text" id="searchInput" class="form-control" placeholder="Leads durchsuchen …" autocomplete="new-password" oninput="filterLeads()"></div>
         <select id="statusFilter" class="form-control" onchange="filterLeads()">
@@ -131,43 +121,34 @@
         <button class="btn btn-ghost btn-sm btn-icon" onclick="loadLeads()" title="Aktualisieren"><i class="fas fa-sync"></i></button>
       </div>
 
-      <div class="stats-grid" style="margin-bottom:16px">
-        <div class="stat-card"><div class="stat-label">Gesamt</div><div class="stat-value sv-blue" id="st-total">—</div></div>
-        <div class="stat-card"><div class="stat-label">Heute neu</div><div class="stat-value sv-accent" id="st-heute" style="color:var(--accent)">—</div></div>
-        <div class="stat-card"><div class="stat-label">Rückrufe</div><div class="stat-value" id="st-rueckruf" style="color:var(--amber)">—</div></div>
-        <div class="stat-card"><div class="stat-label">Kunden</div><div class="stat-value sv-amber" id="st-kunde">—</div></div>
+      <div class="quick-filters" id="adminQuickFilters">
+        <button class="qf-btn active" data-qf="all" onclick="adminQuickFilter('all',this)">Alle<span class="qf-count">0</span></button>
+        <button class="qf-btn" data-qf="nicht_zugewiesen" onclick="adminQuickFilter('nicht_zugewiesen',this)"><i class="fas fa-user-slash"></i>Nicht zugewiesen<span class="qf-count">0</span></button>
+        <button class="qf-btn" data-qf="rueckruf" onclick="adminQuickFilter('rueckruf',this)"><i class="fas fa-bell"></i>Rückrufe<span class="qf-count">0</span></button>
+        <button class="qf-btn" data-qf="neu_woche" onclick="adminQuickFilter('neu_woche',this)"><i class="fas fa-star"></i>Neu diese Woche<span class="qf-count">0</span></button>
+        <button class="qf-btn" data-qf="kunden" onclick="adminQuickFilter('kunden',this)"><i class="fas fa-trophy"></i>Kunden<span class="qf-count">0</span></button>
       </div>
 
-      <!-- Feature 9: Schnellfilter -->
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
-        <button class="qf-btn active" onclick="adminQuickFilter('all',this)">Alle</button>
-        <button class="qf-btn" onclick="adminQuickFilter('nicht_zugewiesen',this)"><i class="fas fa-user-slash"></i> Nicht zugewiesen</button>
-        <button class="qf-btn" onclick="adminQuickFilter('rueckruf',this)"><i class="fas fa-bell"></i> Rückrufe</button>
-        <button class="qf-btn" onclick="adminQuickFilter('neu_woche',this)"><i class="fas fa-star"></i> Neu diese Woche</button>
-        <button class="qf-btn" onclick="adminQuickFilter('kunden',this)"><i class="fas fa-trophy"></i> Kunden</button>
-      </div>
-
-      <!-- Bulk-Action-Bar -->
-      <div id="bulkBar" style="display:none;align-items:center;gap:10px;background:color-mix(in srgb, var(--accent) 10%, transparent);border:1px solid color-mix(in srgb, var(--accent) 35%, transparent);border-radius:10px;padding:10px 14px;margin-bottom:12px;flex-wrap:wrap">
-        <span id="bulkCount" style="font-size:13px;font-weight:600;color:var(--accent)">0 ausgewählt</span>
-        <span style="color:var(--border2)">|</span>
-        <span style="font-size:13px;color:var(--text2)">Zuweisen an:</span>
-        <select id="bulkAssignSelect" class="form-control" style="width:180px"></select>
+      <div id="bulkBar" class="bulk-bar">
+        <span class="bulk-count" id="bulkCount">0 ausgewählt</span>
+        <span class="bulk-sep"></span>
+        <span class="bulk-label">Zuweisen an</span>
+        <select id="bulkAssignSelect" class="form-control"></select>
         <button class="btn btn-primary btn-sm" onclick="executeBulkAssign()"><i class="fas fa-user-tag"></i> Zuweisen</button>
         <button class="btn btn-ghost btn-sm" onclick="clearBulkSelection()"><i class="fas fa-times"></i> Abbrechen</button>
       </div>
 
-      <div id="funnelSummary" style="margin-bottom:16px"></div>
+      <div id="funnelSummary"></div>
 
       <div id="allLeadsTableCard" class="card">
         <div class="card-header">
-          <div class="card-title"><i class="fas fa-database" style="color:var(--accent)"></i> Lead-Datenbank <span class="badge" id="leadCount">0</span></div>
+          <div class="card-title"><i class="fas fa-database"></i> Lead-Datenbank <span class="badge" id="leadCount">0</span></div>
         </div>
         <div class="table-wrap">
-          <table>
+          <table class="has-select">
             <thead><tr>
-              <th style="width:32px"><input type="checkbox" id="selectAllLeads" title="Alle auswählen" onchange="toggleAllLeadsSelect(this.checked)" style="accent-color:var(--accent)"></th>
-              <th>#</th><th>Unternehmen</th><th>Geschäftsführer</th><th>Kontakt</th>
+              <th class="cell-check"><input type="checkbox" id="selectAllLeads" title="Alle auswählen" onchange="toggleAllLeadsSelect(this.checked)"></th>
+              <th>#</th><th>Unternehmen</th><th>Kontakt</th>
               <th>Standort</th><th>Status</th><th>Zugewiesen</th><th>Hinzugefügt</th><th></th>
             </tr></thead>
             <tbody id="leadsTableBody"></tbody>
@@ -183,25 +164,27 @@
     <!-- ── TAB: MEINE LEADS ─────────────────────────── -->
     <div id="tab-myLeads" class="tab-panel">
       <div class="page-header">
-        <h1 data-eyebrow="Leads">Meine Leads</h1>
+        <div><h1 data-eyebrow="Leads">Meine Leads</h1><p class="page-desc">Alle Leads, die dir zugewiesen sind. Status direkt in der Zeile ändern oder per Pipeline verschieben.</p></div>
         <div class="page-actions">
           <div class="view-toggle">
             <button id="myLeadsViewTable" class="active" onclick="setMyLeadsView('table')"><i class="fas fa-table"></i> Tabelle</button>
             <button id="myLeadsViewPipeline" onclick="setMyLeadsView('pipeline')"><i class="fas fa-columns"></i> Pipeline</button>
           </div>
-          <button class="btn btn-ghost btn-sm" onclick="showTab('myLeads')"><i class="fas fa-sync"></i></button>
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="showTab('myLeads')" title="Aktualisieren"><i class="fas fa-sync"></i></button>
         </div>
       </div>
+
+      <div class="dash-kpis" id="myStats"></div>
 
       <div id="myLeadsTableView">
         <div class="card">
           <div class="card-header">
-            <div class="card-title"><i class="fas fa-user-check" style="color:var(--accent)"></i> Mir zugewiesene Leads <span class="badge" id="myLeadCount">0</span></div>
+            <div class="card-title"><i class="fas fa-user-check"></i> Mir zugewiesene Leads <span class="badge" id="myLeadCount">0</span></div>
           </div>
           <div class="table-wrap">
             <table>
               <thead><tr>
-                <th>#</th><th>Unternehmen</th><th>Geschäftsführer</th><th>Kontakt</th>
+                <th>#</th><th>Unternehmen</th><th>Kontakt</th>
                 <th>Standort</th><th>Status</th><th>Hinzugefügt</th><th></th>
               </tr></thead>
               <tbody id="myLeadsTableBody"></tbody>
@@ -688,7 +671,7 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf8"></script>
+<script src="/shared/api.js?v=nf9"></script>
 <script>
 let allLeads = [], allUsers = [], generatedLeads = [], editingUserId = null;
 let panelDirty = false;
@@ -812,32 +795,32 @@ function renderAdminPipeline(leads, boardId) {
   board.innerHTML = PIPELINE_STATUSES.map(([status, label]) => {
     const colLeads = leads.filter(l => l.status === status);
     const cards = colLeads.map(l => `
-      <div class="pipeline-card" draggable="true" data-id="${l.id}"
+      <div class="pipeline-card" draggable="true" data-id="${l.id}" data-status="${escHtml(l.status||'')}"
            ondragstart="onAdminCardDragStart(event,${l.id})" ondragend="onAdminCardDragEnd(event)"
            onclick="openLeadPanel(${l.id})">
         <div class="pc-company">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}</div>
-        ${l.ceo    ? `<div class="pc-row"><i class="fas fa-user" style="width:12px"></i>${escHtml(l.ceo)}</div>` : ''}
-        ${l.phone  ? `<div class="pc-row"><i class="fas fa-phone" style="width:12px"></i><a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()" style="color:var(--accent);font-family:var(--font-mono);font-size:11px">${escHtml(l.phone)}</a></div>` : ''}
-        ${l.assigned_name ? `<div class="pc-row"><i class="fas fa-user-tag" style="width:12px"></i>${escHtml(l.assigned_name)}</div>` : ''}
-        <div class="pc-row"><i class="fas fa-clock" style="width:12px"></i>${fmtDateShort(l.updated_at||l.created_at)}</div>
-        <div style="margin-top:6px;text-align:right">
-          <span onclick="adminQuickNoteToggle(${l.id}, this, event)" title="Schnellnotiz" style="cursor:pointer;color:var(--accent);font-size:13px"><i class="fas fa-sticky-note"></i></span>
-          <textarea class="quick-note-ta" data-lead-id="${l.id}" rows="2" placeholder="Schnellnotiz..." style="display:none;width:100%;margin-top:4px;font-size:11px;resize:none;background:var(--bg2);border:1px solid var(--border2);border-radius:6px;padding:4px 6px;color:var(--text1);box-sizing:border-box"
-            onclick="event.stopPropagation()"
-            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();adminQuickNoteSave(${l.id},this)}"
-            onblur="adminQuickNoteSave(${l.id},this)"></textarea>
+        ${l.ceo    ? `<div class="pc-row"><i class="fas fa-user"></i><span>${escHtml(l.ceo)}</span></div>` : ''}
+        ${l.phone  ? `<div class="pc-row"><i class="fas fa-phone"></i><a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()">${escHtml(l.phone)}</a></div>` : ''}
+        ${l.assigned_name ? `<div class="pc-row"><i class="fas fa-user-tag"></i><span>${escHtml(l.assigned_name)}</span></div>` : ''}
+        <div class="pc-foot">
+          <span class="pc-date"><i class="fas fa-clock"></i>${fmtDateShort(l.updated_at||l.created_at)}</span>
+          <button type="button" class="pc-note" onclick="adminQuickNoteToggle(${l.id}, this, event)" title="Schnellnotiz"><i class="fas fa-sticky-note"></i></button>
         </div>
+        <textarea class="quick-note-ta" data-lead-id="${l.id}" rows="2" placeholder="Schnellnotiz …" style="display:none"
+          onclick="event.stopPropagation()"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();adminQuickNoteSave(${l.id},this)}"
+          onblur="adminQuickNoteSave(${l.id},this)"></textarea>
       </div>`).join('');
     return `
       <div class="pipeline-col">
         <div class="pipeline-col-header">
-          <span><span class="status-badge s-${status}" style="padding:2px 7px">${label}</span></span>
-          <span class="badge">${colLeads.length}</span>
+          <span class="status-badge s-${status}">${label}</span>
+          <span class="pc-count">${colLeads.length}</span>
         </div>
         <div class="pipeline-col-body" data-status="${status}"
              ondragover="onAdminColDragOver(event)" ondragleave="onAdminColDragLeave(event)"
              ondrop="onAdminColDrop(event,'${status}','${boardId}')">
-          ${cards || '<div style="color:var(--text3);font-size:11px;text-align:center;padding:16px 4px">Keine Leads</div>'}
+          ${cards || '<div class="pipeline-empty">Keine Leads</div>'}
         </div>
       </div>`;
   }).join('');
@@ -927,6 +910,7 @@ function renderMyLeads() {
   }
   const mine = allLeads.filter(l => l.assigned_to === ME.id);
   document.getElementById('myLeadCount').textContent = mine.length;
+  renderLeadKpis('myStats', mine);
 
   if (myLeadsView === 'pipeline') {
     renderAdminPipeline(mine, 'myLeadsPipelineBoard');
@@ -935,23 +919,38 @@ function renderMyLeads() {
 
   const body = document.getElementById('myLeadsTableBody');
   if (!mine.length) {
-    body.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text3)"><i class="fas fa-inbox" style="display:block;font-size:30px;margin-bottom:10px;opacity:.3"></i>Keine Leads zugewiesen</td></tr>`;
+    body.innerHTML = `<tr><td colspan="7"><div class="wiki-empty" style="margin:6px 0"><i class="fas fa-inbox"></i>Dir sind aktuell keine Leads zugewiesen.</div></td></tr>`;
     return;
   }
+  const muted = '<span style="color:var(--text3)">—</span>';
   body.innerHTML = mine.map((l, i) => `
-    <tr style="cursor:pointer" onclick="openLeadPanel(${l.id})">
-      <td style="color:var(--text3);font-size:11px;font-family:var(--font-mono)">${String(i+1).padStart(2,'0')}</td>
-      <td style="font-weight:600">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}</td>
-      <td style="color:var(--text2)">${escHtml(l.ceo||'—')}</td>
-      <td>${l.phone ? `<a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()" style="color:var(--accent);font-size:12px">${escHtml(l.phone)}</a>` : ''}</td>
-      <td style="font-size:12px;color:var(--text2)">${escHtml(l.location||'—')}</td>
+    <tr class="lead-row" onclick="openLeadPanel(${l.id})">
+      <td class="cell-idx">${String(i+1).padStart(2,'0')}</td>
+      <td><div class="cell-title">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}</div>${l.ceo ? `<div class="cell-sub">${escHtml(l.ceo)}</div>` : ''}</td>
+      <td>${l.email ? `<div class="cell-sub"><a href="mailto:${escHtml(l.email)}" onclick="event.stopPropagation()">${escHtml(l.email)}</a></div>` : ''}${l.phone ? `<div class="cell-sub mono"><a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()">${escHtml(l.phone)}</a></div>` : ''}${!l.email && !l.phone ? muted : ''}</td>
+      <td><span class="cell-sub">${escHtml(l.location||'—')}</span></td>
       <td onclick="event.stopPropagation()">${statusSelectHtml(l)}</td>
-      <td style="font-size:11px;color:var(--text3);font-family:var(--font-mono)">${fmtDateShort(l.created_at)}</td>
-      <td onclick="event.stopPropagation()" style="white-space:nowrap">
-        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openLeadPanel(${l.id})"><i class="fas fa-chevron-right"></i></button>
-        <span onclick="tableQuickNote(${l.id},this,event)" title="Schnellnotiz" style="cursor:pointer;color:var(--accent);font-size:13px;margin-left:4px;vertical-align:middle"><i class="fas fa-sticky-note"></i></span>
+      <td><span class="cell-sub mono">${fmtDateShort(l.created_at)}</span></td>
+      <td class="cell-actions" onclick="event.stopPropagation()">
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="tableQuickNote(${l.id},this,event)" title="Schnellnotiz"><i class="fas fa-sticky-note"></i></button>
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="openLeadPanel(${l.id})" title="Öffnen"><i class="fas fa-chevron-right"></i></button>
       </td>
     </tr>`).join('');
+}
+
+function renderLeadKpis(containerId, leads) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const c = s => leads.filter(l => l.status === s).length;
+  const kunden = c('kunde');
+  const quote = leads.length ? Math.round(kunden / leads.length * 100) : 0;
+  const kpi = (cls, icon, label, value, sub) =>
+    `<div class="kpi-card ${cls}"><div class="kpi-head"><span class="kpi-label">${label}</span><span class="kpi-icon"><i class="fas ${icon}"></i></span></div><div class="kpi-value">${value}</div><div class="kpi-sub">${sub}</div></div>`;
+  el.innerHTML =
+    kpi('', 'fa-user-check', 'Zugewiesen', leads.length, `<b>${c('kontaktiert')}</b> kontaktiert`) +
+    kpi('c-ink', 'fa-star', 'Neu', c('neu'), 'noch nicht angerufen') +
+    kpi('c-copper', 'fa-phone-volume', 'Rückruf', c('rueckruf'), `<b>${c('nicht_erreicht')}</b> nicht erreicht`) +
+    kpi('c-green', 'fa-trophy', 'Kunden', kunden, `Abschlussquote <b>${quote}&nbsp;%</b>`);
 }
 
 // ── STATUS QUICK-CHANGE (Tabellenzeile) ────────────────────────
@@ -1026,43 +1025,57 @@ function renderLeads(leads) {
   document.getElementById('leadCount').textContent = leads.length + ' Einträge';
   const body = document.getElementById('leadsTableBody');
   if (!leads.length) {
-    body.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text3)"><i class="fas fa-inbox" style="display:block;font-size:30px;margin-bottom:10px;opacity:.3"></i>Keine Leads</td></tr>`;
+    body.innerHTML = `<tr><td colspan="9"><div class="wiki-empty" style="margin:6px 0"><i class="fas fa-inbox"></i>Keine Leads für diese Auswahl.</div></td></tr>`;
     return;
   }
-  body.innerHTML = leads.map((l, i) => `
-    <tr draggable="true" ondragstart="_dragLeadId=${l.id};showDragAssignOverlay()" ondragend="hideDragAssignOverlay()"
-        style="cursor:pointer;${bulkSelectedIds.has(l.id)?'background:color-mix(in srgb, var(--accent) 7%, transparent)':''}" onclick="openLeadPanel(${l.id})">
-      <td onclick="event.stopPropagation()">
-        <input type="checkbox" class="lead-cb" data-id="${l.id}" ${bulkSelectedIds.has(l.id)?'checked':''} onchange="toggleBulkSelect(${l.id},this.checked)" style="accent-color:var(--accent)">
+  const muted = '<span style="color:var(--text3)">—</span>';
+  body.innerHTML = leads.map((l, i) => {
+    const sel = bulkSelectedIds.has(l.id);
+    return `
+    <tr class="lead-row${sel ? ' is-selected' : ''}" draggable="true" ondragstart="_dragLeadId=${l.id};showDragAssignOverlay()" ondragend="hideDragAssignOverlay()" onclick="openLeadPanel(${l.id})">
+      <td class="cell-check" onclick="event.stopPropagation()">
+        <input type="checkbox" class="lead-cb" data-id="${l.id}" ${sel ? 'checked' : ''} onchange="toggleBulkSelect(${l.id},this.checked)">
       </td>
-      <td style="color:var(--text3);font-size:11px;font-family:var(--font-mono)">${String(i+1).padStart(2,'0')}</td>
-      <td style="font-weight:600">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}</td>
-      <td style="color:var(--text2)">${escHtml(l.ceo||'—')}</td>
-      <td>
-        ${l.email ? `<a href="mailto:${escHtml(l.email)}" onclick="event.stopPropagation()" style="color:var(--accent);font-size:12px">${escHtml(l.email)}</a>` : ''}
-        ${l.phone ? `<div style="color:var(--text2);font-size:11px;font-family:var(--font-mono)">${escHtml(l.phone)}</div>` : ''}
-      </td>
-      <td style="color:var(--text2);font-size:12px">${escHtml(l.location||'—')}</td>
+      <td class="cell-idx">${String(i+1).padStart(2,'0')}</td>
+      <td><div class="cell-title">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}</div>${l.ceo ? `<div class="cell-sub">${escHtml(l.ceo)}</div>` : ''}</td>
+      <td>${l.email ? `<div class="cell-sub"><a href="mailto:${escHtml(l.email)}" onclick="event.stopPropagation()">${escHtml(l.email)}</a></div>` : ''}${l.phone ? `<div class="cell-sub mono">${escHtml(l.phone)}</div>` : ''}${!l.email && !l.phone ? muted : ''}</td>
+      <td><span class="cell-sub">${escHtml(l.location||'—')}</span></td>
       <td onclick="event.stopPropagation()">${statusSelectHtml(l)}</td>
-      <td style="font-size:12px;color:var(--text2)">${escHtml(l.assigned_name||'—')}</td>
-      <td style="font-size:11px;color:var(--text3)">${fmtDateShort(l.created_at)}</td>
-      <td onclick="event.stopPropagation()" style="white-space:nowrap">
-        <span onclick="tableQuickNote(${l.id},this,event)" title="Schnellnotiz" style="cursor:pointer;color:var(--accent);font-size:13px;margin-right:6px;vertical-align:middle"><i class="fas fa-sticky-note"></i></span>
-        <button class="btn btn-ghost btn-sm" onclick="deleteLead(${l.id})" title="Löschen"><i class="fas fa-trash" style="color:var(--red)"></i></button>
+      <td>${l.assigned_name ? `<span class="assignee"><i>${escHtml(l.assigned_name[0].toUpperCase())}</i>${escHtml(l.assigned_name)}</span>` : '<span class="assignee none">Nicht zugewiesen</span>'}</td>
+      <td><span class="cell-sub mono">${fmtDateShort(l.created_at)}</span></td>
+      <td class="cell-actions" onclick="event.stopPropagation()">
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="tableQuickNote(${l.id},this,event)" title="Schnellnotiz"><i class="fas fa-sticky-note"></i></button>
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteLead(${l.id})" title="Löschen"><i class="fas fa-trash" style="color:var(--red)"></i></button>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 
 function updateLeadStats(leads) {
   const today = new Date().toDateString();
-  document.getElementById('st-total').textContent    = leads.length;
-  document.getElementById('st-heute').textContent    = leads.filter(l => new Date(l.created_at).toDateString() === today).length;
-  document.getElementById('st-rueckruf').textContent = leads.filter(l => l.status === 'rueckruf').length;
-  document.getElementById('st-kunde').textContent    = leads.filter(l => l.status === 'kunde').length;
+  const weekAgo = new Date(Date.now() - 7 * 86400000);
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  const kunden = leads.filter(l => l.status === 'kunde').length;
+  const rueckruf = leads.filter(l => l.status === 'rueckruf').length;
+  const unassigned = leads.filter(l => !l.assigned_to).length;
+  const neuWoche = leads.filter(l => l.status === 'neu' && new Date(l.created_at) >= weekAgo).length;
+  set('st-total', leads.length);
+  set('st-heute', leads.filter(l => new Date(l.created_at).toDateString() === today).length);
+  set('st-rueckruf', rueckruf);
+  set('st-kunde', kunden);
+  set('st-unassigned', unassigned);
+  set('st-woche', leads.filter(l => new Date(l.created_at) >= weekAgo).length);
+  set('st-quote', (leads.length ? Math.round(kunden / leads.length * 100) : 0) + ' %');
+  const counts = { all: leads.length, nicht_zugewiesen: unassigned, rueckruf, neu_woche: neuWoche, kunden };
+  document.querySelectorAll('#adminQuickFilters .qf-btn').forEach(b => {
+    const c = b.querySelector('.qf-count'); if (c && counts[b.dataset.qf] != null) c.textContent = counts[b.dataset.qf];
+  });
   renderFunnel(leads);
 }
 
 function renderFunnel(leads) {
+  const el = document.getElementById('funnelSummary');
+  if (!el) return;
   const total = leads.length;
   const STEPS = [
     { key: 'neu',            label: 'Neu' },
@@ -1074,31 +1087,28 @@ function renderFunnel(leads) {
   ];
   const counts = {};
   leads.forEach(l => { counts[l.status] = (counts[l.status] || 0) + 1; });
+  const quote = total ? Math.round((counts.kunde || 0) / total * 100) : 0;
 
-  const rows = STEPS.map(({ key, label }) => {
-    const n   = counts[key] || 0;
-    const pct = total > 0 ? Math.round(n / total * 100) : 0;
-    const bar = total > 0 ? Math.round(n / total * 100) : 0;
-    const color = key === 'kunde' ? 'var(--green,#1f9a5f)'
-                : key === 'kein_interesse' ? 'var(--red,#c43d3d)'
-                : 'var(--accent)';
-    return `
-      <div style="display:grid;grid-template-columns:140px 40px 1fr 48px;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)">
-        <span style="font-size:13px;color:var(--text2)">${label}</span>
-        <span style="font-size:14px;font-weight:700;text-align:right">${n}</span>
-        <div style="background:var(--bg2);border-radius:4px;height:8px;overflow:hidden">
-          <div style="width:${bar}%;height:100%;background:${color};border-radius:4px;transition:width .3s"></div>
-        </div>
-        <span style="font-size:12px;color:var(--text3);text-align:right">${pct} %</span>
-      </div>`;
+  const segs = STEPS.map(({ key, label }) => {
+    const n = counts[key] || 0;
+    return n ? `<i class="f-${key}" style="width:${n / total * 100}%" title="${label}: ${n}"></i>` : '';
+  }).join('');
+  const items = STEPS.map(({ key, label }) => {
+    const n = counts[key] || 0;
+    const pct = total ? Math.round(n / total * 100) : 0;
+    return `<div class="funnel-item"><span class="dot f-${key}"></span><span>${label}</span><b>${n}</b><span class="pct">${pct}&nbsp;%</span></div>`;
   }).join('');
 
-  document.getElementById('funnelSummary').innerHTML = `
-    <div class="card" style="padding:14px 18px">
-      <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:10px;display:flex;align-items:center;gap:6px">
-        <i class="fas fa-filter" style="color:var(--accent)"></i> Lead-Funnel — ${total} Leads gesamt
+  el.innerHTML = `
+    <div class="card funnel-card">
+      <div class="card-header">
+        <div class="card-title"><i class="fas fa-filter"></i> Lead-Funnel</div>
+        <span class="funnel-meta"><b>${total}</b> Leads · Abschlussquote <b>${quote}&nbsp;%</b></span>
       </div>
-      ${rows}
+      <div class="funnel-body">
+        <div class="funnel-bar">${segs || '<i class="f-empty" style="width:100%"></i>'}</div>
+        <div class="funnel-legend">${items}</div>
+      </div>
     </div>`;
 }
 
@@ -2024,7 +2034,7 @@ function exportCSV() {
 
 // ── FEATURE 9: ADMIN QUICK FILTERS ───────────────────────────
 function adminQuickFilter(type, btn) {
-  document.querySelectorAll('.qf-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#adminQuickFilters .qf-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   const now = new Date();
   const weekAgo = new Date(now - 7 * 86400000);
@@ -2033,7 +2043,9 @@ function adminQuickFilter(type, btn) {
   else if (type === 'rueckruf') leads = allLeads.filter(l => l.status === 'rueckruf');
   else if (type === 'neu_woche') leads = allLeads.filter(l => l.status === 'neu' && new Date(l.created_at) >= weekAgo);
   else if (type === 'kunden') leads = allLeads.filter(l => l.status === 'kunde');
-  renderLeadsTable(leads);
+  currentFilteredLeads = leads;
+  renderLeads(leads);
+  if (adminLeadsViewMode === 'pipeline') renderAdminPipeline(leads, 'allLeadsPipelineBoard');
 }
 
 // ── FEATURE 7: AKTIVITÄTS-FEED ────────────────────────────────
@@ -2050,26 +2062,26 @@ async function loadActivityFeed() {
   const list = document.getElementById('activityFeedList');
   try {
     const rows = await api('GET', '/leads/activity-feed');
-    if (!rows.length) { list.innerHTML = '<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">Keine Aktivitäten</div>'; return; }
+    if (!rows.length) { list.innerHTML = '<div class="wiki-empty" style="margin-top:12px"><i class="fas fa-stream"></i>Noch keine Aktivitäten.</div>'; return; }
     const ACTION_ICONS = { status_changed:'exchange-alt', note_added:'sticky-note', lead_created:'plus', lead_assigned:'user-tag', lead_archived:'archive', email_sent:'envelope', call_logged:'phone' };
+    const FEED_LABELS = { status_changed:'Status geändert', note_added:'Notiz hinzugefügt', lead_created:'Lead erstellt', lead_assigned:'Lead zugewiesen', lead_archived:'Lead archiviert', email_sent:'E-Mail gesendet', call_logged:'Anruf protokolliert' };
     list.innerHTML = rows.map(r => {
       const icon = ACTION_ICONS[r.action] || 'dot-circle';
       const dt = new Date(r.created_at);
-      const timeStr = dt.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'}) + ' ' + dt.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+      const timeStr = dt.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'}) + ' · ' + dt.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
       let detail = '';
       try { const d = JSON.parse(r.details || '{}'); detail = d.to || d.note_preview || d.assigned_to || ''; } catch(e) {}
-      return `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
-        <div style="width:28px;height:28px;border-radius:50%;background:color-mix(in srgb, var(--accent) 12%, transparent);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px">
-          <i class="fas fa-${icon}" style="font-size:11px;color:var(--accent)"></i>
-        </div>
+      const label = FEED_LABELS[r.action] || String(r.action || '').replace(/_/g,' ');
+      return `<div class="feed-item">
+        <div class="feed-icon"><i class="fas fa-${icon}"></i></div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:12px;font-weight:600;color:var(--text1)">${escHtml(r.full_name||'System')}</div>
-          <div style="font-size:11px;color:var(--text2);margin-top:1px">${r.company ? `<span style="color:var(--accent)">${escHtml(r.company)}</span> · ` : ''}${r.action.replace(/_/g,' ')}${detail ? ` → ${escHtml(String(detail))}` : ''}</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:2px">${timeStr}</div>
+          <div class="feed-name">${escHtml(r.full_name||'System')}</div>
+          <div class="feed-text">${r.company ? `<b>${escHtml(r.company)}</b> · ` : ''}${escHtml(label)}${detail ? ` → ${escHtml(String(detail))}` : ''}</div>
+          <div class="feed-time">${timeStr}</div>
         </div>
       </div>`;
     }).join('');
-  } catch(e) { list.innerHTML = '<div style="color:var(--red);font-size:12px;text-align:center">Fehler beim Laden</div>'; }
+  } catch(e) { list.innerHTML = '<div class="wiki-empty" style="margin-top:12px;color:var(--red)">Fehler beim Laden</div>'; }
 }
 
 // ── FEATURE 8: CSV IMPORT ─────────────────────────────────────
@@ -3713,16 +3725,16 @@ document.getElementById('editContactInput')?.addEventListener('keydown', functio
 </div>
 
 <!-- Feature 7: Aktivitäts-Feed Seitenpanel -->
-<div id="activityFeedPanel" style="display:none;position:fixed;top:0;right:0;width:340px;height:100vh;z-index:7000;background:var(--bg2);border-left:1px solid var(--border2);box-shadow:var(--shadow-lg);flex-direction:column">
-  <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
-    <div style="font-size:14px;font-weight:700"><i class="fas fa-stream" style="color:var(--accent);margin-right:8px"></i>Aktivitäts-Feed</div>
-    <button class="btn btn-ghost btn-sm" onclick="toggleActivityFeed()"><i class="fas fa-times"></i></button>
+<div id="activityFeedPanel" class="feed-panel" style="display:none">
+  <div class="feed-head">
+    <div class="feed-title"><i class="fas fa-stream"></i> Aktivitäts-Feed</div>
+    <button class="btn btn-ghost btn-sm btn-icon" onclick="toggleActivityFeed()" title="Schließen"><i class="fas fa-times"></i></button>
   </div>
-  <div id="activityFeedList" style="flex:1;overflow-y:auto;padding:12px 16px">
-    <div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">Laden...</div>
+  <div id="activityFeedList" class="feed-list">
+    <div class="wiki-empty" style="margin-top:12px">Laden …</div>
   </div>
 </div>
-<div id="activityFeedOverlay" style="display:none;position:fixed;inset:0;z-index:6999" onclick="toggleActivityFeed()"></div>
+<div id="activityFeedOverlay" class="feed-overlay" style="display:none" onclick="toggleActivityFeed()"></div>
 
 <!-- MODAL: Tool verwalten -->
 <div class="modal-overlay" id="toolModal" onclick="if(event.target===this)closeToolModal()">
