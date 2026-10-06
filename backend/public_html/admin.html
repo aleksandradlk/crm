@@ -7,16 +7,8 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf6">
+<link rel="stylesheet" href="/shared/style.css?v=nf7">
 <style>
-.source-btn{display:flex;align-items:center;gap:6px;padding:7px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text2);cursor:pointer;transition:all 0.15s;user-select:none}
-.source-btn.active{background:color-mix(in srgb, var(--accent) 12%, transparent);border-color:color-mix(in srgb, var(--accent) 40%, transparent);color:var(--accent)}
-.sources-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:12px}
-.section-label{font-size:10px;font-weight:600;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase;margin-bottom:8px}
-.log-body{background:var(--bg3);border-radius:8px;padding:12px;font-family:var(--font-mono);font-size:11px;min-height:80px;max-height:120px;overflow-y:auto;display:flex;flex-direction:column;gap:3px}
-.log-line{display:flex;gap:8px}
-.log-t{color:var(--text3);min-width:60px}
-.log-ok{color:var(--green)}.log-info{color:var(--accent)}.log-warn{color:var(--amber)}.log-err{color:var(--red)}
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
 .tab-btn.active{background:color-mix(in srgb, var(--accent) 12%, transparent);border-color:color-mix(in srgb, var(--accent) 40%, transparent);color:var(--accent);font-weight:600}
@@ -26,16 +18,10 @@
 .tr-meta{font-size:11px;color:var(--text3)}
 .tr-right{margin-left:auto;text-align:right}
 .tr-time{font-size:12px;font-family:var(--font-mono);color:var(--text2)}
-.fields-check{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px}
-.check-item{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2);cursor:pointer}
-.check-item input{accent-color:var(--accent);width:14px;height:14px}
 .user-row td{vertical-align:middle}
 .role-badge{padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600}
 .rb-admin{background:color-mix(in srgb, var(--amber) 15%, transparent);color:var(--amber)}
 .rb-closer{background:color-mix(in srgb, var(--accent) 15%, transparent);color:var(--accent)}
-.progress-wrap{margin-top:6px}
-.progress-bg{background:var(--bg4);height:3px;border-radius:2px}
-.progress-fill{height:100%;border-radius:2px;background:var(--accent);transition:width 0.4s}
 .view-toggle{display:flex;border:1px solid var(--border2);border-radius:8px;overflow:hidden}
 .view-toggle button{background:var(--bg3);border:none;color:var(--text3);padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px}
 .view-toggle button.active{background:var(--accent);color:var(--accent-fg)}
@@ -233,24 +219,28 @@
 
     <!-- ── TAB: GENERATE ──────────────────────────────── -->
     <div id="tab-generate" class="tab-panel">
-      <h1 class="page-title" data-eyebrow="Leads">Leads generieren</h1>
-      <div class="gen-grid" style="display:grid;grid-template-columns:320px 1fr;gap:20px;align-items:start">
+      <div class="page-header">
+        <div><h1 data-eyebrow="Leads">Leads generieren</h1><p class="page-desc">KI-Recherche mit Web-Suche. Nur Treffer mit mindestens 80 % Konfidenz landen in der Vorschau.</p></div>
+      </div>
+      <div class="gen-layout">
 
-        <div class="card">
-          <div class="card-header"><div class="card-title"><i class="fas fa-sliders-h" style="color:var(--accent)"></i> Suchparameter</div></div>
+        <div class="card gen-form">
+          <div class="card-header"><div class="card-title"><i class="fas fa-sliders-h"></i> Suchparameter</div></div>
           <div class="card-body">
             <div class="form-group"><label>Branche / Suchbegriff *</label><input type="text" id="gen-query" class="form-control" placeholder="z.B. Maschinenbau"></div>
             <div class="form-group"><label>Standort</label><input type="text" id="gen-location" class="form-control" placeholder="z.B. NRW, Düsseldorf"></div>
-            <div class="form-group"><label>Unternehmensgröße</label>
-              <select id="gen-size" class="form-control">
-                <option value="small">Kleinunternehmen (10–49)</option>
-                <option value="medium" selected>Mittelstand (50–250)</option>
-              </select>
-            </div>
-            <div class="form-group"><label>Max. Leads</label>
-              <select id="gen-max" class="form-control">
-                <option value="5">5</option><option value="10" selected>10</option><option value="20">20</option><option value="50">50</option><option value="100">100</option>
-              </select>
+            <div class="auth-grid-2">
+              <div class="form-group"><label>Unternehmensgröße</label>
+                <select id="gen-size" class="form-control">
+                  <option value="small">Klein (10–49)</option>
+                  <option value="medium" selected>Mittelstand (50–250)</option>
+                </select>
+              </div>
+              <div class="form-group"><label>Max. Leads</label>
+                <select id="gen-max" class="form-control">
+                  <option value="5">5</option><option value="10" selected>10</option><option value="20">20</option><option value="50">50</option><option value="100">100</option>
+                </select>
+              </div>
             </div>
             <div class="form-group"><label>Zuweisen an</label>
               <select id="gen-assign" class="form-control"><option value="">— Nicht zuweisen —</option></select>
@@ -275,10 +265,10 @@
               <label class="check-item"><input type="checkbox" id="ff-employees"><span>Mitarbeiter</span></label>
             </div>
 
-            <div class="form-group"><label>Zusätzliche Anweisung</label>
-              <textarea id="gen-extra" class="form-control" placeholder="z.B. nur B2B, Familienunternehmen..."></textarea>
+            <div class="form-group" style="margin-top:14px"><label>Zusätzliche Anweisung</label>
+              <textarea id="gen-extra" class="form-control" rows="2" placeholder="z.B. nur B2B, Familienunternehmen …"></textarea>
             </div>
-            <button class="btn btn-primary" style="width:100%" id="genBtn" onclick="generateLeads()">
+            <button class="btn btn-primary" style="width:100%;height:44px" id="genBtn" onclick="generateLeads()">
               <i class="fas fa-search"></i> Leads generieren
             </button>
           </div>
@@ -286,26 +276,26 @@
 
         <div>
           <div class="card" style="margin-bottom:14px">
-            <div class="card-header"><div class="card-title"><i class="fas fa-terminal" style="color:var(--accent)"></i> Protokoll</div>
-              <div style="display:flex;align-items:center;gap:8px">
+            <div class="card-header">
+              <div class="card-title"><i class="fas fa-terminal"></i> Protokoll</div>
+              <div class="gen-progress">
+                <span class="gen-status" id="gen-status">Bereit</span>
                 <div id="gen-progress-label" style="font-size:11px;color:var(--text3)"></div>
-                <div style="width:120px" id="gen-progress-wrap" style="display:none">
-                  <div class="progress-bg"><div class="progress-fill" id="gen-progress" style="width:0%"></div></div>
-                </div>
+                <div id="gen-progress-wrap" style="display:none"><div class="progress-bg"><div class="progress-fill" id="gen-progress" style="width:0%"></div></div></div>
               </div>
             </div>
-            <div class="card-body" style="padding:14px"><div class="log-body" id="genLog"></div></div>
+            <div class="card-body" style="padding:14px"><div class="gen-console" id="genLog"></div></div>
           </div>
 
           <div class="card" id="genResultsCard" style="display:none">
             <div class="card-header">
-              <div class="card-title"><i class="fas fa-list" style="color:var(--green)"></i> Vorschau <span class="badge" id="genResultCount">0</span></div>
+              <div class="card-title"><i class="fas fa-list"></i> Vorschau <span class="badge" id="genResultCount">0</span></div>
               <button class="btn btn-primary btn-sm" id="saveLeadsBtn" onclick="saveGeneratedLeads()">
                 <i class="fas fa-save"></i> Alle speichern
               </button>
             </div>
             <div class="table-wrap">
-              <table><thead><tr><th>Unternehmen</th><th>GF</th><th>E-Mail</th><th>Telefon</th><th>Standort</th><th>Konfidenz</th></tr></thead>
+              <table class="keep-first"><thead><tr><th>Unternehmen</th><th>GF</th><th>E-Mail</th><th>Telefon</th><th>Standort</th><th>Konfidenz</th></tr></thead>
               <tbody id="genResultsBody"></tbody></table>
             </div>
           </div>
@@ -348,34 +338,41 @@
     <!-- ── TAB: TRACKING ──────────────────────────────── -->
     <div id="tab-tracking" class="tab-panel">
       <div class="page-header">
-        <h1 data-eyebrow="Administration">Aktivitäts-Tracking</h1>
+        <div><h1 data-eyebrow="Administration">Aktivitäts-Tracking</h1><p class="page-desc">Wer ist gerade aktiv, was wurde heute bewegt, und das vollständige Aktivitätslog.</p></div>
         <div class="page-actions">
           <select id="trackingUserFilter" class="form-control" onchange="loadTracking()">
             <option value="">Alle Benutzer</option>
           </select>
           <button class="btn btn-ghost btn-sm" onclick="downloadActivityLog()"><i class="fas fa-download"></i> CSV</button>
-          <button class="btn btn-ghost btn-sm" onclick="loadTracking()"><i class="fas fa-sync"></i> Aktualisieren</button>
-        </div>
-      </div>
-      <div id="trackingOverview" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:24px"></div>
-      <div id="trackingList"></div>
-
-      <h2 style="font-size:16px;font-weight:600;margin:20px 0 12px">Aktivitätslog</h2>
-      <div class="card">
-        <div class="table-wrap">
-          <table><thead><tr><th>Zeit</th><th>Benutzer</th><th>Aktion</th><th>Details</th></tr></thead>
-          <tbody id="activityBody"></tbody></table>
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="loadTracking()" title="Aktualisieren"><i class="fas fa-sync"></i></button>
         </div>
       </div>
 
-      <!-- Unzugeordnete E-Mails -->
-      <div style="display:flex;align-items:center;justify-content:space-between;margin:28px 0 12px">
-        <h2 style="font-size:16px;font-weight:600;margin:0"><i class="fas fa-envelope-open-text" style="color:var(--accent);margin-right:8px"></i>Unzugeordnete E-Mails</h2>
-        <button class="btn btn-ghost btn-sm" onclick="loadUnmatchedEmails()"><i class="fas fa-sync"></i> Aktualisieren</button>
-      </div>
-      <div class="card" id="unmatchedEmailsCard">
-        <div style="color:var(--text3);padding:20px;text-align:center;font-size:13px">Wird geladen…</div>
-      </div>
+      <section class="wiki-section">
+        <div class="wiki-section-head"><div class="wiki-section-title"><i class="fas fa-users"></i> Team heute</div></div>
+        <div id="trackingOverview" class="track-grid"></div>
+        <div id="trackingList"></div>
+      </section>
+
+      <section class="wiki-section">
+        <div class="wiki-section-head"><div class="wiki-section-title"><i class="fas fa-stream"></i> Aktivitätslog</div></div>
+        <div class="card">
+          <div class="table-wrap">
+            <table><thead><tr><th>Zeit</th><th>Benutzer</th><th>Aktion</th><th>Details</th></tr></thead>
+            <tbody id="activityBody"></tbody></table>
+          </div>
+        </div>
+      </section>
+
+      <section class="wiki-section">
+        <div class="wiki-section-head">
+          <div class="wiki-section-title"><i class="fas fa-envelope-open-text"></i> Unzugeordnete E-Mails</div>
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="loadUnmatchedEmails()" title="Aktualisieren"><i class="fas fa-sync"></i></button>
+        </div>
+        <div class="card" id="unmatchedEmailsCard">
+          <div class="wiki-empty" style="border:none;background:transparent"><i class="fas fa-spinner fa-spin"></i>Wird geladen …</div>
+        </div>
+      </section>
     </div>
 
     <!-- ── TAB: WIKI ─────────────────────────────────── -->
@@ -528,13 +525,11 @@
 
     <div id="tab-tools" class="tab-panel">
       <div class="page-header">
-        <h1 data-eyebrow="Administration">Tools verwalten</h1>
-        <button class="btn btn-primary btn-sm" onclick="openToolModal()"><i class="fas fa-plus"></i> Tool hinzufügen</button>
+        <div><h1 data-eyebrow="Administration">Tools verwalten</h1><p class="page-desc">Externe Tools, die als Links in der Sidebar erscheinen. Auf Wunsch auch für Closer.</p></div>
+        <div class="page-actions"><button class="btn btn-primary btn-sm" onclick="openToolModal()"><i class="fas fa-plus"></i> Tool hinzufügen</button></div>
       </div>
-      <div class="card" style="overflow:hidden">
-        <div id="toolsTableContainer">
-          <div style="text-align:center;padding:40px;color:var(--text3)"><i class="fas fa-spinner fa-spin"></i></div>
-        </div>
+      <div id="toolsTableContainer">
+        <div class="wiki-empty"><i class="fas fa-spinner fa-spin"></i>Wird geladen …</div>
       </div>
     </div>
 
@@ -686,7 +681,7 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf6"></script>
+<script src="/shared/api.js?v=nf7"></script>
 <script>
 let allLeads = [], allUsers = [], generatedLeads = [], editingUserId = null;
 let panelDirty = false;
@@ -1564,10 +1559,12 @@ async function generateLeads() {
   const query = document.getElementById('gen-query').value.trim();
   if (!query) { showToast('Suchbegriff eingeben', 'err'); return; }
   const btn = document.getElementById('genBtn');
-  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Läuft...';
+  const setStatus = (t, c) => { const s = document.getElementById('gen-status'); if (s) { s.textContent = t; s.className = 'gen-status ' + (c || ''); } };
+  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Läuft …';
   document.getElementById('genResultsCard').style.display = 'none';
   document.getElementById('genLog').innerHTML = '';
   document.getElementById('gen-progress-wrap').style.display = 'block';
+  setStatus('Läuft …', 'run');
 
   const sources = [...document.querySelectorAll('.source-btn.active')].map(b => b.dataset.src);
   const fields  = ['company','ceo','email','phone','location','linkedin','revenue','employees']
@@ -1587,37 +1584,41 @@ async function generateLeads() {
     generatedLeads = data.leads || [];
     document.getElementById('gen-progress').style.width = '100%';
     genLog(`${generatedLeads.length} Leads gefunden${data.real_data ? ' — per Web-Suche verifiziert' : ' — Web-Suche ohne Treffer, nur KI-Wissen'}`, 'ok');
-    if (data.dropped_low_confidence > 0) genLog(`${data.dropped_low_confidence} Kandidat(en) wegen Konfidenz < 80% verworfen`, 'info');
+    if (data.dropped_low_confidence > 0) genLog(`${data.dropped_low_confidence} Kandidat(en) wegen Konfidenz < 80% verworfen`, 'warn');
     generatedLeads.forEach(l => genLog(`✓ ${l.company} (${l.location||'?'}) Konfidenz: ${l.confidence}%`, 'ok'));
     renderGenResults(generatedLeads, data.real_data);
     document.getElementById('genResultsCard').style.display = 'block';
+    setStatus(`${generatedLeads.length} Treffer`, 'ok');
   } catch (e) {
     genLog(`Fehler: ${e.message}`, 'err');
     showToast(e.message, 'err');
+    setStatus('Fehler', 'err');
   }
   btn.disabled = false; btn.innerHTML = '<i class="fas fa-search"></i> Leads generieren';
 }
+
 
 function renderGenResults(leads, realData) {
   const cardTitle = document.querySelector('#genResultsCard .card-title');
   if (cardTitle) {
     const badge = realData
-      ? `<span style="background:var(--green);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:6px">Live-Daten</span>`
-      : `<span style="background:var(--amber);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:6px">KI-Wissen</span>`;
-    cardTitle.innerHTML = `<i class="fas fa-list" style="color:var(--green)"></i> Vorschau <span class="badge" id="genResultCount">${leads.length}</span>${badge}`;
+      ? '<span class="data-badge live">Live-Daten</span>'
+      : '<span class="data-badge ai">KI-Wissen</span>';
+    cardTitle.innerHTML = `<i class="fas fa-list"></i> Vorschau <span class="badge" id="genResultCount">${leads.length}</span>${badge}`;
   } else {
     document.getElementById('genResultCount').textContent = leads.length;
   }
   document.getElementById('genResultsBody').innerHTML = leads.map(l => `
     <tr>
-      <td style="font-weight:600">${escHtml(l.company||'—')}</td>
-      <td style="color:var(--text2)">${escHtml(l.ceo||'—')}</td>
-      <td style="font-size:12px">${l.email ? `<a href="mailto:${escHtml(l.email)}">${escHtml(l.email)}</a>` : '—'}</td>
-      <td style="font-size:12px;font-family:var(--font-mono)">${escHtml(l.phone||'—')}</td>
-      <td style="font-size:12px;color:var(--text2)">${escHtml(l.location||'—')}</td>
+      <td class="cell-title">${escHtml(l.company||'—')}</td>
+      <td class="cell-sub">${escHtml(l.ceo||'—')}</td>
+      <td class="cell-sub">${l.email ? `<a href="mailto:${escHtml(l.email)}">${escHtml(l.email)}</a>` : '—'}</td>
+      <td class="cell-sub mono">${escHtml(l.phone||'—')}</td>
+      <td class="cell-sub">${escHtml(l.location||'—')}</td>
       <td>${confBar(l.confidence)}</td>
     </tr>`).join('');
 }
+
 
 async function saveGeneratedLeads() {
   if (!generatedLeads.length) return;
@@ -1826,47 +1827,29 @@ async function loadTracking() {
       const pulseClass   = onlineStatus === 'online' ? 'online' : onlineStatus === 'idle' ? 'idle' : 'offline';
       const statusLabel  = onlineStatus === 'online' ? 'Aktiv'
         : onlineStatus === 'idle' ? 'Kurz inaktiv'
-        : onlineStatus === 'away' ? 'Angemeldet (inaktiv)'
+        : onlineStatus === 'away' ? 'Angemeldet, inaktiv'
         : 'Nicht angemeldet';
       const sessionInfo  = sess
-        ? `Sitzung: ${parseInt(sess.session_minutes)||0} Min · ${parseInt(sess.click_count)||0} Klicks`
-        : (u.last_login ? `Letzter Login: ${fmtDateShort(u.last_login)}` : 'Noch nie eingeloggt');
+        ? `Sitzung ${parseInt(sess.session_minutes)||0} Min`
+        : (u.last_login ? `Letzter Login ${fmtDateShort(u.last_login)}` : 'Noch nie eingeloggt');
       const leadsCount   = stats.leads.size;
       const lastActLabel = stats.lastAction ? fmtDate(stats.lastAction) : null;
-      const cardBorder   = onlineStatus === 'online' ? 'border-color:var(--green,#1f9a5f)' : '';
-      const clickCount = parseInt(sess?.click_count) || 0;
+      const clickCount   = parseInt(sess?.click_count) || 0;
+      const kpi = (v, l) => `<div class="track-kpi"><b>${v}</b><span>${l}</span></div>`;
       return `
-        <div class="tracking-card" style="flex-direction:column;align-items:stretch;gap:10px;${cardBorder};cursor:pointer" onclick="filterTrackingUser('${u.id}')">
-          <div style="display:flex;align-items:center;gap:10px">
-            <div class="pulse ${pulseClass}"></div>
-            <div class="avatar" style="width:36px;height:36px;font-size:14px;flex-shrink:0">${escHtml(u.full_name?.[0]||'?')}</div>
+        <div class="track-card ${onlineStatus === 'online' ? 'is-online' : ''}" onclick="filterTrackingUser('${u.id}')">
+          <div class="track-head">
+            <div class="track-avatar">${escHtml((u.full_name||'?').trim().charAt(0).toUpperCase() || '?')}<span class="pulse ${pulseClass}"></span></div>
             <div style="flex:1;min-width:0">
-              <div class="tr-name">${escHtml(u.full_name)} <span style="color:var(--text3);font-size:11px">(${u.role})</span></div>
-              <div class="tr-meta">${statusLabel}${sess && inactive !== null ? ' · Inaktiv: ' + inactive + ' Min' : ''}</div>
+              <div class="track-name"><span class="n">${escHtml(u.full_name)}</span><span class="track-role">${escHtml(u.role)}</span></div>
+              <div class="track-status ${onlineStatus === 'online' ? 'online' : ''}">${statusLabel}${sess && inactive !== null && onlineStatus !== 'online' ? ' · ' + inactive + ' Min' : ''}</div>
             </div>
             <i class="fas fa-chevron-right" style="color:var(--text3);font-size:11px"></i>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">
-            <div style="text-align:center;background:var(--bg2);border-radius:6px;padding:7px 4px">
-              <div style="font-size:20px;font-weight:700;color:var(--accent);line-height:1">${leadsCount}</div>
-              <div style="font-size:10px;color:var(--text3);margin-top:2px">Leads</div>
-            </div>
-            <div style="text-align:center;background:var(--bg2);border-radius:6px;padding:7px 4px">
-              <div style="font-size:20px;font-weight:700;color:var(--accent);line-height:1">${stats.status}</div>
-              <div style="font-size:10px;color:var(--text3);margin-top:2px">Status</div>
-            </div>
-            <div style="text-align:center;background:var(--bg2);border-radius:6px;padding:7px 4px">
-              <div style="font-size:20px;font-weight:700;color:var(--accent);line-height:1">${stats.comments}</div>
-              <div style="font-size:10px;color:var(--text3);margin-top:2px">Notizen</div>
-            </div>
-            <div style="text-align:center;background:var(--bg2);border-radius:6px;padding:7px 4px">
-              <div style="font-size:20px;font-weight:700;color:var(--accent);line-height:1">${clickCount}</div>
-              <div style="font-size:10px;color:var(--text3);margin-top:2px">Klicks</div>
-            </div>
-          </div>
-          <div style="font-size:11px;color:var(--text3)">${sessionInfo}${lastActLabel ? ' · Aktiv: ' + lastActLabel : ''}</div>
+          <div class="track-kpis">${kpi(leadsCount, 'Leads')}${kpi(stats.status, 'Status')}${kpi(stats.comments, 'Notizen')}${kpi(clickCount, 'Klicks')}</div>
+          <div class="track-foot"><span>${sessionInfo}</span>${lastActLabel ? `<span>Zuletzt ${lastActLabel}</span>` : ''}</div>
         </div>`;
-    }).join('') || '<div style="color:var(--text3);font-size:13px;padding:20px">Keine Benutzer gefunden</div>';
+    }).join('') || '<div class="wiki-empty"><i class="fas fa-users"></i>Keine Benutzer gefunden</div>';
 
     document.getElementById('trackingList').innerHTML = '';
 
@@ -1875,19 +1858,20 @@ async function loadTracking() {
       ? activity.filter(a => String(a.user_id) === String(filterUserId))
       : activity;
 
-    document.getElementById('activityBody').innerHTML = tableActivity.map(a => {
+    document.getElementById('activityBody').innerHTML = tableActivity.length ? tableActivity.map(a => {
       let detail = '';
       try { const d = JSON.parse(a.detail); detail = Object.entries(d).filter(([,v])=>v!=null).map(([k,v])=>`${k}: ${v}`).join(', '); } catch {}
       return `
         <tr>
-          <td style="font-size:12px;font-family:var(--font-mono);color:var(--text3)">${fmtDate(a.created_at)}</td>
-          <td style="font-weight:600;font-size:13px">${escHtml(a.full_name)}</td>
+          <td class="cell-sub mono" style="color:var(--text3);white-space:nowrap">${fmtDate(a.created_at)}</td>
+          <td class="cell-title">${escHtml(a.full_name)}</td>
           <td><span class="badge" style="font-size:10px">${ACTION_LABELS[a.action]||a.action}</span></td>
-          <td style="font-size:12px;color:var(--text2)">${escHtml(detail)}</td>
+          <td class="cell-sub">${escHtml(detail)}</td>
         </tr>`;
-    }).join('');
+    }).join('') : '<tr><td colspan="4" style="text-align:center;padding:28px;color:var(--text3)">Keine Aktivitäten im Zeitraum</td></tr>';
   } catch (e) { showToast(e.message, 'err'); }
 }
+
 
 function filterTrackingUser(userId) {
   const sel = document.getElementById('trackingUserFilter');
@@ -2974,7 +2958,7 @@ async function loadToolsTab() {
     renderAdminToolsSidebar(_toolsList);
   } catch(e) {
     const el = document.getElementById('toolsTableContainer');
-    if (el) el.innerHTML = `<div style="padding:24px;color:var(--danger)">${escHtml(e.message)}</div>`;
+    if (el) el.innerHTML = `<div class="wiki-empty" style="color:var(--red)">${escHtml(e.message)}</div>`;
   }
 }
 
@@ -2982,31 +2966,34 @@ function renderToolsTable(tools) {
   const el = document.getElementById('toolsTableContainer');
   if (!el) return;
   if (!tools.length) {
-    el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3)"><i class="fas fa-toolbox" style="font-size:28px;display:block;margin-bottom:10px;opacity:.3"></i>Noch keine Tools vorhanden</div>';
+    el.innerHTML = '<div class="wiki-empty"><i class="fas fa-toolbox"></i>Noch keine Tools. Lege externe Links an, die dein Team in der Sidebar sieht.</div>';
     return;
   }
-  el.innerHTML = `<table class="data-table"><thead><tr>
-    <th>Name</th><th>URL</th><th style="text-align:center">Closer sichtbar</th><th style="text-align:right">Aktionen</th>
-  </tr></thead><tbody>
-    ${tools.map(t => `<tr>
-      <td><strong>${escHtml(t.name)}</strong></td>
-      <td style="font-size:12px;color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-        <a href="${escHtml(t.url)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">${escHtml(t.url)}</a>
-      </td>
-      <td style="text-align:center">
-        <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">
-          <input type="checkbox" ${t.closer_visible ? 'checked' : ''} onchange="toggleToolCloserVisible(${t.id}, this.checked)"
-            style="width:16px;height:16px;cursor:pointer">
-          <span style="font-size:12px;color:var(--text2)">${t.closer_visible ? 'Ja' : 'Nein'}</span>
-        </label>
-      </td>
-      <td style="text-align:right">
-        <button class="btn btn-ghost btn-sm" onclick="openToolModal(${t.id})" title="Bearbeiten"><i class="fas fa-edit"></i></button>
-        <button class="btn btn-ghost btn-sm" onclick="deleteTool(${t.id})" title="Löschen" style="color:var(--danger)"><i class="fas fa-trash"></i></button>
-      </td>
-    </tr>`).join('')}
-  </tbody></table>`;
+  el.innerHTML = `<div class="tool-grid">${tools.map(t => {
+    let host = ''; try { host = new URL(t.url).hostname.replace(/^www\./, ''); } catch {}
+    return `<div class="tool-card">
+      <div class="tool-head">
+        <div class="tool-icon"><i class="fas fa-external-link-alt"></i></div>
+        <div style="min-width:0;flex:1">
+          <div class="tool-name">${escHtml(t.name)}</div>
+          <span class="tool-url" title="${escHtml(t.url)}"><a href="${escHtml(t.url)}" target="_blank" rel="noopener noreferrer">${escHtml(host || t.url)}</a></span>
+        </div>
+      </div>
+      <label class="tool-vis">
+        <input type="checkbox" ${t.closer_visible ? 'checked' : ''} onchange="toggleToolCloserVisible(${t.id}, this.checked)">
+        Für Closer sichtbar
+        <span class="tag ${t.closer_visible ? 'on' : ''}">${t.closer_visible ? 'Sichtbar' : 'Nur Admin'}</span>
+      </label>
+      <div class="tool-actions">
+        <a class="btn btn-ghost btn-sm" href="${escHtml(t.url)}" target="_blank" rel="noopener noreferrer"><i class="fas fa-external-link-alt"></i> Öffnen</a>
+        <span class="spacer"></span>
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="openToolModal(${t.id})" title="Bearbeiten"><i class="fas fa-edit"></i></button>
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteTool(${t.id})" title="Löschen" style="color:var(--red)"><i class="fas fa-trash"></i></button>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
 }
+
 
 function renderAdminToolsSidebar(tools) {
   const el = document.getElementById('adminToolsNav');

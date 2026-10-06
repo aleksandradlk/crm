@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf6">
+<link rel="stylesheet" href="/shared/style.css?v=nf7">
 <style>
 .notif-panel{position:fixed;top:0;right:0;bottom:0;width:340px;background:var(--bg2);border-left:1px solid var(--border2);z-index:150;transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;padding:20px}
 .notif-panel.open{transform:translateX(0)}
@@ -370,51 +370,52 @@
 
     <!-- LEADS GENERIEREN (nur bei can_generate_leads) -->
     <div id="sec-generateLeads" style="display:none">
-      <h1 class="page-title" data-eyebrow="Leads">Leads generieren</h1>
-      <div class="clgen-grid" style="display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start">
-        <div class="card">
-          <div class="card-header"><div class="card-title"><i class="fas fa-sliders-h" style="color:var(--accent)"></i> Suchparameter</div></div>
+      <div class="page-header">
+        <div><h1 data-eyebrow="Leads">Leads generieren</h1><p class="page-desc">KI-Recherche mit Web-Suche. Gefundene Leads werden dir direkt zugewiesen.</p></div>
+      </div>
+      <div class="gen-layout">
+        <div class="card gen-form">
+          <div class="card-header"><div class="card-title"><i class="fas fa-sliders-h"></i> Suchparameter</div></div>
           <div class="card-body">
             <div class="form-group"><label>Branche / Suchbegriff *</label><input type="text" id="clgen-query" class="form-control" placeholder="z.B. Maschinenbau"></div>
             <div class="form-group"><label>Standort</label><input type="text" id="clgen-location" class="form-control" placeholder="z.B. NRW, Düsseldorf"></div>
-            <div class="form-group"><label>Unternehmensgröße</label>
-              <select id="clgen-size" class="form-control">
-                <option value="small">Kleinunternehmen (10–54 Mitarbeiter)</option>
-                <option value="medium" selected>Mittelstand (55–200 Mitarbeiter)</option>
-              </select>
-            </div>
-            <div class="form-group"><label>Max. Leads</label>
-              <select id="clgen-max" class="form-control">
-                <option value="5">5</option><option value="10" selected>10</option><option value="20">20</option><option value="50">50</option>
-              </select>
+            <div class="auth-grid-2">
+              <div class="form-group"><label>Unternehmensgröße</label>
+                <select id="clgen-size" class="form-control">
+                  <option value="small">Klein (10–54)</option>
+                  <option value="medium" selected>Mittelstand (55–200)</option>
+                </select>
+              </div>
+              <div class="form-group"><label>Max. Leads</label>
+                <select id="clgen-max" class="form-control">
+                  <option value="5">5</option><option value="10" selected>10</option><option value="20">20</option><option value="50">50</option>
+                </select>
+              </div>
             </div>
             <div class="form-group"><label>Zusätzliche Anweisung</label>
-              <textarea id="clgen-extra" class="form-control" rows="2" placeholder="z.B. nur B2B, Familienunternehmen..."></textarea>
+              <textarea id="clgen-extra" class="form-control" rows="2" placeholder="z.B. nur B2B, Familienunternehmen …"></textarea>
             </div>
-            <button class="btn btn-primary" style="width:100%" id="clGenBtn" onclick="clGenerateLeads()">
+            <button class="btn btn-primary" style="width:100%;height:44px" id="clGenBtn" onclick="clGenerateLeads()">
               <i class="fas fa-search"></i> Leads generieren
             </button>
           </div>
         </div>
         <div>
           <div class="card" style="margin-bottom:14px">
-            <div class="card-header"><div class="card-title"><i class="fas fa-terminal" style="color:var(--accent)"></i> Protokoll</div></div>
-            <div class="card-body" style="padding:14px"><div style="min-height:80px;max-height:200px;overflow-y:auto;font-family:var(--font-mono);font-size:11px;display:flex;flex-direction:column;gap:2px" id="clGenLog"></div></div>
+            <div class="card-header">
+              <div class="card-title"><i class="fas fa-terminal"></i> Protokoll</div>
+              <span class="gen-status" id="clgen-status">Bereit</span>
+            </div>
+            <div class="card-body" style="padding:14px"><div class="gen-console" id="clGenLog"></div></div>
           </div>
           <div class="card" id="clGenResultsCard" style="display:none">
             <div class="card-header">
-              <div class="card-title"><i class="fas fa-list" style="color:var(--accent)"></i> Ergebnisse (<span id="clGenResultCount">0</span>)</div>
+              <div class="card-title"><i class="fas fa-list"></i> Vorschau <span class="badge" id="clGenResultCount">0</span></div>
               <button class="btn btn-primary btn-sm" id="clSaveLeadsBtn" onclick="clSaveGeneratedLeads()"><i class="fas fa-save"></i> Alle speichern</button>
             </div>
-            <div class="card-body" style="padding:0;overflow-x:auto">
-              <table style="width:100%;border-collapse:collapse;font-size:13px">
-                <thead><tr style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);background:var(--bg3)">
-                  <th style="padding:8px 12px;text-align:left">Unternehmen</th>
-                  <th style="padding:8px 12px;text-align:left">Ansprechpartner</th>
-                  <th style="padding:8px 12px;text-align:left">E-Mail</th>
-                  <th style="padding:8px 12px;text-align:left">Telefon</th>
-                  <th style="padding:8px 12px;text-align:left">Standort</th>
-                </tr></thead>
+            <div class="table-wrap">
+              <table class="keep-first">
+                <thead><tr><th>Unternehmen</th><th>Ansprechpartner</th><th>E-Mail</th><th>Telefon</th><th>Standort</th></tr></thead>
                 <tbody id="clGenResultsBody"></tbody>
               </table>
             </div>
@@ -510,7 +511,7 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf6"></script>
+<script src="/shared/api.js?v=nf7"></script>
 <script>
 const ME = Auth.getUser();
 const CAN = {
@@ -2382,21 +2383,23 @@ async function submitCreateUser() {
 function clGenLog(msg, type='info') {
   const body = document.getElementById('clGenLog');
   if (!body) return;
-  const colors = { info: 'var(--text2)', ok: 'var(--green)', err: 'var(--red)' };
   const now = new Date().toLocaleTimeString('de', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
   const el = document.createElement('div');
-  el.style.cssText = 'display:flex;gap:8px';
-  el.innerHTML = `<span style="color:var(--text3);flex-shrink:0">${now}</span><span style="color:${colors[type]||colors.info}">${escHtml(msg)}</span>`;
+  el.className = 'log-line';
+  el.innerHTML = `<span class="log-t">${now}</span><span class="log-${type}">${escHtml(msg)}</span>`;
   body.appendChild(el); body.scrollTop = body.scrollHeight;
 }
+
 
 async function clGenerateLeads() {
   const query = document.getElementById('clgen-query').value.trim();
   if (!query) { showToast('Suchbegriff eingeben', 'err'); return; }
   const btn = document.getElementById('clGenBtn');
-  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Läuft...';
+  const setStatus = (t, cls) => { const s = document.getElementById('clgen-status'); if (s) { s.textContent = t; s.className = 'gen-status ' + (cls || ''); } };
+  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Läuft …';
   document.getElementById('clGenResultsCard').style.display = 'none';
   document.getElementById('clGenLog').innerHTML = '';
+  setStatus('Läuft …', 'run');
   clGenLog(`Suche: "${query}"`, 'info');
   try {
     const data = await api('POST', '/generate', {
@@ -2410,28 +2413,38 @@ async function clGenerateLeads() {
     });
     generatedLeadsCl = data.leads || [];
     clGenLog(`${generatedLeadsCl.length} Leads gefunden${data.real_data ? ' — per Web-Suche verifiziert' : ' — Web-Suche ohne Treffer, nur KI-Wissen'}`, 'ok');
-    if (data.dropped_low_confidence > 0) clGenLog(`${data.dropped_low_confidence} Kandidat(en) wegen Konfidenz < 80% verworfen`, 'info');
+    if (data.dropped_low_confidence > 0) clGenLog(`${data.dropped_low_confidence} Kandidat(en) wegen Konfidenz < 80% verworfen`, 'warn');
     generatedLeadsCl.forEach(l => clGenLog(`✓ ${l.company} (${l.location||'?'})`, 'ok'));
-    clRenderGenResults(generatedLeadsCl);
+    clRenderGenResults(generatedLeadsCl, data.real_data);
     document.getElementById('clGenResultsCard').style.display = 'block';
+    setStatus(`${generatedLeadsCl.length} Treffer`, 'ok');
   } catch(e) {
     clGenLog(`Fehler: ${e.message}`, 'err');
     showToast(e.message, 'err');
+    setStatus('Fehler', 'err');
   }
   btn.disabled = false; btn.innerHTML = '<i class="fas fa-search"></i> Leads generieren';
 }
 
-function clRenderGenResults(leads) {
-  document.getElementById('clGenResultCount').textContent = leads.length;
+
+function clRenderGenResults(leads, realData) {
+  const cardTitle = document.querySelector('#clGenResultsCard .card-title');
+  if (cardTitle) {
+    const badge = realData ? '<span class="data-badge live">Live-Daten</span>' : '<span class="data-badge ai">KI-Wissen</span>';
+    cardTitle.innerHTML = `<i class="fas fa-list"></i> Vorschau <span class="badge" id="clGenResultCount">${leads.length}</span>${badge}`;
+  } else {
+    document.getElementById('clGenResultCount').textContent = leads.length;
+  }
   document.getElementById('clGenResultsBody').innerHTML = leads.map(l => `
-    <tr style="border-top:1px solid var(--border)">
-      <td style="padding:8px 12px;font-weight:600">${escHtml(l.company||'—')}</td>
-      <td style="padding:8px 12px;color:var(--text2)">${escHtml(l.ceo||'—')}</td>
-      <td style="padding:8px 12px;font-size:12px">${l.email ? `<a href="mailto:${escHtml(l.email)}" style="color:var(--accent)">${escHtml(l.email)}</a>` : '—'}</td>
-      <td style="padding:8px 12px;font-size:12px;font-family:var(--font-mono)">${escHtml(l.phone||'—')}</td>
-      <td style="padding:8px 12px;font-size:12px;color:var(--text2)">${escHtml(l.location||'—')}</td>
+    <tr>
+      <td class="cell-title">${escHtml(l.company||'—')}</td>
+      <td class="cell-sub">${escHtml(l.ceo||'—')}</td>
+      <td class="cell-sub">${l.email ? `<a href="mailto:${escHtml(l.email)}">${escHtml(l.email)}</a>` : '—'}</td>
+      <td class="cell-sub mono">${escHtml(l.phone||'—')}</td>
+      <td class="cell-sub">${escHtml(l.location||'—')}</td>
     </tr>`).join('');
 }
+
 
 async function clSaveGeneratedLeads() {
   if (!generatedLeadsCl.length) return;
