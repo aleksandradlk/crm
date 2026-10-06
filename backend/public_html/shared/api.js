@@ -320,3 +320,122 @@ function updateThemeBtn() {
     }
   }, { passive: true });
 })();
+
+// ── Wissensdatenbank: gemeinsame Renderer ─────────────────────
+function renderTemplateCard(t, a) {
+  const inactive = t.is_active !== undefined && !t.is_active;
+  const preview = String(t.body || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  return `<div class="tpl-card ${inactive ? 'inactive' : ''}">
+    <div class="tpl-card-head">
+      <div class="tpl-icon"><i class="fas fa-envelope-open-text"></i></div>
+      <div class="tpl-meta">
+        <div class="tpl-name">${escHtml(t.name)}</div>
+        <div class="tpl-tags">${t.category ? `<span class="tpl-tag cat">${escHtml(t.category)}</span>` : ''}${inactive ? '<span class="tpl-tag off">Inaktiv</span>' : ''}</div>
+      </div>
+    </div>
+    <div class="tpl-subject" title="${escHtml(t.subject || '')}">${escHtml(t.subject || '—')}</div>
+    <div class="tpl-preview">${preview ? escHtml(preview) : '<span style="color:var(--text3)">Kein Text</span>'}</div>
+    ${a ? `<div class="tpl-actions">
+      <button class="btn btn-ghost btn-sm" onclick="${a.edit}"><i class="fas fa-edit"></i> Bearbeiten</button>
+      <span class="spacer"></span>
+      ${a.toggle ? `<button class="btn btn-ghost btn-sm btn-icon" title="${inactive ? 'Aktivieren' : 'Deaktivieren'}" onclick="${a.toggle}"><i class="fas fa-${inactive ? 'eye' : 'eye-slash'}"></i></button>` : ''}
+      ${a.remove ? `<button class="btn btn-ghost btn-sm btn-icon" title="Löschen" style="color:var(--red)" onclick="${a.remove}"><i class="fas fa-trash"></i></button>` : ''}
+    </div>` : ''}
+  </div>`;
+}
+
+function renderWikiFiles(files, containerId, isAdmin) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  if (!files.length) {
+    container.innerHTML = `<div class="wiki-empty"><i class="fas fa-folder-open"></i>${isAdmin ? 'Noch keine Dateien hochgeladen. Nutze das Formular rechts.' : 'Noch keine Dateien vorhanden'}</div>`;
+    return;
+  }
+  const jsStr = s => String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
+  const cats = [...new Set(files.map(f => f.category))];
+  container.innerHTML = cats.map(cat => {
+    const catFiles = files.filter(f => f.category === cat);
+    const cards = catFiles.map(f => {
+      const fn = f.filename || '';
+      const isImage  = f.mimetype?.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(fn);
+      const isPdf    = f.mimetype === 'application/pdf' || /\.pdf$/i.test(fn);
+      const isOffice = /\.(docx?|xlsx?|pptx?|odt|ods|odp)$/i.test(fn);
+      const ext  = (fn.includes('.') ? fn.split('.').pop() : '').toUpperCase();
+      const size = f.size ? (f.size >= 1048576 ? (f.size / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(f.size / 1024)) + ' KB') : '';
+      const kind = isPdf ? 'pdf' : isImage ? 'img' : isOffice ? 'doc' : '';
+      const icon = isPdf ? 'file-pdf' : isImage ? 'file-image' : /\.xlsx?$/i.test(fn) ? 'file-excel' : /\.pptx?$/i.test(fn) ? 'file-powerpoint' : isOffice ? 'file-word' : 'file-alt';
+      const meta = [ext, size, fmtDateShort(f.created_at)].filter(Boolean).join(' · ');
+      const safeFile = escHtml(jsStr(fn));
+      const encName  = encodeURIComponent(f.name || '');
+      const actions = [
+        `<button class="btn btn-ghost btn-sm btn-icon" title="Vorschau" onclick="wikiFileOpen('${safeFile}','${encName}')"><i class="fas fa-eye"></i></button>`,
+        `<button class="btn btn-ghost btn-sm btn-icon" title="Download" onclick="wikiFileOpen('${safeFile}','${encName}',true)"><i class="fas fa-download"></i></button>`,
+        isAdmin ? `<button class="btn btn-ghost btn-sm btn-icon" title="Notiz bearbeiten" onclick="openWikiNoteModal(${f.id},'${escHtml(jsStr(f.note))}')"><i class="fas fa-pen"></i></button>` : '',
+        isAdmin ? `<button class="btn btn-ghost btn-sm btn-icon" title="Datei austauschen" onclick="openWikiReplaceModal(${f.id},'${escHtml(jsStr(f.name))}')"><i class="fas fa-retweet"></i></button>` : '',
+        isAdmin ? `<button class="btn btn-ghost btn-sm btn-icon" title="Löschen" style="color:var(--red)" onclick="deleteWikiFile(${f.id})"><i class="fas fa-trash"></i></button>` : '',
+      ].join('');
+      return `<div class="file-card">
+        <div class="file-icon ${kind}"><i class="fas fa-${icon}"></i></div>
+        <div class="file-main">
+          <div class="file-name" title="${escHtml(f.name)}">${escHtml(f.name)}</div>
+          <div class="file-meta">${meta}</div>
+          ${f.note ? `<div class="file-note"><i class="fas fa-info-circle"></i>${escHtml(f.note)}</div>` : ''}
+        </div>
+        <div class="file-actions">${actions}</div>
+      </div>`;
+    }).join('');
+    return `<div class="wiki-cat">
+      <div class="wiki-cat-head"><i class="fas fa-folder"></i><span class="wiki-cat-name">${escHtml(cat)}</span><span class="badge">${catFiles.length}</span></div>
+      <div class="file-grid">${cards}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Rücksprachen: gemeinsame Renderer ─────────────────────────
+function renderChatListItems(chats, emptyText) {
+  if (!chats.length) return `<div class="wiki-empty"><i class="fas fa-comments"></i>${emptyText}</div>`;
+  return '<div class="chat-list">' + chats.map(c => {
+    const initial = escHtml((c.title || '?').trim().charAt(0).toUpperCase() || '?');
+    const n = Number(c.msg_count || 0);
+    return `<div class="chat-item ${c.is_closed ? 'closed' : ''}" onclick="openChat(${c.id})">
+      <div class="chat-avatar">${initial}</div>
+      <div class="chat-main">
+        <div class="chat-title"><span class="t">${escHtml(c.title)}</span>${c.is_closed ? '<span class="chat-closed-tag">Geschlossen</span>' : ''}</div>
+        <div class="chat-meta">${c.participants ? `<span class="t"><i class="fas fa-users" style="margin-right:5px"></i>${escHtml(c.participants)}</span>` : (c.created_by_name ? `<span>von ${escHtml(c.created_by_name)}</span>` : '')}</div>
+      </div>
+      <div class="chat-side-meta">
+        <span class="chat-count"><i class="fas fa-comment"></i> ${n}</span>
+        <span class="chat-when">${fmtDate(c.last_msg_at || c.created_at)}</span>
+      </div>
+      <i class="fas fa-chevron-right chat-chevron"></i>
+    </div>`;
+  }).join('') + '</div>';
+}
+
+function renderChatLeadContext(c, openFn) {
+  const row = (icon, html) => `<div class="lead-ctx-row"><i class="fas fa-${icon}"></i><span>${html}</span></div>`;
+  return `<div class="lead-ctx">
+    <div class="lead-ctx-eyebrow">Lead-Kontext</div>
+    <div class="lead-ctx-company">${escHtml(c.lead_company || '—')}</div>
+    ${c.lead_ceo ? row('user', escHtml(c.lead_ceo)) : ''}
+    ${c.lead_phone ? row('phone', `<a href="tel:${escHtml(c.lead_phone)}" class="mono">${escHtml(c.lead_phone)}</a>`) : ''}
+    ${c.lead_email ? row('envelope', `<a href="mailto:${escHtml(c.lead_email)}">${escHtml(c.lead_email)}</a>`) : ''}
+    ${statusBadge(c.lead_status || 'neu')}
+    <button class="btn btn-ghost btn-sm" onclick="${openFn}(${c.lead_id})"><i class="fas fa-external-link-alt"></i> Lead öffnen</button>
+  </div>`;
+}
+
+function renderChatMessages(msgs, myId) {
+  if (!msgs.length) return '<div class="chat-empty"><i class="fas fa-comments"></i>Noch keine Nachrichten. Schreib die erste.</div>';
+  return msgs.map(m => {
+    const own = m.user_id === myId;
+    const initial = escHtml((m.full_name || '?').trim().charAt(0).toUpperCase() || '?');
+    return `<div class="msg ${own ? 'own' : ''}">
+      <div class="msg-avatar">${initial}</div>
+      <div class="msg-body">
+        <div class="msg-meta"><b>${escHtml(m.full_name)}</b> · ${fmtDate(m.created_at)}</div>
+        <div class="msg-bubble">${escHtml(m.text)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
