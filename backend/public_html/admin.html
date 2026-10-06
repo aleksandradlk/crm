@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf2">
+<link rel="stylesheet" href="/shared/style.css?v=nf3">
 <style>
 .source-btn{display:flex;align-items:center;gap:6px;padding:7px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text2);cursor:pointer;transition:all 0.15s;user-select:none}
 .source-btn.active{background:color-mix(in srgb, var(--accent) 12%, transparent);border-color:color-mix(in srgb, var(--accent) 40%, transparent);color:var(--accent)}
@@ -40,8 +40,8 @@
 .view-toggle button{background:var(--bg3);border:none;color:var(--text3);padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px}
 .view-toggle button.active{background:var(--accent);color:var(--accent-fg)}
 /* Pipeline */
-.pipeline-board{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px}
-.pipeline-col{flex:0 0 230px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);display:flex;flex-direction:column;max-height:calc(100vh - 280px);min-height:200px}
+.pipeline-board{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;overscroll-behavior-x:contain}
+.pipeline-col{flex:1 1 0;min-width:176px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);display:flex;flex-direction:column;max-height:calc(100vh - 280px);min-height:200px}
 .pipeline-col-header{padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;color:var(--text2)}
 .pipeline-col-body{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:8px;min-height:80px;transition:background .15s}
 .pipeline-col-body.drag-over{background:color-mix(in srgb, var(--accent) 10%, transparent)}
@@ -510,15 +510,21 @@
 <div class="slide-overlay" id="leadOverlay" onclick="closeLeadPanel()"></div>
 <div class="slide-panel" id="leadPanel">
   <!-- Fixer Header -->
-  <div id="panelHeader" style="flex-shrink:0;padding:18px 20px 16px;border-bottom:1px solid var(--border);background:var(--bg2)">
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px">
-      <div style="font-size:17px;font-weight:700;line-height:1.3" id="panelCompany">—</div>
-      <button class="btn btn-ghost btn-sm" style="flex-shrink:0" onclick="closeLeadPanel()"><i class="fas fa-times"></i></button>
+  <div id="panelHeader" class="panel-head">
+    <div class="panel-head-row">
+      <div class="panel-avatar" id="panelAvatar">—</div>
+      <div class="panel-title-wrap">
+        <div class="panel-title" id="panelCompany">—</div>
+        <div class="panel-subtitle" id="panelSubtitle"></div>
+      </div>
+      <div class="panel-head-actions">
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="closeLeadPanel()" title="Schließen"><i class="fas fa-times"></i></button>
+      </div>
     </div>
     <div id="panelKeyInfo"></div>
   </div>
   <!-- Scrollbarer Body -->
-  <div id="panelContent" style="flex:1;overflow-y:auto;padding:20px"></div>
+  <div id="panelContent" class="panel-body"></div>
 </div>
 
 <!-- EMAIL MODAL -->
@@ -645,7 +651,7 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf2"></script>
+<script src="/shared/api.js?v=nf3"></script>
 <script>
 let allLeads = [], allUsers = [], generatedLeads = [], editingUserId = null;
 let panelDirty = false;
@@ -1256,29 +1262,31 @@ function renderCallLogs(logs) {
 function renderPanelKeyInfo(l) {
   const lastNote = (l.comments||[]).length ? l.comments[l.comments.length - 1] : null;
   const lastActivity = lastNote && lastNote.created_at > (l.updated_at||'') ? lastNote.created_at : (l.updated_at||l.created_at);
-  const editBtn = (field, val) => `<button onclick="editLeadContact(${l.id},'${field}',${escHtml(JSON.stringify(val||''))})" style="background:none;border:none;cursor:pointer;color:var(--text3);padding:1px 5px;font-size:11px;flex-shrink:0;line-height:1" title="Bearbeiten"><i class="fas fa-edit"></i></button>`;
-  const callBtn = l.phone ? `<button onclick="startCall(${l.id},'${escHtml(l.phone)}')" style="background:none;border:1px solid var(--green);border-radius:5px;cursor:pointer;color:var(--green);padding:2px 8px;font-size:11px;flex-shrink:0;white-space:nowrap;font-weight:600" title="Anrufen"><i class="fas fa-phone"></i> Anrufen</button>` : '';
+  const editBtn = (field, val) => `<button class="panel-icon-btn" onclick="editLeadContact(${l.id},'${field}',${escHtml(JSON.stringify(val||''))})" title="Bearbeiten"><i class="fas fa-edit"></i></button>`;
+  const callBtn = l.phone ? `<button class="panel-call-btn" onclick="startCall(${l.id},'${escHtml(l.phone)}')" title="Anrufen"><i class="fas fa-phone"></i> Anrufen</button>` : '';
+  const empty = `<span class="panel-muted">—</span>`;
   const contactItems = [
-    l.ceo   ? `<div style="display:flex;align-items:center;gap:8px;font-size:13px"><i class="fas fa-user" style="color:var(--text3);width:14px;text-align:center;flex-shrink:0"></i><span>${escHtml(l.ceo)}</span></div>` : '',
-    `<div style="display:flex;align-items:center;gap:8px;font-size:13px;flex-wrap:wrap"><i class="fas fa-phone" style="color:var(--text3);width:14px;text-align:center;flex-shrink:0"></i>${l.phone ? `<a href="tel:${escHtml(l.phone)}" style="color:var(--accent)">${escHtml(l.phone)}</a>` : `<span style="color:var(--text3);font-size:12px">—</span>`}${editBtn('phone', l.phone)}${callBtn}</div>`,
-    `<div style="display:flex;align-items:center;gap:8px;font-size:13px"><i class="fas fa-envelope" style="color:var(--text3);width:14px;text-align:center;flex-shrink:0"></i>${l.email ? `<a href="mailto:${escHtml(l.email)}" style="color:var(--accent)">${escHtml(l.email)}</a>` : `<span style="color:var(--text3);font-size:12px">—</span>`}${editBtn('email', l.email)}</div>`,
+    l.ceo ? `<div class="panel-contact-row"><i class="fas fa-user"></i><span>${escHtml(l.ceo)}</span></div>` : '',
+    `<div class="panel-contact-row"><i class="fas fa-phone"></i>${l.phone ? `<a href="tel:${escHtml(l.phone)}" class="mono">${escHtml(l.phone)}</a>` : empty}${editBtn('phone', l.phone)}${callBtn}</div>`,
+    `<div class="panel-contact-row"><i class="fas fa-envelope"></i>${l.email ? `<a href="mailto:${escHtml(l.email)}">${escHtml(l.email)}</a>` : empty}${editBtn('email', l.email)}</div>`,
   ].filter(Boolean).join('');
+  const avatar = document.getElementById('panelAvatar');
+  if (avatar) avatar.textContent = (l.company||'').trim().charAt(0).toUpperCase() || '?';
+  const sub = document.getElementById('panelSubtitle');
+  if (sub) sub.textContent = [l.location, l.industry].filter(Boolean).join(' · ');
   return `
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+    <div class="panel-meta">
       ${statusBadge(l.status)}
       ${ageBadge(lastActivity)}
       ${confBar(l.confidence)}
-      <div style="display:flex;gap:6px;margin-left:auto">
-        <button class="btn btn-ghost btn-sm" onclick="openCreateChatFromLead(${l.id})" title="Rücksprache erstellen"><i class="fas fa-comments"></i> Rücksprache</button>
-        <button class="btn btn-ghost btn-sm" onclick="openEmailModal()"><i class="fas fa-envelope"></i> E-Mail</button>
-        <button class="btn btn-ghost btn-sm" onclick="deleteLead(${l.id})" title="Lead löschen" style="color:var(--red)"><i class="fas fa-trash"></i></button>
-      </div>
     </div>
-    ${contactItems ? `<div style="display:grid;gap:5px;margin-bottom:${lastNote?'10px':'0'}">${contactItems}</div>` : ''}
-    ${lastNote ? `<div style="padding:8px 10px;background:var(--bg3);border-radius:6px;border-left:2px solid var(--accent)">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:3px">Letzte Notiz</div>
-      <div style="font-size:12px;color:var(--text2);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${escHtml(lastNote.text)}</div>
-    </div>` : ''}
+    <div class="panel-contact">${contactItems}</div>
+    <div class="panel-actions">
+      <button class="btn btn-ghost btn-sm" onclick="openCreateChatFromLead(${l.id})" title="Rücksprache erstellen"><i class="fas fa-comments"></i> Rücksprache</button>
+      <button class="btn btn-ghost btn-sm" onclick="openEmailModal()"><i class="fas fa-envelope"></i> E-Mail</button>
+      <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteLead(${l.id})" title="Lead löschen" style="color:var(--red);margin-left:auto"><i class="fas fa-trash"></i></button>
+    </div>
+    ${lastNote ? `<div class="panel-note"><div class="panel-note-label">Letzte Notiz</div><div class="panel-note-text">${escHtml(lastNote.text)}</div></div>` : ''}
     <div id="callLogSection">${renderCallLogs(l.call_logs||[])}</div>
   `;
 }
@@ -1294,71 +1302,76 @@ function renderLeadDetail(l) {
   const fieldsHtml = fields.filter(([,v]) => v).map(([k,v,t]) => {
     let val = escHtml(v);
     if (t === 'email') val = `<a href="mailto:${escHtml(v)}">${escHtml(v)}</a>`;
-    if (t === 'url')   val = `<a href="${escHtml(absUrl(v))}" target="_blank">${escHtml(v)}</a>`;
-    return `<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px">
-      <span style="color:var(--text3)">${k}</span><span style="text-align:right;max-width:220px;word-break:break-all">${val}</span></div>`;
+    if (t === 'url')   val = `<a href="${escHtml(absUrl(v))}" target="_blank" rel="noopener">${escHtml(v)}</a>`;
+    return `<div class="panel-field"><div class="panel-field-k">${k}</div><div class="panel-field-v">${val}</div></div>`;
   }).join('');
 
   const statusOpts = ['neu','kontaktiert','nicht_erreicht','kein_interesse','rueckruf','kunde'];
   const statusLabels = { neu:'Neu', kontaktiert:'Kontaktiert', nicht_erreicht:'Nicht erreicht', kein_interesse:'Kein Interesse', rueckruf:'Rückruf', kunde:'Kunde' };
   const statusHtml = statusOpts.map(s =>
-    `<button class="btn btn-ghost btn-sm" style="${l.status===s?'border-color:var(--accent);color:var(--accent)':''}" onclick="changeStatus(${l.id},'${s}')">${statusLabels[s]}</button>`
+    `<button class="status-chip s-${s} ${l.status===s?'active':''}" onclick="changeStatus(${l.id},'${s}')">${statusLabels[s]}</button>`
   ).join('');
 
   const commentsHtml = (l.comments||[]).map(c => {
-    const editBtn   = `<button onclick="editComment(${l.id},${c.id},${JSON.stringify(c.text)})" style="background:none;border:none;cursor:pointer;color:var(--text3);padding:2px 5px;font-size:11px" title="Bearbeiten"><i class="fas fa-edit"></i></button>`;
-    const deleteBtn = `<button onclick="deleteComment(${l.id},${c.id})" style="background:none;border:none;cursor:pointer;color:var(--text3);padding:2px 5px;font-size:11px" title="Löschen"><i class="fas fa-trash"></i></button>`;
-    return `<div id="comment-wrap-${c.id}" style="padding:10px;background:var(--bg3);border-radius:8px;margin-bottom:8px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
-        <span style="font-size:11px;color:var(--text3)">${escHtml(c.full_name)} · ${fmtDate(c.created_at)}${c.edited_at?'<i style="margin-left:4px;opacity:.6"> · bearb.</i>':''}</span>
-        <div>${editBtn}${deleteBtn}</div>
+    const editBtn   = `<button class="panel-icon-btn" onclick="editComment(${l.id},${c.id},${escHtml(JSON.stringify(c.text))})" title="Bearbeiten"><i class="fas fa-edit"></i></button>`;
+    const deleteBtn = `<button class="panel-icon-btn" onclick="deleteComment(${l.id},${c.id})" title="Löschen"><i class="fas fa-trash"></i></button>`;
+    return `<div id="comment-wrap-${c.id}" class="comment">
+      <div class="comment-avatar">${escHtml((c.full_name||'?').trim().charAt(0).toUpperCase())}</div>
+      <div class="comment-main">
+        <div class="comment-meta"><span><b>${escHtml(c.full_name)}</b> · ${fmtDate(c.created_at)}${c.edited_at?'<i style="margin-left:4px;opacity:.6"> · bearb.</i>':''}</span><div class="comment-actions">${editBtn}${deleteBtn}</div></div>
+        <div id="comment-text-${c.id}" class="comment-text">${escHtml(c.text)}</div>
       </div>
-      <div id="comment-text-${c.id}" style="font-size:13px">${escHtml(c.text)}</div>
     </div>`;
-  }).join('') || '<div style="color:var(--text3);font-size:12px">Noch keine Kommentare</div>';
+  }).join('') || '<div class="panel-empty">Noch keine Kommentare</div>';
 
   const remindersHtml = (l.reminders||[]).filter(r => !r.sent).map(r => `
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--bg3);border-radius:8px;margin-bottom:6px">
-      <div>
-        <div style="font-size:12px;color:var(--amber)"><i class="fas fa-bell"></i> ${fmtDate(r.remind_at)}</div>
-        ${r.note ? `<div style="font-size:12px;color:var(--text2);margin-top:2px">${escHtml(r.note)}</div>` : ''}
-      </div>
-      <button class="btn btn-ghost btn-sm" onclick="deleteReminder(${l.id},${r.id})"><i class="fas fa-times"></i></button>
-    </div>`).join('') || '<div style="color:var(--text3);font-size:12px">Keine Reminder</div>';
+    <div class="reminder">
+      <div><div class="reminder-when"><i class="fas fa-bell"></i> ${fmtDate(r.remind_at)}</div>${r.note ? `<div class="reminder-note">${escHtml(r.note)}</div>` : ''}</div>
+      <button class="panel-icon-btn" onclick="deleteReminder(${l.id},${r.id})" title="Löschen"><i class="fas fa-times"></i></button>
+    </div>`).join('') || '<div class="panel-empty">Keine Reminder</div>';
 
-  const me = Auth.getUser();
   const userOpts = `<option value="">— Niemandem zuweisen —</option>` +
     (allUsers||[]).map(u => `<option value="${u.id}" ${l.assigned_to===u.id?'selected':''}>${escHtml(u.full_name)} (${u.role})</option>`).join('');
 
   return `
-    ${fieldsHtml}
+    ${fieldsHtml ? `<div class="panel-section"><div class="panel-section-title">Details</div><div class="panel-fields">${fieldsHtml}</div></div>` : ''}
 
-    <div style="margin:16px 0 8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Zuweisen</div>
-    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-      <select id="assignSelect-${l.id}" class="form-control" style="flex:1;min-width:160px">${userOpts}</select>
-      <button class="btn btn-ghost btn-sm" onclick="assignLead(${l.id})"><i class="fas fa-user-check"></i> Zuweisen</button>
-      <button class="btn btn-ghost btn-sm" onclick="assignLeadToMe(${l.id})" title="Mir zuweisen"><i class="fas fa-hand-pointer"></i> Mir</button>
-    </div>
-
-    <div style="margin:0 0 8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Status ändern</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">${statusHtml}</div>
-    <div style="margin-bottom:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Kommentare</div>
-    <div style="margin-bottom:12px">${commentsHtml}</div>
-    <div style="display:flex;gap:8px;margin-bottom:16px">
-      <input type="text" id="newComment-${l.id}" class="form-control" placeholder="Kommentar schreiben...">
-      <button class="btn btn-ghost btn-sm" onclick="addComment(${l.id})"><i class="fas fa-paper-plane"></i></button>
-    </div>
-    <div style="margin-top:16px;margin-bottom:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">E-Mail-Verlauf</div>
-    <div id="adminEmailThread">${renderEmailThread(l.email_thread||[])}</div>
-
-    <div style="margin-bottom:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Reminder</div>
-    <div style="margin-bottom:12px">${remindersHtml}</div>
-    <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end">
-      <div>
-        <div class="form-group" style="margin-bottom:8px"><label>Datum &amp; Uhrzeit</label><input type="datetime-local" id="newRemindAt-${l.id}" class="form-control"></div>
-        <div class="form-group" style="margin-bottom:0"><label>Notiz</label><input type="text" id="newRemindNote-${l.id}" class="form-control" placeholder="Optional..."></div>
+    <div class="panel-section">
+      <div class="panel-section-title">Zuweisen</div>
+      <div class="panel-row">
+        <select id="assignSelect-${l.id}" class="form-control">${userOpts}</select>
+        <button class="btn btn-ghost btn-sm" onclick="assignLead(${l.id})"><i class="fas fa-user-check"></i> Zuweisen</button>
+        <button class="btn btn-ghost btn-sm" onclick="assignLeadToMe(${l.id})" title="Mir zuweisen"><i class="fas fa-hand-pointer"></i> Mir</button>
       </div>
-      <button class="btn btn-ghost btn-sm" style="margin-bottom:0" onclick="addReminder(${l.id})"><i class="fas fa-bell"></i> Setzen</button>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title">Status ändern</div>
+      <div class="panel-status">${statusHtml}</div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title">Kommentare</div>
+      <div class="panel-list">${commentsHtml}</div>
+      <div class="panel-row" style="margin-top:10px">
+        <input type="text" id="newComment-${l.id}" class="form-control" placeholder="Kommentar schreiben …" onkeydown="if(event.key==='Enter')addComment(${l.id})">
+        <button class="btn btn-primary btn-sm btn-icon" onclick="addComment(${l.id})" title="Senden"><i class="fas fa-paper-plane"></i></button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title">E-Mail-Verlauf</div>
+      <div id="adminEmailThread">${renderEmailThread(l.email_thread||[])}</div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title">Reminder</div>
+      <div class="panel-list">${remindersHtml}</div>
+      <div class="reminder-form">
+        <div class="form-group" style="margin:0"><label>Datum &amp; Uhrzeit</label><input type="datetime-local" id="newRemindAt-${l.id}" class="form-control"></div>
+        <div class="form-group" style="margin:0"><label>Notiz</label><input type="text" id="newRemindNote-${l.id}" class="form-control" placeholder="Optional …"></div>
+        <button class="btn btn-ghost btn-sm" onclick="addReminder(${l.id})"><i class="fas fa-bell"></i> Setzen</button>
+      </div>
     </div>`;
 }
 

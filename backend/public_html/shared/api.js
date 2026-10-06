@@ -294,3 +294,28 @@ function updateThemeBtn() {
     btn.textContent = isDark ? '☀️' : '🌙';
   }
 }
+
+// ── Pipeline: automatisches Scrollen beim Ziehen an den Rand ──
+// Browser scrollen innere Scroll-Bereiche beim nativen Drag & Drop nicht
+// zuverlässig mit. Bei schmalen Fenstern liegen Spalten der Pipeline
+// außerhalb des sichtbaren Bereichs; hier wird das Board (horizontal) bzw.
+// die Spalte (vertikal) nachgeschoben, sobald die Karte nahe am Rand ist.
+(function () {
+  const EDGE = 64, STEP = 18;
+  document.addEventListener('dragover', (e) => {
+    if (!e.target || !e.target.closest) return;
+    const board = e.target.closest('.pipeline-board');
+    if (!board) return;
+    if (board.scrollWidth > board.clientWidth) {
+      const r = board.getBoundingClientRect();
+      if (e.clientX < r.left + EDGE)       board.scrollLeft -= STEP;
+      else if (e.clientX > r.right - EDGE) board.scrollLeft += STEP;
+    }
+    const body = e.target.closest('.pipeline-col-body');
+    if (body && body.scrollHeight > body.clientHeight) {
+      const b = body.getBoundingClientRect();
+      if (e.clientY < b.top + EDGE)         body.scrollTop -= STEP;
+      else if (e.clientY > b.bottom - EDGE) body.scrollTop += STEP;
+    }
+  }, { passive: true });
+})();
