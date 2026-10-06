@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf9">
+<link rel="stylesheet" href="/shared/style.css?v=nf10">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -671,7 +671,7 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf9"></script>
+<script src="/shared/api.js?v=nf10"></script>
 <script>
 let allLeads = [], allUsers = [], generatedLeads = [], editingUserId = null;
 let panelDirty = false;
@@ -2744,12 +2744,14 @@ function showReminderPopup(r) {
   const id = `rn-${r.id}`;
   const div = document.createElement('div');
   div.id = id;
-  div.style.cssText = 'background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;box-shadow:var(--shadow-lg);min-width:260px;max-width:320px;animation:slideIn .3s ease;position:relative';
+  div.className = 'rem-toast';
   div.innerHTML = `
-    <div style="font-size:12px;color:var(--accent);font-weight:600;margin-bottom:4px"><i class="fas fa-bell"></i> Reminder fällig</div>
-    <div style="font-size:13px;font-weight:600">${escHtml(r.company)}</div>
-    ${r.note ? `<div style="font-size:12px;color:var(--text2);margin-top:3px">${escHtml(r.note)}</div>` : ''}
-    <button onclick="document.getElementById('${id}').remove()" style="position:absolute;top:8px;right:10px;background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px"><i class="fas fa-times"></i></button>
+    <div class="rem-toast-eyebrow"><i class="fas fa-bell"></i> Reminder fällig</div>
+    <div class="rem-toast-title">${escHtml(r.company||'—')}</div>
+    ${r.note ? `<div class="rem-toast-note">${escHtml(r.note)}</div>` : ''}
+    <div class="rem-toast-time">${fmtDate(r.remind_at)}</div>
+    <button type="button" class="rem-toast-x" onclick="document.getElementById('${id}').remove()" title="Schließen"><i class="fas fa-times"></i></button>
+    <button class="btn btn-primary btn-sm" onclick="openLeadPanel(${r.lead_id});document.getElementById('${id}').remove()"><i class="fas fa-external-link-alt"></i> Lead öffnen</button>
   `;
   container.appendChild(div);
   setTimeout(() => { const el = document.getElementById(id); if (el) el.remove(); }, 8000);
@@ -3562,7 +3564,7 @@ document.getElementById('addLeadModal').addEventListener('click', function(e){ i
 </div>
 
 <!-- Reminder Popup Container -->
-<div id="reminderNotifContainer" style="position:fixed;bottom:20px;right:20px;z-index:600;display:flex;flex-direction:column;gap:8px;align-items:flex-end"></div>
+<div id="reminderNotifContainer" class="rem-toast-stack"></div>
 
 <style>
 @keyframes slideIn {
