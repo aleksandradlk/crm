@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf5">
+<link rel="stylesheet" href="/shared/style.css?v=nf6">
 <style>
 .notif-panel{position:fixed;top:0;right:0;bottom:0;width:340px;background:var(--bg2);border-left:1px solid var(--border2);z-index:150;transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;padding:20px}
 .notif-panel.open{transform:translateX(0)}
@@ -312,20 +312,29 @@
     <!-- FEEDBACK -->
     <div id="sec-feedback" style="display:none">
       <div class="page-header">
-        <h1 data-eyebrow="Ressourcen">Feedback-Board</h1>
+        <div><h1 data-eyebrow="Ressourcen">Feedback-Board</h1><p class="page-desc">Wünsche und Fehler melden. Aleksandra antwortet direkt am Eintrag.</p></div>
         <div class="page-actions">
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="loadMyFeedback()" title="Aktualisieren"><i class="fas fa-sync"></i></button>
           <button class="btn btn-primary btn-sm" onclick="openFeedbackModal()"><i class="fas fa-plus"></i> Neu eintragen</button>
-          <select id="myFbFilter" class="form-control" style="width:160px" onchange="loadMyFeedback()">
-            <option value="">Alle Tags</option>
-            <option value="offen">Offen</option>
-            <option value="in_planung">In Planung</option>
-            <option value="erledigt">Erledigt</option>
-            <option value="nicht_moeglich">Nicht möglich</option>
-          </select>
-          <button class="btn btn-ghost btn-sm" onclick="loadMyFeedback()"><i class="fas fa-sync"></i></button>
         </div>
       </div>
-      <div id="myFeedbackList"></div>
+      <div class="toolbar">
+        <div class="chip-row" id="myFbFilters">
+          <button class="qf-btn active" data-value="" onclick="chipFilter(this,'myFbFilter',loadMyFeedback)">Alle <span class="qf-count">0</span></button>
+          <button class="qf-btn" data-value="offen" onclick="chipFilter(this,'myFbFilter',loadMyFeedback)">Offen <span class="qf-count">0</span></button>
+          <button class="qf-btn" data-value="in_planung" onclick="chipFilter(this,'myFbFilter',loadMyFeedback)">In Planung <span class="qf-count">0</span></button>
+          <button class="qf-btn" data-value="erledigt" onclick="chipFilter(this,'myFbFilter',loadMyFeedback)">Erledigt <span class="qf-count">0</span></button>
+          <button class="qf-btn" data-value="nicht_moeglich" onclick="chipFilter(this,'myFbFilter',loadMyFeedback)">Nicht möglich <span class="qf-count">0</span></button>
+        </div>
+        <select id="myFbFilter" class="form-control" hidden onchange="loadMyFeedback()">
+          <option value="">Alle Tags</option>
+          <option value="offen">Offen</option>
+          <option value="in_planung">In Planung</option>
+          <option value="erledigt">Erledigt</option>
+          <option value="nicht_moeglich">Nicht möglich</option>
+        </select>
+      </div>
+      <div id="myFeedbackList" class="fb-list"></div>
     </div>
 
     <!-- BENUTZER ANLEGEN (nur bei can_create_users) -->
@@ -501,7 +510,7 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf5"></script>
+<script src="/shared/api.js?v=nf6"></script>
 <script>
 const ME = Auth.getUser();
 const CAN = {
@@ -2293,29 +2302,17 @@ const FB_TAG_COLORS_C = { offen:'var(--accent)', in_planung:'var(--amber)', erle
 async function loadMyFeedback() {
   try {
     const filter = document.getElementById('myFbFilter')?.value || '';
-    let list = await api('GET', '/feedback');
-    if (filter) list = list.filter(f => f.tag === filter);
+    const all = await api('GET', '/feedback');
+    const counts = { _all: all.length };
+    all.forEach(f => { counts[f.tag] = (counts[f.tag] || 0) + 1; });
+    setChipCounts('myFbFilters', counts);
+    const list = filter ? all.filter(f => f.tag === filter) : all;
     const el = document.getElementById('myFeedbackList');
-    if (!list.length) { el.innerHTML = '<div style="color:var(--text3);padding:24px;text-align:center">Keine Einträge gefunden</div>'; return; }
-    el.innerHTML = list.map(f => `
-      <div class="card" style="padding:16px;margin-bottom:10px">
-        <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap">
-          <div style="flex:1;min-width:0">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
-              <span style="font-size:11px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:1px 7px;color:var(--text3)">${escHtml(f.type==='bug'?'Bug':'Wunsch')}</span>
-              <span style="font-size:11px;font-weight:700;color:${FB_TAG_COLORS_C[f.tag]||'var(--text3)'}">${escHtml(FB_TAG_LABELS_C[f.tag]||f.tag)}</span>
-              <span style="font-size:11px;color:var(--text3)">${fmtDateShort(f.created_at)}</span>
-            </div>
-            <div style="font-weight:600;margin-bottom:4px">${escHtml(f.title)}</div>
-            ${f.description ? `<div style="font-size:13px;color:var(--text2);white-space:pre-wrap">${escHtml(f.description)}</div>` : ''}
-            ${f.admin_note ? `<div style="margin-top:8px;padding:8px 10px;background:color-mix(in srgb, var(--accent) 8%, transparent);border-radius:8px;font-size:12px;color:var(--text2)"><b>Admin-Notiz:</b> ${escHtml(f.admin_note)}</div>` : ''}
-          </div>
-          <button class="btn btn-ghost btn-sm" style="color:var(--red);font-size:11px" onclick="deleteMyFeedback(${f.id})"><i class="fas fa-trash"></i> Löschen</button>
-        </div>
-      </div>
-    `).join('');
+    if (!list.length) { el.innerHTML = '<div class="wiki-empty"><i class="fas fa-flag"></i>' + (filter ? 'Keine Einträge mit diesem Status.' : 'Noch keine Einträge. Hast du einen Wunsch oder ist dir ein Fehler aufgefallen? Trag ihn ein.') + '</div>'; return; }
+    el.innerHTML = list.map(f => renderFeedbackCard(f, { deleteFn: 'deleteMyFeedback' })).join('');
   } catch(e) { showToast(e.message, 'err'); }
 }
+
 
 function selectFbType(type) {
   document.getElementById('fb-type').value = type;

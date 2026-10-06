@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf5">
+<link rel="stylesheet" href="/shared/style.css?v=nf6">
 <style>
 .source-btn{display:flex;align-items:center;gap:6px;padding:7px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text2);cursor:pointer;transition:all 0.15s;user-select:none}
 .source-btn.active{background:color-mix(in srgb, var(--accent) 12%, transparent);border-color:color-mix(in srgb, var(--accent) 40%, transparent);color:var(--accent)}
@@ -339,7 +339,7 @@
       </div>
       <div class="card">
         <div class="table-wrap">
-          <table><thead><tr><th>Name</th><th>Benutzername</th><th>E-Mail</th><th>Telefon</th><th>Rolle</th><th>Status</th><th>Letzter Login</th><th>Erstellt von</th><th></th></tr></thead>
+          <table class="keep-first"><thead><tr><th>Name</th><th>Benutzername</th><th>E-Mail</th><th>Telefon</th><th>Rolle</th><th>Status</th><th>Letzter Login</th><th>Erstellt von</th><th></th></tr></thead>
           <tbody id="usersTableBody"></tbody></table>
         </div>
       </div>
@@ -461,47 +461,67 @@
     <!-- ── TAB: FEEDBACK-BOARD ───────────────────────── -->
     <div id="tab-feedback" class="tab-panel">
       <div class="page-header">
-        <h1 data-eyebrow="Ressourcen">Feedback-Board</h1>
+        <div><h1 data-eyebrow="Ressourcen">Feedback-Board</h1><p class="page-desc">Wünsche und Fehlermeldungen aus dem Team, mit Status und deiner Antwort.</p></div>
         <div class="page-actions">
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="loadFeedback()" title="Aktualisieren"><i class="fas fa-sync"></i></button>
           <button class="btn btn-primary btn-sm" onclick="openAdminFeedbackModal()"><i class="fas fa-plus"></i> Neu eintragen</button>
-          <select id="fbTagFilter" class="form-control" style="width:160px" onchange="renderFeedbackList()">
-            <option value="">Alle Tags</option>
-            <option value="offen">Offen</option>
-            <option value="in_planung">In Planung</option>
-            <option value="erledigt">Erledigt</option>
-            <option value="nicht_moeglich">Nicht möglich</option>
-          </select>
-          <button class="btn btn-ghost btn-sm" onclick="loadFeedback()"><i class="fas fa-sync"></i></button>
         </div>
       </div>
-      <div id="feedbackList"></div>
+      <div class="toolbar">
+        <div class="chip-row" id="fbFilters">
+          <button class="qf-btn active" data-value="" onclick="chipFilter(this,'fbTagFilter',renderFeedbackList)">Alle <span class="qf-count">0</span></button>
+          <button class="qf-btn" data-value="offen" onclick="chipFilter(this,'fbTagFilter',renderFeedbackList)">Offen <span class="qf-count">0</span></button>
+          <button class="qf-btn" data-value="in_planung" onclick="chipFilter(this,'fbTagFilter',renderFeedbackList)">In Planung <span class="qf-count">0</span></button>
+          <button class="qf-btn" data-value="erledigt" onclick="chipFilter(this,'fbTagFilter',renderFeedbackList)">Erledigt <span class="qf-count">0</span></button>
+          <button class="qf-btn" data-value="nicht_moeglich" onclick="chipFilter(this,'fbTagFilter',renderFeedbackList)">Nicht möglich <span class="qf-count">0</span></button>
+        </div>
+        <select id="fbTagFilter" class="form-control" hidden onchange="renderFeedbackList()">
+          <option value="">Alle Tags</option>
+          <option value="offen">Offen</option>
+          <option value="in_planung">In Planung</option>
+          <option value="erledigt">Erledigt</option>
+          <option value="nicht_moeglich">Nicht möglich</option>
+        </select>
+      </div>
+      <div id="feedbackList" class="fb-list"></div>
     </div>
 
     <!-- ── TAB: AGENTEN ─────────────────────────────── -->
     <div id="tab-agents" class="tab-panel">
       <div class="page-header">
-        <h1 data-eyebrow="Ressourcen">Agenten</h1>
+        <div><h1 data-eyebrow="Ressourcen">Agenten</h1><p class="page-desc">Protokoll deiner KI-Agenten. Inhalte warten hier auf deine Freigabe.</p></div>
         <div class="page-actions">
-          <button class="btn btn-primary btn-sm" onclick="openAgentLogModal()"><i class="fas fa-plus"></i> Neu</button>
-          <select id="agentFilter" class="form-control" style="width:180px" onchange="renderAgentLog()">
-            <option value="">Alle Agenten</option>
-            <option value="Recherche">Recherche</option>
-            <option value="Content">Content</option>
-            <option value="Kundenservice">Kundenservice</option>
-            <option value="Buchhaltung">Buchhaltung</option>
-          </select>
-          <button class="btn btn-ghost btn-sm" onclick="loadAgentLog()"><i class="fas fa-sync"></i></button>
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="loadAgentLog()" title="Aktualisieren"><i class="fas fa-sync"></i></button>
+          <button class="btn btn-primary btn-sm" onclick="openAgentLogModal()"><i class="fas fa-plus"></i> Eintrag anlegen</button>
         </div>
       </div>
-      <div id="canvaStatusBar" class="card" style="padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"></div>
-      <div id="agentLogList"></div>
+      <div id="canvaStatusBar" class="integration-bar"></div>
+      <div class="toolbar">
+        <div class="chip-row" id="agentFilters">
+          <button class="qf-btn active" data-value="" onclick="chipFilter(this,'agentFilter',renderAgentLog)">Alle <span class="qf-count">0</span></button>
+          <button class="qf-btn" data-value="Recherche" onclick="chipFilter(this,'agentFilter',renderAgentLog)">Recherche <span class="qf-count">0</span></button>
+          <button class="qf-btn" data-value="Content" onclick="chipFilter(this,'agentFilter',renderAgentLog)">Content <span class="qf-count">0</span></button>
+          <button class="qf-btn" data-value="Kundenservice" onclick="chipFilter(this,'agentFilter',renderAgentLog)">Kundenservice <span class="qf-count">0</span></button>
+          <button class="qf-btn" data-value="Buchhaltung" onclick="chipFilter(this,'agentFilter',renderAgentLog)">Buchhaltung <span class="qf-count">0</span></button>
+        </div>
+        <select id="agentFilter" class="form-control" hidden onchange="renderAgentLog()">
+          <option value="">Alle Agenten</option>
+          <option value="Recherche">Recherche</option>
+          <option value="Content">Content</option>
+          <option value="Kundenservice">Kundenservice</option>
+          <option value="Buchhaltung">Buchhaltung</option>
+        </select>
+        <div class="toolbar-spacer"></div>
+        <span class="agent-pending" id="agentPending" hidden><i class="fas fa-hourglass-half"></i> <b>0</b> warten auf Freigabe</span>
+      </div>
+      <div id="agentLogList" class="agent-list"></div>
     </div>
 
     <!-- ── TAB: ARCHIV ──────────────────────────────── -->
     <div id="tab-archive" class="tab-panel">
       <div class="page-header">
-        <h1 data-eyebrow="Ressourcen">Archivierte Leads</h1>
-        <button class="btn btn-ghost btn-sm" onclick="loadArchive()"><i class="fas fa-sync"></i> Aktualisieren</button>
+        <div><h1 data-eyebrow="Ressourcen">Archivierte Leads</h1><p class="page-desc">Archivierte Leads bleiben erhalten und lassen sich jederzeit wiederherstellen. <span class="badge" id="archiveCount">0</span></p></div>
+        <div class="page-actions"><button class="btn btn-ghost btn-sm" onclick="loadArchive()"><i class="fas fa-sync"></i> Aktualisieren</button></div>
       </div>
       <div id="archiveList"></div>
     </div>
@@ -666,7 +686,7 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf5"></script>
+<script src="/shared/api.js?v=nf6"></script>
 <script>
 let allLeads = [], allUsers = [], generatedLeads = [], editingUserId = null;
 let panelDirty = false;
@@ -3058,35 +3078,27 @@ async function loadArchive() {
   try {
     const leads = await api('GET', '/leads/archived');
     const el = document.getElementById('archiveList');
+    const cnt = document.getElementById('archiveCount');
+    if (cnt) cnt.textContent = leads.length;
     if (!leads.length) {
-      el.innerHTML = '<div style="color:var(--text3);text-align:center;padding:40px"><i class="fas fa-archive" style="font-size:28px;display:block;margin-bottom:10px;opacity:.3"></i>Keine archivierten Leads</div>';
+      el.innerHTML = '<div class="wiki-empty"><i class="fas fa-archive"></i>Keine archivierten Leads. Archivierte Leads landen hier und lassen sich jederzeit wiederherstellen.</div>';
       return;
     }
-    el.innerHTML = leads.map(l => `
-      <div class="card" style="padding:14px 16px;margin-bottom:10px">
-        <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap">
-          <div style="flex:1;min-width:0">
-            <div style="font-weight:700;font-size:14px;margin-bottom:4px">${escHtml(l.company||'—')}</div>
-            <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--text2);margin-bottom:6px">
-              ${l.ceo   ? `<span><i class="fas fa-user" style="opacity:.5;margin-right:4px"></i>${escHtml(l.ceo)}</span>` : ''}
-              ${l.phone ? `<span><i class="fas fa-phone" style="opacity:.5;margin-right:4px"></i><a href="tel:${escHtml(l.phone)}" style="color:inherit">${escHtml(l.phone)}</a></span>` : ''}
-              ${l.email ? `<span><i class="fas fa-envelope" style="opacity:.5;margin-right:4px"></i>${escHtml(l.email)}</span>` : ''}
-              ${l.assigned_name ? `<span><i class="fas fa-user-check" style="opacity:.5;margin-right:4px"></i>${escHtml(l.assigned_name)}</span>` : ''}
-            </div>
-            <div style="font-size:11px;color:var(--text3)">
-              ${statusBadge(l.status)}
-              <span style="margin-left:8px"><i class="fas fa-archive" style="margin-right:3px"></i>Archiviert ${fmtDate(l.archived_at)} ${l.archived_by_name ? 'von ' + escHtml(l.archived_by_name) : ''}</span>
-              ${l.archive_reason ? `<span style="margin-left:8px;font-style:italic">"${escHtml(l.archive_reason)}"</span>` : ''}
-            </div>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
-            <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="restoreLead(${l.id})"><i class="fas fa-undo"></i> Wiederherstellen</button>
-            <button class="btn btn-ghost btn-sm" style="font-size:12px;color:var(--red)" onclick="permanentDeleteLead(${l.id},'${escHtml((l.company||'').replace(/'/g,"\\'"))}')"><i class="fas fa-trash"></i> Endgültig löschen</button>
-          </div>
-        </div>
-      </div>`).join('');
+    const jsName = l => escHtml(String(l.company || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+    el.innerHTML = `<div class="card"><div class="table-wrap"><table class="keep-first">
+      <thead><tr><th>Unternehmen</th><th>Kontakt</th><th>Zugewiesen</th><th>Status</th><th>Archiviert</th><th></th></tr></thead>
+      <tbody>${leads.map(l => `<tr>
+        <td><div class="cell-title">${escHtml(l.company || '—')}</div>${l.ceo ? `<div class="cell-sub">${escHtml(l.ceo)}</div>` : ''}</td>
+        <td>${l.phone ? `<div class="cell-sub mono"><a href="tel:${escHtml(l.phone)}">${escHtml(l.phone)}</a></div>` : ''}${l.email ? `<div class="cell-sub">${escHtml(l.email)}</div>` : ''}${(!l.phone && !l.email) ? '<span class="panel-muted">—</span>' : ''}</td>
+        <td class="cell-sub">${escHtml(l.assigned_name || '—')}</td>
+        <td>${statusBadge(l.status)}</td>
+        <td><div class="cell-sub">${fmtDateShort(l.archived_at)}${l.archived_by_name ? ' · ' + escHtml(l.archived_by_name) : ''}</div>${l.archive_reason ? `<div class="cell-reason">„${escHtml(l.archive_reason)}“</div>` : ''}</td>
+        <td class="cell-actions"><button class="btn btn-ghost btn-sm" onclick="restoreLead(${l.id})"><i class="fas fa-undo"></i> Wiederherstellen</button><button class="btn btn-ghost btn-sm btn-icon" title="Endgültig löschen" style="color:var(--red)" onclick="permanentDeleteLead(${l.id},'${jsName(l)}')"><i class="fas fa-trash"></i></button></td>
+      </tr>`).join('')}</tbody>
+    </table></div></div>`;
   } catch(e) { showToast(e.message, 'err'); }
 }
+
 
 async function restoreLead(id) {
   try {
@@ -3132,24 +3144,25 @@ async function loadCanvaStatus() {
   try {
     const { connected } = await api('GET', '/canva/status');
     if (!connected) {
-      bar.innerHTML = `<i class="fas fa-plug" style="color:var(--text3)"></i>
-        <span style="font-size:13px;flex:1">Canva ist noch nicht verbunden — Freigabe erstellt dann noch kein Design.</span>
+      bar.innerHTML = `<div class="integration-icon"><i class="fas fa-plug"></i></div>
+        <div class="integration-text"><b>Canva ist noch nicht verbunden</b><span>Nach der Verbindung erstellt eine Freigabe automatisch ein Design.</span></div>
         <button class="btn btn-primary btn-sm" onclick="connectCanva()"><i class="fas fa-link"></i> Mit Canva verbinden</button>`;
       return;
     }
     const templates = await api('GET', '/canva/brand-templates');
     const currentId = document.getElementById('canvaTemplateSelect')?.value;
-    bar.innerHTML = `<i class="fas fa-check-circle" style="color:var(--green)"></i>
-      <span style="font-size:13px">Canva verbunden</span>
-      <span style="font-size:13px;color:var(--text3)">· Vorlage für Content-Designs:</span>
-      <select id="canvaTemplateSelect" class="form-control" style="width:220px" onchange="selectCanvaTemplate(this.value)">
+    bar.innerHTML = `<div class="integration-icon ok"><i class="fas fa-check-circle"></i></div>
+      <div class="integration-text"><b>Canva verbunden</b><span>Vorlage für Content-Designs</span></div>
+      <select id="canvaTemplateSelect" class="form-control" onchange="selectCanvaTemplate(this.value)">
         <option value="">— auswählen —</option>
         ${templates.map(t => `<option value="${t.id}" ${t.id===currentId?'selected':''}>${escHtml(t.title||t.id)}</option>`).join('')}
       </select>`;
   } catch(e) {
-    bar.innerHTML = `<span style="font-size:13px;color:var(--red)">Canva-Status konnte nicht geladen werden: ${escHtml(e.message)}</span>`;
+    bar.innerHTML = `<div class="integration-icon err"><i class="fas fa-exclamation-triangle"></i></div>
+      <div class="integration-text"><b>Canva-Status konnte nicht geladen werden</b><span>${escHtml(e.message)}</span></div>`;
   }
 }
+
 
 async function connectCanva() {
   try {
@@ -3169,35 +3182,40 @@ async function selectCanvaTemplate(templateId) {
 
 function renderAgentLog() {
   const filter = document.getElementById('agentFilter')?.value || '';
-  const list = filter ? allAgentLog.filter(a => a.agent === filter) : allAgentLog;
+  const counts = { _all: allAgentLog.length };
+  allAgentLog.forEach(x => { counts[x.agent] = (counts[x.agent] || 0) + 1; });
+  setChipCounts('agentFilters', counts);
+  const pending = allAgentLog.filter(x => x.status === 'pending').length;
+  const pEl = document.getElementById('agentPending');
+  if (pEl) { pEl.hidden = !pending; const b = pEl.querySelector('b'); if (b) b.textContent = pending; }
+  const list = filter ? allAgentLog.filter(x => x.agent === filter) : allAgentLog;
   const el = document.getElementById('agentLogList');
-  if (!list.length) { el.innerHTML = '<div style="color:var(--text3);padding:24px;text-align:center">Noch keine Agenten-Aktivität</div>'; return; }
-  const STATUS_BADGE = {
-    error:    '<span style="font-size:10px;background:var(--red);color:#fff;border-radius:6px;padding:1px 6px">Fehler</span>',
-    pending:  '<span style="font-size:10px;background:var(--amber);color:#fff;border-radius:6px;padding:1px 6px">Wartet auf Freigabe</span>',
-    rejected: '<span style="font-size:10px;background:var(--text3);color:#fff;border-radius:6px;padding:1px 6px">Abgelehnt</span>',
-  };
-  el.innerHTML = list.map(a => `
-    <div class="card" style="padding:14px 16px;margin-bottom:8px;display:flex;align-items:flex-start;gap:12px">
-      <i class="fas ${AGENT_ICONS[a.agent]||'fa-robot'}" style="color:${a.status==='error'?'var(--red)':a.status==='pending'?'var(--amber)':'var(--accent)'};margin-top:2px"></i>
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px">
-          <span style="font-weight:700;font-size:13px">${escHtml(a.agent)}</span>
-          <span style="font-size:11px;color:var(--text3)">${fmtDate(a.created_at)}${a.created_by_name ? ' · von ' + escHtml(a.created_by_name) : ''}</span>
-          ${STATUS_BADGE[a.status] || ''}
+  if (!list.length) { el.innerHTML = '<div class="wiki-empty"><i class="fas fa-robot"></i>Noch keine Agenten-Aktivität' + (filter ? ' für diesen Agenten' : '') + '</div>'; return; }
+  const STATUS = { error: ['Fehler', 'err'], pending: ['Wartet auf Freigabe', 'pending'], rejected: ['Abgelehnt', ''], approved: ['Freigegeben', 'ok'] };
+  el.innerHTML = list.map(x => {
+    const st = STATUS[x.status];
+    const cls = String(x.agent || '').toLowerCase().replace(/[^a-z]/g, '');
+    const actions = [
+      x.design_url ? `<a href="${escHtml(x.design_url)}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm"><i class="fas fa-image"></i> Canva-Design öffnen</a>` : '',
+      x.status === 'pending' ? `<button class="btn btn-primary btn-sm" id="approve-btn-${x.id}" onclick="approveAgentLog(${x.id})"><i class="fas fa-check"></i> Freigeben</button>
+        <button class="btn btn-ghost btn-sm" onclick="rejectAgentLog(${x.id})"><i class="fas fa-times"></i> Ablehnen</button>` : '',
+    ].join('');
+    return `<div class="agent-item ${x.status === 'pending' ? 'is-pending' : ''} ${x.status === 'error' ? 'is-error' : ''}">
+      <div class="agent-icon ${cls}"><i class="fas ${AGENT_ICONS[x.agent] || 'fa-robot'}"></i></div>
+      <div class="agent-main">
+        <div class="agent-head">
+          <span class="agent-name">${escHtml(x.agent)}</span>
+          ${st ? `<span class="agent-status ${st[1]}">${st[0]}</span>` : ''}
+          <span class="agent-meta">${fmtDate(x.created_at)}${x.created_by_name ? ' · von ' + escHtml(x.created_by_name) : ''}</span>
         </div>
-        <div style="font-size:13px;color:var(--text2)">${escHtml(a.action)}</div>
-        ${a.detail ? `<div style="font-size:12px;color:var(--text3);margin-top:4px;white-space:pre-wrap">${escHtml(a.detail)}</div>` : ''}
-        ${a.design_url ? `<a href="${escHtml(a.design_url)}" target="_blank" class="btn btn-ghost btn-sm" style="margin-top:8px;display:inline-flex"><i class="fas fa-image"></i> Canva-Design öffnen</a>` : ''}
-        ${a.status==='pending' ? `
-          <div style="margin-top:8px;display:flex;gap:6px">
-            <button class="btn btn-primary btn-sm" id="approve-btn-${a.id}" onclick="approveAgentLog(${a.id})"><i class="fas fa-check"></i> Freigeben</button>
-            <button class="btn btn-ghost btn-sm" onclick="rejectAgentLog(${a.id})"><i class="fas fa-times"></i> Ablehnen</button>
-          </div>` : ''}
+        <div class="agent-action">${escHtml(x.action)}</div>
+        ${x.detail ? `<div class="agent-detail">${escHtml(x.detail)}</div>` : ''}
+        ${actions.trim() ? `<div class="agent-actions">${actions}</div>` : ''}
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
+
 
 async function approveAgentLog(id) {
   const btn = document.getElementById(`approve-btn-${id}`);
@@ -3250,33 +3268,15 @@ async function loadFeedback() {
 
 function renderFeedbackList() {
   const filter = document.getElementById('fbTagFilter')?.value || '';
+  const counts = { _all: allFeedback.length };
+  allFeedback.forEach(f => { counts[f.tag] = (counts[f.tag] || 0) + 1; });
+  setChipCounts('fbFilters', counts);
   const list = filter ? allFeedback.filter(f => f.tag === filter) : allFeedback;
   const el = document.getElementById('feedbackList');
-  if (!list.length) { el.innerHTML = '<div style="color:var(--text3);padding:24px;text-align:center">Keine Einträge</div>'; return; }
-  el.innerHTML = list.map(f => `
-    <div class="card" style="padding:16px;margin-bottom:10px">
-      <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap">
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
-            <span style="font-size:11px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:1px 7px;color:var(--text3)">${escHtml(FB_TYPE_LABELS[f.type]||f.type)}</span>
-            <span style="font-size:11px;font-weight:700;color:${FB_TAG_COLORS[f.tag]||'var(--text3)'}">${escHtml(FB_TAG_LABELS[f.tag]||f.tag)}</span>
-            <span style="font-size:11px;color:var(--text3)">${escHtml(f.author_name||'?')} · ${fmtDateShort(f.created_at)}</span>
-          </div>
-          <div style="font-weight:600;margin-bottom:4px">${escHtml(f.title)}</div>
-          ${f.description ? `<div style="font-size:13px;color:var(--text2);white-space:pre-wrap">${escHtml(f.description)}</div>` : ''}
-          ${f.admin_note ? `<div style="margin-top:8px;padding:8px 10px;background:color-mix(in srgb, var(--accent) 8%, transparent);border-radius:8px;font-size:12px;color:var(--text2)"><b>Admin-Notiz:</b> ${escHtml(f.admin_note)}</div>` : ''}
-        </div>
-        <div style="display:flex;flex-direction:column;gap:6px;min-width:160px">
-          <select class="form-control" style="font-size:12px" onchange="updateFeedbackTag(${f.id},this.value)">
-            ${Object.entries(FB_TAG_LABELS).map(([v,l])=>`<option value="${v}"${f.tag===v?' selected':''}>${l}</option>`).join('')}
-          </select>
-          <input type="text" class="form-control" style="font-size:12px" placeholder="Admin-Notiz..." value="${escHtml(f.admin_note||'')}" onblur="updateFeedbackNote(${f.id},this.value)" onkeydown="if(event.key==='Enter')this.blur()">
-          <button class="btn btn-ghost btn-sm" style="color:var(--red);font-size:11px" onclick="deleteFeedback(${f.id})"><i class="fas fa-trash"></i> Löschen</button>
-        </div>
-      </div>
-    </div>
-  `).join('');
+  if (!list.length) { el.innerHTML = '<div class="wiki-empty"><i class="fas fa-flag"></i>Keine Einträge' + (filter ? ' mit diesem Status' : '') + '</div>'; return; }
+  el.innerHTML = list.map(f => renderFeedbackCard(f, { admin: true })).join('');
 }
+
 
 async function updateFeedbackTag(id, tag) {
   try { await api('PATCH', `/feedback/${id}`, { tag }); const f = allFeedback.find(x=>x.id===id); if(f) f.tag=tag; renderFeedbackList(); }
