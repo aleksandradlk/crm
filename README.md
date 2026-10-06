@@ -1,7 +1,7 @@
 # LeadHunter Pro — Setup-Anleitung
 
 ## Voraussetzungen
-- Node.js 18+ auf deinem Hosting
+- Node.js 20+ auf deinem Hosting
 - MySQL/MariaDB Datenbank
 - SSH-Zugang zu deinem Server
 
