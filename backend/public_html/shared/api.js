@@ -103,12 +103,13 @@ function customConfirm(message, { title = 'Bitte bestätigen', okLabel = 'Bestä
     if (!overlay) {
       overlay = document.createElement('div');
       overlay.id = '_customConfirmOverlay';
-      overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(26,35,48,0.45);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:16px';
+      overlay.className = 'modal-overlay open';
+      overlay.style.cssText = 'z-index:9999';
       overlay.innerHTML = `
-        <div id="_customConfirmBox" style="background:var(--bg2);border:1px solid var(--border2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.28);width:100%;max-width:420px;padding:28px 28px 24px;display:flex;flex-direction:column;gap:0">
-          <div id="_customConfirmTitle" style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:12px"></div>
-          <div id="_customConfirmMsg"   style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:22px;white-space:pre-line"></div>
-          <div style="display:flex;gap:8px;justify-content:flex-end">
+        <div id="_customConfirmBox" class="modal" style="max-width:420px;padding:24px 26px 22px">
+          <div id="_customConfirmTitle" class="modal-title" style="margin-bottom:10px;padding-right:0"></div>
+          <div id="_customConfirmMsg" style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:20px;white-space:pre-line"></div>
+          <div class="modal-actions" style="margin-top:0">
             <button id="_customConfirmCancel" class="btn btn-ghost btn-sm"></button>
             <button id="_customConfirmOk"     class="btn btn-sm"></button>
           </div>
