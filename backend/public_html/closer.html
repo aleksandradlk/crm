@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf4">
+<link rel="stylesheet" href="/shared/style.css?v=nf5">
 <style>
 .notif-panel{position:fixed;top:0;right:0;bottom:0;width:340px;background:var(--bg2);border-left:1px solid var(--border2);z-index:150;transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;padding:20px}
 .notif-panel.open{transform:translateX(0)}
@@ -244,23 +244,30 @@
 
     <!-- WIKI -->
     <div id="sec-wiki" style="display:none">
-      <h1 class="page-title" data-eyebrow="Ressourcen">Wissensdatenbank</h1>
+      <div class="page-header">
+        <div><h1 data-eyebrow="Ressourcen">Wissensdatenbank</h1><p class="page-desc">Unterlagen und Vorlagen für deine Gespräche.</p></div>
+      </div>
 
-      <!-- Pinned Willkommenskarte -->
-      <div style="background:color-mix(in srgb, var(--accent) 8%, transparent);border:1px solid color-mix(in srgb, var(--accent) 35%, transparent);border-radius:12px;padding:18px 20px;margin-bottom:20px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-          <div style="width:36px;height:36px;border-radius:10px;background:var(--accent);display:flex;align-items:center;justify-content:center;color:var(--accent-fg);font-size:16px;flex-shrink:0"><i class="fas fa-star"></i></div>
-          <div style="font-size:15px;font-weight:700">Willkommen bei NovaFlow!</div>
+      <!-- Willkommen -->
+      <div class="wiki-hero">
+        <img class="wiki-hero-logo" src="/LogoOB.PNG" alt="">
+        <div>
+          <div class="wiki-hero-eyebrow">Willkommen</div>
+          <h2 class="wiki-hero-title">Willkommen bei NovaFlow!</h2>
+          <p class="wiki-hero-sub">Hier findest du alles, was du für Gespräche und Angebote brauchst.</p>
         </div>
-        <div style="font-size:13px;color:var(--text2);line-height:1.65;display:flex;flex-direction:column;gap:8px">
-          <div><strong>Wissensdatenbank:</strong> Hier findest du alle wichtigen Unterlagen — Preisliste, Angebotsleitfaden und weitere Dokumente.</div>
-          <div><strong>E-Mail Vorlagen:</strong> Öffne einen Lead, klicke auf <strong>E-Mail</strong> und wähle eine Vorlage. Platzhalter werden automatisch ersetzt.</div>
-          <div><strong>Fragen? Kein Problem!</strong> Melde dich jederzeit bei Aleksandra Dalak<span id="wikiAdminPhone"></span><span id="wikiAdminEmail"></span> — per WhatsApp oder Chat.</div>
+        <div class="wiki-hero-tips">
+          <div class="wiki-tip"><i class="fas fa-book"></i><div><b>Wissensdatenbank</b><span>Preisliste, Angebotsleitfaden und weitere Unterlagen, immer in der aktuellen Version.</span></div></div>
+          <div class="wiki-tip"><i class="fas fa-envelope"></i><div><b>E-Mail-Vorlagen</b><span>Lead öffnen, auf <strong>E-Mail</strong> klicken, Vorlage wählen. Platzhalter werden automatisch ersetzt.</span></div></div>
+          <div class="wiki-tip"><i class="fas fa-comments"></i><div><b>Fragen? Kein Problem!</b><span>Melde dich jederzeit bei Aleksandra Dalak<span id="wikiAdminPhone"></span><span id="wikiAdminEmail"></span>, per WhatsApp oder Rücksprache.</span></div></div>
         </div>
       </div>
 
       <div id="closerEmailTemplate"></div>
-      <div id="wikiFilesContainer"></div>
+      <section class="wiki-section">
+        <div class="wiki-section-head"><div class="wiki-section-title"><i class="fas fa-folder-open"></i> Unterlagen</div></div>
+        <div id="wikiFilesContainer"></div>
+      </section>
     </div>
 
     <!-- REMINDERS -->
@@ -273,26 +280,31 @@
     <div id="sec-chat" style="display:none">
       <div id="chatListView">
         <div class="page-header">
-          <h1 data-eyebrow="Ressourcen">Rücksprachen</h1>
+          <div><h1 data-eyebrow="Ressourcen">Rücksprachen</h1><p class="page-desc">Fragen an Aleksandra oder Austausch zu einem Lead.</p></div>
           <button class="btn btn-primary btn-sm" onclick="openCreateChat()"><i class="fas fa-plus"></i> Neues Gespräch</button>
         </div>
         <div id="chatList"></div>
       </div>
       <div id="chatDetailView" style="display:none">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
-          <button class="btn btn-ghost btn-sm" onclick="backToChats()"><i class="fas fa-arrow-left"></i> Zurück</button>
-          <h1 class="h1-inline" id="chatDetailTitle"></h1>
-          <button class="btn btn-ghost btn-sm" id="chatInviteBtn" onclick="openChatInvite()"><i class="fas fa-user-plus"></i> Einladen</button>
-          <button class="btn btn-ghost btn-sm" id="chatCloseBtn" onclick="closeChatRoom()" title="Gespräch beenden" style="color:var(--red)"><i class="fas fa-times-circle"></i> Beenden</button>
+        <div class="page-header">
+          <div class="chat-head-left">
+            <button class="btn btn-ghost btn-sm btn-icon" onclick="backToChats()" title="Zurück"><i class="fas fa-arrow-left"></i></button>
+            <div style="min-width:0;flex:1"><h1 class="h1-inline" id="chatDetailTitle"></h1><div class="chat-participants" id="chatParticipants"></div></div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost btn-sm" id="chatInviteBtn" onclick="openChatInvite()"><i class="fas fa-user-plus"></i> Einladen</button>
+            <button class="btn btn-ghost btn-sm" id="chatCloseBtn" onclick="closeChatRoom()" title="Gespräch beenden" style="color:var(--red)"><i class="fas fa-times-circle"></i> Beenden</button>
+          </div>
         </div>
-        <div id="chatLeadContext"></div>
-        <div class="card" style="margin-bottom:12px">
-          <div style="padding:8px 14px;background:var(--bg3);border-radius:8px 8px 0 0;font-size:11px;color:var(--text3)" id="chatParticipants"></div>
-          <div id="chatMessages" style="padding:16px;min-height:300px;max-height:480px;overflow-y:auto;display:flex;flex-direction:column;gap:8px"></div>
-        </div>
-        <div style="display:flex;gap:8px">
-          <input type="text" id="chatMsgInput" class="form-control" placeholder="Nachricht schreiben..." onkeydown="if(event.key==='Enter')sendChatMsg()">
-          <button class="btn btn-primary btn-sm" onclick="sendChatMsg()"><i class="fas fa-paper-plane"></i></button>
+        <div class="chat-layout">
+          <div class="card chat-window">
+            <div id="chatMessages" class="chat-messages"></div>
+            <div class="chat-compose">
+              <input type="text" id="chatMsgInput" class="form-control" placeholder="Nachricht schreiben …" onkeydown="if(event.key==='Enter')sendChatMsg()">
+              <button class="btn btn-primary" onclick="sendChatMsg()" title="Senden"><i class="fas fa-paper-plane"></i></button>
+            </div>
+          </div>
+          <aside id="chatLeadContext" class="chat-side"></aside>
         </div>
       </div>
     </div>
@@ -489,7 +501,7 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf4"></script>
+<script src="/shared/api.js?v=nf5"></script>
 <script>
 const ME = Auth.getUser();
 const CAN = {
@@ -1652,16 +1664,16 @@ async function loadWiki() {
         tmplEl.innerHTML = clRenderTemplateMgmtSection();
       } else if (tmpl.subject || tmpl.body) {
         tmplEl.innerHTML = `
-          <div class="card" style="margin-bottom:14px">
-            <div class="card-header"><div class="card-title"><i class="fas fa-envelope" style="color:var(--accent)"></i> E-Mail Vorlage <span style="font-size:11px;font-weight:400;color:var(--text3)">(nur lesbar)</span></div></div>
-            <div class="card-body" style="padding:14px">
-              <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Platzhalter <code style="background:var(--bg3);padding:1px 5px;border-radius:4px">{company}</code> wird durch Firmennamen ersetzt</div>
-              <div class="form-group" style="margin-bottom:8px"><label>Betreff</label>
-                <input class="form-control" value="${escHtml(tmpl.subject||'')}" readonly style="background:var(--bg3);color:var(--text2)"></div>
-              <div class="form-group" style="margin:0"><label>Nachricht</label>
-                <div class="form-control" style="background:var(--bg3);color:var(--text2);font-size:13px;line-height:1.6;min-height:120px;overflow-y:auto;pointer-events:none">${bodyToHtml(tmpl.body||'')}</div></div>
+          <section class="wiki-section">
+            <div class="wiki-section-head">
+              <div class="wiki-section-title"><i class="fas fa-envelope"></i> E-Mail-Vorlage <span class="tpl-tag">Nur lesbar</span></div>
+              <div class="wiki-placeholders">Platzhalter <code>{company}</code> wird durch den Firmennamen ersetzt</div>
             </div>
-          </div>`;
+            <div class="card"><div class="card-body" style="padding:16px 18px">
+              <div class="form-group" style="margin-bottom:10px"><label>Betreff</label><input class="form-control" value="${escHtml(tmpl.subject||'')}" readonly style="background:var(--bg3);color:var(--text2)"></div>
+              <div class="form-group" style="margin:0"><label>Nachricht</label><div class="form-control" style="background:var(--bg3);color:var(--text2);font-size:13px;line-height:1.6;min-height:120px;overflow-y:auto;pointer-events:none">${bodyToHtml(tmpl.body||'')}</div></div>
+            </div></div>
+          </section>`;
       } else {
         tmplEl.innerHTML = '';
       }
@@ -1673,27 +1685,19 @@ async function loadWiki() {
 let _clManagedTemplates = [];
 
 function clRenderTemplateMgmtSection() {
-  const rows = _clManagedTemplates.map(t => {
-    const inactive = !t.is_active;
-    return `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg3);border-radius:8px;margin-bottom:6px;${inactive?'opacity:0.55':''}">
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:600;color:var(--text1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(t.name)}</div>
-        <div style="font-size:11px;color:var(--text3)">${escHtml(t.subject||'')}${t.category?` · <span style="color:var(--accent)">${escHtml(t.category)}</span>`:''}</div>
-      </div>
-      <button class="btn btn-sm" style="padding:4px 8px;font-size:11px" onclick="clOpenTemplModal(${t.id})" title="Bearbeiten"><i class="fas fa-pen"></i></button>
-      <button class="btn btn-sm" style="padding:4px 8px;font-size:11px;color:${inactive?'var(--accent)':'var(--text3)'}" onclick="clToggleTempl(${t.id},${inactive?1:0})" title="${inactive?'Aktivieren':'Deaktivieren'}"><i class="fas fa-${inactive?'eye':'eye-slash'}"></i></button>
-    </div>`;
-  }).join('');
-  return `<div class="card" style="margin-bottom:14px">
-    <div class="card-header" style="display:flex;align-items:center;justify-content:space-between">
-      <div class="card-title"><i class="fas fa-envelope" style="color:var(--accent)"></i> E-Mail-Vorlagen</div>
+  const cards = _clManagedTemplates.map(t => renderTemplateCard(t, {
+    edit:   `clOpenTemplModal(${t.id})`,
+    toggle: `clToggleTempl(${t.id},${t.is_active ? 0 : 1})`,
+  })).join('');
+  return `<section class="wiki-section">
+    <div class="wiki-section-head">
+      <div class="wiki-section-title"><i class="fas fa-envelope"></i> E-Mail-Vorlagen <span class="badge">${_clManagedTemplates.length}</span></div>
       <button class="btn btn-primary btn-sm" onclick="clOpenTemplModal(null)"><i class="fas fa-plus"></i> Neue Vorlage</button>
     </div>
-    <div class="card-body" style="padding:12px">
-      ${_clManagedTemplates.length ? rows : '<div style="font-size:13px;color:var(--text3);text-align:center;padding:16px 0">Noch keine Vorlagen vorhanden</div>'}
-    </div>
-  </div>`;
+    <div class="tpl-grid">${cards || '<div class="wiki-empty" style="grid-column:1/-1"><i class="fas fa-envelope-open-text"></i>Noch keine Vorlagen vorhanden</div>'}</div>
+  </section>`;
 }
+
 
 function clBuildCategorySelect(currentCat) {
   const cats = [...new Set(_clManagedTemplates.map(t => t.category).filter(Boolean))].sort();
@@ -1861,43 +1865,7 @@ async function wikiFileOpen(filename, encodedName, forceDownload) {
   } catch(e) { showToast('Fehler beim Laden', 'err'); }
 }
 
-function renderWikiFiles(files, containerId, isAdmin) {
-  const container = document.getElementById(containerId);
-  if (!files.length) {
-    container.innerHTML = '<div style="color:var(--text3);text-align:center;padding:30px"><i class="fas fa-folder-open" style="font-size:28px;display:block;margin-bottom:10px;opacity:.3"></i>Noch keine Dateien vorhanden</div>';
-    return;
-  }
-  const cats = [...new Set(files.map(f => f.category))];
-  container.innerHTML = cats.map(cat => {
-    const catFiles = files.filter(f => f.category === cat);
-    const filesHtml = catFiles.map(f => {
-      const isImage = f.mimetype?.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(f.filename||'');
-      const isPdf   = f.mimetype === 'application/pdf' || /\.pdf$/i.test(f.filename||'');
-      const isOffice = /\.(docx?|xlsx?|pptx?|odt|ods|odp)$/i.test(f.filename||'');
-      const size    = f.size ? (f.size / 1024).toFixed(0) + ' KB' : '';
-      const icon    = isPdf ? 'file-pdf' : isImage ? 'file-image' : isOffice ? 'file-word' : 'file-alt';
-      const previewBtn = `<button class="btn btn-ghost btn-sm" title="Vorschau" onclick="wikiFileOpen('${f.filename}','${encodeURIComponent(f.name)}')"><i class="fas fa-eye"></i></button>`;
-      return `
-        <div style="padding:10px;background:var(--bg3);border-radius:8px;margin-bottom:6px">
-          <div style="display:flex;align-items:center;gap:10px">
-            <i class="fas fa-${icon}" style="color:var(--accent);font-size:18px;min-width:20px;text-align:center"></i>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(f.name)}</div>
-              <div style="font-size:11px;color:var(--text3)">${size ? size + ' · ' : ''}${fmtDateShort(f.created_at)}</div>
-            </div>
-            ${previewBtn}
-            <button class="btn btn-ghost btn-sm" title="Download" onclick="wikiFileOpen('${f.filename}','${encodeURIComponent(f.name)}',true)"><i class="fas fa-download"></i></button>
-          </div>
-          ${f.note ? `<div style="margin-top:8px;padding:8px 10px;background:color-mix(in srgb, var(--accent) 7%, transparent);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--text2);line-height:1.5"><i class="fas fa-info-circle" style="color:var(--accent);margin-right:5px"></i>${escHtml(f.note)}</div>` : ''}
-        </div>`;
-    }).join('');
-    return `
-      <div class="card" style="margin-bottom:14px">
-        <div class="card-header"><div class="card-title"><i class="fas fa-folder" style="color:var(--accent)"></i> ${escHtml(cat)}</div></div>
-        <div class="card-body" style="padding:14px">${filesHtml}</div>
-      </div>`;
-  }).join('');
-}
+
 
 // ── KOMMENTAR EDIT / DELETE ───────────────────────────────────
 function editComment(leadId, cid, currentText) {
@@ -2022,20 +1990,11 @@ async function loadChats() {
   try {
     const chats = await api('GET', '/chats');
     const el = document.getElementById('chatList');
-    if (!chats.length) {
-      el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:20px">Noch keine Rücksprachen</div>';
-      return;
-    }
-    el.innerHTML = chats.map(c => `
-      <div onclick="openChat(${c.id})" style="padding:12px 14px;border-radius:8px;cursor:pointer;background:var(--bg3);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <div style="font-weight:600;font-size:14px">${escHtml(c.title)} ${c.is_closed ? '<span style="font-size:10px;color:var(--text3)">[geschlossen]</span>' : ''}</div>
-          <div style="font-size:11px;color:var(--text3)">${fmtDate(c.created_at)}</div>
-        </div>
-        <i class="fas fa-chevron-right" style="color:var(--text3)"></i>
-      </div>`).join('');
+    if (!el) return;
+    el.innerHTML = renderChatListItems(chats, 'Noch keine Rücksprachen. Starte ein neues Gespräch, wenn du eine Frage hast.');
   } catch(e) { showToast(e.message, 'err'); }
 }
+
 
 async function openChat(id) {
   currentChatId = id;
@@ -2050,36 +2009,23 @@ async function refreshChat() {
   try {
     const chat = await api('GET', `/chats/${currentChatId}`);
     document.getElementById('chatDetailTitle').textContent = chat.title || '';
-    document.getElementById('chatParticipants').textContent =
-      'Teilnehmer: ' + (chat.participants||[]).map(p => escHtml(p.full_name)).join(', ');
+    const parts = (chat.participants||[]).map(p => p.full_name).filter(Boolean);
+    document.getElementById('chatParticipants').textContent = parts.length ? `${parts.length} Teilnehmer · ${parts.join(', ')}` : 'Keine Teilnehmer';
     const ctxEl = document.getElementById('chatLeadContext');
-    if (ctxEl) {
-      ctxEl.innerHTML = chat.lead_id ? `
-        <div style="background:var(--bg3);border-radius:8px;padding:10px 14px;margin-bottom:12px;border-left:3px solid var(--accent)">
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:6px">Lead-Kontext</div>
-          <div style="font-size:13px;font-weight:600">${escHtml(chat.lead_company||'—')}</div>
-          ${chat.lead_ceo?`<div style="font-size:12px;color:var(--text2)">${escHtml(chat.lead_ceo)}</div>`:''}
-          ${chat.lead_phone?`<div style="font-size:12px;margin-top:3px"><i class="fas fa-phone" style="color:var(--text3);font-size:10px;margin-right:5px"></i><a href="tel:${escHtml(chat.lead_phone)}" style="color:var(--accent)">${escHtml(chat.lead_phone)}</a></div>`:''}
-          ${chat.lead_email?`<div style="font-size:12px;margin-top:2px"><i class="fas fa-envelope" style="color:var(--text3);font-size:10px;margin-right:5px"></i>${escHtml(chat.lead_email)}</div>`:''}
-          <div style="margin-top:6px">${statusBadge(chat.lead_status||'neu')}</div>
-          <button class="btn btn-ghost btn-sm" style="margin-top:8px;font-size:11px" onclick="openPanel(${chat.lead_id})"><i class="fas fa-external-link-alt"></i> Lead öffnen</button>
-        </div>` : '';
-    }
-    document.getElementById('chatCloseBtn').style.display  = chat.is_closed ? 'none' : 'inline-flex';
-    document.getElementById('chatInviteBtn').style.display = chat.is_closed ? 'none' : '';
-    document.getElementById('chatMsgInput').disabled = !!chat.is_closed;
-
+    if (ctxEl) ctxEl.innerHTML = chat.lead_id ? renderChatLeadContext(chat, 'openPanel') : '';
+    const closed = !!chat.is_closed;
+    document.getElementById('chatCloseBtn').style.display  = closed ? 'none' : 'inline-flex';
+    document.getElementById('chatInviteBtn').style.display = closed ? 'none' : '';
+    const msgInput = document.getElementById('chatMsgInput');
+    msgInput.disabled = closed; msgInput.placeholder = closed ? 'Gespräch beendet' : 'Nachricht schreiben …';
     const msgsEl = document.getElementById('chatMessages');
     if (msgsEl) {
-      msgsEl.innerHTML = (chat.messages||[]).map(m => `
-        <div style="margin-bottom:10px;${m.user_id===ME.id?'text-align:right':''}">
-          <div style="font-size:11px;color:var(--text3);margin-bottom:2px">${escHtml(m.full_name)} · ${fmtDate(m.created_at)}</div>
-          <div style="display:inline-block;background:${m.user_id===ME.id?'var(--accent)':'var(--bg3)'};color:${m.user_id===ME.id?'#fff':'var(--text1)'};padding:8px 12px;border-radius:10px;font-size:13px;max-width:80%;text-align:left">${escHtml(m.text)}</div>
-        </div>`).join('');
+      msgsEl.innerHTML = renderChatMessages(chat.messages||[], ME.id);
       msgsEl.scrollTop = msgsEl.scrollHeight;
     }
   } catch(e) { showToast(e.message, 'err'); }
 }
+
 
 function backToChats() {
   clearInterval(chatPollTimer);

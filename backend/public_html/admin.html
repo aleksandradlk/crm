@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf4">
+<link rel="stylesheet" href="/shared/style.css?v=nf5">
 <style>
 .source-btn{display:flex;align-items:center;gap:6px;padding:7px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text2);cursor:pointer;transition:all 0.15s;user-select:none}
 .source-btn.active{background:color-mix(in srgb, var(--accent) 12%, transparent);border-color:color-mix(in srgb, var(--accent) 40%, transparent);color:var(--accent)}
@@ -380,65 +380,80 @@
 
     <!-- ── TAB: WIKI ─────────────────────────────────── -->
     <div id="tab-wiki" class="tab-panel">
-      <h1 class="page-title" data-eyebrow="Ressourcen">Wissensdatenbank</h1>
-
-      <!-- E-Mail Vorlagen -->
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div style="font-size:16px;font-weight:700"><i class="fas fa-envelope" style="color:var(--accent);margin-right:8px"></i>E-Mail Vorlagen</div>
-        <button class="btn btn-primary btn-sm" onclick="openTemplateMgmtModal()"><i class="fas fa-plus"></i> Neue Vorlage</button>
-      </div>
-      <p style="font-size:12px;color:var(--text3);margin-bottom:14px">Platzhalter: <code style="background:var(--bg3);padding:1px 5px;border-radius:4px">{{kunde}}</code> <code style="background:var(--bg3);padding:1px 5px;border-radius:4px">{{firma}}</code> <code style="background:var(--bg3);padding:1px 5px;border-radius:4px">{{closer}}</code> <code style="background:var(--bg3);padding:1px 5px;border-radius:4px">{{telefon}}</code> <code style="background:var(--bg3);padding:1px 5px;border-radius:4px">{{email}}</code></p>
-      <div id="adminTemplateList" style="margin-bottom:24px"></div>
-
-      <!-- Datei hochladen -->
-      <div class="card" style="margin-bottom:20px">
-        <div class="card-header"><div class="card-title"><i class="fas fa-upload" style="color:var(--accent)"></i> Datei hochladen</div></div>
-        <div class="card-body" style="padding:16px">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-            <div class="form-group" style="margin:0"><label>Bezeichnung <span style="color:var(--text3)">(optional)</span></label><input type="text" id="wiki-file-name" class="form-control" placeholder="z.B. Preisliste 2026"></div>
-            <div class="form-group" style="margin:0"><label>Kategorie</label>
-              <select id="wiki-file-cat" class="form-control">
-                <option value="Vorlagen">Vorlagen</option>
-                <option value="Preislisten">Preislisten</option>
-                <option value="Dienstleistungen">Dienstleistungen</option>
-                <option value="Sonstiges">Sonstiges</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group" style="margin-bottom:12px"><label>Notiz für Closer <span style="color:var(--text3);font-weight:400">(optional)</span></label><textarea id="wiki-file-note" class="form-control" rows="2" placeholder="z.B. Bitte vor dem ersten Kundengespräch lesen. Preisliste gültig ab 2026." style="resize:vertical;font-size:13px"></textarea></div>
-          <div class="form-group" style="margin-bottom:12px"><label>Datei</label><input type="file" id="wiki-file-input" class="form-control" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.docx,.xlsx,.txt" style="padding:6px"></div>
-          <button class="btn btn-primary btn-sm" onclick="uploadWikiFile()"><i class="fas fa-upload"></i> Hochladen</button>
+      <div class="page-header">
+        <div><h1 data-eyebrow="Ressourcen">Wissensdatenbank</h1><p class="page-desc">E-Mail-Vorlagen und Unterlagen für dein Team an einem Ort.</p></div>
+        <div class="page-actions">
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('wikiUploadCard').scrollIntoView({behavior:'smooth',block:'start'});document.getElementById('wiki-file-input').focus()"><i class="fas fa-upload"></i> Datei hochladen</button>
+          <button class="btn btn-primary btn-sm" onclick="openTemplateMgmtModal()"><i class="fas fa-plus"></i> Neue Vorlage</button>
         </div>
       </div>
 
-      <!-- Dateiliste -->
-      <div id="wikiFilesContainer"></div>
+      <!-- E-Mail Vorlagen -->
+      <section class="wiki-section">
+        <div class="wiki-section-head">
+          <div class="wiki-section-title"><i class="fas fa-envelope"></i> E-Mail-Vorlagen</div>
+          <div class="wiki-placeholders">Platzhalter: <code>{{kunde}}</code> <code>{{firma}}</code> <code>{{closer}}</code> <code>{{telefon}}</code> <code>{{email}}</code></div>
+        </div>
+        <div id="adminTemplateList" class="tpl-grid"></div>
+      </section>
+
+      <!-- Unterlagen + Upload -->
+      <section class="wiki-section">
+        <div class="wiki-section-head">
+          <div class="wiki-section-title"><i class="fas fa-folder-open"></i> Unterlagen</div>
+        </div>
+        <div class="wiki-layout">
+          <div id="wikiFilesContainer"></div>
+          <aside class="card wiki-upload" id="wikiUploadCard">
+            <div class="card-header"><div class="card-title"><i class="fas fa-upload"></i> Datei hochladen</div></div>
+            <div class="card-body" style="padding:16px 18px">
+              <div class="form-group"><label>Datei</label><input type="file" id="wiki-file-input" class="form-control" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.docx,.xlsx,.txt" style="padding:8px"></div>
+              <div class="form-group"><label>Bezeichnung <span style="color:var(--text3);font-weight:400">(optional)</span></label><input type="text" id="wiki-file-name" class="form-control" placeholder="z.B. Preisliste 2026"></div>
+              <div class="form-group"><label>Kategorie</label>
+                <select id="wiki-file-cat" class="form-control">
+                  <option value="Vorlagen">Vorlagen</option>
+                  <option value="Preislisten">Preislisten</option>
+                  <option value="Dienstleistungen">Dienstleistungen</option>
+                  <option value="Sonstiges">Sonstiges</option>
+                </select>
+              </div>
+              <div class="form-group"><label>Notiz für Closer <span style="color:var(--text3);font-weight:400">(optional)</span></label><textarea id="wiki-file-note" class="form-control" rows="2" placeholder="z.B. Bitte vor dem ersten Kundengespräch lesen. Preisliste gültig ab 2026."></textarea></div>
+              <button class="btn btn-primary" style="width:100%" onclick="uploadWikiFile()"><i class="fas fa-upload"></i> Hochladen</button>
+            </div>
+          </aside>
+        </div>
+      </section>
     </div>
 
     <!-- ── TAB: CHAT ─────────────────────────────────── -->
     <div id="tab-chat" class="tab-panel">
       <div id="chatListView">
         <div class="page-header">
-          <h1 data-eyebrow="Ressourcen">Rücksprachen</h1>
+          <div><h1 data-eyebrow="Ressourcen">Rücksprachen</h1><p class="page-desc">Fragen klären, Leads besprechen, Entscheidungen festhalten.</p></div>
           <button class="btn btn-primary btn-sm" onclick="openCreateChat()"><i class="fas fa-plus"></i> Neues Gespräch</button>
         </div>
         <div id="chatList"></div>
       </div>
       <div id="chatDetailView" style="display:none">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
-          <button class="btn btn-ghost btn-sm" onclick="backToChats()"><i class="fas fa-arrow-left"></i> Zurück</button>
-          <h1 class="h1-inline" id="chatDetailTitle"></h1>
-          <button class="btn btn-ghost btn-sm" id="chatInviteBtn" onclick="openChatInvite()"><i class="fas fa-user-plus"></i> Einladen</button>
-          <button class="btn btn-ghost btn-sm" id="chatCloseBtn" onclick="closeChatRoom()" style="color:var(--red)"><i class="fas fa-times-circle"></i> Beenden</button>
+        <div class="page-header">
+          <div class="chat-head-left">
+            <button class="btn btn-ghost btn-sm btn-icon" onclick="backToChats()" title="Zurück"><i class="fas fa-arrow-left"></i></button>
+            <div style="min-width:0;flex:1"><h1 class="h1-inline" id="chatDetailTitle"></h1><div class="chat-participants" id="chatParticipants"></div></div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost btn-sm" id="chatInviteBtn" onclick="openChatInvite()"><i class="fas fa-user-plus"></i> Einladen</button>
+            <button class="btn btn-ghost btn-sm" id="chatCloseBtn" onclick="closeChatRoom()" title="Gespräch beenden" style="color:var(--red)"><i class="fas fa-times-circle"></i> Beenden</button>
+          </div>
         </div>
-        <div id="chatLeadContext"></div>
-        <div class="card" style="margin-bottom:12px">
-          <div style="padding:8px 14px;background:var(--bg3);border-radius:8px 8px 0 0;font-size:11px;color:var(--text3)" id="chatParticipants"></div>
-          <div id="chatMessages" style="padding:16px;min-height:300px;max-height:480px;overflow-y:auto;display:flex;flex-direction:column;gap:8px"></div>
-        </div>
-        <div style="display:flex;gap:8px">
-          <input type="text" id="chatMsgInput" class="form-control" placeholder="Nachricht schreiben..." onkeydown="if(event.key==='Enter')sendChatMsg()">
-          <button class="btn btn-primary btn-sm" onclick="sendChatMsg()"><i class="fas fa-paper-plane"></i></button>
+        <div class="chat-layout">
+          <div class="card chat-window">
+            <div id="chatMessages" class="chat-messages"></div>
+            <div class="chat-compose">
+              <input type="text" id="chatMsgInput" class="form-control" placeholder="Nachricht schreiben …" onkeydown="if(event.key==='Enter')sendChatMsg()">
+              <button class="btn btn-primary" onclick="sendChatMsg()" title="Senden"><i class="fas fa-paper-plane"></i></button>
+            </div>
+          </div>
+          <aside id="chatLeadContext" class="chat-side"></aside>
         </div>
       </div>
     </div>
@@ -651,7 +666,7 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf4"></script>
+<script src="/shared/api.js?v=nf5"></script>
 <script>
 let allLeads = [], allUsers = [], generatedLeads = [], editingUserId = null;
 let panelDirty = false;
@@ -2152,29 +2167,16 @@ function renderAdminTemplateList() {
   const el = document.getElementById('adminTemplateList');
   if (!el) return;
   if (!_emailTemplates.length) {
-    el.innerHTML = '<div style="color:var(--text3);padding:20px;text-align:center">Noch keine Vorlagen</div>';
+    el.innerHTML = '<div class="wiki-empty" style="grid-column:1/-1"><i class="fas fa-envelope-open-text"></i>Noch keine Vorlagen. Lege die erste an, damit dein Team mit einem Klick E-Mails schreiben kann.</div>';
     return;
   }
-  el.innerHTML = _emailTemplates.map(t => `
-    <div class="card" style="padding:12px 16px;margin-bottom:8px;opacity:${t.is_active?1:0.55}">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:600;font-size:13px">${escHtml(t.name)}
-            ${t.category ? `<span style="font-size:10px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:1px 6px;margin-left:6px;color:var(--text3)">${escHtml(t.category)}</span>` : ''}
-            ${t.is_active ? '' : '<span style="font-size:10px;color:var(--text3);margin-left:6px">[inaktiv]</span>'}
-          </div>
-          <div style="font-size:12px;color:var(--text3);margin-top:2px">${escHtml(t.subject)}</div>
-        </div>
-        <div style="display:flex;gap:6px;flex-shrink:0">
-          <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="openTemplateMgmtModal(${t.id})"><i class="fas fa-edit"></i></button>
-          <button class="btn btn-ghost btn-sm" style="font-size:11px" title="${t.is_active?'Deaktivieren':'Aktivieren'}" onclick="toggleTemplateActive(${t.id},${t.is_active?0:1})">
-            <i class="fas fa-${t.is_active?'eye-slash':'eye'}"></i>
-          </button>
-          <button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--red)" onclick="deleteEmailTemplate(${t.id},'${escHtml((t.name||'').replace(/'/g,"\\'"))}')"><i class="fas fa-trash"></i></button>
-        </div>
-      </div>
-    </div>`).join('');
+  el.innerHTML = _emailTemplates.map(t => renderTemplateCard(t, {
+    edit:   `openTemplateMgmtModal(${t.id})`,
+    toggle: `toggleTemplateActive(${t.id},${t.is_active ? 0 : 1})`,
+    remove: `deleteEmailTemplate(${t.id},'${escHtml(String(t.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"))}')`,
+  })).join('');
 }
+
 
 function populateAdminTemplateDropdown() {
   const sel = document.getElementById('emailTemplateSelect');
@@ -2554,55 +2556,7 @@ async function saveWikiReplace(id) {
   } catch(e) { showToast(e.message, 'err'); }
 }
 
-function renderWikiFiles(files, containerId, isAdmin) {
-  const container = document.getElementById(containerId);
-  if (!files.length) {
-    container.innerHTML = '<div style="color:var(--text3);text-align:center;padding:30px"><i class="fas fa-folder-open" style="font-size:28px;display:block;margin-bottom:10px;opacity:.3"></i>Noch keine Dateien hochgeladen</div>';
-    return;
-  }
-  const cats = [...new Set(files.map(f => f.category))];
-  container.innerHTML = cats.map(cat => {
-    const catFiles = files.filter(f => f.category === cat);
-    const filesHtml = catFiles.map(f => {
-      const isImage = f.mimetype?.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(f.filename||'');
-      const isPdf   = f.mimetype === 'application/pdf' || /\.pdf$/i.test(f.filename||'');
-      const isOffice = /\.(docx?|xlsx?|pptx?|odt|ods|odp)$/i.test(f.filename||'');
-      const size    = f.size ? (f.size / 1024).toFixed(0) + ' KB' : '';
-      const icon    = isPdf ? 'file-pdf' : isImage ? 'file-image' : isOffice ? 'file-word' : 'file-alt';
-      const previewBtn = `<button class="btn btn-ghost btn-sm" title="Vorschau" onclick="wikiFileOpen('${f.filename}','${encodeURIComponent(f.name)}')"><i class="fas fa-eye"></i></button>`;
-      const editNoteBtn = isAdmin
-        ? `<button class="btn btn-ghost btn-sm" title="Notiz bearbeiten" onclick="openWikiNoteModal(${f.id},'${(f.note||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n')}')"><i class="fas fa-pen" style="font-size:11px"></i></button>`
-        : '';
-      const replaceBtn = isAdmin
-        ? `<button class="btn btn-ghost btn-sm" title="Datei austauschen" onclick="openWikiReplaceModal(${f.id},'${(f.name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')"><i class="fas fa-retweet" style="font-size:11px"></i></button>`
-        : '';
-      const delBtn = isAdmin
-        ? `<button class="btn btn-ghost btn-sm" onclick="deleteWikiFile(${f.id})" title="Löschen"><i class="fas fa-trash" style="color:var(--red)"></i></button>`
-        : '';
-      return `
-        <div style="padding:10px;background:var(--bg3);border-radius:8px;margin-bottom:6px">
-          <div style="display:flex;align-items:center;gap:10px">
-            <i class="fas fa-${icon}" style="color:var(--accent);font-size:18px;min-width:20px;text-align:center"></i>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(f.name)}</div>
-              <div style="font-size:11px;color:var(--text3)">${size ? size + ' · ' : ''}${fmtDateShort(f.created_at)}</div>
-            </div>
-            ${previewBtn}
-            <button class="btn btn-ghost btn-sm" title="Download" onclick="wikiFileOpen('${f.filename}','${encodeURIComponent(f.name)}',true)"><i class="fas fa-download"></i></button>
-            ${editNoteBtn}
-            ${replaceBtn}
-            ${delBtn}
-          </div>
-          ${f.note ? `<div style="margin-top:8px;padding:8px 10px;background:color-mix(in srgb, var(--accent) 7%, transparent);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--text2);line-height:1.5"><i class="fas fa-info-circle" style="color:var(--accent);margin-right:5px"></i>${escHtml(f.note)}</div>` : ''}
-        </div>`;
-    }).join('');
-    return `
-      <div class="card" style="margin-bottom:14px">
-        <div class="card-header"><div class="card-title"><i class="fas fa-folder" style="color:var(--accent)"></i> ${escHtml(cat)}</div></div>
-        <div class="card-body" style="padding:14px">${filesHtml}</div>
-      </div>`;
-  }).join('');
-}
+
 
 // ── COMMENT EDIT / DELETE (Admin — kein Ownership-Check) ──────
 function editComment(leadId, cid, text) {
@@ -2719,20 +2673,10 @@ async function loadChats() {
     const chats = await api('GET', '/chats');
     const listEl = document.getElementById('chatList');
     if (!listEl) return;
-    if (!chats.length) {
-      listEl.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:20px">Noch keine Chats</div>';
-      return;
-    }
-    listEl.innerHTML = chats.map(c => `
-      <div onclick="openChat(${c.id})" style="padding:12px 14px;border-radius:8px;cursor:pointer;background:var(--bg3);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <div style="font-weight:600;font-size:14px">${escHtml(c.title)} ${c.is_closed ? '<span style="font-size:10px;color:var(--text3)">[geschlossen]</span>' : ''}</div>
-          <div style="font-size:11px;color:var(--text3)">${fmtDate(c.created_at)}</div>
-        </div>
-        <i class="fas fa-chevron-right" style="color:var(--text3)"></i>
-      </div>`).join('');
+    listEl.innerHTML = renderChatListItems(chats, 'Noch keine Rücksprachen. Starte ein neues Gespräch.');
   } catch(e) { showToast(e.message, 'err'); }
 }
+
 let _chatId = null, _chatInterval = null;
 async function openChat(id) {
   _chatId = id;
@@ -2748,29 +2692,14 @@ async function refreshChat() {
     const c = await api('GET', `/chats/${_chatId}`);
     if (!c) return;
     document.getElementById('chatDetailTitle').textContent = c.title || '';
-    const parts = (c.participants||[]).map(p => escHtml(p.full_name)).join(', ');
+    const parts = (c.participants||[]).map(p => p.full_name).filter(Boolean);
     const partsEl = document.getElementById('chatParticipants');
-    if (partsEl) partsEl.textContent = 'Teilnehmer: ' + (parts || '—');
+    if (partsEl) partsEl.textContent = parts.length ? `${parts.length} Teilnehmer · ${parts.join(', ')}` : 'Keine Teilnehmer';
     const ctxEl = document.getElementById('chatLeadContext');
-    if (ctxEl) {
-      ctxEl.innerHTML = c.lead_id ? `
-        <div style="background:var(--bg3);border-radius:8px;padding:10px 14px;margin-bottom:12px;border-left:3px solid var(--accent)">
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:6px">Lead-Kontext</div>
-          <div style="font-size:13px;font-weight:600">${escHtml(c.lead_company||'—')}</div>
-          ${c.lead_ceo?`<div style="font-size:12px;color:var(--text2)">${escHtml(c.lead_ceo)}</div>`:''}
-          ${c.lead_phone?`<div style="font-size:12px;margin-top:3px"><i class="fas fa-phone" style="color:var(--text3);font-size:10px;margin-right:5px"></i><a href="tel:${escHtml(c.lead_phone)}" style="color:var(--accent)">${escHtml(c.lead_phone)}</a></div>`:''}
-          ${c.lead_email?`<div style="font-size:12px;margin-top:2px"><i class="fas fa-envelope" style="color:var(--text3);font-size:10px;margin-right:5px"></i>${escHtml(c.lead_email)}</div>`:''}
-          <div style="margin-top:6px">${statusBadge(c.lead_status||'neu')}</div>
-          <button class="btn btn-ghost btn-sm" style="margin-top:8px;font-size:11px" onclick="openLeadPanel(${c.lead_id})"><i class="fas fa-external-link-alt"></i> Lead öffnen</button>
-        </div>` : '';
-    }
+    if (ctxEl) ctxEl.innerHTML = c.lead_id ? renderChatLeadContext(c, 'openLeadPanel') : '';
     const msgsEl = document.getElementById('chatMessages');
     if (msgsEl) {
-      msgsEl.innerHTML = (c.messages||[]).map(m => `
-        <div style="margin-bottom:10px;${m.user_id===ME?.id?'text-align:right':''}">
-          <div style="font-size:11px;color:var(--text3);margin-bottom:2px">${escHtml(m.full_name)} · ${fmtDate(m.created_at)}</div>
-          <div style="display:inline-block;background:${m.user_id===ME?.id?'var(--accent)':'var(--bg3)'};color:${m.user_id===ME?.id?'#fff':'var(--text1)'};padding:8px 12px;border-radius:10px;font-size:13px;max-width:80%;text-align:left">${escHtml(m.text)}</div>
-        </div>`).join('');
+      msgsEl.innerHTML = renderChatMessages(c.messages||[], ME?.id);
       msgsEl.scrollTop = msgsEl.scrollHeight;
     }
     const closed = !!c.is_closed;
@@ -2779,9 +2708,10 @@ async function refreshChat() {
     const msgInput   = document.getElementById('chatMsgInput');
     if (closeBtn)  closeBtn.style.display  = closed ? 'none' : 'inline-flex';
     if (inviteBtn) inviteBtn.style.display = closed ? 'none' : '';
-    if (msgInput)  msgInput.disabled       = closed;
+    if (msgInput)  { msgInput.disabled = closed; msgInput.placeholder = closed ? 'Gespräch beendet' : 'Nachricht schreiben …'; }
   } catch(e) { showToast(e.message, 'err'); }
 }
+
 function backToChats() {
   clearInterval(_chatInterval); _chatId = null;
   document.getElementById('chatDetailView').style.display = 'none';
