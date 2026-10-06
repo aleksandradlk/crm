@@ -9,101 +9,153 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf2">
+<link rel="stylesheet" href="/shared/style.css?v=nf3">
 <style>
-  body { display: flex; align-items: center; justify-content: center; min-height: 100vh; min-height: 100svh; background: var(--bg); padding: 24px 16px; }
-  .login-wrap { display: flex; width: 860px; max-width: 100%; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); overflow: hidden; }
-  .login-left { flex: 1; padding: 44px 44px 36px; min-width: 0; }
-  .login-right { width: 340px; background: var(--ink); color: var(--text-on-ink); padding: 44px 36px; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden; }
-  .login-right::after { content: ''; position: absolute; right: -120px; bottom: -140px; width: 320px; height: 320px; border-radius: 50%; background: radial-gradient(closest-side, rgba(143,176,221,0.22), transparent); pointer-events: none; }
+  body { background: var(--bg2); min-height: 100vh; min-height: 100svh; }
+  .auth { display: grid; grid-template-columns: minmax(0, 1fr) minmax(420px, 44%); min-height: 100vh; min-height: 100svh; }
 
-  .login-logo { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 36px; }
-  .login-logo img { max-height: 44px; width: auto; display: block; }
-  .login-logo-sub { font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text3); white-space: nowrap; }
-
-  .login-title { font-size: 24px; font-weight: 600; color: var(--text); margin-bottom: 6px; letter-spacing: -0.025em; }
-  .login-desc { font-size: 13px; color: var(--text2); margin-bottom: 28px; line-height: 1.6; }
-  .login-btn { width: 100%; height: 44px; font-size: 14px; margin-top: 4px; }
-  .error-msg { color: var(--red); font-size: 12px; margin-top: 4px; margin-bottom: 8px; text-align: center; min-height: 18px; }
-  .setup-link { text-align: center; margin-top: 16px; font-size: 12px; color: var(--text3); }
+  /* ── Formularseite ── */
+  .auth-form { display: flex; flex-direction: column; justify-content: center; padding: 48px 24px; position: relative; }
+  .auth-form-inner { width: 100%; max-width: 400px; margin: 0 auto; }
+  .auth-logo { height: 42px; width: auto; display: block; margin-bottom: 40px; }
+  .auth-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--copper); margin-bottom: 10px; }
+  .auth-title { font-size: 28px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.15; color: var(--text); margin: 0 0 8px; }
+  .auth-desc { font-size: 14px; color: var(--text2); margin: 0 0 30px; line-height: 1.6; }
+  .auth-field { position: relative; }
+  .auth-field .form-control { height: 46px; padding-left: 42px; font-size: 14px; }
+  .auth-field-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text3); font-size: 13px; pointer-events: none; transition: color 0.15s; }
+  .auth-field:focus-within .auth-field-icon { color: var(--accent); }
+  .pw-toggle { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text3); cursor: pointer; font-size: 14px; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+  .pw-toggle:hover { color: var(--text); background: var(--bg3); }
+  .form-group label { font-size: 12.5px; }
+  .error-msg { color: var(--red); font-size: 12.5px; min-height: 18px; margin: 2px 0 10px; }
+  .login-btn { width: 100%; height: 48px; font-size: 14.5px; border-radius: 12px; }
+  .setup-link { text-align: center; margin-top: 18px; font-size: 12.5px; color: var(--text3); }
   .setup-link a { color: var(--accent); font-weight: 600; }
-  .pw-toggle { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text3); cursor: pointer; font-size: 14px; padding: 4px; border-radius: 6px; }
-  .pw-toggle:hover { color: var(--text); }
+  .auth-foot { position: absolute; left: 0; right: 0; bottom: 22px; text-align: center; font-size: 11.5px; color: var(--text3); }
+  .auth-foot a { color: var(--text3); }
 
-  .right-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: var(--copper-light); margin-bottom: 14px; }
-  .right-title { font-size: 22px; font-weight: 600; color: #fff; margin-bottom: 12px; letter-spacing: -0.025em; line-height: 1.2; text-wrap: balance; }
-  .right-sub { font-size: 13px; color: var(--muted-on-ink); line-height: 1.65; }
-  .right-dots { display: flex; flex-direction: column; gap: 12px; margin-top: 32px; position: relative; }
-  .right-dot { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: rgba(242,245,249,0.82); }
-  .right-dot i { color: var(--navy-light); width: 14px; }
-  .right-foot { margin-top: 36px; font-size: 11px; color: var(--muted-on-ink); display: flex; align-items: center; gap: 10px; position: relative; }
-  .right-foot img { width: 26px; height: 26px; object-fit: contain; }
+  /* ── Markenseite ── */
+  .auth-brand { position: relative; overflow: hidden; background: var(--ink); color: var(--text-on-ink); display: flex; flex-direction: column; justify-content: space-between; padding: 44px 48px; }
+  .auth-brand::before { content: ''; position: absolute; inset: auto -160px -200px auto; width: 520px; height: 520px; border-radius: 50%; background: radial-gradient(closest-side, rgba(143,176,221,0.22), transparent 70%); pointer-events: none; }
+  .auth-waves { position: absolute; left: -10%; right: -10%; bottom: -6%; width: 120%; height: auto; opacity: 0.9; pointer-events: none; }
+  .auth-brand > :not(.auth-waves) { position: relative; }
+  .auth-brand-top { display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 600; color: rgba(242,245,249,0.85); }
+  .auth-brand-top img { width: 36px; height: 36px; object-fit: contain; padding: 5px; border-radius: 10px; background: rgba(255,255,255,0.07); }
+  .auth-brand-top span { font-weight: 500; color: var(--muted-on-ink); margin-left: 2px; }
+  .auth-brand-main { max-width: 440px; }
+  .auth-brand-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: var(--copper-light); margin-bottom: 16px; }
+  .auth-brand-title { font-size: clamp(26px, 2.6vw, 34px); font-weight: 600; color: #fff; letter-spacing: -0.03em; line-height: 1.15; margin: 0 0 14px; text-wrap: balance; }
+  .auth-brand-sub { font-size: 14px; color: var(--muted-on-ink); line-height: 1.65; margin: 0 0 30px; }
+  .auth-features { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+  .auth-features li { display: flex; align-items: flex-start; gap: 12px; }
+  .auth-feature-icon { width: 34px; height: 34px; border-radius: 10px; background: rgba(143,176,221,0.14); color: var(--navy-light); display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+  .auth-features b { display: block; font-size: 13.5px; font-weight: 600; color: #fff; margin-bottom: 2px; }
+  .auth-features span { display: block; font-size: 12.5px; color: var(--muted-on-ink); line-height: 1.5; }
+  .auth-brand-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 11.5px; color: var(--muted-on-ink); }
+  .auth-brand-foot .tag { font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; padding: 4px 9px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.14); color: rgba(242,245,249,0.75); }
 
-  @media (max-width: 760px) {
-    .login-wrap { flex-direction: column; max-width: 440px; }
-    .login-left { padding: 32px 24px 28px; }
-    .login-right { width: 100%; padding: 26px 24px; }
-    .right-dots, .right-foot { display: none; }
-    .login-logo img { max-height: 38px; }
+  @media (max-width: 900px) {
+    .auth { grid-template-columns: 1fr; }
+    .auth-brand { order: -1; padding: 26px 24px 28px; justify-content: flex-start; gap: 18px; }
+    .auth-brand-top { display: none; }
+    .auth-brand-sub, .auth-features, .auth-brand-foot, .auth-waves { display: none; }
+    .auth-brand-eyebrow { margin-bottom: 10px; }
+    .auth-brand-title { font-size: 22px; }
+    .auth-form { padding: 36px 20px 64px; justify-content: flex-start; }
+    .auth-logo { height: 36px; margin-bottom: 28px; }
+    .auth-title { font-size: 24px; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .auth-form-inner { animation: rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+    @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
   }
 </style>
 </head>
 <body>
 
-<div class="login-wrap">
-  <div class="login-left">
-    <div class="login-logo">
-      <img src="/LogoKomplett-klein.PNG" alt="NovaFlow">
-      <span class="login-logo-sub">CRM</span>
-    </div>
-    <div class="login-title">Willkommen zurück</div>
-    <div class="login-desc">Melde dich an, um auf deine Leads zuzugreifen.</div>
+<div class="auth">
+  <section class="auth-form">
+    <div class="auth-form-inner">
+      <img class="auth-logo" src="/LogoKomplett-klein.PNG" alt="NovaFlow">
+      <div class="auth-eyebrow">NovaFlow CRM</div>
+      <h1 class="auth-title">Willkommen zurück</h1>
+      <p class="auth-desc">Melde dich an, um auf deine Leads, Rückrufe und Abschlüsse zuzugreifen.</p>
 
-    <div class="form-group">
-      <label for="username">Benutzername</label>
-      <input type="text" id="username" class="form-control" placeholder="dein_username" autocomplete="username" autofocus>
-    </div>
-    <div class="form-group">
-      <label for="password">Passwort</label>
-      <div style="position:relative">
-        <input type="password" id="password" class="form-control" placeholder="••••••••" autocomplete="current-password" style="padding-right:40px">
-        <button type="button" class="pw-toggle" onclick="togglePw()" title="Passwort anzeigen">
-          <i class="fas fa-eye" id="pwEye"></i>
-        </button>
+      <div class="form-group">
+        <label for="username">Benutzername</label>
+        <div class="auth-field">
+          <i class="fas fa-user auth-field-icon"></i>
+          <input type="text" id="username" class="form-control" placeholder="dein_username" autocomplete="username" autofocus>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="password">Passwort</label>
+        <div class="auth-field">
+          <i class="fas fa-lock auth-field-icon"></i>
+          <input type="password" id="password" class="form-control" placeholder="••••••••" autocomplete="current-password" style="padding-right:44px">
+          <button type="button" class="pw-toggle" onclick="togglePw()" title="Passwort anzeigen">
+            <i class="fas fa-eye" id="pwEye"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="error-msg" id="errorMsg"></div>
+
+      <button class="btn btn-primary login-btn" id="loginBtn" onclick="doLogin()">
+        Anmelden
+      </button>
+
+      <div class="setup-link" id="setupLink" style="display:none">
+        Erster Start? <a href="/setup.html">Admin-Account erstellen</a>
       </div>
     </div>
+    <div class="auth-foot">NovaFlow Services · Interner Zugang</div>
+  </section>
 
-    <div class="error-msg" id="errorMsg"></div>
+  <aside class="auth-brand">
+    <svg class="auth-waves" viewBox="0 0 800 420" aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient id="wave-stroke" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#8fb0dd" stop-opacity="0"/>
+          <stop offset="0.45" stop-color="#8fb0dd" stop-opacity="0.45"/>
+          <stop offset="1" stop-color="#8fb0dd" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <g fill="none" stroke="url(#wave-stroke)" stroke-width="1.4">
+        <path d="M-20 300 C 140 170, 260 420, 420 290 S 680 160, 830 250"/>
+        <path d="M-20 330 C 140 200, 260 450, 420 320 S 680 190, 830 280"/>
+        <path d="M-20 360 C 140 230, 260 480, 420 350 S 680 220, 830 310"/>
+        <path d="M-20 390 C 140 260, 260 510, 420 380 S 680 250, 830 340"/>
+        <path d="M-20 420 C 140 290, 260 540, 420 410 S 680 280, 830 370"/>
+      </g>
+    </svg>
 
-    <button class="btn btn-primary login-btn" id="loginBtn" onclick="doLogin()">
-      Anmelden
-    </button>
-
-    <div class="setup-link" id="setupLink" style="display:none">
-      Erster Start? <a href="/setup.html">Admin-Account erstellen</a>
-    </div>
-  </div>
-
-  <div class="login-right">
-    <div>
-      <div class="right-eyebrow">Automation Business</div>
-      <div class="right-title">Von der Anfrage bis zum Zahlungseingang.</div>
-      <div class="right-sub">Anfragen landen automatisch im CRM, Follow-ups laufen von allein. Hier verwaltest du Leads, Rückrufe und Abschlüsse an einem Ort.</div>
-      <div class="right-dots">
-        <div class="right-dot"><i class="fas fa-check-circle"></i> Leads generieren &amp; zuweisen</div>
-        <div class="right-dot"><i class="fas fa-check-circle"></i> Status &amp; Kommentare tracken</div>
-        <div class="right-dot"><i class="fas fa-check-circle"></i> Reminder &amp; Rückrufe verwalten</div>
-        <div class="right-dot"><i class="fas fa-check-circle"></i> CSV-Export für jede Ansicht</div>
-      </div>
-    </div>
-    <div class="right-foot">
+    <div class="auth-brand-top">
       <img src="/LogoOB.PNG" alt="">
-      <span>NovaFlow Services · CRM</span>
+      NovaFlow Services <span>· CRM</span>
     </div>
-  </div>
+
+    <div class="auth-brand-main">
+      <div class="auth-brand-eyebrow">Automation Business</div>
+      <h2 class="auth-brand-title">Von der Anfrage bis zum Zahlungseingang.</h2>
+      <p class="auth-brand-sub">Anfragen landen automatisch im CRM, Follow-ups laufen von allein. Hier verwaltest du Leads, Rückrufe und Abschlüsse an einem Ort.</p>
+      <ul class="auth-features">
+        <li><span class="auth-feature-icon"><i class="fas fa-search"></i></span><div><b>Leads generieren &amp; zuweisen</b><span>Recherche per KI, Zuweisung an deine Closer mit einem Klick.</span></div></li>
+        <li><span class="auth-feature-icon"><i class="fas fa-columns"></i></span><div><b>Status &amp; Pipeline</b><span>Jeder Lead hat einen klaren Stand, als Tabelle oder Kanban.</span></div></li>
+        <li><span class="auth-feature-icon"><i class="fas fa-bell"></i></span><div><b>Reminder &amp; Rückrufe</b><span>Erinnerungen in der App und per E-Mail, nichts geht unter.</span></div></li>
+        <li><span class="auth-feature-icon"><i class="fas fa-file-csv"></i></span><div><b>Export für jede Ansicht</b><span>Alle Listen als CSV, jederzeit.</span></div></li>
+      </ul>
+    </div>
+
+    <div class="auth-brand-foot">
+      <span>crm.novaflowservices.de</span>
+      <span class="tag">Intern</span>
+    </div>
+  </aside>
 </div>
 
-<script src="/shared/api.js?v=nf2"></script>
+<script src="/shared/api.js?v=nf3"></script>
 <script>
   // Redirect if already logged in
   if (Auth.getToken()) {
