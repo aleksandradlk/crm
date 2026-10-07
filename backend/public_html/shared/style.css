@@ -1384,6 +1384,24 @@ body.dark .due-banner { color: var(--copper-light); }
   .rem-toast { width: auto; }
 }
 
+/* ── Leads: Auswahlmodus ────────────────────────────────────── */
+.btn-ghost.is-on { background: var(--navy); border-color: var(--navy); color: #fff; }
+.btn-ghost.is-on:hover { background: var(--navy-deep); border-color: var(--navy-deep); color: #fff; }
+body.dark .btn-ghost.is-on { background: var(--navy-light); border-color: var(--navy-light); color: var(--ink); }
+.select-hint { font-size: 12px; color: var(--text2); display: inline-flex; align-items: center; gap: 7px; }
+.select-hint i { color: var(--navy); }
+.select-hint kbd { font-family: var(--font-mono); font-size: 10.5px; padding: 1px 5px; border: 1px solid var(--border2); border-bottom-width: 2px; border-radius: 5px; background: var(--bg3); color: var(--text); }
+td.cell-check, th.cell-check { width: 44px; cursor: pointer; }
+td.cell-check input, th.cell-check input { width: 17px; height: 17px; }
+.select-mode tbody, .has-selection tbody { user-select: none; }
+.select-mode tr.lead-row:hover td { background: color-mix(in srgb, var(--navy) 4%, transparent); }
+.select-mode tr.lead-row.is-selected td, .has-selection tr.lead-row.is-selected td { background: color-mix(in srgb, var(--navy) 7%, transparent); }
+.bulk-spacer { flex: 1; }
+@media (max-width: 640px) {
+  .bulk-spacer { display: none; }
+  .select-hint { display: none; }
+}
+
 /* ── Reduzierte Bewegung ─────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }

@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf10">
+<link rel="stylesheet" href="/shared/style.css?v=nf11">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -114,6 +114,7 @@
         </select>
         <div class="toolbar-spacer"></div>
         <button class="btn btn-ghost btn-sm btn-icon" onclick="toggleActivityFeed()" title="Aktivitäts-Feed"><i class="fas fa-stream"></i></button>
+        <button id="selectModeBtn" class="btn btn-ghost btn-sm" onclick="toggleSelectMode()" title="Mehrere Leads per Klick auswählen"><i class="fas fa-check-square"></i> Auswählen</button>
         <div class="view-toggle">
           <button id="allLeadsViewTable" class="active" onclick="setLeadsView('table')"><i class="fas fa-table"></i> Tabelle</button>
           <button id="allLeadsViewPipeline" onclick="setLeadsView('pipeline')"><i class="fas fa-columns"></i> Pipeline</button>
@@ -135,6 +136,9 @@
         <span class="bulk-label">Zuweisen an</span>
         <select id="bulkAssignSelect" class="form-control"></select>
         <button class="btn btn-primary btn-sm" onclick="executeBulkAssign()"><i class="fas fa-user-tag"></i> Zuweisen</button>
+        <span class="bulk-sep"></span>
+        <button class="btn btn-ghost btn-sm" onclick="executeBulkArchive()"><i class="fas fa-archive"></i> Archivieren</button>
+        <span class="bulk-spacer"></span>
         <button class="btn btn-ghost btn-sm" onclick="clearBulkSelection()"><i class="fas fa-times"></i> Abbrechen</button>
       </div>
 
@@ -143,6 +147,7 @@
       <div id="allLeadsTableCard" class="card">
         <div class="card-header">
           <div class="card-title"><i class="fas fa-database"></i> Lead-Datenbank <span class="badge" id="leadCount">0</span></div>
+          <span class="select-hint" id="selectHint" style="display:none"><i class="fas fa-mouse-pointer"></i> Klick wählt einen Lead aus, <kbd>Umschalt</kbd> + Klick einen ganzen Bereich.</span>
         </div>
         <div class="table-wrap">
           <table class="has-select">
@@ -671,7 +676,7 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf10"></script>
+<script src="/shared/api.js?v=nf11"></script>
 <script>
 let allLeads = [], allUsers = [], generatedLeads = [], editingUserId = null;
 let panelDirty = false;
@@ -1032,8 +1037,8 @@ function renderLeads(leads) {
   body.innerHTML = leads.map((l, i) => {
     const sel = bulkSelectedIds.has(l.id);
     return `
-    <tr class="lead-row${sel ? ' is-selected' : ''}" draggable="true" ondragstart="_dragLeadId=${l.id};showDragAssignOverlay()" ondragend="hideDragAssignOverlay()" onclick="openLeadPanel(${l.id})">
-      <td class="cell-check" onclick="event.stopPropagation()">
+    <tr class="lead-row${sel ? ' is-selected' : ''}" data-id="${l.id}" draggable="true" ondragstart="_dragLeadId=${l.id};showDragAssignOverlay()" ondragend="hideDragAssignOverlay()" onclick="onLeadRowClick(event, ${l.id})">
+      <td class="cell-check" onclick="onLeadCheckCell(event, ${l.id})">
         <input type="checkbox" class="lead-cb" data-id="${l.id}" ${sel ? 'checked' : ''} onchange="toggleBulkSelect(${l.id},this.checked)">
       </td>
       <td class="cell-idx">${String(i+1).padStart(2,'0')}</td>
@@ -1045,7 +1050,7 @@ function renderLeads(leads) {
       <td><span class="cell-sub mono">${fmtDateShort(l.created_at)}</span></td>
       <td class="cell-actions" onclick="event.stopPropagation()">
         <button class="btn btn-ghost btn-sm btn-icon" onclick="tableQuickNote(${l.id},this,event)" title="Schnellnotiz"><i class="fas fa-sticky-note"></i></button>
-        <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteLead(${l.id})" title="Löschen"><i class="fas fa-trash" style="color:var(--red)"></i></button>
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteLead(${l.id})" title="Archivieren"><i class="fas fa-archive"></i></button>
       </td>
     </tr>`;
   }).join('');
@@ -1495,7 +1500,64 @@ async function loadClosersForSelect() {
 function toggleBulkSelect(id, checked) {
   if (checked) bulkSelectedIds.add(id);
   else bulkSelectedIds.delete(id);
+  _lastClickedLeadId = id;
   updateBulkBar();
+  syncRowSelection();
+}
+
+// ── Auswahlmodus: ganze Zeile klickbar, Umschalt+Klick für Bereiche ──
+let selectMode = false;
+let _lastClickedLeadId = null;
+
+function visibleLeads() { return currentFilteredLeads.length ? currentFilteredLeads : allLeads; }
+
+function toggleSelectMode(on) {
+  selectMode = typeof on === 'boolean' ? on : !selectMode;
+  const btn = document.getElementById('selectModeBtn');
+  if (btn) {
+    btn.classList.toggle('is-on', selectMode);
+    btn.innerHTML = selectMode ? '<i class="fas fa-check-square"></i> Auswahl beenden' : '<i class="fas fa-check-square"></i> Auswählen';
+  }
+  const hint = document.getElementById('selectHint');
+  if (hint) hint.style.display = selectMode ? '' : 'none';
+  document.getElementById('allLeadsTableCard')?.classList.toggle('select-mode', selectMode);
+  if (!selectMode && bulkSelectedIds.size) clearBulkSelection();
+}
+
+function onLeadRowClick(e, id) {
+  const selecting = selectMode || bulkSelectedIds.size > 0 || e.ctrlKey || e.metaKey || e.shiftKey;
+  if (!selecting) { openLeadPanel(id); return; }
+  if (e.shiftKey && _lastClickedLeadId != null && _lastClickedLeadId !== id) {
+    const ids = visibleLeads().map(l => l.id);
+    const a = ids.indexOf(_lastClickedLeadId), b = ids.indexOf(id);
+    if (a >= 0 && b >= 0) ids.slice(Math.min(a, b), Math.max(a, b) + 1).forEach(x => bulkSelectedIds.add(x));
+    else bulkSelectedIds.add(id);
+  } else if (bulkSelectedIds.has(id)) {
+    bulkSelectedIds.delete(id);
+  } else {
+    bulkSelectedIds.add(id);
+  }
+  _lastClickedLeadId = id;
+  updateBulkBar();
+  syncRowSelection();
+}
+
+function onLeadCheckCell(e, id) {
+  e.stopPropagation();
+  if (e.target && e.target.tagName === 'INPUT') return; // onchange der Checkbox übernimmt
+  toggleBulkSelect(id, !bulkSelectedIds.has(id));
+}
+
+function syncRowSelection() {
+  document.querySelectorAll('#leadsTableBody tr.lead-row').forEach(tr => {
+    const id = parseInt(tr.dataset.id);
+    const on = bulkSelectedIds.has(id);
+    tr.classList.toggle('is-selected', on);
+    const cb = tr.querySelector('.lead-cb');
+    if (cb) cb.checked = on;
+  });
+  const all = document.getElementById('selectAllLeads');
+  if (all) { const vis = visibleLeads(); all.checked = vis.length > 0 && vis.every(l => bulkSelectedIds.has(l.id)); }
 }
 
 function toggleAllLeadsSelect(checked) {
@@ -1517,9 +1579,11 @@ function clearBulkSelection() {
 function updateBulkBar() {
   const bar = document.getElementById('bulkBar');
   if (!bar) return;
-  if (bulkSelectedIds.size > 0) {
+  const n = bulkSelectedIds.size;
+  document.getElementById('allLeadsTableCard')?.classList.toggle('has-selection', n > 0);
+  if (n > 0) {
     bar.style.display = 'flex';
-    document.getElementById('bulkCount').textContent = bulkSelectedIds.size + ' ausgewählt';
+    document.getElementById('bulkCount').textContent = n + ' ausgewählt';
   } else {
     bar.style.display = 'none';
   }
@@ -1537,6 +1601,25 @@ async function executeBulkAssign() {
     clearBulkSelection();
     loadLeads();
   } catch(e) { showToast(e.message, 'err'); }
+}
+
+async function executeBulkArchive() {
+  const ids = [...bulkSelectedIds];
+  if (!ids.length) return;
+  const word = ids.length === 1 ? 'Lead' : 'Leads';
+  const ok = await customConfirm(
+    `${ids.length} ${word} archivieren?\nDie Leads werden aus der Datenbank ausgeblendet. Kommentare und Erinnerungen bleiben erhalten, im Archiv kannst du sie jederzeit wiederherstellen.`,
+    { title: 'Leads archivieren', okLabel: 'Archivieren', danger: true }
+  );
+  if (!ok) return;
+  const results = await Promise.allSettled(ids.map(id => api('DELETE', `/leads/${id}`)));
+  const failed = results.filter(r => r.status === 'rejected').length;
+  const done = ids.length - failed;
+  if (done) showToast(`${done} ${done === 1 ? 'Lead' : 'Leads'} archiviert ✓`);
+  if (failed) showToast(`${failed} ${failed === 1 ? 'Lead konnte' : 'Leads konnten'} nicht archiviert werden`, 'err');
+  if (_panelLead && ids.includes(_panelLead.id)) closeLeadPanel();
+  clearBulkSelection();
+  loadLeads();
 }
 
 // ── Rückruf-Reminder-Popup ────────────────────────────────────
