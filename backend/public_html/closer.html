@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf14">
+<link rel="stylesheet" href="/shared/style.css?v=nf15">
 <style>
 .notif-panel{position:fixed;top:0;right:0;bottom:0;width:340px;background:var(--bg2);border-left:1px solid var(--border2);z-index:150;transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;padding:20px}
 .notif-panel.open{transform:translateX(0)}
@@ -535,7 +535,7 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf14"></script>
+<script src="/shared/api.js?v=nf15"></script>
 <script>
 const ME = Auth.getUser();
 const CAN = {
@@ -570,7 +570,7 @@ let _visibleMyLeads  = [];
 
 // ── Mehrfachauswahl „Meine Leads“ (gemeinsame Komponente in shared/api.js) ──
 const clMySel = makeLeadSelection({
-  bodyId: 'myLeadsBody', cardId: 'clMyLeadsTableCard', barId: 'clMyBulkBar', countId: 'clMyBulkCount',
+  bodyId: 'myLeadsBody', cardIds: ['clMyLeadsTableCard', 'myLeadsPipelineView'], boardIds: ['pipelineBoard'], barId: 'clMyBulkBar', countId: 'clMyBulkCount',
   allCbId: 'selectAllMyLeadsCl', modeBtnId: 'clMySelectModeBtn', hintId: 'clMySelectHint',
   statusSelectId: 'clMyBulkStatus',
   statusRequest: (id, status) => api('PATCH', `/leads/${id}/status`, { status }),
@@ -834,22 +834,28 @@ function renderPipeline(leads) {
   const board = document.getElementById('pipelineBoard');
   board.innerHTML = PIPELINE_STATUSES.map(([status, label]) => {
     const colLeads = leads.filter(l => l.status === status);
-    const cards = colLeads.map(l => `
-      <div class="pipeline-card" draggable="true" data-id="${l.id}" data-status="${escHtml(l.status||'')}"
+    const cards = colLeads.map(l => {
+      const on = clMySel.ids.has(l.id);
+      return `
+      <div class="pipeline-card${on ? ' is-selected' : ''}" draggable="true" data-id="${l.id}" data-status="${escHtml(l.status||'')}"
            ondragstart="onCardDragStart(event,${l.id})" ondragend="onCardDragEnd(event)"
-           onclick="openPanel(${l.id})">
+           onclick="clMySel.cardClick(event, ${l.id})">
         <div class="pc-company">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}</div>
         ${l.ceo ? `<div class="pc-row"><i class="fas fa-user"></i><span>${escHtml(l.ceo)}</span></div>` : ''}
         ${l.phone ? `<div class="pc-row"><i class="fas fa-phone"></i><a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()">${escHtml(l.phone)}</a></div>` : ''}
         <div class="pc-foot">
-          <span class="pc-date"><i class="fas fa-clock"></i>${fmtDateShort(l.updated_at || l.created_at)}</span>
+          <div class="pc-foot-l">
+            <label class="pc-check" onclick="event.stopPropagation()" title="Auswählen"><input type="checkbox" class="lead-cb" data-id="${l.id}" ${on ? 'checked' : ''} onchange="clMySel.toggle(${l.id}, this.checked)"></label>
+            <span class="pc-date"><i class="fas fa-clock"></i>${fmtDateShort(l.updated_at || l.created_at)}</span>
+          </div>
           <button type="button" class="pc-note" onclick="quickNoteToggle(${l.id}, this, event)" title="Schnellnotiz"><i class="fas fa-sticky-note"></i></button>
         </div>
         <textarea class="quick-note-ta" data-lead-id="${l.id}" rows="2" placeholder="Schnellnotiz …" style="display:none"
           onclick="event.stopPropagation()"
           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();quickNoteSave(${l.id},this)}"
           onblur="quickNoteSave(${l.id},this)"></textarea>
-      </div>`).join('');
+      </div>`;
+    }).join('');
     return `
       <div class="pipeline-col">
         <div class="pipeline-col-header"><span class="status-badge s-${status}">${label}</span><span class="pc-count">${colLeads.length}</span></div>
@@ -859,6 +865,7 @@ function renderPipeline(leads) {
         </div>
       </div>`;
   }).join('');
+  clMySel.sync();
 }
 
 function quickNoteToggle(id, iconEl, event) {
@@ -888,11 +895,13 @@ let _draggedLeadId = null;
 
 function onCardDragStart(e, id) {
   _draggedLeadId = id;
-  e.target.classList.add('dragging');
+  const board = e.target.closest('.pipeline-board');
+  if (clMySel.ids.has(id) && board) board.querySelectorAll('.pipeline-card.is-selected').forEach(el => el.classList.add('dragging'));
+  else e.target.classList.add('dragging');
   e.dataTransfer.effectAllowed = 'move';
 }
 function onCardDragEnd(e) {
-  e.target.classList.remove('dragging');
+  document.querySelectorAll('.pipeline-card.dragging').forEach(el => el.classList.remove('dragging'));
 }
 function onColDragOver(e) {
   e.preventDefault();
@@ -904,14 +913,20 @@ function onColDragLeave(e) {
 async function onColDrop(e, status) {
   e.preventDefault();
   e.currentTarget.classList.remove('drag-over');
-  const id = _draggedLeadId;
+  const draggedId = _draggedLeadId;
   _draggedLeadId = null;
-  if (!id) return;
-  const lead = allLeads.find(l => l.id === id);
-  if (!lead || lead.status === status) return;
-  lead.status = status;
+  if (!draggedId) return;
+  const ids = clMySel.dragIds(draggedId).filter(id => { const l = allLeads.find(x => x.id === id); return l && l.status !== status; });
+  if (!ids.length) return;
+  ids.forEach(id => { const l = allLeads.find(x => x.id === id); if (l) l.status = status; });
   renderPipeline(myLeads());
-  await quickStatus(id, status);
+  if (ids.length === 1) { await quickStatus(ids[0], status); return; }
+  const results = await Promise.allSettled(ids.map(id => api('PATCH', `/leads/${id}/status`, { status })));
+  const failed = results.filter(r => r.status === 'rejected').length;
+  if (failed) showToast(`${failed} ${failed === 1 ? 'Lead konnte' : 'Leads konnten'} nicht geändert werden`, 'err');
+  else showToast(`Status für ${ids.length} Leads aktualisiert ✓`);
+  clMySel.clear();
+  loadLeads();
 }
 
 function filterAllLeads() {

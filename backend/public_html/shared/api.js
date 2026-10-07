@@ -189,18 +189,23 @@ function fmtDateShort(d) {
 function makeLeadSelection(cfg) {
   const S = { ids: new Set(), mode: false, last: null };
   const $ = id => document.getElementById(id);
+  const containers = [].concat(cfg.cardIds || cfg.cardId || []);
+  const boards = [].concat(cfg.boardIds || []);
+  const setCls = (cls, on) => containers.forEach(id => $(id)?.classList.toggle(cls, on));
   S.visible = () => cfg.visible();
   S.updateBar = () => {
     const n = S.ids.size;
-    $(cfg.cardId)?.classList.toggle('has-selection', n > 0);
+    setCls('has-selection', n > 0);
     const bar = $(cfg.barId); if (bar) bar.style.display = n > 0 ? 'flex' : 'none';
     const c = $(cfg.countId); if (c) c.textContent = n + ' ausgewählt';
   };
   S.sync = () => {
-    document.querySelectorAll(`#${cfg.bodyId} tr.lead-row`).forEach(tr => {
-      const on = S.ids.has(parseInt(tr.dataset.id));
-      tr.classList.toggle('is-selected', on);
-      const cb = tr.querySelector('.lead-cb'); if (cb) cb.checked = on;
+    const nodes = [...document.querySelectorAll(`#${cfg.bodyId} tr.lead-row`)];
+    boards.forEach(b => nodes.push(...document.querySelectorAll(`#${b} .pipeline-card[data-id]`)));
+    nodes.forEach(el => {
+      const on = S.ids.has(parseInt(el.dataset.id));
+      el.classList.toggle('is-selected', on);
+      const cb = el.querySelector('.lead-cb'); if (cb) cb.checked = on;
     });
     const all = $(cfg.allCbId);
     if (all) { const vis = S.visible(); all.checked = vis.length > 0 && vis.every(l => S.ids.has(l.id)); }
@@ -216,7 +221,7 @@ function makeLeadSelection(cfg) {
       btn.innerHTML = S.mode ? '<i class="fas fa-check-square"></i> Auswahl beenden' : '<i class="fas fa-check-square"></i> Auswählen';
     }
     const hint = $(cfg.hintId); if (hint) hint.style.display = S.mode ? '' : 'none';
-    $(cfg.cardId)?.classList.toggle('select-mode', S.mode);
+    setCls('select-mode', S.mode);
     if (!S.mode && S.ids.size) S.clear();
   };
   S.rowClick = (e, id) => {
@@ -239,6 +244,24 @@ function makeLeadSelection(cfg) {
     if (e.target && e.target.tagName === 'INPUT') return; // onchange der Checkbox übernimmt
     S.toggle(id, !S.ids.has(id));
   };
+  // Pipeline-Karte: Klick wählt aus, Umschalt+Klick einen Bereich innerhalb der Spalte
+  S.cardClick = (e, id) => {
+    const selecting = S.mode || S.ids.size > 0 || e.ctrlKey || e.metaKey || e.shiftKey;
+    if (!selecting) { cfg.open(id); return; }
+    const col = e.currentTarget && e.currentTarget.closest ? e.currentTarget.closest('.pipeline-col-body') : null;
+    const order = col ? [...col.querySelectorAll('.pipeline-card[data-id]')].map(c => parseInt(c.dataset.id)) : [];
+    const a = order.indexOf(S.last), b = order.indexOf(id);
+    if (e.shiftKey && S.last != null && S.last !== id && a >= 0 && b >= 0) {
+      order.slice(Math.min(a, b), Math.max(a, b) + 1).forEach(x => S.ids.add(x));
+    } else if (S.ids.has(id)) {
+      S.ids.delete(id);
+    } else {
+      S.ids.add(id);
+    }
+    S.last = id; S.updateBar(); S.sync();
+  };
+  // Beim Ziehen einer markierten Karte wandern alle markierten mit
+  S.dragIds = (draggedId) => S.ids.has(draggedId) ? [...S.ids] : [draggedId];
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
   S.assign = async () => {
     const closerId = $(cfg.assignSelectId)?.value;
