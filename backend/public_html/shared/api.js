@@ -299,6 +299,21 @@ function makeLeadSelection(cfg) {
     if (failed) showToast(`${plural(failed, 'Lead konnte', 'Leads konnten')} nicht übernommen werden`, 'err');
     S.clear(); cfg.afterChange();
   };
+  // Generische Sammelaktion: request(id) pro Lead, optional mit Bestätigung
+  S.bulk = async ({ request, confirm, done, failed: failedMsg }) => {
+    const ids = [...S.ids];
+    if (!ids.length) return;
+    if (confirm) {
+      const ok = await customConfirm(confirm.message(ids.length), confirm.opts || {});
+      if (!ok) return;
+    }
+    const results = await Promise.allSettled(ids.map(id => request(id)));
+    const failed = results.filter(r => r.status === 'rejected').length;
+    const okN = ids.length - failed;
+    if (okN && done) showToast(done(okN));
+    if (failed) showToast(failedMsg ? failedMsg(failed) : `${plural(failed, 'Lead konnte', 'Leads konnten')} nicht verarbeitet werden`, 'err');
+    S.clear(); cfg.afterChange();
+  };
   S.archive = async () => {
     const ids = [...S.ids];
     if (!ids.length) return;

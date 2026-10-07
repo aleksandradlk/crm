@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf16">
+<link rel="stylesheet" href="/shared/style.css?v=nf17">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -527,9 +527,23 @@
     <!-- ── TAB: ARCHIV ──────────────────────────────── -->
     <div id="tab-archive" class="tab-panel">
       <div class="page-header">
-        <div><h1 data-eyebrow="Ressourcen">Archivierte Leads</h1><p class="page-desc">Archivierte Leads bleiben erhalten und lassen sich jederzeit wiederherstellen. <span class="badge" id="archiveCount">0</span></p></div>
-        <div class="page-actions"><button class="btn btn-ghost btn-sm" onclick="loadArchive()"><i class="fas fa-sync"></i> Aktualisieren</button></div>
+        <div><h1 data-eyebrow="Ressourcen">Archivierte Leads</h1><p class="page-desc">Archivierte Leads bleiben erhalten und lassen sich jederzeit wiederherstellen. Klick auf eine Zeile wählt sie aus. <span class="badge" id="archiveCount">0</span></p></div>
+        <div class="page-actions">
+          <button id="archiveSelectModeBtn" class="btn btn-ghost btn-sm" onclick="archSel.toggleMode()" title="Mehrere Leads per Klick auswählen"><i class="fas fa-check-square"></i> Auswählen</button>
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="loadArchive()" title="Aktualisieren"><i class="fas fa-sync"></i></button>
+        </div>
       </div>
+
+      <div id="archiveBulkBar" class="bulk-bar">
+        <span class="bulk-count" id="archiveBulkCount">0 ausgewählt</span>
+        <span class="bulk-sep"></span>
+        <button class="btn btn-primary btn-sm" onclick="bulkRestoreLeads()"><i class="fas fa-undo"></i> Wiederherstellen</button>
+        <span class="bulk-sep"></span>
+        <button class="btn btn-ghost btn-sm" onclick="bulkPermanentDelete()"><i class="fas fa-trash"></i> Endgültig löschen</button>
+        <span class="bulk-spacer"></span>
+        <button class="btn btn-ghost btn-sm" onclick="archSel.clear()"><i class="fas fa-times"></i> Abbrechen</button>
+      </div>
+
       <div id="archiveList"></div>
     </div>
 
@@ -691,7 +705,7 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf16"></script>
+<script src="/shared/api.js?v=nf17"></script>
 <script>
 let allLeads = [], allUsers = [], generatedLeads = [], editingUserId = null;
 let panelDirty = false;
@@ -3180,26 +3194,69 @@ async function deleteTool(id) {
 async function loadArchive() {
   try {
     const leads = await api('GET', '/leads/archived');
+    _archivedLeads = leads;
     const el = document.getElementById('archiveList');
     const cnt = document.getElementById('archiveCount');
     if (cnt) cnt.textContent = leads.length;
     if (!leads.length) {
       el.innerHTML = '<div class="wiki-empty"><i class="fas fa-archive"></i>Keine archivierten Leads. Archivierte Leads landen hier und lassen sich jederzeit wiederherstellen.</div>';
+      archSel.clear();
       return;
     }
     const jsName = l => escHtml(String(l.company || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
-    el.innerHTML = `<div class="card"><div class="table-wrap"><table class="keep-first">
-      <thead><tr><th>Unternehmen</th><th>Kontakt</th><th>Zugewiesen</th><th>Status</th><th>Archiviert</th><th></th></tr></thead>
-      <tbody>${leads.map(l => `<tr>
+    el.innerHTML = `<div class="card" id="archiveTableCard">
+      <div class="card-header">
+        <div class="card-title"><i class="fas fa-archive"></i> Archiv <span class="badge">${leads.length}</span></div>
+        <span class="select-hint" id="archiveSelectHint" style="display:${archSel.mode ? '' : 'none'}"><i class="fas fa-mouse-pointer"></i> Klick wählt einen Lead aus, <kbd>Umschalt</kbd> + Klick einen ganzen Bereich.</span>
+      </div>
+      <div class="table-wrap"><table>
+      <thead><tr><th class="cell-check"><input type="checkbox" id="selectAllArchive" title="Alle auswählen" onchange="archSel.toggleAll(this.checked)"></th><th>Unternehmen</th><th>Kontakt</th><th>Zugewiesen</th><th>Status</th><th>Archiviert</th><th></th></tr></thead>
+      <tbody id="archiveTableBody">${leads.map(l => {
+        const sel = archSel.ids.has(l.id);
+        return `<tr class="lead-row${sel ? ' is-selected' : ''}" data-id="${l.id}" onclick="archSel.rowClick(event, ${l.id})">
+        <td class="cell-check" onclick="archSel.checkCell(event, ${l.id})"><input type="checkbox" class="lead-cb" data-id="${l.id}" ${sel ? 'checked' : ''} onchange="archSel.toggle(${l.id}, this.checked)"></td>
         <td><div class="cell-title">${escHtml(l.company || '—')}</div>${l.ceo ? `<div class="cell-sub">${escHtml(l.ceo)}</div>` : ''}</td>
-        <td>${l.phone ? `<div class="cell-sub mono"><a href="tel:${escHtml(l.phone)}">${escHtml(l.phone)}</a></div>` : ''}${l.email ? `<div class="cell-sub">${escHtml(l.email)}</div>` : ''}${(!l.phone && !l.email) ? '<span class="panel-muted">—</span>' : ''}</td>
+        <td>${l.phone ? `<div class="cell-sub mono"><a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()">${escHtml(l.phone)}</a></div>` : ''}${l.email ? `<div class="cell-sub">${escHtml(l.email)}</div>` : ''}${(!l.phone && !l.email) ? '<span class="panel-muted">—</span>' : ''}</td>
         <td class="cell-sub">${escHtml(l.assigned_name || '—')}</td>
         <td>${statusBadge(l.status)}</td>
         <td><div class="cell-sub">${fmtDateShort(l.archived_at)}${l.archived_by_name ? ' · ' + escHtml(l.archived_by_name) : ''}</div>${l.archive_reason ? `<div class="cell-reason">„${escHtml(l.archive_reason)}“</div>` : ''}</td>
-        <td class="cell-actions"><button class="btn btn-ghost btn-sm" onclick="restoreLead(${l.id})"><i class="fas fa-undo"></i> Wiederherstellen</button><button class="btn btn-ghost btn-sm btn-icon" title="Endgültig löschen" style="color:var(--red)" onclick="permanentDeleteLead(${l.id},'${jsName(l)}')"><i class="fas fa-trash"></i></button></td>
-      </tr>`).join('')}</tbody>
+        <td class="cell-actions" onclick="event.stopPropagation()"><button class="btn btn-ghost btn-sm" onclick="restoreLead(${l.id})"><i class="fas fa-undo"></i> Wiederherstellen</button><button class="btn btn-ghost btn-sm btn-icon" title="Endgültig löschen" style="color:var(--red)" onclick="permanentDeleteLead(${l.id},'${jsName(l)}')"><i class="fas fa-trash"></i></button></td>
+      </tr>`; }).join('')}</tbody>
     </table></div></div>`;
+    archSel.sync();
+    archSel.updateBar();
+    document.getElementById('archiveTableCard')?.classList.toggle('select-mode', archSel.mode);
   } catch(e) { showToast(e.message, 'err'); }
+}
+
+// ── Mehrfachauswahl Archiv: Zeilen-Klick wählt immer aus, Sammel-Wiederherstellen und -Löschen ──
+let _archivedLeads = [];
+const archSel = makeLeadSelection({
+  bodyId: 'archiveTableBody', cardIds: ['archiveTableCard'], barId: 'archiveBulkBar', countId: 'archiveBulkCount',
+  allCbId: 'selectAllArchive', modeBtnId: 'archiveSelectModeBtn', hintId: 'archiveSelectHint',
+  visible: () => _archivedLeads,
+  open: id => archSel.toggle(id, !archSel.ids.has(id)),
+  afterChange: () => loadArchive(),
+});
+
+function bulkRestoreLeads() {
+  return archSel.bulk({
+    request: id => api('POST', `/leads/${id}/restore`),
+    done: n => `${n} ${n === 1 ? 'Lead' : 'Leads'} wiederhergestellt ✓`,
+    failed: n => `${n} ${n === 1 ? 'Lead konnte' : 'Leads konnten'} nicht wiederhergestellt werden`,
+  });
+}
+
+function bulkPermanentDelete() {
+  return archSel.bulk({
+    confirm: {
+      message: n => `${n} ${n === 1 ? 'Lead' : 'Leads'} endgültig löschen?\nDieser Vorgang kann nicht rückgängig gemacht werden. Alle Kommentare, Anrufprotokolle und Reminder dieser Leads werden ebenfalls gelöscht.`,
+      opts: { title: 'Endgültig löschen', okLabel: 'Endgültig löschen', danger: true },
+    },
+    request: id => api('DELETE', `/leads/${id}/permanent`),
+    done: n => `${n} ${n === 1 ? 'Lead' : 'Leads'} endgültig gelöscht`,
+    failed: n => `${n} ${n === 1 ? 'Lead konnte' : 'Leads konnten'} nicht gelöscht werden`,
+  });
 }
 
 
@@ -3212,7 +3269,8 @@ async function restoreLead(id) {
 }
 
 async function permanentDeleteLead(id, name) {
-  if (!confirm(`Lead "${name}" endgültig löschen?\n\nDieser Vorgang kann NICHT rückgängig gemacht werden.\nAlle Kommentare und Reminder werden ebenfalls gelöscht.`)) return;
+  const ok = await customConfirm(`Lead „${name}“ endgültig löschen?\nDieser Vorgang kann nicht rückgängig gemacht werden. Alle Kommentare, Anrufprotokolle und Reminder werden ebenfalls gelöscht.`, { title: 'Endgültig löschen', okLabel: 'Endgültig löschen', danger: true });
+  if (!ok) return;
   try {
     await api('DELETE', `/leads/${id}/permanent`);
     showToast('Lead endgültig gelöscht');
