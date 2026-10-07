@@ -264,6 +264,18 @@ function makeLeadSelection(cfg) {
     const sel = $(cfg.statusSelectId); if (sel) sel.value = '';
     S.clear(); cfg.afterChange();
   };
+  S.claim = async () => {
+    const all = [...S.ids];
+    const ids = cfg.claimable ? all.filter(id => cfg.claimable(id)) : all;
+    const skipped = all.length - ids.length;
+    if (!ids.length) { showToast(skipped ? 'Die ausgewählten Leads sind bereits vergeben' : 'Keine Leads ausgewählt', 'err'); return; }
+    const results = await Promise.allSettled(ids.map(id => cfg.claimRequest(id)));
+    const failed = results.filter(r => r.status === 'rejected').length;
+    const done = ids.length - failed;
+    if (done) showToast(`${plural(done, 'Lead', 'Leads')} übernommen ✓${skipped ? ` · ${skipped} bereits vergeben` : ''}`);
+    if (failed) showToast(`${plural(failed, 'Lead konnte', 'Leads konnten')} nicht übernommen werden`, 'err');
+    S.clear(); cfg.afterChange();
+  };
   S.archive = async () => {
     const ids = [...S.ids];
     if (!ids.length) return;
