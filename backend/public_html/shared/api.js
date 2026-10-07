@@ -183,6 +183,106 @@ function fmtDateShort(d) {
   return new Date(d).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' });
 }
 
+// ── Mehrfachauswahl für Lead-Tabellen (Admin + Closer) ───────
+// Ganze Zeile klickbar, Umschalt+Klick für Bereiche, Sammelaktionen
+// (Zuweisen, Status setzen, Archivieren) je nach Konfiguration.
+function makeLeadSelection(cfg) {
+  const S = { ids: new Set(), mode: false, last: null };
+  const $ = id => document.getElementById(id);
+  S.visible = () => cfg.visible();
+  S.updateBar = () => {
+    const n = S.ids.size;
+    $(cfg.cardId)?.classList.toggle('has-selection', n > 0);
+    const bar = $(cfg.barId); if (bar) bar.style.display = n > 0 ? 'flex' : 'none';
+    const c = $(cfg.countId); if (c) c.textContent = n + ' ausgewählt';
+  };
+  S.sync = () => {
+    document.querySelectorAll(`#${cfg.bodyId} tr.lead-row`).forEach(tr => {
+      const on = S.ids.has(parseInt(tr.dataset.id));
+      tr.classList.toggle('is-selected', on);
+      const cb = tr.querySelector('.lead-cb'); if (cb) cb.checked = on;
+    });
+    const all = $(cfg.allCbId);
+    if (all) { const vis = S.visible(); all.checked = vis.length > 0 && vis.every(l => S.ids.has(l.id)); }
+  };
+  S.toggle = (id, checked) => { if (checked) S.ids.add(id); else S.ids.delete(id); S.last = id; S.updateBar(); S.sync(); };
+  S.toggleAll = (checked) => { S.visible().forEach(l => checked ? S.ids.add(l.id) : S.ids.delete(l.id)); S.updateBar(); S.sync(); };
+  S.clear = () => { S.ids.clear(); S.last = null; S.updateBar(); S.sync(); };
+  S.toggleMode = (on) => {
+    S.mode = typeof on === 'boolean' ? on : !S.mode;
+    const btn = $(cfg.modeBtnId);
+    if (btn) {
+      btn.classList.toggle('is-on', S.mode);
+      btn.innerHTML = S.mode ? '<i class="fas fa-check-square"></i> Auswahl beenden' : '<i class="fas fa-check-square"></i> Auswählen';
+    }
+    const hint = $(cfg.hintId); if (hint) hint.style.display = S.mode ? '' : 'none';
+    $(cfg.cardId)?.classList.toggle('select-mode', S.mode);
+    if (!S.mode && S.ids.size) S.clear();
+  };
+  S.rowClick = (e, id) => {
+    const selecting = S.mode || S.ids.size > 0 || e.ctrlKey || e.metaKey || e.shiftKey;
+    if (!selecting) { cfg.open(id); return; }
+    if (e.shiftKey && S.last != null && S.last !== id) {
+      const ids = S.visible().map(l => l.id);
+      const a = ids.indexOf(S.last), b = ids.indexOf(id);
+      if (a >= 0 && b >= 0) ids.slice(Math.min(a, b), Math.max(a, b) + 1).forEach(x => S.ids.add(x));
+      else S.ids.add(id);
+    } else if (S.ids.has(id)) {
+      S.ids.delete(id);
+    } else {
+      S.ids.add(id);
+    }
+    S.last = id; S.updateBar(); S.sync();
+  };
+  S.checkCell = (e, id) => {
+    e.stopPropagation();
+    if (e.target && e.target.tagName === 'INPUT') return; // onchange der Checkbox übernimmt
+    S.toggle(id, !S.ids.has(id));
+  };
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  S.assign = async () => {
+    const closerId = $(cfg.assignSelectId)?.value;
+    if (!closerId) { showToast('Bitte einen Closer auswählen', 'err'); return; }
+    if (!S.ids.size) return;
+    const n = S.ids.size;
+    try {
+      await Promise.all([...S.ids].map(id => api('PATCH', `/leads/${id}`, { assigned_to: closerId })));
+      showToast(`${plural(n, 'Lead', 'Leads')} zugewiesen ✓`);
+      S.clear(); cfg.afterChange();
+    } catch(e) { showToast(e.message, 'err'); }
+  };
+  S.setStatus = async () => {
+    const status = $(cfg.statusSelectId)?.value;
+    if (!status) { showToast('Bitte einen Status auswählen', 'err'); return; }
+    const ids = [...S.ids];
+    if (!ids.length) return;
+    const results = await Promise.allSettled(ids.map(id => cfg.statusRequest(id, status)));
+    const failed = results.filter(r => r.status === 'rejected').length;
+    const done = ids.length - failed;
+    if (done) showToast(`Status für ${plural(done, 'Lead', 'Leads')} gesetzt ✓`);
+    if (failed) showToast(`${plural(failed, 'Lead konnte', 'Leads konnten')} nicht geändert werden`, 'err');
+    const sel = $(cfg.statusSelectId); if (sel) sel.value = '';
+    S.clear(); cfg.afterChange();
+  };
+  S.archive = async () => {
+    const ids = [...S.ids];
+    if (!ids.length) return;
+    const ok = await customConfirm(
+      `${plural(ids.length, 'Lead', 'Leads')} archivieren?\nDie Leads werden aus der Datenbank ausgeblendet. Kommentare und Erinnerungen bleiben erhalten, im Archiv können sie jederzeit wiederhergestellt werden.`,
+      { title: 'Leads archivieren', okLabel: 'Archivieren', danger: true }
+    );
+    if (!ok) return;
+    const results = await Promise.allSettled(ids.map(id => api('DELETE', `/leads/${id}`)));
+    const failed = results.filter(r => r.status === 'rejected').length;
+    const done = ids.length - failed;
+    if (done) showToast(`${plural(done, 'Lead', 'Leads')} archiviert ✓`);
+    if (failed) showToast(`${plural(failed, 'Lead konnte', 'Leads konnten')} nicht archiviert werden`, 'err');
+    if (cfg.onArchived) cfg.onArchived(ids);
+    S.clear(); cfg.afterChange();
+  };
+  return S;
+}
+
 // ── Activity Heartbeat (Closer-Tracking) ─────────────────────
 let _clickCount = 0;
 let _inactiveTimer = null;
