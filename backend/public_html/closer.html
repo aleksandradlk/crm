@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf15">
+<link rel="stylesheet" href="/shared/style.css?v=nf16">
 <style>
 .notif-panel{position:fixed;top:0;right:0;bottom:0;width:340px;background:var(--bg2);border-left:1px solid var(--border2);z-index:150;transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;padding:20px}
 .notif-panel.open{transform:translateX(0)}
@@ -215,6 +215,10 @@
         </select>
         <div class="toolbar-spacer"></div>
         <button id="clAllSelectModeBtn" class="btn btn-ghost btn-sm" onclick="clAllSel.toggleMode()" title="Mehrere Leads per Klick auswählen"><i class="fas fa-check-square"></i> Auswählen</button>
+        <div class="view-toggle">
+          <button id="allViewTableBtn" class="active" onclick="setAllLeadsView('table')"><i class="fas fa-table"></i> Tabelle</button>
+          <button id="allViewPipelineBtn" class="mob-hide" onclick="setAllLeadsView('pipeline')"><i class="fas fa-columns"></i> Pipeline</button>
+        </div>
         <button class="btn btn-ghost btn-sm btn-icon" onclick="loadLeads()" title="Aktualisieren"><i class="fas fa-sync"></i></button>
       </div>
 
@@ -244,6 +248,7 @@
         <button class="btn btn-ghost btn-sm" onclick="clAllSel.clear()"><i class="fas fa-times"></i> Abbrechen</button>
       </div>
 
+      <div id="allLeadsTableView">
       <div class="card" id="clAllLeadsTableCard">
         <div class="card-header">
           <div class="card-title"><i class="fas fa-list"></i> Alle Leads <span class="badge" id="allLeadCount">0</span></div>
@@ -259,6 +264,11 @@
             <tbody id="allLeadsBody"></tbody>
           </table>
         </div>
+      </div>
+      </div>
+
+      <div id="allLeadsPipelineView" style="display:none">
+        <div class="pipeline-board" id="allPipelineBoard"></div>
       </div>
     </div>
 
@@ -535,7 +545,7 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf15"></script>
+<script src="/shared/api.js?v=nf16"></script>
 <script>
 const ME = Auth.getUser();
 const CAN = {
@@ -581,7 +591,7 @@ const clMySel = makeLeadSelection({
 });
 // ── Mehrfachauswahl „Alle Leads“: Übernehmen freier Leads + Archivieren ──
 const clAllSel = makeLeadSelection({
-  bodyId: 'allLeadsBody', cardId: 'clAllLeadsTableCard', barId: 'clAllBulkBar', countId: 'clAllBulkCount',
+  bodyId: 'allLeadsBody', cardIds: ['clAllLeadsTableCard', 'allLeadsPipelineView'], boardIds: ['allPipelineBoard'], barId: 'clAllBulkBar', countId: 'clAllBulkCount',
   allCbId: 'selectAllLeadsCl', modeBtnId: 'clAllSelectModeBtn', hintId: 'clAllSelectHint',
   claimRequest: id => api('PATCH', `/leads/${id}/assign`),
   claimable: id => { const l = allLeads.find(x => x.id === id); return !!l && l.assigned_to !== ME?.id && (ME?.role === 'admin' || !l.assigned_to); },
@@ -738,6 +748,16 @@ function showSection(name) {
 
 // ── LOADS ─────────────────────────────────────────────────────
 let myLeadsViewMode = 'table';
+let allLeadsViewMode = 'table';
+
+function setAllLeadsView(mode) {
+  allLeadsViewMode = mode;
+  document.getElementById('allLeadsTableView').style.display    = mode === 'table'    ? '' : 'none';
+  document.getElementById('allLeadsPipelineView').style.display = mode === 'pipeline' ? '' : 'none';
+  document.getElementById('allViewTableBtn').classList.toggle('active', mode === 'table');
+  document.getElementById('allViewPipelineBtn').classList.toggle('active', mode === 'pipeline');
+  if (mode === 'pipeline') renderPipeline(_visibleAllLeads.length ? _visibleAllLeads : allLeads, 'allPipelineBoard');
+}
 
 function setMyLeadsView(mode) {
   myLeadsViewMode = mode;
@@ -830,22 +850,28 @@ const PIPELINE_STATUSES = [
   ['kein_interesse','Kein Interesse'],['rueckruf','Rückruf'],['kunde','Kunde']
 ];
 
-function renderPipeline(leads) {
-  const board = document.getElementById('pipelineBoard');
+function renderPipeline(leads, boardId = 'pipelineBoard') {
+  const board = document.getElementById(boardId);
+  if (!board) return;
+  const isAll = boardId === 'allPipelineBoard';
+  const sel = isAll ? clAllSel : clMySel;
+  const selName = isAll ? 'clAllSel' : 'clMySel';
   board.innerHTML = PIPELINE_STATUSES.map(([status, label]) => {
     const colLeads = leads.filter(l => l.status === status);
     const cards = colLeads.map(l => {
-      const on = clMySel.ids.has(l.id);
+      const on = sel.ids.has(l.id);
+      const canDrag = canDragLead(l);
       return `
-      <div class="pipeline-card${on ? ' is-selected' : ''}" draggable="true" data-id="${l.id}" data-status="${escHtml(l.status||'')}"
-           ondragstart="onCardDragStart(event,${l.id})" ondragend="onCardDragEnd(event)"
-           onclick="clMySel.cardClick(event, ${l.id})">
+      <div class="pipeline-card${on ? ' is-selected' : ''}${canDrag ? '' : ' no-drag'}" draggable="${canDrag}" data-id="${l.id}" data-status="${escHtml(l.status||'')}"
+           ${canDrag ? `ondragstart="onCardDragStart(event,${l.id})" ondragend="onCardDragEnd(event)"` : ''}
+           onclick="${selName}.cardClick(event, ${l.id})">
         <div class="pc-company">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}</div>
         ${l.ceo ? `<div class="pc-row"><i class="fas fa-user"></i><span>${escHtml(l.ceo)}</span></div>` : ''}
         ${l.phone ? `<div class="pc-row"><i class="fas fa-phone"></i><a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()">${escHtml(l.phone)}</a></div>` : ''}
+        ${isAll ? `<div class="pc-row"><i class="fas fa-user-tag"></i><span>${l.assigned_name ? escHtml(l.assigned_name) : 'Nicht zugewiesen'}</span></div>` : ''}
         <div class="pc-foot">
           <div class="pc-foot-l">
-            <label class="pc-check" onclick="event.stopPropagation()" title="Auswählen"><input type="checkbox" class="lead-cb" data-id="${l.id}" ${on ? 'checked' : ''} onchange="clMySel.toggle(${l.id}, this.checked)"></label>
+            <label class="pc-check" onclick="event.stopPropagation()" title="Auswählen"><input type="checkbox" class="lead-cb" data-id="${l.id}" ${on ? 'checked' : ''} onchange="${selName}.toggle(${l.id}, this.checked)"></label>
             <span class="pc-date"><i class="fas fa-clock"></i>${fmtDateShort(l.updated_at || l.created_at)}</span>
           </div>
           <button type="button" class="pc-note" onclick="quickNoteToggle(${l.id}, this, event)" title="Schnellnotiz"><i class="fas fa-sticky-note"></i></button>
@@ -860,13 +886,16 @@ function renderPipeline(leads) {
       <div class="pipeline-col">
         <div class="pipeline-col-header"><span class="status-badge s-${status}">${label}</span><span class="pc-count">${colLeads.length}</span></div>
         <div class="pipeline-col-body" data-status="${status}"
-             ondragover="onColDragOver(event)" ondragleave="onColDragLeave(event)" ondrop="onColDrop(event,'${status}')">
+             ondragover="onColDragOver(event)" ondragleave="onColDragLeave(event)" ondrop="onColDrop(event,'${status}','${boardId}')">
           ${cards || '<div class="pipeline-empty">Keine Leads</div>'}
         </div>
       </div>`;
   }).join('');
-  clMySel.sync();
+  sel.sync();
 }
+
+// Status per Drag nur für eigene Leads (Admins: alle), passend zum Status-Select in der Tabelle
+function canDragLead(l) { return !!l && (ME?.role === 'admin' || l.assigned_to === ME?.id); }
 
 function quickNoteToggle(id, iconEl, event) {
   event.stopPropagation();
@@ -896,7 +925,8 @@ let _draggedLeadId = null;
 function onCardDragStart(e, id) {
   _draggedLeadId = id;
   const board = e.target.closest('.pipeline-board');
-  if (clMySel.ids.has(id) && board) board.querySelectorAll('.pipeline-card.is-selected').forEach(el => el.classList.add('dragging'));
+  const sel = board?.id === 'allPipelineBoard' ? clAllSel : clMySel;
+  if (sel.ids.has(id) && board) board.querySelectorAll('.pipeline-card.is-selected:not(.no-drag)').forEach(el => el.classList.add('dragging'));
   else e.target.classList.add('dragging');
   e.dataTransfer.effectAllowed = 'move';
 }
@@ -910,22 +940,27 @@ function onColDragOver(e) {
 function onColDragLeave(e) {
   e.currentTarget.classList.remove('drag-over');
 }
-async function onColDrop(e, status) {
+async function onColDrop(e, status, boardId = 'pipelineBoard') {
   e.preventDefault();
   e.currentTarget.classList.remove('drag-over');
   const draggedId = _draggedLeadId;
   _draggedLeadId = null;
   if (!draggedId) return;
-  const ids = clMySel.dragIds(draggedId).filter(id => { const l = allLeads.find(x => x.id === id); return l && l.status !== status; });
-  if (!ids.length) return;
+  const isAll = boardId === 'allPipelineBoard';
+  const sel = isAll ? clAllSel : clMySel;
+  const wanted = sel.dragIds(draggedId);
+  const ids = wanted.filter(id => { const l = allLeads.find(x => x.id === id); return canDragLead(l) && l.status !== status; });
+  const skipped = wanted.filter(id => { const l = allLeads.find(x => x.id === id); return l && !canDragLead(l); }).length;
+  if (!ids.length) { if (skipped) showToast('Nur eigene Leads lassen sich verschieben', 'err'); return; }
   ids.forEach(id => { const l = allLeads.find(x => x.id === id); if (l) l.status = status; });
-  renderPipeline(myLeads());
-  if (ids.length === 1) { await quickStatus(ids[0], status); return; }
+  const rerender = () => isAll ? renderPipeline(_visibleAllLeads.length ? _visibleAllLeads : allLeads, 'allPipelineBoard') : renderPipeline(myLeads());
+  rerender();
+  if (ids.length === 1 && !skipped) { await quickStatus(ids[0], status); rerender(); return; }
   const results = await Promise.allSettled(ids.map(id => api('PATCH', `/leads/${id}/status`, { status })));
   const failed = results.filter(r => r.status === 'rejected').length;
   if (failed) showToast(`${failed} ${failed === 1 ? 'Lead konnte' : 'Leads konnten'} nicht geändert werden`, 'err');
-  else showToast(`Status für ${ids.length} Leads aktualisiert ✓`);
-  clMySel.clear();
+  else showToast(`Status für ${ids.length} ${ids.length === 1 ? 'Lead' : 'Leads'} aktualisiert ✓${skipped ? ` · ${skipped} fremde übersprungen` : ''}`);
+  sel.clear();
   loadLeads();
 }
 
@@ -981,6 +1016,7 @@ function renderAllLeads(leads) {
   if (!leads.length) {
     body.innerHTML = `<tr><td colspan="9"><div class="wiki-empty" style="margin:6px 0"><i class="fas fa-inbox"></i>Keine Leads für diese Auswahl.</div></td></tr>`;
     clAllSel.sync();
+    if (allLeadsViewMode === 'pipeline') renderPipeline(leads, 'allPipelineBoard');
     return;
   }
   const muted = '<span style="color:var(--text3)">—</span>';
@@ -1006,6 +1042,7 @@ function renderAllLeads(leads) {
     </tr>`;
   }).join('');
   clAllSel.sync();
+  if (allLeadsViewMode === 'pipeline') renderPipeline(leads, 'allPipelineBoard');
 }
 
 function statusOptions(current) {
