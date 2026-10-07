@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf12">
+<link rel="stylesheet" href="/shared/style.css?v=nf13">
 <style>
 .notif-panel{position:fixed;top:0;right:0;bottom:0;width:340px;background:var(--bg2);border-left:1px solid var(--border2);z-index:150;transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;padding:20px}
 .notif-panel.open{transform:translateX(0)}
@@ -126,6 +126,7 @@
           <option value="kunde">Kunde</option>
         </select>
         <div class="toolbar-spacer"></div>
+        <button id="clMySelectModeBtn" class="btn btn-ghost btn-sm" onclick="clMySel.toggleMode()" title="Mehrere Leads per Klick auswählen"><i class="fas fa-check-square"></i> Auswählen</button>
         <div class="view-toggle">
           <button id="myViewTableBtn" class="active" onclick="setMyLeadsView('table')"><i class="fas fa-table"></i> Tabelle</button>
           <button id="myViewPipelineBtn" class="mob-hide" onclick="setMyLeadsView('pipeline')"><i class="fas fa-columns"></i> Pipeline</button>
@@ -148,14 +149,36 @@
         <button class="qf-btn" onclick="quickFilter('my','neu_woche',this)"><i class="fas fa-star"></i>Neu diese Woche</button>
       </div>
 
+      <div id="clMyBulkBar" class="bulk-bar">
+        <span class="bulk-count" id="clMyBulkCount">0 ausgewählt</span>
+        <span class="bulk-sep"></span>
+        <span class="bulk-label">Status setzen</span>
+        <select id="clMyBulkStatus" class="form-control">
+          <option value="">— Status wählen —</option>
+          <option value="neu">Neu</option>
+          <option value="kontaktiert">Kontaktiert</option>
+          <option value="nicht_erreicht">Nicht erreicht</option>
+          <option value="kein_interesse">Kein Interesse</option>
+          <option value="rueckruf">Rückruf</option>
+          <option value="kunde">Kunde</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="clMySel.setStatus()"><i class="fas fa-exchange-alt"></i> Übernehmen</button>
+        <span class="bulk-sep" id="clMyBulkArchiveSep"></span>
+        <button class="btn btn-ghost btn-sm" id="clMyBulkArchiveBtn" onclick="clMySel.archive()"><i class="fas fa-archive"></i> Archivieren</button>
+        <span class="bulk-spacer"></span>
+        <button class="btn btn-ghost btn-sm" onclick="clMySel.clear()"><i class="fas fa-times"></i> Abbrechen</button>
+      </div>
+
       <div id="myLeadsTableView">
-        <div class="card">
+        <div class="card" id="clMyLeadsTableCard">
           <div class="card-header">
             <div class="card-title"><i class="fas fa-user-check"></i> Meine Lead-Liste <span class="badge" id="myLeadCount">0</span></div>
+            <span class="select-hint" id="clMySelectHint" style="display:none"><i class="fas fa-mouse-pointer"></i> Klick wählt einen Lead aus, <kbd>Umschalt</kbd> + Klick einen ganzen Bereich.</span>
           </div>
           <div class="table-wrap">
-            <table>
+            <table class="has-select">
               <thead><tr>
+                <th class="cell-check"><input type="checkbox" id="selectAllMyLeadsCl" title="Alle auswählen" onchange="clMySel.toggleAll(this.checked)"></th>
                 <th class="mob-hide">#</th><th>Unternehmen</th><th>Telefon</th><th class="mob-hide">Standort</th>
                 <th>Status</th><th class="mob-hide">Letzter Kontakt</th><th></th>
               </tr></thead>
@@ -498,7 +521,7 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf12"></script>
+<script src="/shared/api.js?v=nf13"></script>
 <script>
 const ME = Auth.getUser();
 const CAN = {
@@ -530,6 +553,22 @@ let generatedLeadsCl = [];
 let panelDirty = false;
 let _panelLead = null;
 let _visibleMyLeads  = [];
+
+// ── Mehrfachauswahl „Meine Leads“ (gemeinsame Komponente in shared/api.js) ──
+const clMySel = makeLeadSelection({
+  bodyId: 'myLeadsBody', cardId: 'clMyLeadsTableCard', barId: 'clMyBulkBar', countId: 'clMyBulkCount',
+  allCbId: 'selectAllMyLeadsCl', modeBtnId: 'clMySelectModeBtn', hintId: 'clMySelectHint',
+  statusSelectId: 'clMyBulkStatus',
+  statusRequest: (id, status) => api('PATCH', `/leads/${id}/status`, { status }),
+  visible: () => _visibleMyLeads,
+  open: id => openPanel(id),
+  afterChange: () => loadLeads(),
+  onArchived: ids => { if (_panelLead && ids.includes(_panelLead.id)) closePanel(); },
+});
+// Archivieren nur, wenn der Closer die Berechtigung hat
+if (!(ME?.role === 'admin' || ME?.can_archive_leads)) {
+  ['clMyBulkArchiveBtn', 'clMyBulkArchiveSep'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+}
 let _visibleAllLeads = [];
 let _panelSourceList = [];
 
@@ -868,12 +907,18 @@ function renderMyLeads(leads) {
   document.getElementById('myLeadCount').textContent = leads.length;
   const body = document.getElementById('myLeadsBody');
   if (!leads.length) {
-    body.innerHTML = `<tr><td colspan="7"><div class="wiki-empty" style="margin:6px 0"><i class="fas fa-inbox"></i>Keine Leads für diese Auswahl.</div></td></tr>`;
+    body.innerHTML = `<tr><td colspan="8"><div class="wiki-empty" style="margin:6px 0"><i class="fas fa-inbox"></i>Keine Leads für diese Auswahl.</div></td></tr>`;
+    clMySel.sync();
     return;
   }
   const muted = '<span style="color:var(--text3)">—</span>';
-  body.innerHTML = leads.map((l, i) => `
-    <tr class="lead-row" onclick="openPanel(${l.id})">
+  body.innerHTML = leads.map((l, i) => {
+    const sel = clMySel.ids.has(l.id);
+    return `
+    <tr class="lead-row${sel ? ' is-selected' : ''}" data-id="${l.id}" onclick="clMySel.rowClick(event, ${l.id})">
+      <td class="cell-check" onclick="clMySel.checkCell(event, ${l.id})">
+        <input type="checkbox" class="lead-cb" data-id="${l.id}" ${sel ? 'checked' : ''} onchange="clMySel.toggle(${l.id},this.checked)">
+      </td>
       <td class="mob-hide cell-idx">${String(i+1).padStart(2,'0')}</td>
       <td><div class="cell-title">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}</div>${l.ceo ? `<div class="cell-sub mob-hide">${escHtml(l.ceo)}</div>` : ''}</td>
       <td>${l.phone ? `<a class="cell-sub mono" href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()">${escHtml(l.phone)}</a>` : muted}</td>
@@ -884,7 +929,9 @@ function renderMyLeads(leads) {
         <button class="btn btn-ghost btn-sm btn-icon" onclick="tableQuickNote(${l.id},this,event)" title="Schnellnotiz"><i class="fas fa-sticky-note"></i></button>
         <button class="btn btn-ghost btn-sm btn-icon" onclick="openPanel(${l.id})" title="Öffnen"><i class="fas fa-chevron-right"></i></button>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
+  clMySel.sync();
 }
 
 function renderAllLeads(leads) {
