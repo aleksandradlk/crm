@@ -1411,6 +1411,9 @@ td.cell-check input, th.cell-check input { width: 17px; height: 17px; }
 .select-mode .pipeline-card { cursor: pointer; }
 .select-mode .pipeline-board, .has-selection .pipeline-board { user-select: none; }
 
+.pipeline-card.no-drag { cursor: default; }
+.select-mode .pipeline-card.no-drag { cursor: pointer; }
+
 /* ── Reduzierte Bewegung ─────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
