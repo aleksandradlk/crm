@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf14">
+<link rel="stylesheet" href="/shared/style.css?v=nf15">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -691,7 +691,7 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf14"></script>
+<script src="/shared/api.js?v=nf15"></script>
 <script>
 let allLeads = [], allUsers = [], generatedLeads = [], editingUserId = null;
 let panelDirty = false;
@@ -812,25 +812,33 @@ function renderAdminPipeline(leads, boardId) {
   _pipelineData[boardId] = leads;
   const board = document.getElementById(boardId);
   if (!board) return;
+  const sel = boardId === 'myLeadsPipelineBoard' ? mySel : allSel;
+  const selName = boardId === 'myLeadsPipelineBoard' ? 'mySel' : 'allSel';
   board.innerHTML = PIPELINE_STATUSES.map(([status, label]) => {
     const colLeads = leads.filter(l => l.status === status);
-    const cards = colLeads.map(l => `
-      <div class="pipeline-card" draggable="true" data-id="${l.id}" data-status="${escHtml(l.status||'')}"
+    const cards = colLeads.map(l => {
+      const on = sel.ids.has(l.id);
+      return `
+      <div class="pipeline-card${on ? ' is-selected' : ''}" draggable="true" data-id="${l.id}" data-status="${escHtml(l.status||'')}"
            ondragstart="onAdminCardDragStart(event,${l.id})" ondragend="onAdminCardDragEnd(event)"
-           onclick="openLeadPanel(${l.id})">
+           onclick="${selName}.cardClick(event, ${l.id})">
         <div class="pc-company">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}</div>
         ${l.ceo    ? `<div class="pc-row"><i class="fas fa-user"></i><span>${escHtml(l.ceo)}</span></div>` : ''}
         ${l.phone  ? `<div class="pc-row"><i class="fas fa-phone"></i><a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()">${escHtml(l.phone)}</a></div>` : ''}
         ${l.assigned_name ? `<div class="pc-row"><i class="fas fa-user-tag"></i><span>${escHtml(l.assigned_name)}</span></div>` : ''}
         <div class="pc-foot">
-          <span class="pc-date"><i class="fas fa-clock"></i>${fmtDateShort(l.updated_at||l.created_at)}</span>
+          <div class="pc-foot-l">
+            <label class="pc-check" onclick="event.stopPropagation()" title="Auswählen"><input type="checkbox" class="lead-cb" data-id="${l.id}" ${on ? 'checked' : ''} onchange="${selName}.toggle(${l.id}, this.checked)"></label>
+            <span class="pc-date"><i class="fas fa-clock"></i>${fmtDateShort(l.updated_at||l.created_at)}</span>
+          </div>
           <button type="button" class="pc-note" onclick="adminQuickNoteToggle(${l.id}, this, event)" title="Schnellnotiz"><i class="fas fa-sticky-note"></i></button>
         </div>
         <textarea class="quick-note-ta" data-lead-id="${l.id}" rows="2" placeholder="Schnellnotiz …" style="display:none"
           onclick="event.stopPropagation()"
           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();adminQuickNoteSave(${l.id},this)}"
           onblur="adminQuickNoteSave(${l.id},this)"></textarea>
-      </div>`).join('');
+      </div>`;
+    }).join('');
     return `
       <div class="pipeline-col">
         <div class="pipeline-col-header">
@@ -844,6 +852,7 @@ function renderAdminPipeline(leads, boardId) {
         </div>
       </div>`;
   }).join('');
+  sel.sync();
 }
 
 function adminQuickNoteToggle(id, iconEl, event) {
@@ -869,27 +878,32 @@ async function adminQuickNoteSave(id, ta) {
 
 function onAdminCardDragStart(e, id) {
   _adminDraggedId = id;
-  e.target.classList.add('dragging');
+  const board = e.target.closest('.pipeline-board');
+  const sel = board?.id === 'myLeadsPipelineBoard' ? mySel : allSel;
+  if (sel.ids.has(id) && board) board.querySelectorAll('.pipeline-card.is-selected').forEach(c => c.classList.add('dragging'));
+  else e.target.classList.add('dragging');
   e.dataTransfer.effectAllowed = 'move';
 }
-function onAdminCardDragEnd(e) { e.target.classList.remove('dragging'); }
+function onAdminCardDragEnd(e) { document.querySelectorAll('.pipeline-card.dragging').forEach(c => c.classList.remove('dragging')); }
 function onAdminColDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
 function onAdminColDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
 
 async function onAdminColDrop(e, status, boardId) {
   e.preventDefault();
   e.currentTarget.classList.remove('drag-over');
-  const id = _adminDraggedId; _adminDraggedId = null;
-  if (!id) return;
-  const lead = allLeads.find(l => l.id === id);
-  if (!lead || lead.status === status) return;
-  lead.status = status;
+  const draggedId = _adminDraggedId; _adminDraggedId = null;
+  if (!draggedId) return;
+  const sel = boardId === 'myLeadsPipelineBoard' ? mySel : allSel;
+  const ids = sel.dragIds(draggedId).filter(id => { const l = allLeads.find(x => x.id === id); return l && l.status !== status; });
+  if (!ids.length) return;
+  ids.forEach(id => { const l = allLeads.find(x => x.id === id); if (l) l.status = status; });
   renderAdminPipeline(_pipelineData[boardId] || [], boardId);
   try {
-    await api('PATCH', `/leads/${id}/status`, { status });
+    await Promise.all(ids.map(id => api('PATCH', `/leads/${id}/status`, { status })));
     updateLeadStats(allLeads);
     renderLeads(currentFilteredLeads.length ? currentFilteredLeads : allLeads);
-    showToast('Status aktualisiert ✓');
+    showToast(ids.length === 1 ? 'Status aktualisiert ✓' : `Status für ${ids.length} Leads aktualisiert ✓`);
+    if (ids.length > 1) sel.clear();
   } catch(e) {
     showToast(e.message, 'err');
     loadLeads();
@@ -1030,7 +1044,7 @@ let currentFilteredLeads = [];
 
 // ── Mehrfachauswahl (gemeinsame Komponente in shared/api.js) ──
 const allSel = makeLeadSelection({
-  bodyId: 'leadsTableBody', cardId: 'allLeadsTableCard', barId: 'bulkBar', countId: 'bulkCount',
+  bodyId: 'leadsTableBody', cardIds: ['allLeadsTableCard', 'allLeadsPipelineView'], boardIds: ['allLeadsPipelineBoard'], barId: 'bulkBar', countId: 'bulkCount',
   allCbId: 'selectAllLeads', modeBtnId: 'selectModeBtn', hintId: 'selectHint', assignSelectId: 'bulkAssignSelect',
   visible: () => currentFilteredLeads.length ? currentFilteredLeads : allLeads,
   open: id => openLeadPanel(id),
@@ -1038,7 +1052,7 @@ const allSel = makeLeadSelection({
   onArchived: ids => { if (_panelLead && ids.includes(_panelLead.id)) closeLeadPanel(); },
 });
 const mySel = makeLeadSelection({
-  bodyId: 'myLeadsTableBody', cardId: 'myLeadsTableCard', barId: 'myBulkBar', countId: 'myBulkCount',
+  bodyId: 'myLeadsTableBody', cardIds: ['myLeadsTableCard', 'myLeadsPipelineView'], boardIds: ['myLeadsPipelineBoard'], barId: 'myBulkBar', countId: 'myBulkCount',
   allCbId: 'selectAllMyLeads', modeBtnId: 'mySelectModeBtn', hintId: 'mySelectHint', assignSelectId: 'myBulkAssignSelect',
   visible: () => allLeads.filter(l => l.assigned_to === ME.id),
   open: id => openLeadPanel(id),

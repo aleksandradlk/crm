@@ -1402,6 +1402,15 @@ td.cell-check input, th.cell-check input { width: 17px; height: 17px; }
   .select-hint { display: none; }
 }
 
+/* ── Pipeline: Auswahlmodus ─────────────────────────────────── */
+.pc-foot-l { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.pc-check { display: none; width: 22px; height: 22px; border-radius: 6px; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
+.pc-check input { width: 15px; height: 15px; margin: 0; accent-color: var(--navy); cursor: pointer; }
+.select-mode .pc-check, .has-selection .pc-check, .pipeline-card.is-selected .pc-check { display: inline-flex; }
+.pipeline-card.is-selected { border-color: var(--navy); box-shadow: 0 0 0 2px color-mix(in srgb, var(--navy) 22%, transparent); background: color-mix(in srgb, var(--navy) 5%, var(--bg2)); }
+.select-mode .pipeline-card { cursor: pointer; }
+.select-mode .pipeline-board, .has-selection .pipeline-board { user-select: none; }
+
 /* ── Reduzierte Bewegung ─────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
