@@ -5,6 +5,10 @@ const db = require('../db');
 // Verhindert, dass sich zwei Abrufe überlappen (Cron läuft alle 2 Minuten)
 let _running = false;
 
+// Speicher schonen (Shared Hosting): Mails einzeln, begrenzt und ohne große Anhänge laden
+const MAX_PER_RUN      = 25;
+const MAX_SOURCE_BYTES = 512 * 1024;
+
 // Message-IDs aus In-Reply-To / References extrahieren (String oder Array)
 function extractMessageIds(...values) {
   const ids = [];
@@ -101,7 +105,7 @@ async function pollIncomingEmails() {
   _running = true;
 
   const ownAddresses = [user, process.env.SMTP_USER].filter(Boolean).map(a => a.toLowerCase());
-  const stats = { checked: 0, matched: 0, unmatched: 0, failed: 0 };
+  const stats = { checked: 0, matched: 0, unmatched: 0, failed: 0, pending: 0 };
 
   try {
     // Letzten erfolgreichen Abruf aus DB lesen
@@ -134,11 +138,14 @@ async function pollIncomingEmails() {
       try {
         const uids = await client.search({ since }, { uid: true });
         if (uids && uids.length > 0) {
-          // Schritt 1: nur Umschläge holen (leichtgewichtig) und bereits
-          // verarbeitete Mails per Message-ID aussortieren.
+          // Schritt 1: nur Umschläge holen (leichtgewichtig). Bereits verarbeitete
+          // Mails (Message-ID) und eigene Mails werden hier schon aussortiert,
+          // damit sie nicht bei jedem Abruf erneut komplett geladen werden.
           const envelopes = [];
           for await (const msg of client.fetch(uids, { envelope: true }, { uid: true })) {
-            if (msg.envelope?.messageId) envelopes.push({ uid: msg.uid, messageId: msg.envelope.messageId });
+            const messageId = msg.envelope?.messageId;
+            const from = (msg.envelope?.from?.[0]?.address || '').toLowerCase();
+            if (messageId && !ownAddresses.includes(from)) envelopes.push({ uid: msg.uid, messageId });
           }
           const newUids = [];
           for (const { uid, messageId } of envelopes) {
@@ -149,20 +156,23 @@ async function pollIncomingEmails() {
             );
             if (!existing) newUids.push(uid);
           }
+          newUids.sort((a, b) => a - b);
 
-          // Schritt 2: nur neue Mails vollständig laden. Erst sammeln, dann
-          // verarbeiten — während eines FETCH keine weiteren IMAP-Befehle.
-          const raw = [];
-          if (newUids.length) {
-            for await (const msg of client.fetch(newUids, { envelope: true, source: true }, { uid: true })) {
-              raw.push({ envelope: msg.envelope, source: msg.source });
-            }
-          }
+          // Schritt 2: neue Mails einzeln laden und sofort verarbeiten — nie alle
+          // gleichzeitig im Speicher. Pro Lauf höchstens MAX_PER_RUN Mails, der Rest
+          // folgt beim nächsten Abruf (wichtig beim ersten Import von 30 Tagen).
+          const batch = newUids.slice(0, MAX_PER_RUN);
+          stats.pending = newUids.length - batch.length;
 
-          for (const { envelope, source } of raw) {
+          for (const uid of batch) {
             stats.checked++;
             try {
-              const parsed = await simpleParser(source, { skipImageLinks: true, skipTextToHtml: true });
+              // Text steht im MIME-Aufbau vor den Anhängen — große Anhänge
+              // werden nicht mitgeladen.
+              const msg = await client.fetchOne(uid, { envelope: true, source: { maxLength: MAX_SOURCE_BYTES } }, { uid: true });
+              if (!msg || !msg.source) continue;
+              const envelope = msg.envelope;
+              const parsed = await simpleParser(msg.source, { skipImageLinks: true, skipTextToHtml: true });
               const messageId = envelope?.messageId || parsed.messageId;
               if (!messageId) continue;
 
@@ -211,12 +221,15 @@ async function pollIncomingEmails() {
       try { await client.logout(); } catch (_) {}
     }
 
-    // Letzten Poll-Zeitpunkt nur bei erfolgreichem Lauf aktualisieren
-    const now = new Date().toISOString();
-    await db.query(
-      "INSERT INTO app_settings (key_name, value) VALUES ('imap_last_poll',?) ON DUPLICATE KEY UPDATE value=?",
-      [now, now]
-    ).catch(() => {});
+    // Letzten Poll-Zeitpunkt nur aktualisieren, wenn alles abgearbeitet ist —
+    // sonst würden noch nicht geladene ältere Mails beim nächsten Lauf übersprungen
+    if (!stats.pending) {
+      const now = new Date().toISOString();
+      await db.query(
+        "INSERT INTO app_settings (key_name, value) VALUES ('imap_last_poll',?) ON DUPLICATE KEY UPDATE value=?",
+        [now, now]
+      ).catch(() => {});
+    }
     await saveStatus({ ok: true, ...stats });
   } catch (e) {
     console.error('[IMAP Poller]', e.message);
