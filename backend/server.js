@@ -23,6 +23,8 @@ const emailTemplateRoutes  = require('./routes/emailtemplates');
 const agentLogRoutes       = require('./routes/agentlog');
 const toolRoutes           = require('./routes/tools');
 const canvaRoutes          = require('./routes/canva');
+const emailRoutes          = require('./routes/emails');
+const voiceRoutes          = require('./routes/voice');
 const { startReminderCron } = require('./cron/reminders');
 const { pollIncomingEmails } = require('./cron/emailPoller');
 const cron           = require('node-cron');
@@ -39,7 +41,9 @@ app.use(helmet({
       styleSrc:    ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdnjs.cloudflare.com"],
       fontSrc:     ["'self'", "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com"],
       imgSrc:      ["'self'", "data:", "blob:"],
-      connectSrc:  ["'self'"],
+      // Twilio Voice SDK: Signalisierung (WebSocket) + Telemetrie + Klingeltöne
+      connectSrc:  ["'self'", "wss://*.twilio.com", "https://*.twilio.com"],
+      mediaSrc:    ["'self'", "blob:", "https://sdk.twilio.com"],
       objectSrc:   ["'none'"],
       baseUri:     ["'self'"],
       frameAncestors: ["'none'"],
@@ -71,6 +75,12 @@ app.use(express.static(path.join(__dirname, 'public_html'), {
 }));
 
 
+// Twilio Voice SDK aus node_modules ausliefern (kein externes CDN nötig)
+app.use('/vendor/twilio-voice', express.static(
+  path.join(__dirname, 'node_modules/@twilio/voice-sdk/dist'),
+  { maxAge: '7d' }
+));
+
 // ── API Routes ────────────────────────────────────────────────
 app.use('/api/auth',     authRoutes);
 app.use('/api/users',    userRoutes);
@@ -85,6 +95,8 @@ app.use('/api/email-templates', emailTemplateRoutes);
 app.use('/api/agent-log',       agentLogRoutes);
 app.use('/api/tools',           toolRoutes);
 app.use('/api/canva',           canvaRoutes);
+app.use('/api/emails',          emailRoutes);
+app.use('/api/voice',           voiceRoutes);
 
 // ── SPA Fallback ──────────────────────────────────────────────
 app.get('*', (req, res) => {
@@ -263,6 +275,20 @@ db.query(`CREATE TABLE IF NOT EXISTS unmatched_emails (
   UNIQUE KEY uq_unmatched_mid (message_id(250))
 )`).catch(() => {});
 
+// ── Posteingang + Telefonie ──────────────────────────────────
+// is_read: Default 1, damit bestehende Mails nicht plötzlich als ungelesen erscheinen
+db.query('ALTER TABLE lead_emails ADD COLUMN is_read TINYINT(1) NOT NULL DEFAULT 1').catch(() => {});
+db.query('ALTER TABLE lead_emails ADD COLUMN from_name VARCHAR(255) NULL').catch(() => {});
+db.query('ALTER TABLE lead_emails ADD COLUMN user_id INT NULL').catch(() => {});
+db.query('ALTER TABLE lead_emails MODIFY COLUMN body_text MEDIUMTEXT').catch(() => {});
+db.query('CREATE INDEX idx_lead_emails_lead ON lead_emails (lead_id)').catch(() => {});
+db.query('CREATE INDEX idx_lead_emails_inbox ON lead_emails (direction, is_read)').catch(() => {});
+db.query('ALTER TABLE unmatched_emails ADD COLUMN from_name VARCHAR(255) NULL').catch(() => {});
+db.query('ALTER TABLE unmatched_emails MODIFY COLUMN body_text MEDIUMTEXT').catch(() => {});
+db.query('ALTER TABLE users ADD COLUMN caller_id VARCHAR(30) NULL').catch(() => {});
+db.query('ALTER TABLE users ADD COLUMN caller_id_verified TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
+db.query('ALTER TABLE call_logs ADD COLUMN twilio_call_sid VARCHAR(64) NULL').catch(() => {});
+
 // ── Settings-Tabelle ─────────────────────────────────────────
 db.query(`CREATE TABLE IF NOT EXISTS app_settings (
   key_name VARCHAR(100) PRIMARY KEY,
@@ -336,7 +362,7 @@ app.listen(PORT, () => {
   console.log(`LeadHunter Pro läuft auf Port ${PORT}`);
   console.log(`Umgebung: ${process.env.NODE_ENV || 'development'}`);
   startReminderCron();
-  // IMAP-Polling alle 5 Minuten
+  // IMAP-Polling alle 2 Minuten
   cron.schedule('*/2 * * * *', pollIncomingEmails);
   pollIncomingEmails(); // Sofort beim Start einmal prüfen
 });

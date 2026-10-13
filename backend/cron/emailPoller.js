@@ -1,162 +1,228 @@
 const { ImapFlow } = require('imapflow');
+const { simpleParser } = require('mailparser');
 const db = require('../db');
+
+// Verhindert, dass sich zwei Abrufe überlappen (Cron läuft alle 2 Minuten)
+let _running = false;
+
+// Message-IDs aus In-Reply-To / References extrahieren (String oder Array)
+function extractMessageIds(...values) {
+  const ids = [];
+  for (const v of values) {
+    if (!v) continue;
+    const list = Array.isArray(v) ? v : [v];
+    for (const item of list) {
+      const s = String(item);
+      const matches = [...s.matchAll(/<([^>]+)>/g)].map(m => `<${m[1]}>`);
+      if (matches.length) ids.push(...matches);
+      else if (s.trim()) ids.push(`<${s.trim().replace(/^<|>$/g, '')}>`);
+    }
+  }
+  return [...new Set(ids)];
+}
+
+function htmlToText(html) {
+  return String(html || '')
+    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|tr|li|h\d)>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/\n{3,}/g, '\n\n');
+}
+
+async function findLeadId(parsed, subject, fromAddr) {
+  // Stufe 1: X-CRM-Lead-ID Header (direkter Treffer)
+  const crmHeader = parsed.headers?.get('x-crm-lead-id');
+  if (crmHeader) {
+    const cid = parseInt(String(crmHeader).trim());
+    if (!isNaN(cid)) {
+      const [[row]] = await db.query(
+        'SELECT id FROM leads WHERE id=? AND archived_at IS NULL LIMIT 1', [cid]
+      );
+      if (row) return row.id;
+    }
+  }
+
+  // Stufe 2: In-Reply-To / References gegen gespeicherte Message-IDs
+  // (greift, wenn der Kunde in seinem Mailprogramm auf „Antworten“ drückt)
+  const refIds = extractMessageIds(parsed.inReplyTo, parsed.references);
+  if (refIds.length) {
+    const placeholders = refIds.map(() => '?').join(',');
+    const [[row]] = await db.query(
+      `SELECT le.lead_id FROM lead_emails le JOIN leads l ON l.id = le.lead_id
+       WHERE le.message_id IN (${placeholders}) AND l.archived_at IS NULL
+       ORDER BY le.id DESC LIMIT 1`,
+      refIds
+    );
+    if (row) return row.lead_id;
+  }
+
+  // Stufe 3: [NF-{id}] im Betreff
+  const match = subject.match(/\[NF-(\d+)\]/i);
+  if (match) {
+    const [[row]] = await db.query(
+      'SELECT id FROM leads WHERE id=? AND archived_at IS NULL LIMIT 1', [parseInt(match[1])]
+    );
+    if (row) return row.id;
+  }
+
+  // Stufe 4: E-Mail-Adresse des Absenders (Fallback)
+  if (fromAddr) {
+    const [[row]] = await db.query(
+      'SELECT id FROM leads WHERE LOWER(email)=? AND archived_at IS NULL ORDER BY updated_at DESC LIMIT 1', [fromAddr]
+    );
+    if (row) return row.id;
+  }
+  return null;
+}
+
+async function saveStatus(status) {
+  const value = JSON.stringify({ ...status, at: new Date().toISOString() });
+  await db.query(
+    "INSERT INTO app_settings (key_name, value) VALUES ('imap_status',?) ON DUPLICATE KEY UPDATE value=?",
+    [value, value]
+  ).catch(() => {});
+}
 
 async function pollIncomingEmails() {
   const host = process.env.IMAP_HOST;
   const user = process.env.IMAP_USER;
   const pass = process.env.IMAP_PASS;
-  if (!host || !user || !pass) return;
+  if (!host || !user || !pass) {
+    await saveStatus({ ok: false, error: 'IMAP ist nicht konfiguriert (IMAP_HOST / IMAP_USER / IMAP_PASS in .env fehlen)' });
+    return;
+  }
+  if (_running) return;
+  _running = true;
 
-  // Letzten Abfrage-Zeitpunkt aus DB lesen
-  const [[lastPollRow]] = await db.query(
-    "SELECT value FROM app_settings WHERE key_name='imap_last_poll'"
-  ).catch(() => [[null]]);
-
-  // Erster Lauf: nur letzte 30 Tage; sonst: seit letztem Poll minus 10 min Puffer
-  // Ungültigen/korrumpierten Datumswert abfangen → Fallback auf 30 Tage
-  const since = (() => {
-    if (lastPollRow?.value) {
-      const d = new Date(lastPollRow.value);
-      if (!isNaN(d.getTime())) return new Date(d.getTime() - 10 * 60 * 1000);
-    }
-    return new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  })();
-
-  const client = new ImapFlow({
-    host,
-    port: parseInt(process.env.IMAP_PORT || '993'),
-    secure: process.env.IMAP_SECURE !== 'false',
-    auth: { user, pass },
-    logger: false,
-    tls: { rejectUnauthorized: process.env.IMAP_REJECT_UNAUTHORIZED !== 'false' }
-  });
+  const ownAddresses = [user, process.env.SMTP_USER].filter(Boolean).map(a => a.toLowerCase());
+  const stats = { checked: 0, matched: 0, unmatched: 0, failed: 0 };
 
   try {
+    // Letzten erfolgreichen Abruf aus DB lesen
+    const [[lastPollRow]] = await db.query(
+      "SELECT value FROM app_settings WHERE key_name='imap_last_poll'"
+    ).catch(() => [[null]]);
+
+    // Erster Lauf: letzte 30 Tage; sonst: seit letztem Abruf minus 1 Tag Puffer
+    // (IMAP-SINCE arbeitet nur tagesgenau, Duplikate fängt die Message-ID-Prüfung ab)
+    const since = (() => {
+      if (lastPollRow?.value) {
+        const d = new Date(lastPollRow.value);
+        if (!isNaN(d.getTime())) return new Date(d.getTime() - 24 * 60 * 60 * 1000);
+      }
+      return new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    })();
+
+    const client = new ImapFlow({
+      host,
+      port: parseInt(process.env.IMAP_PORT || '993'),
+      secure: process.env.IMAP_SECURE !== 'false',
+      auth: { user, pass },
+      logger: false,
+      tls: { rejectUnauthorized: process.env.IMAP_REJECT_UNAUTHORIZED !== 'false' }
+    });
+
     await client.connect();
     try {
-      const lock = await client.getMailboxLock('INBOX');
+      const lock = await client.getMailboxLock(process.env.IMAP_FOLDER || 'INBOX');
       try {
-        // Nur neue Nachrichten seit dem letzten Poll abrufen (nicht alle)
         const uids = await client.search({ since }, { uid: true });
-
         if (uids && uids.length > 0) {
-          for await (const msg of client.fetch(uids, {
-            envelope: true,
-            bodyParts: ['TEXT'],
-            headers: ['in-reply-to', 'references', 'x-crm-lead-id'],
-          }, { uid: true })) {
-            const messageId = msg.envelope?.messageId;
-            if (!messageId) continue;
-
-            // Bereits verarbeitet?
+          // Schritt 1: nur Umschläge holen (leichtgewichtig) und bereits
+          // verarbeitete Mails per Message-ID aussortieren.
+          const envelopes = [];
+          for await (const msg of client.fetch(uids, { envelope: true }, { uid: true })) {
+            if (msg.envelope?.messageId) envelopes.push({ uid: msg.uid, messageId: msg.envelope.messageId });
+          }
+          const newUids = [];
+          for (const { uid, messageId } of envelopes) {
             const [[existing]] = await db.query(
-              'SELECT id FROM lead_emails WHERE message_id=?', [messageId]
-            ).catch(() => [[null]]);
-            if (existing) continue;
+              `SELECT 1 AS x FROM lead_emails WHERE message_id=?
+               UNION SELECT 1 FROM unmatched_emails WHERE message_id=? LIMIT 1`,
+              [messageId, messageId]
+            );
+            if (!existing) newUids.push(uid);
+          }
 
-            const fromAddr = msg.envelope?.from?.[0]?.address?.toLowerCase() || '';
-            const subject  = msg.envelope?.subject || '';
+          // Schritt 2: nur neue Mails vollständig laden. Erst sammeln, dann
+          // verarbeiten — während eines FETCH keine weiteren IMAP-Befehle.
+          const raw = [];
+          if (newUids.length) {
+            for await (const msg of client.fetch(newUids, { envelope: true, source: true }, { uid: true })) {
+              raw.push({ envelope: msg.envelope, source: msg.source });
+            }
+          }
 
-            // ── 4-stufige Lead-Zuordnung ─────────────────────────────
-            let leadId = null;
+          for (const { envelope, source } of raw) {
+            stats.checked++;
+            try {
+              const parsed = await simpleParser(source, { skipImageLinks: true, skipTextToHtml: true });
+              const messageId = envelope?.messageId || parsed.messageId;
+              if (!messageId) continue;
 
-            // Stufe 1: X-CRM-Lead-ID Header (direkter Treffer)
-            const crmHeader = msg.headers?.get('x-crm-lead-id');
-            if (crmHeader) {
-              const cid = parseInt(String(crmHeader).trim());
-              if (!isNaN(cid)) {
-                const [[row]] = await db.query(
-                  'SELECT id FROM leads WHERE id=? AND archived_at IS NULL LIMIT 1', [cid]
-                ).catch(() => [[null]]);
-                if (row) leadId = row.id;
+              const fromAddr = (parsed.from?.value?.[0]?.address || envelope?.from?.[0]?.address || '').toLowerCase();
+              // Eigene Mails (z.B. Kopien im Posteingang) nicht als Kundenantwort speichern
+              if (ownAddresses.includes(fromAddr)) continue;
+
+              const fromName = parsed.from?.value?.[0]?.name || '';
+              const subject  = parsed.subject || envelope?.subject || '';
+              const toAddr   = parsed.to?.value?.[0]?.address || envelope?.to?.[0]?.address || user;
+              const receivedAt = parsed.date || envelope?.date || new Date();
+              const bodyText = (parsed.text || htmlToText(parsed.html) || '')
+                .replace(/\r\n/g, '\n').trim().slice(0, 60000);
+
+              const leadId = await findLeadId(parsed, subject, fromAddr);
+
+              if (!leadId) {
+                await db.query(
+                  `INSERT IGNORE INTO unmatched_emails (from_address, from_name, to_address, subject, body_text, message_id, received_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                  [fromAddr, fromName || null, toAddr, subject, bodyText, messageId, receivedAt]
+                );
+                stats.unmatched++;
+                continue;
               }
-            }
 
-            // Stufe 2: In-Reply-To / References gegen gesendete Message-IDs
-            if (!leadId) {
-              const inReplyTo  = msg.headers?.get('in-reply-to') || '';
-              const references = msg.headers?.get('references')  || '';
-              const refIds = [
-                ...String(inReplyTo).matchAll(/<([^>]+)>/g),
-                ...String(references).matchAll(/<([^>]+)>/g),
-              ].map(m => `<${m[1]}>`);
-              if (refIds.length) {
-                const placeholders = refIds.map(() => '?').join(',');
-                const [[row]] = await db.query(
-                  `SELECT lead_id FROM lead_emails WHERE message_id IN (${placeholders}) ORDER BY id DESC LIMIT 1`,
-                  refIds
-                ).catch(() => [[null]]);
-                if (row) leadId = row.lead_id;
-              }
-            }
-
-            // Stufe 3: [NF-{id}] im Betreff
-            if (!leadId) {
-              const match = subject.match(/\[NF-(\d+)\]/i);
-              if (match) {
-                const sid = parseInt(match[1]);
-                const [[row]] = await db.query(
-                  'SELECT id FROM leads WHERE id=? AND archived_at IS NULL LIMIT 1', [sid]
-                ).catch(() => [[null]]);
-                if (row) leadId = row.id;
-              }
-            }
-
-            // Stufe 4: E-Mail-Adresse des Absenders (Fallback)
-            if (!leadId && fromAddr) {
-              const [[row]] = await db.query(
-                'SELECT id FROM leads WHERE LOWER(email)=? AND archived_at IS NULL LIMIT 1', [fromAddr]
-              ).catch(() => [[null]]);
-              if (row) leadId = row.id;
-            }
-
-            // Body-Text extrahieren
-            let bodyText = '';
-            if (msg.bodyParts) {
-              for (const [, part] of msg.bodyParts) {
-                bodyText += Buffer.isBuffer(part) ? part.toString('utf8') : String(part);
-              }
-            }
-            bodyText = bodyText.replace(/<[^>]+>/g, '').replace(/\r\n/g, '\n').trim();
-
-            const receivedAt = msg.envelope?.date || new Date();
-            const toAddr     = msg.envelope?.to?.[0]?.address || user;
-
-            if (!leadId) {
-              // Kein Lead gefunden → in unmatched_emails speichern (Admin-Liste)
               await db.query(
-                `INSERT IGNORE INTO unmatched_emails (from_address, to_address, subject, body_text, message_id, received_at)
-                 VALUES (?, ?, ?, ?, ?, ?)`,
-                [fromAddr, toAddr, subject, bodyText.slice(0, 10000), messageId, receivedAt]
-              ).catch(() => {});
-              continue;
+                `INSERT IGNORE INTO lead_emails (lead_id, direction, from_address, from_name, to_address, subject, body_text, message_id, received_at, is_read)
+                 VALUES (?, 'inbound', ?, ?, ?, ?, ?, ?, ?, 0)`,
+                [leadId, fromAddr, fromName || null, toAddr, subject, bodyText, messageId, receivedAt]
+              );
+              // Lead nach oben holen, damit die Antwort im Verlauf/Listen sichtbar wird
+              await db.query('UPDATE leads SET updated_at=NOW() WHERE id=?', [leadId]).catch(() => {});
+              stats.matched++;
+            } catch (e) {
+              // Eine kaputte Mail darf den Abruf aller anderen nicht blockieren
+              stats.failed++;
+              console.error('[IMAP Poller] Mail konnte nicht verarbeitet werden:', e.message);
             }
-
-            await db.query(
-              `INSERT INTO lead_emails (lead_id, direction, from_address, to_address, subject, body_text, message_id, received_at)
-               VALUES (?, 'inbound', ?, ?, ?, ?, ?, ?)`,
-              [leadId, fromAddr, toAddr, subject, bodyText.slice(0, 10000), messageId, receivedAt]
-            ).catch(() => {});
           }
         }
       } finally {
         lock.release();
       }
-
-      // Letzten Poll-Zeitpunkt aktualisieren (nur bei erfolgreichem Lauf)
-      await db.query(
-        "INSERT INTO app_settings (key_name, value) VALUES ('imap_last_poll',?) ON DUPLICATE KEY UPDATE value=?",
-        [new Date().toISOString(), new Date().toISOString()]
-      ).catch(() => {});
-
     } finally {
-      // Verbindung immer schließen, auch bei Fehlern im Fetch-Loop
       try { await client.logout(); } catch (_) {}
     }
+
+    // Letzten Poll-Zeitpunkt nur bei erfolgreichem Lauf aktualisieren
+    const now = new Date().toISOString();
+    await db.query(
+      "INSERT INTO app_settings (key_name, value) VALUES ('imap_last_poll',?) ON DUPLICATE KEY UPDATE value=?",
+      [now, now]
+    ).catch(() => {});
+    await saveStatus({ ok: true, ...stats });
   } catch (e) {
-    if (e.code !== 'ECONNREFUSED') {
-      console.error('[IMAP Poller]', e.message);
-    }
+    console.error('[IMAP Poller]', e.message);
+    await saveStatus({ ok: false, error: e.responseText || e.message, ...stats });
+  } finally {
+    _running = false;
   }
 }
 

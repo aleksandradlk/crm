@@ -52,7 +52,7 @@ async function sendReminder({ to, toName, leadCompany, note, remindAt }) {
 // inReplyTo/references: Message-IDs der bisherigen Konversation. Nur gesetzt, wenn
 // vorhanden — dann hängt die Antwort im Mailprogramm des Kunden am richtigen Thread
 // statt eine neue Konversation aufzumachen.
-async function sendLeadEmail({ to, subject, body, leadId, inReplyTo, references }) {
+async function sendLeadEmail({ to, subject, body, leadId, inReplyTo, references, senderName }) {
   const domain = (process.env.SMTP_USER || 'info@novaflowservices.de').split('@')[1] || 'novaflowservices.de';
   const msgId  = `<crm-lead-${leadId}-${Date.now()}@${domain}>`;
   const taggedSubject = subject.includes('[NF-') ? subject : `${subject} [NF-${leadId}]`;
@@ -61,10 +61,16 @@ async function sendLeadEmail({ to, subject, body, leadId, inReplyTo, references 
     .filter(Boolean)
     .filter((v, i, a) => a.indexOf(v) === i);
 
+  // Absendername = Vertriebler, Adresse bleibt das gemeinsame Postfach,
+  // damit Kundenantworten per IMAP wieder im CRM landen.
+  const displayName = senderName
+    ? `${stripHeaders(senderName).replace(/"/g, '')} | NovaFlow Services`
+    : 'NovaFlow Services';
   const info = await transporter.sendMail({
-    from:    `"NovaFlow Services" <${process.env.SMTP_USER}>`,
+    from:    `"${displayName}" <${process.env.SMTP_USER}>`,
+    replyTo: process.env.IMAP_USER || process.env.SMTP_USER,
     to,
-    subject: taggedSubject,
+    subject: stripHeaders(taggedSubject),
     messageId: msgId,
     ...(inReplyTo   ? { inReplyTo }               : {}),
     ...(refList.length ? { references: refList }  : {}),

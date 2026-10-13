@@ -268,7 +268,7 @@ router.get('/reminders', auth, async (req, res) => {
 router.get('/unmatched-emails', auth, adminOnly, async (req, res) => {
   try {
     const [rows] = await db.query(
-      `SELECT id, from_address, to_address, subject, body_text, received_at, created_at
+      `SELECT id, from_address, from_name, to_address, subject, body_text, received_at, created_at
        FROM unmatched_emails
        ORDER BY COALESCE(received_at, created_at) DESC
        LIMIT 200`
@@ -276,6 +276,37 @@ router.get('/unmatched-emails', auth, adminOnly, async (req, res) => {
     res.json(rows);
   } catch(e) {
     console.error('Unmatched emails error:', e);
+    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
+  }
+});
+
+// ── POST /api/leads/unmatched-emails/:id/assign — Unzugeordnete Email einem Lead zuordnen (Admin) ──
+router.post('/unmatched-emails/:id/assign', auth, adminOnly, async (req, res) => {
+  const id     = parseInt(req.params.id);
+  const leadId = parseInt(req.body.lead_id);
+  if (!leadId) return res.status(400).json({ error: 'lead_id ist erforderlich' });
+  try {
+    const [[mail]] = await db.query('SELECT * FROM unmatched_emails WHERE id=?', [id]);
+    if (!mail) return res.status(404).json({ error: 'E-Mail nicht gefunden' });
+    const [[lead]] = await db.query('SELECT id, email FROM leads WHERE id=? AND archived_at IS NULL', [leadId]);
+    if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
+
+    await db.query(
+      `INSERT IGNORE INTO lead_emails (lead_id, direction, from_address, from_name, to_address, subject, body_text, message_id, received_at, is_read)
+       VALUES (?, 'inbound', ?, ?, ?, ?, ?, ?, ?, 0)`,
+      [leadId, mail.from_address, mail.from_name || null, mail.to_address, mail.subject, mail.body_text, mail.message_id, mail.received_at]
+    );
+    await db.query('DELETE FROM unmatched_emails WHERE id=?', [id]);
+    // Absenderadresse am Lead hinterlegen, falls noch keine vorhanden —
+    // dann werden künftige Mails dieses Absenders automatisch zugeordnet.
+    if (!lead.email && mail.from_address) {
+      await db.query('UPDATE leads SET email=? WHERE id=?', [mail.from_address, leadId]);
+    }
+    await db.query('UPDATE leads SET updated_at=NOW() WHERE id=?', [leadId]).catch(() => {});
+    await log(req.user.id, 'email_assigned', 'lead', leadId, { from: mail.from_address, subject: mail.subject }, req.ip);
+    res.json({ ok: true });
+  } catch(e) {
+    console.error('Unmatched assign error:', e);
     res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
   }
 });
@@ -372,7 +403,7 @@ router.get('/:id', auth, async (req, res) => {
      WHERE cl.lead_id = ? ORDER BY cl.started_at DESC`, [id]
   ).catch(() => [[]]);
   const [email_thread] = await db.query(
-    `SELECT id, direction, from_address, to_address, subject, body_text, received_at, created_at
+    `SELECT id, direction, from_address, from_name, to_address, subject, body_text, received_at, created_at, is_read
      FROM lead_emails WHERE lead_id = ? ORDER BY COALESCE(received_at, created_at) ASC`, [id]
   ).catch(() => [[]]);
   res.json({ ...lead, comments, reminders, call_logs, email_thread });
@@ -579,7 +610,7 @@ router.post('/:id/email', auth, async (req, res) => {
     ).catch(() => [[]]);
 
     const realMessageId = await sendLeadEmail({
-      to, subject, body, leadId: id,
+      to, subject, body, leadId: id, senderName: user?.full_name,
       inReplyTo:  lastInbound?.message_id || undefined,
       references: (priorIds || []).map(r => r.message_id),
     });
@@ -590,11 +621,17 @@ router.post('/:id/email', auth, async (req, res) => {
     );
     // Gesendete E-Mail mit echter Message-ID speichern — wird für Antwort-Zuordnung benötigt
     await db.query(
-      `INSERT IGNORE INTO lead_emails (lead_id, direction, from_address, to_address, subject, body_text, message_id, received_at)
-       VALUES (?, 'outbound', ?, ?, ?, ?, ?, NOW())`,
-      [id, process.env.SMTP_USER || 'info@novaflowservices.de', to, subject,
-       body.replace(/<[^>]+>/g, '').trim().slice(0, 10000),
-       realMessageId]
+      `INSERT IGNORE INTO lead_emails (lead_id, direction, from_address, from_name, to_address, subject, body_text, message_id, received_at, is_read, user_id)
+       VALUES (?, 'outbound', ?, ?, ?, ?, ?, ?, NOW(), 1, ?)`,
+      [id, process.env.SMTP_USER || 'info@novaflowservices.de', user?.full_name || null, to, subject,
+       body.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div)>/gi, '\n').replace(/<[^>]+>/g, '')
+         .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+         .replace(/\n{3,}/g, '\n\n').trim().slice(0, 60000),
+       realMessageId, req.user.id]
+    ).catch(e => console.error('lead_emails insert error:', e.message));
+    // Wer antwortet, hat die Kundenmail gelesen
+    await db.query(
+      "UPDATE lead_emails SET is_read=1 WHERE lead_id=? AND direction='inbound' AND is_read=0", [id]
     ).catch(() => {});
     await log(req.user.id, 'lead_email_sent', 'lead', id, { to, subject }, req.ip);
     res.json({ ok: true });
