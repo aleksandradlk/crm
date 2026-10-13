@@ -364,5 +364,6 @@ app.listen(PORT, () => {
   startReminderCron();
   // IMAP-Polling alle 2 Minuten
   cron.schedule('*/2 * * * *', pollIncomingEmails);
-  pollIncomingEmails(); // Sofort beim Start einmal prüfen
+  // Erster Abruf leicht verzögert, damit die App nach dem Start sofort erreichbar ist
+  setTimeout(pollIncomingEmails, 30 * 1000);
 });
