@@ -178,6 +178,12 @@ function fmtDate(d) {
   if (!d) return '—';
   return new Date(d).toLocaleString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
 }
+// Gesprächsdauer: "45 Sek" bzw. "3:07 Min"
+function fmtCallDuration(sec) {
+  sec = parseInt(sec) || 0;
+  if (sec < 60) return `${sec} Sek`;
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')} Min`;
+}
 function fmtDateShort(d) {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' });
@@ -643,4 +649,352 @@ function renderFeedbackCard(f, o = {}) {
     </div>
     ${side}
   </div>`;
+}
+
+// ── E-Mail: Verlauf + Posteingang (Admin + Closer) ───────────
+// Trennt den zitierten Verlauf ("Am … schrieb …", "> …") von der eigentlichen Antwort
+function splitQuotedEmail(text) {
+  const t = String(text || '').replace(/\r\n/g, '\n');
+  const markers = [
+    /^\s*Am .{4,120}(schrieb|wrote).{0,120}:\s*$/m,
+    /^\s*On .{4,120}wrote:\s*$/m,
+    /^\s*-{2,}\s*(Original Message|Ursprüngliche Nachricht|Originalnachricht)\s*-{2,}/mi,
+    /^\s*(Von|From):\s.+\n(.*\n){0,3}\s*(Gesendet|Sent|Datum|Date):/mi,
+    /^\s*>.*$/m,
+  ];
+  let cut = -1;
+  for (const re of markers) {
+    const m = re.exec(t);
+    if (m && (cut === -1 || m.index < cut)) cut = m.index;
+  }
+  if (cut <= 0) return { main: t.trim(), quoted: '' };
+  return { main: t.slice(0, cut).trim(), quoted: t.slice(cut).trim() };
+}
+
+// Gemeinsamer Renderer für den E-Mail-Verlauf im Lead-Panel.
+// replyFn: Name einer globalen Funktion (emailId) → öffnet das Antwort-Fenster
+function renderEmailThread(emails, replyFn) {
+  if (!emails || !emails.length) return '<div class="mail-empty">Noch keine E-Mails mit diesem Lead.</div>';
+  return '<div class="mail-thread">' + emails.map(m => {
+    const isOut  = m.direction === 'outbound';
+    const date   = m.received_at || m.created_at;
+    const who    = isOut ? (m.from_name || 'Gesendet') : (m.from_name ? `${m.from_name} <${m.from_address}>` : (m.from_address || 'Kunde'));
+    const { main, quoted } = splitQuotedEmail(m.body_text);
+    const unread = !isOut && m.is_read === 0;
+    return `<div class="mail-item ${isOut ? 'out' : 'in'} ${unread ? 'unread' : ''}">
+      <div class="mail-head">
+        <span class="mail-dir"><i class="fas ${isOut ? 'fa-arrow-up' : 'fa-arrow-down'}"></i> ${isOut ? 'Gesendet' : 'Empfangen'}</span>
+        ${unread ? '<span class="mail-new">Neu</span>' : ''}
+        <span class="mail-when">${fmtDate(date)}</span>
+      </div>
+      <div class="mail-subject">${escHtml(m.subject || '(kein Betreff)')}</div>
+      <div class="mail-from">${isOut ? `von ${escHtml(who)} an ${escHtml(m.to_address || '')}` : `von ${escHtml(who)}`}</div>
+      <div class="mail-body">${escHtml(main || '(kein Text)')}</div>
+      ${quoted ? `<details class="mail-quoted"><summary>Verlauf anzeigen</summary><div class="mail-body">${escHtml(quoted)}</div></details>` : ''}
+      ${!isOut && replyFn ? `<div class="mail-actions"><button class="btn btn-ghost btn-sm" onclick="${replyFn}(${parseInt(m.id)})"><i class="fas fa-reply"></i> Antworten</button></div>` : ''}
+    </div>`;
+  }).join('') + '</div>';
+}
+
+// "Re: …"-Betreff ohne doppeltes Präfix; [NF-…] bleibt erhalten (Zuordnung)
+function replySubject(subject) {
+  const s = String(subject || '').trim();
+  return /^(re|aw|antw)\s*:/i.test(s) ? s : `Re: ${s}`;
+}
+
+// Text der Kundenmail als Zitat unter die Antwort setzen
+function replyQuoteHtml(mail) {
+  const { main } = splitQuotedEmail(mail.body_text);
+  const head = `Am ${fmtDate(mail.received_at || mail.created_at)} schrieb ${mail.from_name || mail.from_address}:`;
+  return `<div><br></div><div><br></div><div style="color:#59616e">${escHtml(head)}</div>` +
+    `<blockquote style="margin:0 0 0 6px;padding-left:10px;border-left:2px solid #cdd5e0;color:#59616e">` +
+    escHtml(main).split('\n').map(l => `<div>${l || '<br>'}</div>`).join('') + '</blockquote>';
+}
+
+function renderInboxList(rows, emptyText) {
+  if (!rows.length) return `<div class="wiki-empty"><i class="fas fa-inbox"></i>${emptyText}</div>`;
+  return '<div class="chat-list">' + rows.map(m => {
+    const initial = escHtml((m.company || m.from_name || m.from_address || '?').trim().charAt(0).toUpperCase() || '?');
+    const unread  = m.is_read === 0;
+    const preview = splitQuotedEmail(m.preview).main.replace(/\s+/g, ' ').slice(0, 160);
+    return `<div class="chat-item inbox-item ${unread ? 'unread' : ''}" onclick="openInboxMail(${parseInt(m.lead_id)})">
+      <div class="chat-avatar">${initial}</div>
+      <div class="chat-main">
+        <div class="chat-title"><span class="t">${escHtml(m.company || m.from_address || '')}</span>${unread ? '<span class="mail-new">Neu</span>' : ''}</div>
+        <div class="inbox-subject">${escHtml(m.subject || '(kein Betreff)')}</div>
+        <div class="chat-meta"><span class="t">${escHtml(preview)}</span></div>
+      </div>
+      <div class="chat-side-meta">
+        <span class="chat-when">${fmtDate(m.received_at || m.created_at)}</span>
+        <span class="chat-count" title="Absender">${escHtml(m.from_name || m.from_address || '')}</span>
+        ${m.assigned_name ? `<span class="chat-count" title="Zuständig"><i class="fas fa-user"></i> ${escHtml(m.assigned_name)}</span>` : ''}
+      </div>
+      <i class="fas fa-chevron-right chat-chevron"></i>
+    </div>`;
+  }).join('') + '</div>';
+}
+
+// Ungelesen-Badge in der Navigation; meldet neue Mails per Toast
+const Inbox = {
+  _latest: null,
+  _timer: null,
+  async refreshBadge() {
+    try {
+      const r = await api('GET', '/emails/unread-count');
+      const badge = document.getElementById('inboxBadge');
+      if (badge) {
+        badge.textContent = r.unread > 99 ? '99+' : r.unread;
+        badge.style.display = r.unread > 0 ? '' : 'none';
+      }
+      if (this._latest !== null && r.latest_id > this._latest && r.unread > 0) {
+        showToast('📩 Neue Kunden-E-Mail im Posteingang');
+        if (typeof onInboxChanged === 'function') onInboxChanged();
+      }
+      this._latest = r.latest_id || 0;
+      return r.unread;
+    } catch (_) { return 0; }
+  },
+  start() {
+    this.refreshBadge();
+    clearInterval(this._timer);
+    this._timer = setInterval(() => this.refreshBadge(), 60 * 1000);
+  },
+  // Beim Öffnen eines Leads: ungelesene Mails als gelesen markieren
+  async markLeadRead(lead) {
+    if (!lead || !(lead.email_thread || []).some(m => m.direction === 'inbound' && m.is_read === 0)) return;
+    try { await api('POST', `/emails/lead/${lead.id}/read`); } catch (_) {}
+    this.refreshBadge();
+  },
+};
+
+// ── Telefonie im Browser (Twilio Voice) ──────────────────────
+// Ist Twilio nicht eingerichtet, fallen die Seiten auf den bisherigen Ablauf zurück
+// (Nummer per tel:-Link wählen, Anruf danach dokumentieren).
+const Softphone = {
+  config: null,
+  device: null,
+  call: null,
+  _timer: null,
+  _sdkPromise: null,
+
+  async loadConfig() {
+    try { this.config = await api('GET', '/voice/config'); }
+    catch (_) { this.config = { enabled: false }; }
+    return this.config;
+  },
+  isEnabled() { return !!(this.config && this.config.enabled); },
+  hasCallerId() { return !!(this.config && this.config.effective_caller_id); },
+
+  _loadSdk() {
+    if (window.Twilio && window.Twilio.Device) return Promise.resolve();
+    if (!this._sdkPromise) {
+      this._sdkPromise = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = '/vendor/twilio-voice/twilio.min.js';
+        s.onload = resolve;
+        s.onerror = () => { this._sdkPromise = null; reject(new Error('Telefonie-Modul konnte nicht geladen werden')); };
+        document.head.appendChild(s);
+      });
+    }
+    return this._sdkPromise;
+  },
+
+  async _ensureDevice() {
+    await this._loadSdk();
+    if (this.device) return this.device;
+    const { token } = await api('POST', '/voice/token');
+    const device = new Twilio.Device(token, {
+      edge: ['frankfurt', 'dublin'],
+      codecPreferences: ['opus', 'pcmu'],
+      closeProtection: 'Es läuft noch ein Anruf. Seite wirklich verlassen?',
+      logLevel: 'error',
+    });
+    device.on('tokenWillExpire', async () => {
+      try { const r = await api('POST', '/voice/token'); device.updateToken(r.token); } catch (_) {}
+    });
+    device.on('error', err => showToast('Telefonie: ' + (err.message || err), 'err'));
+    this.device = device;
+    return device;
+  },
+
+  // Startet den Anruf. onEnd({ callLogId, answered, durationSec }) wird nach dem Auflegen aufgerufen.
+  async dial({ leadId, phone, label, onEnd }) {
+    if (this.call) { showToast('Es läuft bereits ein Anruf', 'err'); return; }
+    if (!this.hasCallerId()) {
+      showToast('Bitte zuerst in den Einstellungen deine Anrufnummer hinterlegen', 'err');
+      if (typeof openSettingsModal === 'function') openSettingsModal();
+      return;
+    }
+    let callLogId;
+    try {
+      const r = await api('POST', `/leads/${leadId}/calls/start`);
+      callLogId = r.id;
+    } catch (e) { showToast(e.message, 'err'); return; }
+
+    this._showBar(label, phone);
+    this._setState('Verbinde …');
+    let answeredAt = null;
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      const durationSec = answeredAt ? Math.round((Date.now() - answeredAt) / 1000) : 0;
+      this.call = null;
+      clearInterval(this._timer);
+      this._hideBar();
+      if (typeof onEnd === 'function') onEnd({ callLogId, answered: !!answeredAt, durationSec });
+    };
+
+    try {
+      const device = await this._ensureDevice();
+      const call = await device.connect({ params: { callLogId: String(callLogId) } });
+      this.call = call;
+      call.on('ringing', () => this._setState('Klingelt …'));
+      call.on('accept', () => {
+        // answerOnBridge: "accept" kommt erst, wenn der Kunde abnimmt
+        answeredAt = Date.now();
+        this._setState('Verbunden', true);
+        this._timer = setInterval(() => {
+          const s = Math.round((Date.now() - answeredAt) / 1000);
+          this._setState(`Verbunden · ${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`, true);
+        }, 1000);
+      });
+      call.on('disconnect', finish);
+      call.on('cancel', finish);
+      call.on('reject', finish);
+      call.on('error', err => { showToast('Anruf-Fehler: ' + (err.message || err), 'err'); finish(); });
+    } catch (e) {
+      const msg = /permission|NotAllowed/i.test(String(e && (e.name || e.message)))
+        ? 'Mikrofon-Zugriff wurde verweigert. Bitte im Browser erlauben.'
+        : (e.message || 'Anruf konnte nicht gestartet werden');
+      showToast(msg, 'err');
+      finish();
+    }
+  },
+
+  hangup() {
+    if (this.call) this.call.disconnect();
+  },
+  toggleMute() {
+    if (!this.call) return;
+    const muted = !this.call.isMuted();
+    this.call.mute(muted);
+    const btn = document.getElementById('sp-mute');
+    if (btn) {
+      btn.classList.toggle('active', muted);
+      btn.innerHTML = muted ? '<i class="fas fa-microphone-slash"></i>' : '<i class="fas fa-microphone"></i>';
+    }
+  },
+  toggleKeypad() {
+    document.getElementById('sp-keypad')?.classList.toggle('open');
+  },
+  digit(d) {
+    if (this.call) this.call.sendDigits(d);
+  },
+
+  _showBar(label, phone) {
+    let bar = document.getElementById('softphoneBar');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'softphoneBar';
+      bar.className = 'softphone';
+      document.body.appendChild(bar);
+    }
+    const keys = ['1','2','3','4','5','6','7','8','9','*','0','#'];
+    bar.innerHTML = `
+      <div class="sp-main">
+        <div class="sp-icon"><i class="fas fa-phone-alt"></i></div>
+        <div class="sp-info">
+          <div class="sp-label">${escHtml(label || phone || '')}</div>
+          <div class="sp-sub"><span class="mono">${escHtml(phone || '')}</span> · <span id="sp-state"></span></div>
+        </div>
+        <button class="sp-btn" id="sp-mute" onclick="Softphone.toggleMute()" title="Stummschalten"><i class="fas fa-microphone"></i></button>
+        <button class="sp-btn" onclick="Softphone.toggleKeypad()" title="Tastenfeld"><i class="fas fa-th"></i></button>
+        <button class="sp-btn sp-hangup" onclick="Softphone.hangup()" title="Auflegen"><i class="fas fa-phone-slash"></i></button>
+      </div>
+      <div class="sp-keypad" id="sp-keypad">${keys.map(k => `<button onclick="Softphone.digit('${k}')">${k}</button>`).join('')}</div>`;
+    bar.classList.add('open');
+  },
+  _setState(text, live) {
+    const el = document.getElementById('sp-state');
+    if (el) el.textContent = text;
+    document.getElementById('softphoneBar')?.classList.toggle('live', !!live);
+  },
+  _hideBar() {
+    document.getElementById('softphoneBar')?.classList.remove('open');
+  },
+};
+
+// ── Einstellungen: eigene Anrufnummer (Caller-ID) ────────────
+async function renderCallerIdSettings(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const cfg = await Softphone.loadConfig();
+  if (!cfg.enabled) {
+    el.innerHTML = `<div class="callerid-hint"><i class="fas fa-info-circle"></i> Telefonie im Browser ist noch nicht eingerichtet. Bis dahin wird über dein Telefon gewählt.</div>`;
+    return;
+  }
+  const status = cfg.caller_id
+    ? (cfg.caller_id_verified
+        ? `<span class="callerid-ok"><i class="fas fa-check-circle"></i> Bestätigt – Kunden sehen diese Nummer</span>`
+        : `<span class="callerid-pending"><i class="fas fa-hourglass-half"></i> Noch nicht bestätigt</span>`)
+    : (cfg.company_caller_id
+        ? `<span class="callerid-hint-inline">Ohne eigene Nummer wird die Firmennummer <span class="mono">${escHtml(cfg.company_caller_id)}</span> angezeigt.</span>`
+        : `<span class="callerid-pending">Noch keine Nummer hinterlegt – Anrufe sind erst danach möglich.</span>`);
+  el.innerHTML = `
+    <div class="form-group" style="margin-bottom:6px">
+      <label>Meine Anrufnummer <span style="font-size:11px;color:var(--text3);font-weight:400">— wird beim Kunden angezeigt</span></label>
+      <div style="display:flex;gap:8px">
+        <input type="tel" id="callerIdInput" class="form-control" placeholder="+49 171 1234567" value="${escHtml(cfg.caller_id || '')}">
+        <button class="btn btn-primary btn-sm" id="callerIdSaveBtn" onclick="saveCallerId('${containerId}')" style="white-space:nowrap"><i class="fas fa-check"></i> Übernehmen</button>
+      </div>
+    </div>
+    <div style="font-size:12px;margin-bottom:4px">${status}</div>
+    <div id="callerIdVerify"></div>`;
+}
+
+let _callerIdPoll = null;
+async function saveCallerId(containerId) {
+  const input = document.getElementById('callerIdInput');
+  const btn = document.getElementById('callerIdSaveBtn');
+  const number = input?.value.trim();
+  if (!number) { showToast('Bitte eine Nummer eingeben', 'err'); return; }
+  btn.disabled = true;
+  try {
+    const r = await api('PUT', '/voice/caller-id', { number });
+    if (r.verified) {
+      showToast('Anrufnummer gespeichert ✓');
+      await renderCallerIdSettings(containerId);
+      return;
+    }
+    // Einmalige Bestätigung: Twilio ruft die Nummer an, Code am Telefon eintippen
+    document.getElementById('callerIdVerify').innerHTML = `
+      <div class="callerid-code">
+        <div>Dein Telefon <b class="mono">${escHtml(r.number)}</b> klingelt gleich. Nimm ab und tippe diesen Code ein:</div>
+        <div class="callerid-digits mono">${escHtml(r.validation_code)}</div>
+        <div class="callerid-wait"><i class="fas fa-spinner fa-spin"></i> Warte auf Bestätigung …</div>
+      </div>`;
+    clearInterval(_callerIdPoll);
+    const started = Date.now();
+    _callerIdPoll = setInterval(async () => {
+      if (Date.now() - started > 3 * 60 * 1000) {
+        clearInterval(_callerIdPoll);
+        const w = document.querySelector('#callerIdVerify .callerid-wait');
+        if (w) w.innerHTML = 'Keine Bestätigung erhalten. Bitte erneut auf „Übernehmen“ klicken.';
+        return;
+      }
+      try {
+        const s = await api('GET', '/voice/caller-id/status');
+        if (s.verified) {
+          clearInterval(_callerIdPoll);
+          showToast('Nummer bestätigt ✓ – du kannst jetzt telefonieren');
+          await renderCallerIdSettings(containerId);
+        }
+      } catch (_) {}
+    }, 4000);
+  } catch (e) {
+    showToast(e.message, 'err');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }

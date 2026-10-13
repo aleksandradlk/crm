@@ -93,6 +93,58 @@ server {
 
 ---
 
+## E-Mail-Eingang (Kundenantworten im CRM)
+
+Das CRM ruft alle 2 Minuten das Postfach aus `IMAP_USER` ab (Standard: `info@novaflowservices.de`).
+Eingehende Mails werden automatisch dem passenden Lead zugeordnet:
+
+1. Antwort auf eine Mail aus dem CRM (Kunde drückt „Antworten“, erkannt über `In-Reply-To`/`References`)
+2. Lead-Kennung im Betreff, z.B. `[NF-123]`
+3. Absenderadresse = E-Mail-Adresse eines Leads
+
+Zugeordnete Mails erscheinen im **Posteingang** (mit Ungelesen-Zähler) und im E-Mail-Verlauf des Leads,
+dort mit „Antworten“-Button. Nicht zuordenbare Mails landen beim Admin unter
+**Posteingang → Unzugeordnete E-Mails** und lassen sich dort per „Zuordnen“ einem Lead zuweisen.
+
+Mails aus dem CRM gehen mit dem Namen des Mitarbeiters raus („Max Muster | NovaFlow Services“),
+aber über das gemeinsame Postfach, damit Antworten wieder im CRM landen.
+
+`.env`: `IMAP_HOST`, `IMAP_PORT` (993), `IMAP_USER`, `IMAP_PASS`. Beim ersten Abruf werden die letzten
+30 Tage importiert. Status und „Jetzt abrufen“ findest du als Admin unter **Posteingang**.
+
+---
+
+## Telefonie im Browser einrichten (Twilio)
+
+Mitarbeiter rufen direkt im CRM per Klick auf „Anrufen“ an (Headset/Mikrofon am PC). Beim Kunden
+erscheint die hinterlegte Nummer des Mitarbeiters. Nach dem Auflegen öffnet sich die Anruf-Dokumentation
+mit vorausgefülltem Ergebnis und Gesprächsdauer. Ohne Twilio-Konfiguration bleibt alles wie bisher
+(Nummer wählen über Handy, Anruf danach dokumentieren).
+
+1. Konto auf [twilio.com](https://www.twilio.com) anlegen und auf ein bezahltes Konto upgraden
+   (Testkonten können nur verifizierte Nummern anrufen und spielen eine Ansage ab).
+2. **Account SID** und **Auth Token** (Twilio Console → Account Info) in `.env` eintragen:
+   `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`.
+3. **API Key** anlegen (Console → Account → API keys & tokens → Create API key, Typ „Standard“):
+   `TWILIO_API_KEY_SID` (beginnt mit `SK`) und `TWILIO_API_KEY_SECRET`.
+4. **TwiML App** anlegen (Console → Voice → TwiML Apps → Create):
+   - Voice Request URL: `https://leads.novaflowservices.de/api/voice/twiml` (HTTP POST)
+   - die SID (beginnt mit `AP`) als `TWILIO_TWIML_APP_SID` eintragen.
+5. **Geo Permissions** (Console → Voice → Settings → Geo permissions): Deutschland aktivieren
+   (ggf. Österreich/Schweiz).
+6. `BASE_URL` in `.env` muss exakt der öffentlichen Adresse entsprechen (wird zur Prüfung der
+   Twilio-Signatur benötigt).
+7. Optional `TWILIO_CALLER_ID`: Firmennummer, die angezeigt wird, wenn ein Mitarbeiter (noch) keine
+   eigene Nummer hinterlegt hat. Muss eine bei Twilio gekaufte oder dort verifizierte Nummer sein.
+8. `npm install` im Ordner `backend`, dann `pm2 restart leadhunter`.
+
+**Pro Mitarbeiter (einmalig, ca. 30 Sekunden):** Einstellungen → „Telefonie im Browser“ → eigene
+Nummer eintragen → „Übernehmen“. Das CRM zeigt einen 6-stelligen Code, das Telefon klingelt kurz,
+Code eintippen – fertig. Diese einmalige Bestätigung ist Pflicht: Telefonanbieter dürfen nur Nummern
+als Absender anzeigen, deren Besitz nachgewiesen ist (Schutz gegen Rufnummern-Fälschung).
+
+---
+
 ## Dateistruktur
 
 ```
@@ -108,12 +160,15 @@ leadhunter/
 │   │   ├── auth.js        ← Login/Logout/Heartbeat
 │   │   ├── users.js       ← Benutzerverwaltung
 │   │   ├── leads.js       ← Lead CRUD + Kommentare + Reminder
+│   │   ├── emails.js      ← Posteingang (Kundenmails, gelesen/ungelesen)
+│   │   ├── voice.js       ← Telefonie im Browser (Twilio)
 │   │   └── generate.js    ← Claude API Lead-Generierung
 │   ├── helpers/
 │   │   ├── logger.js      ← Aktivitäts-Log
 │   │   └── mailer.js      ← E-Mail (Nodemailer)
 │   └── cron/
-│       └── reminders.js   ← Reminder-Scheduler
+│       ├── reminders.js   ← Reminder-Scheduler
+│       └── emailPoller.js ← Holt Kundenmails per IMAP ab
 ├── frontend/
 │   ├── login.html         ← Login-Seite
 │   ├── setup.html         ← Ersteinrichtung

@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf18">
+<link rel="stylesheet" href="/shared/style.css?v=nf19">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -45,6 +45,7 @@
       <div class="nav-item active" data-tab="dashboard" onclick="showTab('dashboard')"><i class="fas fa-tachometer-alt"></i> Dashboard</div>
       <div class="nav-item" data-tab="leads" onclick="showTab('leads')"><i class="fas fa-database"></i> Alle Leads</div>
       <div class="nav-item" data-tab="myLeads" onclick="showTab('myLeads')"><i class="fas fa-user-check"></i> Meine Leads</div>
+      <div class="nav-item" data-tab="inbox" onclick="showTab('inbox')"><i class="fas fa-inbox"></i> Posteingang <span id="inboxBadge" style="display:none;margin-left:auto" class="badge" title="Ungelesene Kunden-E-Mails">0</span></div>
       <div class="nav-item" data-tab="generate" onclick="showTab('generate')"><i class="fas fa-search"></i> Generieren</div>
       <div class="nav-sep"></div>
       <span class="nav-group-label">Administration</span>
@@ -392,11 +393,29 @@
         </div>
       </section>
 
-      <section class="wiki-section">
+    </div>
+
+    <!-- ── TAB: POSTEINGANG ──────────────────────────── -->
+    <div id="tab-inbox" class="tab-panel">
+      <div class="page-header">
+        <div><h1 data-eyebrow="Hauptnavigation">Posteingang</h1><p class="page-desc">Alle Kunden-E-Mails, die im CRM-Postfach eingehen. Antworten werden automatisch dem richtigen Lead zugeordnet.</p></div>
+        <div class="page-actions">
+          <div class="view-toggle">
+            <button id="inboxFilterUnread" class="active" onclick="setInboxFilter('unread')">Ungelesen</button>
+            <button id="inboxFilterAll" onclick="setInboxFilter('all')">Alle</button>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="pollMailboxNow()" title="Postfach jetzt abrufen"><i class="fas fa-download"></i> Jetzt abrufen</button>
+        </div>
+      </div>
+      <div class="inbox-status" id="inboxMailStatus" style="margin-bottom:12px"></div>
+      <div id="inboxList"></div>
+
+      <section class="wiki-section" style="margin-top:24px">
         <div class="wiki-section-head">
           <div class="wiki-section-title"><i class="fas fa-envelope-open-text"></i> Unzugeordnete E-Mails</div>
           <button class="btn btn-ghost btn-sm btn-icon" onclick="loadUnmatchedEmails()" title="Aktualisieren"><i class="fas fa-sync"></i></button>
         </div>
+        <p class="page-desc" style="margin:-4px 0 10px">Mails, die keinem Lead zugeordnet werden konnten (z.B. neue Absenderadresse). Per „Zuordnen“ landen sie beim Lead – künftige Mails dieses Absenders dann automatisch.</p>
         <div class="card" id="unmatchedEmailsCard">
           <div class="wiki-empty" style="border:none;background:transparent"><i class="fas fa-spinner fa-spin"></i>Wird geladen …</div>
         </div>
@@ -600,6 +619,17 @@
 </div>
 
 <!-- EMAIL MODAL -->
+<div class="modal-overlay" id="assignMailModal" onclick="if(event.target===this)closeAssignMail()">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-head">
+      <h2><i class="fas fa-link" style="color:var(--accent);margin-right:8px"></i>E-Mail einem Lead zuordnen</h2>
+      <button class="modal-x" onclick="closeAssignMail()" title="Schließen"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="form-group"><input type="text" id="assignMailSearch" class="form-control" placeholder="Firma, Ansprechpartner oder E-Mail suchen …" oninput="renderAssignMailResults()"></div>
+    <div id="assignMailResults" class="chat-list" style="max-height:320px;overflow-y:auto"></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="adminEmailModal">
   <div class="modal modal-flex" style="max-width:560px">
     <div class="modal-header">
@@ -723,7 +753,7 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf18"></script>
+<script src="/shared/api.js?v=nf19"></script>
 <script>
 let allLeads = [], allUsers = [], generatedLeads = [], editingUserId = null;
 let panelDirty = false;
@@ -823,7 +853,8 @@ function showTab(name) {
   }
   if (name === 'myLeads')  renderMyLeads();
   if (name === 'users')    { loadUsers(); loadAppSettings(); }
-  if (name === 'tracking') { loadTracking(); loadUnmatchedEmails(); }
+  if (name === 'tracking') loadTracking();
+  if (name === 'inbox')    { loadInbox(); loadUnmatchedEmails(); loadMailStatus(); }
   if (name === 'wiki')     { loadWiki(); loadEmailTemplatesForAdmin(); }
   if (name === 'chat')     loadChats();
   if (name === 'feedback') loadFeedback();
@@ -1229,6 +1260,7 @@ async function openLeadPanel(id) {
     document.getElementById('panelCompany').textContent = l.company || 'Lead';
     document.getElementById('panelKeyInfo').innerHTML = renderPanelKeyInfo(l);
     document.getElementById('panelContent').innerHTML = renderLeadDetail(l);
+    Inbox.markLeadRead(l);
   } catch (e) { document.getElementById('panelContent').innerHTML = `<span style="color:var(--red)">${escHtml(e.message)}</span>`; }
 }
 function closeLeadPanel() {
@@ -1290,20 +1322,42 @@ async function saveEditContact() {
 // ── Call-Logging ───────────────────────────────────────────────
 let _activeCallId = null, _activeCallLeadId = null;
 
+let _autoDurSec = null, _autoDurMin = '';
+
 async function startCall(leadId, phone) {
+  // Telefonie im Browser aktiv → direkt aus dem CRM anrufen
+  if (Softphone.isEnabled()) {
+    const label = (_panelLead && _panelLead.id === leadId ? _panelLead.company : null)
+      || (allLeads.find(x => x.id === leadId) || {}).company || '';
+    Softphone.dial({
+      leadId, phone, label,
+      onEnd: ({ callLogId, answered, durationSec }) => openCallDoc(leadId, phone, callLogId, { answered, durationSec }),
+    });
+    return;
+  }
   try {
     const r = await api('POST', `/leads/${leadId}/calls/start`);
-    _activeCallId     = r.id;
-    _activeCallLeadId = leadId;
+    openCallDoc(leadId, phone, r.id, null);
   } catch(e) {
-    showToast(e.message, 'err'); return;
+    showToast(e.message, 'err');
   }
+}
+
+function openCallDoc(leadId, phone, callLogId, auto) {
+  _activeCallId     = callLogId;
+  _activeCallLeadId = leadId;
+  _autoDurSec = auto ? auto.durationSec : null;
+  _autoDurMin = auto && auto.durationSec ? String(Math.max(1, Math.round(auto.durationSec / 60))) : '';
   document.getElementById('callDocPhone').textContent = phone || '';
-  document.getElementById('callDocStatus').value      = 'reached';
-  document.getElementById('callDocDuration').value    = '';
+  document.getElementById('callDocStatus').value      = auto ? (auto.answered ? 'reached' : 'no-answer') : 'reached';
+  document.getElementById('callDocDuration').value    = _autoDurMin;
   document.getElementById('callDocNote').value        = '';
   document.getElementById('callDocError').textContent = '';
+  document.getElementById('callDocHint').textContent  = auto
+    ? 'Anruf beendet. Ergebnis und Dauer sind vorausgefüllt – bitte prüfen und kurz notieren, was besprochen wurde.'
+    : 'Rufe die Nummer manuell über dein Handy oder deine Telefon-App an und dokumentiere das Ergebnis hier.';
   document.getElementById('callDocModal').classList.add('open');
+  setTimeout(() => document.getElementById('callDocNote')?.focus(), 50);
 }
 
 function copyCallPhone() {
@@ -1322,7 +1376,9 @@ async function saveCallDoc() {
   const status   = document.getElementById('callDocStatus').value;
   const durVal   = document.getElementById('callDocDuration').value.trim();
   const note     = document.getElementById('callDocNote').value.trim();
-  const dur      = durVal ? parseInt(durVal) * 60 : null;
+  // Unveränderte Browser-Anruf-Dauer sekundengenau übernehmen
+  const dur      = (_autoDurSec != null && durVal === _autoDurMin) ? _autoDurSec
+                 : (durVal ? parseInt(durVal) * 60 : null);
   const btn      = document.getElementById('callDocSaveBtn');
   btn.disabled   = true;
   try {
@@ -1365,24 +1421,6 @@ function tableQuickNote(id, el, event) {
   setTimeout(() => { document.addEventListener('click', function oc(e){ if (!popup.contains(e.target)){ close(); document.removeEventListener('click',oc); } }); }, 100);
 }
 
-function renderEmailThread(emails) {
-  if (!emails || !emails.length) return '<div style="color:var(--text3);font-size:12px;padding:6px 0">Keine E-Mails vorhanden</div>';
-  return emails.map(m => {
-    const isOut = m.direction === 'outbound';
-    const color = isOut ? 'var(--accent)' : 'var(--green)';
-    const label = isOut ? '↑ Gesendet' : '↓ Empfangen';
-    const date  = m.received_at || m.created_at;
-    return `<div style="margin-bottom:8px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
-      <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg3);border-left:3px solid ${color}">
-        <span style="font-size:11px;font-weight:700;color:${color}">${label}</span>
-        <span style="font-size:12px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(m.subject||'(kein Betreff)')}</span>
-        <span style="font-size:11px;color:var(--text3);white-space:nowrap">${fmtDate(date)}</span>
-      </div>
-      <div style="padding:8px 10px;font-size:12px;color:var(--text2);line-height:1.5;max-height:120px;overflow-y:auto;white-space:pre-wrap;word-break:break-word">${escHtml((m.body_text||'').slice(0,500))}${(m.body_text||'').length>500?'…':''}</div>
-    </div>`;
-  }).join('');
-}
-
 function renderCallLogs(logs) {
   if (!logs || !logs.length) return '';
   const LABELS = { reached:'Erreicht', 'no-answer':'Nicht erreicht', busy:'Besetzt', failed:'Fehlgeschlagen', wrong_number:'Falsche Nummer', started:'Gestartet', completed:'Gespräch geführt', manual:'Manuell' };
@@ -1391,7 +1429,7 @@ function renderCallLogs(logs) {
     logs.map(c => `<div style="display:flex;gap:8px;align-items:flex-start;padding:7px 10px;background:var(--bg3);border-radius:6px;border-left:2px solid ${COLORS[c.status]||'var(--text3)'};margin-bottom:5px;font-size:12px">
       <div style="flex:1">
         <span style="font-weight:600;color:${COLORS[c.status]||'var(--text)'}">${LABELS[c.status]||c.status}</span>
-        ${c.duration_seconds ? `<span style="color:var(--text3);margin-left:8px">${Math.round(c.duration_seconds/60)} Min</span>` : ''}
+        ${c.duration_seconds ? `<span style="color:var(--text3);margin-left:8px">${fmtCallDuration(c.duration_seconds)}</span>` : ''}
         <span style="color:var(--text3);float:right">${fmtDate(c.started_at)}</span>
         ${c.note ? `<div style="color:var(--text2);margin-top:3px">${escHtml(c.note)}</div>` : ''}
       </div>
@@ -1500,7 +1538,7 @@ function renderLeadDetail(l) {
 
     <div class="panel-section">
       <div class="panel-section-title">E-Mail-Verlauf</div>
-      <div id="adminEmailThread">${renderEmailThread(l.email_thread||[])}</div>
+      <div id="adminEmailThread">${renderEmailThread(l.email_thread||[], 'replyToEmail')}</div>
     </div>
 
     <div class="panel-section">
@@ -2084,10 +2122,11 @@ async function loadUnmatchedEmails() {
             ${rows.map(m => `
               <tr>
                 <td style="white-space:nowrap;font-size:12px">${fmtDate(m.received_at||m.created_at)}</td>
-                <td style="font-size:12px">${escHtml(m.from_address||'')}</td>
+                <td style="font-size:12px">${m.from_name ? `<div style="font-weight:600">${escHtml(m.from_name)}</div>` : ''}${escHtml(m.from_address||'')}</td>
                 <td style="font-size:12px">${escHtml(m.subject||'(kein Betreff)')}</td>
                 <td style="font-size:12px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml((m.body_text||'').slice(0,120))}</td>
-                <td><button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteUnmatchedEmail(${parseInt(m.id)})"><i class="fas fa-trash"></i></button></td>
+                <td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="openAssignMail(${parseInt(m.id)})" title="Einem Lead zuordnen"><i class="fas fa-link"></i> Zuordnen</button>
+                  <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteUnmatchedEmail(${parseInt(m.id)})" title="Löschen"><i class="fas fa-trash"></i></button></td>
               </tr>
             `).join('')}
           </tbody>
@@ -2097,6 +2136,90 @@ async function loadUnmatchedEmails() {
     card.innerHTML = `<div style="color:var(--red);padding:16px;font-size:13px">Fehler: ${escHtml(e.message)}</div>`;
   }
 }
+// ── Unzugeordnete E-Mail einem Lead zuordnen ─────────────────
+let _assignMailId = null;
+async function openAssignMail(id) {
+  _assignMailId = id;
+  if (!allLeads.length) { try { await loadLeads(); } catch (_) {} }
+  document.getElementById('assignMailSearch').value = '';
+  renderAssignMailResults();
+  document.getElementById('assignMailModal').classList.add('open');
+  setTimeout(() => document.getElementById('assignMailSearch').focus(), 50);
+}
+function closeAssignMail() { document.getElementById('assignMailModal').classList.remove('open'); _assignMailId = null; }
+function renderAssignMailResults() {
+  const q = document.getElementById('assignMailSearch').value.trim().toLowerCase();
+  const hits = (q ? allLeads.filter(l => [l.company, l.ceo, l.email, l.location].some(v => (v || '').toLowerCase().includes(q))) : allLeads).slice(0, 30);
+  document.getElementById('assignMailResults').innerHTML = hits.length
+    ? hits.map(l => `<div class="chat-item" style="padding:8px 10px" onclick="assignMailToLead(${l.id})">
+        <div class="chat-main"><div class="chat-title"><span class="t">${escHtml(l.company || '—')}</span></div>
+        <div class="chat-meta"><span class="t">${escHtml([l.ceo, l.email, l.location].filter(Boolean).join(' · '))}</span></div></div>
+        <i class="fas fa-link chat-chevron"></i></div>`).join('')
+    : '<div style="color:var(--text3);font-size:12px;padding:10px">Kein Lead gefunden</div>';
+}
+async function assignMailToLead(leadId) {
+  if (!_assignMailId) return;
+  try {
+    await api('POST', `/leads/unmatched-emails/${_assignMailId}/assign`, { lead_id: leadId });
+    showToast('E-Mail zugeordnet ✓');
+    closeAssignMail();
+    loadUnmatchedEmails(); loadInbox(); Inbox.refreshBadge();
+  } catch (e) { showToast(e.message, 'err'); }
+}
+
+// ── POSTEINGANG ──────────────────────────────────────────────
+let _inboxFilter = 'unread';
+function setInboxFilter(f) {
+  _inboxFilter = f;
+  document.getElementById('inboxFilterUnread').classList.toggle('active', f === 'unread');
+  document.getElementById('inboxFilterAll').classList.toggle('active', f === 'all');
+  loadInbox();
+}
+async function loadInbox() {
+  const el = document.getElementById('inboxList');
+  if (!el) return;
+  try {
+    const rows = await api('GET', `/emails/inbox?filter=${_inboxFilter}`);
+    el.innerHTML = renderInboxList(rows, _inboxFilter === 'unread' ? 'Keine ungelesenen Kunden-E-Mails 🎉' : 'Noch keine Kunden-E-Mails eingegangen');
+  } catch (e) {
+    el.innerHTML = `<div style="color:var(--red);padding:16px;font-size:13px">${escHtml(e.message)}</div>`;
+  }
+}
+function renderMailStatus(r) {
+  const el = document.getElementById('inboxMailStatus');
+  if (!el) return;
+  if (!r.configured) {
+    el.innerHTML = '<span class="err"><i class="fas fa-exclamation-triangle"></i> Postfach-Abruf ist nicht eingerichtet: IMAP_HOST, IMAP_USER und IMAP_PASS in der .env eintragen.</span>';
+    return;
+  }
+  const st = r.status;
+  const when = st && st.at ? fmtDate(st.at) : 'noch nie';
+  el.innerHTML = `<i class="fas fa-envelope"></i> Postfach <b>${escHtml(r.mailbox || '')}</b> · letzter Abruf ${escHtml(when)} · ` +
+    (st && st.ok === false
+      ? `<span class="err"><i class="fas fa-times-circle"></i> Fehler: ${escHtml(st.error || 'unbekannt')}</span>`
+      : `<span class="ok"><i class="fas fa-check-circle"></i> läuft</span> <span>(alle 2 Minuten)</span>`);
+}
+async function loadMailStatus() {
+  try { renderMailStatus(await api('GET', '/emails/status')); } catch (_) {}
+}
+async function pollMailboxNow() {
+  showToast('Postfach wird abgerufen …');
+  try {
+    const r = await api('POST', '/emails/poll');
+    const st = r.status || {};
+    if (st.ok === false) showToast('Abruf fehlgeschlagen: ' + (st.error || ''), 'err');
+    else showToast(`Abruf fertig ✓ ${st.matched || 0} zugeordnet, ${st.unmatched || 0} unzugeordnet`);
+  } catch (e) { showToast(e.message, 'err'); }
+  loadMailStatus(); loadInbox(); loadUnmatchedEmails(); Inbox.refreshBadge();
+}
+async function openInboxMail(leadId) {
+  await openLeadPanel(leadId);
+  if (document.getElementById('tab-inbox')?.classList.contains('active')) loadInbox();
+}
+function onInboxChanged() {
+  if (document.getElementById('tab-inbox')?.classList.contains('active')) { loadInbox(); loadUnmatchedEmails(); }
+}
+
 async function deleteUnmatchedEmail(id) {
   if (!confirm('Eintrag löschen?')) return;
   try {
@@ -2282,19 +2405,29 @@ function bodyToHtml(text) {
   return text.split('\n').map(l => `<div>${escHtml(l) || '<br>'}</div>`).join('');
 }
 
-async function openEmailModal() {
+async function openEmailModal(reply) {
   const l = _panelLead;
   if (!l) return;
   document.getElementById('emailLeadId').value = l.id;
-  document.getElementById('emailTo').value     = l.email || '';
-  document.getElementById('emailSubject').value = '';
-  document.getElementById('emailBody').innerHTML = '';
+  document.getElementById('emailTo').value     = (reply && reply.from_address) || l.email || '';
+  document.getElementById('emailSubject').value = reply ? replySubject(reply.subject) : '';
+  document.getElementById('emailBody').innerHTML = reply ? replyQuoteHtml(reply) : '';
   // Vorlagen laden falls noch nicht geladen
   if (!_emailTemplates.length) await loadEmailTemplatesForAdmin();
   else populateAdminTemplateDropdown();
   const sel = document.getElementById('emailTemplateSelect');
   if (sel) sel.value = '';
   document.getElementById('adminEmailModal').classList.add('open');
+  if (reply) {
+    const body = document.getElementById('emailBody');
+    body.focus();
+    const r = document.createRange(); r.setStart(body, 0); r.collapse(true);
+    const sel2 = window.getSelection(); sel2.removeAllRanges(); sel2.addRange(r);
+  }
+}
+function replyToEmail(emailId) {
+  const mail = (_panelLead?.email_thread || []).find(m => m.id === emailId);
+  if (mail) openEmailModal(mail);
 }
 function closeEmailModal() { document.getElementById('adminEmailModal').classList.remove('open'); }
 async function sendEmail() {
@@ -2307,6 +2440,7 @@ async function sendEmail() {
     await api('POST', `/leads/${id}/email`, { to, subject, body });
     showToast('E-Mail gesendet ✓');
     closeEmailModal();
+    if (_panelLead && _panelLead.id === parseInt(id)) openLeadPanel(parseInt(id));
   } catch(e) { showToast(e.message, 'err'); }
 }
 
@@ -2782,9 +2916,10 @@ async function openSettingsModal() {
       ? new Date(settings.maintenance_until).toISOString().slice(0,16)
       : '';
   } catch {}
+  renderCallerIdSettings('callerIdSettings');
   document.getElementById('settingsModal').classList.add('open');
 }
-function closeSettingsModal() { document.getElementById('settingsModal').classList.remove('open'); }
+function closeSettingsModal() { clearInterval(_callerIdPoll); document.getElementById('settingsModal').classList.remove('open'); }
 async function saveNotifSettings() {
   const notify_email = document.getElementById('adminNotifEmail')?.checked ? 1 : 0;
   const phone        = document.getElementById('adminPhone')?.value.trim() || null;
@@ -3110,6 +3245,8 @@ showTab('dashboard');
 })();
 loadToolsTab();
 loadClosersForSelect();
+Inbox.start();
+Softphone.loadConfig();
 checkReminderNotifications();
 setInterval(checkReminderNotifications, 2 * 60 * 1000);
 setInterval(loadDashboard, 60000);
@@ -3612,6 +3749,9 @@ document.getElementById('addLeadModal').addEventListener('click', function(e){ i
       <input id="adminEmail" class="form-control" type="email" placeholder="name@beispiel.de">
     </div>
     <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+    <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)"><i class="fas fa-headset" style="color:var(--accent);margin-right:6px"></i>Telefonie im Browser</div>
+    <div id="callerIdSettings"></div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
     <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)"><i class="fas fa-scroll" style="color:var(--accent);margin-right:6px"></i>Gesprächsleitfaden (für Closer)</div>
     <div class="form-group">
       <label>Tagesziel <span style="font-size:11px;color:var(--text3);font-weight:400">(Anrufe pro Tag)</span></label>
@@ -3748,7 +3888,7 @@ document.getElementById('editContactInput')?.addEventListener('keydown', functio
           <span id="callDocPhone" style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--text);letter-spacing:.5px"></span>
           <button onclick="copyCallPhone()" style="background:none;border:1px solid var(--border2);border-radius:6px;cursor:pointer;color:var(--text3);padding:3px 10px;font-size:11px;white-space:nowrap" title="Nummer kopieren"><i class="fas fa-copy"></i> Kopieren</button>
         </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:8px"><i class="fas fa-info-circle" style="margin-right:4px"></i>Rufe die Nummer manuell über dein Handy oder deine Telefon-App an und dokumentiere das Ergebnis hier.</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:8px"><i class="fas fa-info-circle" style="margin-right:4px"></i><span id="callDocHint">Rufe die Nummer manuell über dein Handy oder deine Telefon-App an und dokumentiere das Ergebnis hier.</span></div>
       </div>
       <div class="form-group" style="margin:0">
         <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Ergebnis</label>

@@ -1418,3 +1418,59 @@ td.cell-check input, th.cell-check input { width: 17px; height: 17px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
 }
+
+/* ── E-Mail-Verlauf im Lead-Panel ─────────────────────────── */
+.mail-empty { color: var(--text3); font-size: 12px; padding: 6px 0; }
+.mail-thread { display: flex; flex-direction: column; gap: 8px; }
+.mail-item { border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius-sm); background: var(--bg2); padding: 9px 11px; font-size: 12px; }
+.mail-item.in { border-left-color: var(--green); }
+.mail-item.unread { background: color-mix(in srgb, var(--green) 6%, var(--bg2)); }
+.mail-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.mail-dir { font-size: 11px; font-weight: 700; color: var(--accent); }
+.mail-item.in .mail-dir { color: var(--green); }
+.mail-when { margin-left: auto; font-size: 11px; color: var(--text3); white-space: nowrap; }
+.mail-new { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 700; background: var(--green); color: #fff; vertical-align: middle; }
+.mail-subject { font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.mail-from { color: var(--text3); font-size: 11px; margin-bottom: 6px; overflow-wrap: anywhere; }
+.mail-body { color: var(--text2); line-height: 1.55; white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow-y: auto; }
+.mail-quoted { margin-top: 6px; }
+.mail-quoted summary { cursor: pointer; font-size: 11px; color: var(--text3); }
+.mail-quoted .mail-body { margin-top: 4px; padding-left: 8px; border-left: 2px solid var(--border2); color: var(--text3); }
+.mail-actions { margin-top: 8px; display: flex; gap: 6px; }
+
+/* ── Posteingang ──────────────────────────────────────────── */
+.inbox-item.unread { background: color-mix(in srgb, var(--green) 5%, var(--bg2)); }
+.inbox-item.unread .chat-title .t { font-weight: 700; }
+.inbox-subject { font-size: 12.5px; color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inbox-status { font-size: 12px; color: var(--text3); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.inbox-status .ok { color: var(--green); }
+.inbox-status .err { color: var(--red); }
+
+/* ── Anrufnummer in den Einstellungen ─────────────────────── */
+.callerid-hint { font-size: 12px; color: var(--text3); background: var(--bg3); border-radius: var(--radius-sm); padding: 8px 10px; }
+.callerid-hint-inline { color: var(--text3); }
+.callerid-ok { color: var(--green); font-weight: 600; }
+.callerid-pending { color: var(--amber); font-weight: 600; }
+.callerid-code { margin-top: 8px; padding: 12px; border-radius: var(--radius); background: var(--bg3); font-size: 12.5px; color: var(--text2); }
+.callerid-digits { font-size: 28px; font-weight: 700; letter-spacing: 6px; color: var(--text); margin: 8px 0; }
+.callerid-wait { font-size: 12px; color: var(--text3); }
+
+/* ── Softphone-Leiste (laufender Anruf) ───────────────────── */
+.softphone { border: 1px solid rgba(255,255,255,0.08); position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 140%); z-index: 700; width: min(440px, calc(100vw - 32px)); background: var(--ink, #1a2330); color: #fff; border-radius: 16px; box-shadow: var(--shadow-lg); padding: 10px 12px; transition: transform 0.22s cubic-bezier(0.4,0,0.2,1); }
+.softphone.open { transform: translate(-50%, 0); }
+.sp-main { display: flex; align-items: center; gap: 10px; }
+.sp-icon { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,0.12); flex-shrink: 0; }
+.softphone.live .sp-icon { background: var(--green); animation: sp-pulse 1.6s infinite; }
+@keyframes sp-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(31,154,95,0.5); } 50% { box-shadow: 0 0 0 8px rgba(31,154,95,0); } }
+.sp-info { flex: 1; min-width: 0; }
+.sp-label { font-weight: 700; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-sub { font-size: 12px; opacity: 0.75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-btn { width: 38px; height: 38px; border-radius: 50%; border: none; cursor: pointer; background: rgba(255,255,255,0.12); color: #fff; font-size: 14px; flex-shrink: 0; }
+.sp-btn:hover { background: rgba(255,255,255,0.2); }
+.sp-btn.active { background: var(--amber); }
+.sp-hangup { background: var(--red); }
+.sp-hangup:hover { background: #a83232; }
+.sp-keypad { display: none; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
+.sp-keypad.open { display: grid; }
+.sp-keypad button { height: 38px; border-radius: 10px; border: none; background: rgba(255,255,255,0.1); color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.sp-keypad button:hover { background: rgba(255,255,255,0.2); }
