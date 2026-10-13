@@ -38,6 +38,9 @@ app.use(helmet({
     directives: {
       defaultSrc:  ["'self'"],
       scriptSrc:   ["'self'", "'unsafe-inline'"],
+      // Die Oberfläche nutzt onclick="…" an Buttons. Helmet setzt sonst standardmäßig
+      // script-src-attr 'none' — dann reagiert kein Button (auch nicht „Anmelden“).
+      scriptSrcAttr: ["'unsafe-inline'"],
       styleSrc:    ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdnjs.cloudflare.com"],
       fontSrc:     ["'self'", "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com"],
       imgSrc:      ["'self'", "data:", "blob:"],
