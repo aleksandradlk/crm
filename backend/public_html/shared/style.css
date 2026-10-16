@@ -1474,3 +1474,28 @@ td.cell-check input, th.cell-check input { width: 17px; height: 17px; }
 .sp-keypad.open { display: grid; }
 .sp-keypad button { height: 38px; border-radius: 10px; border: none; background: rgba(255,255,255,0.1); color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; font-family: inherit; }
 .sp-keypad button:hover { background: rgba(255,255,255,0.2); }
+
+/* ── Angebotstool: Wert-Badges & Bereich „Angebote & Umsatz“ ── */
+.value-badge { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 700; font-variant-numeric: tabular-nums; vertical-align: middle; white-space: nowrap; }
+.value-badge i { font-size: 9px; }
+.value-badge.open { color: var(--copper); background: color-mix(in srgb, var(--copper) 12%, transparent); }
+.value-badge.won  { color: var(--green);  background: color-mix(in srgb, var(--green) 12%, transparent); }
+.av-kunde { font-size: 12px; color: var(--text2); margin-bottom: 10px; }
+.av-kunde i { color: var(--text3); margin-right: 4px; }
+.av-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+.av-tile { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 9px 11px; min-width: 0; }
+.av-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); }
+.av-value { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); margin-top: 2px; }
+.av-value small { font-size: 11px; font-weight: 600; color: var(--text2); }
+.av-tile.open .av-value { color: var(--copper); }
+.av-tile.won  .av-value { color: var(--green); }
+.av-tile.late .av-value { color: var(--red); }
+.av-head { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text3); margin: 10px 0 6px; }
+.av-doc { display: flex; justify-content: space-between; gap: 10px; padding: 7px 10px; background: var(--bg3); border-radius: 6px; margin-bottom: 5px; font-size: 12px; }
+.av-doc-main { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.av-doc-sub { color: var(--text3); font-size: 11px; margin-top: 1px; }
+.av-doc-side { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.av-chip { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--bg2); border: 1px solid var(--border); color: var(--text2); }
+.av-chip.s-angenommen, .av-chip.s-bezahlt { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, transparent); }
+.av-chip.s-versendet, .av-chip.s-offen { color: var(--copper); border-color: color-mix(in srgb, var(--copper) 40%, transparent); }
+.av-chip.s-ueberfaellig, .av-chip.s-abgelehnt { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, transparent); }

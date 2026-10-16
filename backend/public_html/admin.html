@@ -5,9 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NovaFlow CRM · Administrator</title>
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/shared/apple-touch-icon.png">
+<meta name="theme-color" content="#1a2330">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="NovaFlow CRM">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf19">
+<link rel="stylesheet" href="/shared/style.css?v=nf20">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -45,6 +50,7 @@
       <div class="nav-item active" data-tab="dashboard" onclick="showTab('dashboard')"><i class="fas fa-tachometer-alt"></i> Dashboard</div>
       <div class="nav-item" data-tab="leads" onclick="showTab('leads')"><i class="fas fa-database"></i> Alle Leads</div>
       <div class="nav-item" data-tab="myLeads" onclick="showTab('myLeads')"><i class="fas fa-user-check"></i> Meine Leads</div>
+      <div class="nav-item" data-tab="kundenwert" onclick="showTab('kundenwert')"><i class="fas fa-euro-sign"></i> Kundenwert</div>
       <div class="nav-item" data-tab="inbox" onclick="showTab('inbox')"><i class="fas fa-inbox"></i> Posteingang <span id="inboxBadge" style="display:none;margin-left:auto" class="badge" title="Ungelesene Kunden-E-Mails">0</span></div>
       <div class="nav-item" data-tab="generate" onclick="showTab('generate')"><i class="fas fa-search"></i> Generieren</div>
       <div class="nav-sep"></div>
@@ -79,6 +85,18 @@
         </div>
       </div>
       <div id="dashboardContent"><div class="wiki-empty">Kennzahlen werden geladen …</div></div>
+    </div>
+
+    <!-- ── TAB: KUNDENWERT (aus dem Angebotstool) ─────── -->
+    <div id="tab-kundenwert" class="tab-panel">
+      <div class="page-header">
+        <div><h1 data-eyebrow="Angebotstool">Kundenwert</h1><p class="page-desc">Welcher Kunde wie viel wert ist – Angebote, Umsatz und laufende Abos aus tool.novaflowservices.de</p></div>
+        <div class="page-actions">
+          <a class="btn btn-ghost btn-sm" id="kwToolLink" href="#" target="_blank" rel="noopener" style="display:none"><i class="fas fa-external-link-alt"></i> Angebotstool</a>
+          <button class="btn btn-ghost btn-sm" onclick="loadKundenwert(true)"><i class="fas fa-sync"></i> Aktualisieren</button>
+        </div>
+      </div>
+      <div id="kundenwertContent"><div class="wiki-empty">Wird geladen …</div></div>
     </div>
 
     <!-- ── TAB: LEADS ─────────────────────────────────── -->
@@ -753,7 +771,7 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf19"></script>
+<script src="/shared/api.js?v=nf20"></script>
 <script>
 let allLeads = [], allUsers = [], generatedLeads = [], editingUserId = null;
 let panelDirty = false;
@@ -861,6 +879,7 @@ function showTab(name) {
   if (name === 'agents')   loadAgentLog();
   if (name === 'archive')  loadArchive();
   if (name === 'tools')    loadToolsTab();
+  if (name === 'kundenwert') loadKundenwert();
 }
 
 // ── PIPELINE (geteilt für Alle Leads + Meine Leads) ──────────
@@ -885,7 +904,7 @@ function renderAdminPipeline(leads, boardId) {
       <div class="pipeline-card${on ? ' is-selected' : ''}" draggable="true" data-id="${l.id}" data-status="${escHtml(l.status||'')}"
            ondragstart="onAdminCardDragStart(event,${l.id})" ondragend="onAdminCardDragEnd(event)"
            onclick="${selName}.cardClick(event, ${l.id})">
-        <div class="pc-company">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}</div>
+        <div class="pc-company">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}${LeadWerte.badge(l.id)}</div>
         ${l.ceo    ? `<div class="pc-row"><i class="fas fa-user"></i><span>${escHtml(l.ceo)}</span></div>` : ''}
         ${l.phone  ? `<div class="pc-row"><i class="fas fa-phone"></i><a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()">${escHtml(l.phone)}</a></div>` : ''}
         ${l.assigned_name ? `<div class="pc-row"><i class="fas fa-user-tag"></i><span>${escHtml(l.assigned_name)}</span></div>` : ''}
@@ -1028,7 +1047,7 @@ function renderMyLeads() {
         <input type="checkbox" class="lead-cb" data-id="${l.id}" ${sel ? 'checked' : ''} onchange="mySel.toggle(${l.id},this.checked)">
       </td>
       <td class="cell-idx">${String(i+1).padStart(2,'0')}</td>
-      <td><div class="cell-title">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}</div>${l.ceo ? `<div class="cell-sub">${escHtml(l.ceo)}</div>` : ''}</td>
+      <td><div class="cell-title">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}${LeadWerte.badge(l.id)}</div>${l.ceo ? `<div class="cell-sub">${escHtml(l.ceo)}</div>` : ''}</td>
       <td>${l.email ? `<div class="cell-sub"><a href="mailto:${escHtml(l.email)}" onclick="event.stopPropagation()">${escHtml(l.email)}</a></div>` : ''}${l.phone ? `<div class="cell-sub mono"><a href="tel:${escHtml(l.phone)}" onclick="event.stopPropagation()">${escHtml(l.phone)}</a></div>` : ''}${!l.email && !l.phone ? muted : ''}</td>
       <td><span class="cell-sub">${escHtml(l.location||'—')}</span></td>
       <td onclick="event.stopPropagation()">${statusSelectHtml(l)}</td>
@@ -1159,7 +1178,7 @@ function renderLeads(leads) {
         <input type="checkbox" class="lead-cb" data-id="${l.id}" ${sel ? 'checked' : ''} onchange="allSel.toggle(${l.id},this.checked)">
       </td>
       <td class="cell-idx">${String(i+1).padStart(2,'0')}</td>
-      <td><div class="cell-title">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}</div>${l.ceo ? `<div class="cell-sub">${escHtml(l.ceo)}</div>` : ''}</td>
+      <td><div class="cell-title">${escHtml(l.company||'—')} ${ageBadge(l.updated_at||l.created_at)}${LeadWerte.badge(l.id)}</div>${l.ceo ? `<div class="cell-sub">${escHtml(l.ceo)}</div>` : ''}</td>
       <td>${l.email ? `<div class="cell-sub"><a href="mailto:${escHtml(l.email)}" onclick="event.stopPropagation()">${escHtml(l.email)}</a></div>` : ''}${l.phone ? `<div class="cell-sub mono">${escHtml(l.phone)}</div>` : ''}${!l.email && !l.phone ? muted : ''}</td>
       <td><span class="cell-sub">${escHtml(l.location||'—')}</span></td>
       <td onclick="event.stopPropagation()">${statusSelectHtml(l)}</td>
@@ -1260,6 +1279,7 @@ async function openLeadPanel(id) {
     document.getElementById('panelCompany').textContent = l.company || 'Lead';
     document.getElementById('panelKeyInfo').innerHTML = renderPanelKeyInfo(l);
     document.getElementById('panelContent').innerHTML = renderLeadDetail(l);
+    AngebotsInfo.load(l);
     Inbox.markLeadRead(l);
   } catch (e) { document.getElementById('panelContent').innerHTML = `<span style="color:var(--red)">${escHtml(e.message)}</span>`; }
 }
@@ -1428,7 +1448,7 @@ function renderCallLogs(logs) {
   return `<div style="margin-top:12px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:6px">Anrufe</div>` +
     logs.map(c => `<div style="display:flex;gap:8px;align-items:flex-start;padding:7px 10px;background:var(--bg3);border-radius:6px;border-left:2px solid ${COLORS[c.status]||'var(--text3)'};margin-bottom:5px;font-size:12px">
       <div style="flex:1">
-        <span style="font-weight:600;color:${COLORS[c.status]||'var(--text)'}">${LABELS[c.status]||c.status}</span>
+        ${c.direction === 'inbound' ? `<span style="color:var(--text3);margin-right:6px" title="Eingehender Anruf"><i class="fas fa-arrow-down"></i> Eingehend ·</span>` : ''}<span style="font-weight:600;color:${COLORS[c.status]||'var(--text)'}">${c.direction === 'inbound' && c.status === 'no-answer' ? 'Verpasst' : (LABELS[c.status]||c.status)}</span>
         ${c.duration_seconds ? `<span style="color:var(--text3);margin-left:8px">${fmtCallDuration(c.duration_seconds)}</span>` : ''}
         <span style="color:var(--text3);float:right">${fmtDate(c.started_at)}</span>
         ${c.note ? `<div style="color:var(--text2);margin-top:3px">${escHtml(c.note)}</div>` : ''}
@@ -1512,6 +1532,8 @@ function renderLeadDetail(l) {
 
   return `
     ${fieldsHtml ? `<div class="panel-section"><div class="panel-section-title">Details</div><div class="panel-fields">${fieldsHtml}</div></div>` : ''}
+
+    ${AngebotsInfo.placeholder(l.id)}
 
     <div class="panel-section">
       <div class="panel-section-title">Zuweisen</div>
@@ -2917,6 +2939,7 @@ async function openSettingsModal() {
       : '';
   } catch {}
   renderCallerIdSettings('callerIdSettings');
+  renderPushSettings('pushSettings');
   document.getElementById('settingsModal').classList.add('open');
 }
 function closeSettingsModal() { clearInterval(_callerIdPoll); document.getElementById('settingsModal').classList.remove('open'); }
@@ -3247,9 +3270,60 @@ loadToolsTab();
 loadClosersForSelect();
 Inbox.start();
 Softphone.loadConfig();
+PushNotify.refresh();
+// Werte aus dem Angebotstool nachladen und Pipelines/Listen mit Badges neu zeichnen
+LeadWerte.load().then(() => {
+  if (!LeadWerte.enabled) return;
+  Object.keys(_pipelineData).forEach(b => renderAdminPipeline(_pipelineData[b], b));
+  if (document.getElementById('tab-leads').classList.contains('active') && allLeads.length) renderLeads(allLeads);
+  if (document.getElementById('tab-myLeads').classList.contains('active')) renderMyLeads();
+});
+window.__openLeadById = openLeadPanel;
+openLeadFromUrl(openLeadPanel);
 checkReminderNotifications();
 setInterval(checkReminderNotifications, 2 * 60 * 1000);
 setInterval(loadDashboard, 60000);
+
+// ── KUNDENWERT (Angebotstool) ─────────────────────────────────
+const KW_STATUS = { neu:'Neu', kontaktiert:'Kontaktiert', nicht_erreicht:'Nicht erreicht', kein_interesse:'Kein Interesse', rueckruf:'Rückruf', kunde:'Kunde' };
+async function loadKundenwert(frisch) {
+  const box = document.getElementById('kundenwertContent');
+  let r;
+  try { r = await api('GET', '/angebote/uebersicht' + (frisch ? '?frisch=1' : '')); }
+  catch (e) { box.innerHTML = `<div class="wiki-empty" style="color:var(--red)"><i class="fas fa-exclamation-triangle"></i>${escHtml(e.message)}</div>`; return; }
+  if (!r.enabled) {
+    box.innerHTML = `<div class="wiki-empty"><i class="fas fa-plug"></i>Das Angebotstool ist noch nicht verbunden.<br><span style="font-size:12px">In der <span class="mono">.env</span> des CRM <span class="mono">ANGEBOT_TOOL_URL</span> und <span class="mono">ANGEBOT_TOOL_KEY</span> eintragen (siehe README → „Angebotstool anbinden“).</span></div>`;
+    return;
+  }
+  const link = document.getElementById('kwToolLink');
+  if (link && r.url) { link.href = r.url + '/abrechnung'; link.style.display = ''; }
+  const s = r.summe;
+  const kpi = (label, value, sub, cls, icon) =>
+    `<div class="kpi-card ${cls}"><div class="kpi-head"><span class="kpi-label">${label}</span><span class="kpi-icon"><i class="fas ${icon}"></i></span></div><div class="kpi-value">${value}</div><div class="kpi-sub">${sub}</div></div>`;
+  const kpis = `<div class="dash-kpis">
+    ${kpi('Offene Angebote', fmtEuro(s.angeboteOffen), s.angeboteOffenMonatlich ? `+ <b>${fmtEuro(s.angeboteOffenMonatlich)}</b> monatlich` : 'Entwürfe und versendete Angebote', 'c-copper', 'fa-file-signature')}
+    ${kpi('Umsatz bezahlt', fmtEuro(s.umsatzBezahlt), `gesamt inkl. offen <b>${fmtEuro(s.umsatzGesamt)}</b>`, 'c-green', 'fa-check-circle')}
+    ${kpi('Rechnungen offen', fmtEuro(s.offenerBetrag), s.ueberfaellig ? `davon überfällig <b>${fmtEuro(s.ueberfaellig)}</b>` : 'nichts überfällig', '', 'fa-hourglass-half')}
+    ${kpi('Monatlich', fmtEuro(s.monatlich), 'aus laufenden Abos', 'c-ink', 'fa-redo')}
+  </div>`;
+  const rows = r.kunden.map(k => {
+    const w = k.werte;
+    const lead = k.lead
+      ? `<a href="#" onclick="openLeadPanel(${k.lead.id});return false">${escHtml(k.lead.company || 'Lead')}</a><div class="cell-sub">${escHtml(KW_STATUS[k.lead.status] || k.lead.status)}${k.lead.assigned_name ? ' · ' + escHtml(k.lead.assigned_name) : ''}</div>`
+      : '<span class="cell-sub">nicht verknüpft</span>';
+    const num = v => `<td class="mono" style="text-align:right;white-space:nowrap${v ? '' : ';color:var(--text3)'}">${fmtEuro(v)}</td>`;
+    return `<tr>
+      <td><div class="cell-title">${escHtml(k.firma)}</div><div class="cell-sub"><span class="mono">${escHtml(k.kunde_nr)}</span>${k.ansprechpartner ? ' · ' + escHtml(k.ansprechpartner) : ''}</div></td>
+      <td>${lead}</td>
+      ${num(w.angeboteOffen)}${num(w.umsatzBezahlt)}${num(w.offenerBetrag)}${num(w.monatlich)}
+    </tr>`;
+  }).join('');
+  box.innerHTML = kpis + `<div class="card"><div class="card-header"><div class="card-title"><i class="fas fa-building"></i> Kunden <span class="badge">${r.kunden.length}</span></div></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Kunde</th><th>Lead im CRM</th><th style="text-align:right">Angebote offen</th><th style="text-align:right">Umsatz bezahlt</th><th style="text-align:right">Rechnung offen</th><th style="text-align:right">Monatlich</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="6"><div class="wiki-empty" style="margin:6px 0">Noch keine Kunden im Angebotstool.</div></td></tr>'}</tbody>
+    </table></div></div>`;
+}
 
 // ── EINSTELLUNGEN ─────────────────────────────────────────────
 async function loadAppSettings() {
@@ -3751,6 +3825,9 @@ document.getElementById('addLeadModal').addEventListener('click', function(e){ i
     <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
     <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)"><i class="fas fa-headset" style="color:var(--accent);margin-right:6px"></i>Telefonie im Browser</div>
     <div id="callerIdSettings"></div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+    <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)"><i class="fas fa-mobile-alt" style="color:var(--accent);margin-right:6px"></i>Anrufe &amp; Erinnerungen aufs Handy</div>
+    <div id="pushSettings"></div>
     <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
     <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)"><i class="fas fa-scroll" style="color:var(--accent);margin-right:6px"></i>Gesprächsleitfaden (für Closer)</div>
     <div class="form-group">

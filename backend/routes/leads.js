@@ -85,7 +85,7 @@ router.post('/', auth, async (req, res) => {
 router.get('/dashboard', auth, adminOnly, async (req, res) => {
   try {
     const [[{ callsToday }]] = await db.query(
-      `SELECT COUNT(*) AS callsToday FROM call_logs WHERE DATE(started_at) = CURDATE()`
+      `SELECT COUNT(*) AS callsToday FROM call_logs WHERE direction='outbound' AND DATE(started_at) = CURDATE()`
     );
     const [[{ winsThisWeek }]] = await db.query(
       `SELECT COUNT(*) AS winsThisWeek FROM leads WHERE status='kunde' AND YEARWEEK(updated_at, 1) = YEARWEEK(NOW(), 1)`
@@ -101,7 +101,7 @@ router.get('/dashboard', auth, adminOnly, async (req, res) => {
          COUNT(DISTINCT CASE WHEN DATE(cl.started_at) = CURDATE() THEN cl.id END) AS callsToday,
          COUNT(DISTINCT l.id) AS totalLeads
        FROM users u
-       LEFT JOIN call_logs cl ON cl.user_id = u.id
+       LEFT JOIN call_logs cl ON cl.user_id = u.id AND cl.direction = 'outbound'
        LEFT JOIN leads l ON l.assigned_to = u.id AND l.archived_at IS NULL
        WHERE u.role = 'closer' AND u.is_active = 1
        GROUP BY u.id, u.full_name
@@ -119,9 +119,9 @@ router.get('/dashboard/closer', auth, async (req, res) => {
   try {
     const uid = req.user.id;
     const [[{ callsToday }]] = await db.query(
-      'SELECT COUNT(*) as callsToday FROM call_logs WHERE user_id=? AND DATE(started_at)=CURDATE()', [uid]);
+      'SELECT COUNT(*) as callsToday FROM call_logs WHERE user_id=? AND direction=\'outbound\' AND DATE(started_at)=CURDATE()', [uid]);
     const [[{ callsWeek }]] = await db.query(
-      'SELECT COUNT(*) as callsWeek FROM call_logs WHERE user_id=? AND YEARWEEK(started_at,1)=YEARWEEK(NOW(),1)', [uid]);
+      'SELECT COUNT(*) as callsWeek FROM call_logs WHERE user_id=? AND direction=\'outbound\' AND YEARWEEK(started_at,1)=YEARWEEK(NOW(),1)', [uid]);
     const [[{ winsTotal }]] = await db.query(
       "SELECT COUNT(*) as winsTotal FROM leads WHERE assigned_to=? AND status='kunde' AND archived_at IS NULL", [uid]);
     const [[{ myLeads }]] = await db.query(
@@ -129,7 +129,7 @@ router.get('/dashboard/closer', auth, async (req, res) => {
     const [[{ avgCalls }]] = await db.query(
       `SELECT ROUND(AVG(daily_count),1) as avgCalls FROM (
         SELECT COUNT(*) as daily_count FROM call_logs
-        WHERE user_id=? AND started_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+        WHERE user_id=? AND direction='outbound' AND started_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
         GROUP BY DATE(started_at)
       ) t`, [uid]);
     res.json({ callsToday, callsWeek, winsTotal, myLeads, avgCalls: avgCalls || 0 });

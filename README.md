@@ -145,6 +145,74 @@ als Absender anzeigen, deren Besitz nachgewiesen ist (Schutz gegen Rufnummern-F�
 
 ---
 
+## Angebotstool anbinden (Kundenwert im CRM)
+
+Das CRM zeigt pro Lead die Angebote, Rechnungen und Abos aus dem Angebotstool
+(tool.novaflowservices.de) – und damit, welcher Kunde wie viel wert ist:
+
+- **Lead öffnen → „Angebote & Umsatz“**: offene Angebote, bezahlter Umsatz, offene Rechnungen,
+  monatliche Abos. Closer sehen die Werte nur lesend.
+- **Als Admin**: „Als Kunde anlegen & Angebot erstellen“ übernimmt den Lead als Kunden ins
+  Angebotstool und öffnet dort direkt ein neues Angebot für ihn. „Neues Angebot“ / „Im Angebotstool öffnen“
+  springt in das Tool (dort ist dein Admin-Login nötig).
+- **€-Badges** in Lead-Liste und Pipeline, Menüpunkt **Kundenwert** mit allen Kunden und Summen.
+
+Zuordnung Lead ↔ Kunde: feste Verknüpfung (entsteht beim Übernehmen), sonst gleiche E-Mail-Adresse,
+sonst eindeutiger Firmenname.
+
+Einrichtung (einmalig):
+1. Einen langen zufälligen Schlüssel erzeugen, z.B. `openssl rand -hex 32`.
+2. **Angebotstool** (Hostinger → Umgebungsvariablen): `CRM_API_KEY=<schlüssel>` setzen, neu starten.
+3. **CRM** `.env`: `ANGEBOT_TOOL_URL=https://tool.novaflowservices.de` und `ANGEBOT_TOOL_KEY=<derselbe schlüssel>`,
+   dann `pm2 restart leadhunter`.
+
+Ohne diese Werte bleibt der Bereich einfach ausgeblendet.
+
+---
+
+## Eingehende Anrufe aufs Handy (wie bei Pipedrive)
+
+Ruft ein Kunde die Firmennummer an, passiert Folgendes:
+
+1. Das CRM sucht die Nummer bei den Leads.
+2. Auf deinem Handy (und dem des zuständigen Closers) erscheint sofort eine Benachrichtigung:
+   **„📞 Müller Bau GmbH ruft an“** – mit Ansprechpartner, Status, Zuständigem und offenen Angeboten/Umsatz.
+   Antippen öffnet den Lead im CRM.
+3. Der Anruf wird auf das Handy des zuständigen Closers weitergeleitet (ist der Lead niemandem zugewiesen
+   oder unbekannt: an die Admins). Angezeigt wird die Nummer des Kunden. Beim Abheben sagt eine kurze
+   Ansage „CRM-Anruf von Müller Bau GmbH“, dann ist der Kunde durchgestellt.
+4. Der Anruf landet im Anruf-Verlauf des Leads („Eingehend“). Nimmt niemand ab, hört der Kunde
+   „Wir rufen Sie schnellstmöglich zurück“, alle bekommen „❗ Verpasster Anruf“ und der Zuständige eine
+   Rückruf-Erinnerung.
+
+Auch fällige Reminder kommen als Push aufs Handy.
+
+**Einrichtung:**
+1. Twilio ist wie unter „Telefonie im Browser“ eingerichtet.
+2. In Twilio eine Rufnummer kaufen (Console → Phone Numbers → Buy a number). Für deutsche Nummern
+   verlangt Twilio einmalig ein „Regulatory Bundle“ (Adresse im Ortsnetz bzw. Firmennachweis).
+3. Bei der Nummer unter **Voice Configuration → A call comes in**: Webhook
+   `https://leads.novaflowservices.de/api/voice/incoming`, HTTP POST.
+4. Diese Nummer ist ab jetzt deine Firmennummer (Website, Visitenkarte, Google). Am besten auch als
+   `TWILIO_CALLER_ID` eintragen, dann sehen Kunden sie auch bei Anrufen aus dem CRM.
+5. **Jeder Mitarbeiter:** Einstellungen → **„Meine Telefonnummer“** = eigene Handynummer (dorthin wird
+   weitergeleitet; ist sie leer, wird die bestätigte Anrufnummer genommen) und → „Anrufe & Erinnerungen
+   aufs Handy“ → **Auf diesem Gerät aktivieren**. Als „Meine Anrufnummer“ kann die Twilio-Firmennummer
+   stehen, dann sehen Kunden auch bei Anrufen aus dem CRM die Firmennummer.
+   - **iPhone:** CRM in Safari öffnen → Teilen → **Zum Home-Bildschirm**, dann über das neue App-Symbol
+     öffnen und dort aktivieren (Apple erlaubt Push nur für installierte Web-Apps, ab iOS 16.4).
+   - **Android:** direkt in Chrome aktivieren (optional „Zum Startbildschirm hinzufügen“).
+
+Tipp: Die Mailbox auf dem Handy erst nach mehr als 25 Sekunden anspringen lassen (oder abschalten),
+sonst nimmt sie weitergeleitete Anrufe an, bevor das CRM „verpasst“ melden kann.
+
+**Und die eSIM?** Eine eSIM ist einfach eine zweite Leitung auf demselben Handy. Du kannst die
+Twilio-Nummer auf eine eSIM-Nummer weiterleiten lassen (die eSIM-Nummer als „Meine Telefonnummer“ im CRM
+hinterlegen), damit Geschäftsanrufe auf der Geschäftsleitung klingeln. Wichtig: Die Nummer, die Kunden
+anrufen, muss die Twilio-Nummer sein. Ruft jemand die eSIM-Nummer direkt an, bekommt das CRM davon nichts mit.
+
+---
+
 ## Dateistruktur
 
 ```
@@ -161,7 +229,9 @@ leadhunter/
 │   │   ├── users.js       ← Benutzerverwaltung
 │   │   ├── leads.js       ← Lead CRUD + Kommentare + Reminder
 │   │   ├── emails.js      ← Posteingang (Kundenmails, gelesen/ungelesen)
-│   │   ├── voice.js       ← Telefonie im Browser (Twilio)
+│   │   ├── voice.js       ← Telefonie: Anrufe aus dem Browser + eingehende Anrufe (Twilio)
+│   │   ├── angebote.js    ← Angebote & Umsatz aus dem Angebotstool
+│   │   ├── push.js        ← Push-Benachrichtigungen aufs Handy
 │   │   └── generate.js    ← Claude API Lead-Generierung
 │   ├── helpers/
 │   │   ├── logger.js      ← Aktivitäts-Log

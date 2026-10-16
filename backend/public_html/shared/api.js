@@ -998,3 +998,217 @@ async function saveCallerId(containerId) {
     if (btn) btn.disabled = false;
   }
 }
+
+// ── Angebotstool: Wert je Lead (Pipeline-Badges) ─────────────
+const fmtEuro = n => (Number(n) || 0).toLocaleString('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+const LeadWerte = {
+  map: {},
+  enabled: false,
+  _loaded: null,
+  load(force) {
+    if (this._loaded && !force) return this._loaded;
+    this._loaded = api('GET', '/angebote/werte')
+      .then(r => { this.enabled = !!r.enabled; this.map = r.werte || {}; return this.map; })
+      .catch(() => { this.enabled = false; return this.map; });
+    return this._loaded;
+  },
+  get(leadId) { return this.map[leadId] || null; },
+  // Kleines Badge für Karten/Zeilen: offene Angebote bzw. Umsatz
+  badge(leadId) {
+    const w = this.get(leadId);
+    if (!w) return '';
+    const parts = [];
+    if (w.umsatzGesamt) parts.push(`Umsatz ${fmtEuro(w.umsatzGesamt)}`);
+    if (w.angeboteOffen) parts.push(`Angebot offen ${fmtEuro(w.angeboteOffen)}`);
+    if (w.monatlich) parts.push(`${fmtEuro(w.monatlich)}/Monat`);
+    if (!parts.length) return '';
+    const main = w.umsatzGesamt || w.angeboteOffen ? fmtEuro(w.umsatzGesamt || w.angeboteOffen) : `${fmtEuro(w.monatlich)}/M`;
+    const cls = w.umsatzGesamt ? 'won' : 'open';
+    return `<span class="value-badge ${cls}" title="${escHtml(parts.join(' · '))}"><i class="fas fa-euro-sign"></i>${escHtml(main.replace(/\s?€/, ''))}</span>`;
+  },
+};
+
+// ── Angebotstool: Bereich „Angebote & Umsatz“ im Lead ────────
+const ANGEBOT_STATUS = { entwurf: 'Entwurf', versendet: 'Versendet', angenommen: 'Angenommen', abgelehnt: 'Abgelehnt', abgelaufen: 'Abgelaufen', offen: 'Offen', bezahlt: 'Bezahlt', ueberfaellig: 'Überfällig', storniert: 'Storniert', storno: 'Storno' };
+const AngebotsInfo = {
+  // Platzhalter, wird nach dem Öffnen des Leads asynchron befüllt
+  placeholder(leadId) {
+    return `<div class="panel-section" id="angeboteSection-${leadId}" style="display:none">
+      <div class="panel-section-title">Angebote &amp; Umsatz</div>
+      <div id="angeboteBody-${leadId}"><div class="panel-empty"><i class="fas fa-spinner fa-spin"></i> Lade aus dem Angebotstool …</div></div>
+    </div>`;
+  },
+  async load(lead) {
+    const sec = document.getElementById(`angeboteSection-${lead.id}`);
+    const body = document.getElementById(`angeboteBody-${lead.id}`);
+    if (!sec || !body) return;
+    let r;
+    try { r = await api('GET', `/angebote/lead/${lead.id}`); }
+    catch (e) {
+      sec.style.display = '';
+      body.innerHTML = `<div class="panel-empty" style="color:var(--red)">${escHtml(e.message)}</div>`;
+      return;
+    }
+    if (!r.enabled) return; // Anbindung nicht eingerichtet → Bereich bleibt unsichtbar
+    sec.style.display = '';
+    body.innerHTML = this.render(lead, r);
+  },
+  render(lead, r) {
+    const isAdmin = Auth.isAdmin();
+    const k = r.kunde;
+    if (!k) {
+      return `<div class="panel-empty">Noch kein Kunde im Angebotstool.</div>` + (isAdmin
+        ? `<div class="panel-row" style="margin-top:8px"><button class="btn btn-primary btn-sm" onclick="AngebotsInfo.uebernehmen(${lead.id}, this)"><i class="fas fa-file-signature"></i> Als Kunde anlegen &amp; Angebot erstellen</button></div>`
+        : '');
+    }
+    const w = k.werte || {};
+    const tile = (label, value, cls) => `<div class="av-tile ${cls || ''}"><div class="av-label">${label}</div><div class="av-value">${value}</div></div>`;
+    const tiles = [
+      tile('Angebote offen', fmtEuro(w.angeboteOffen) + (w.angeboteOffenMonatlich ? `<small> + ${fmtEuro(w.angeboteOffenMonatlich)}/M</small>` : ''), w.angeboteOffen ? 'open' : ''),
+      tile('Umsatz bezahlt', fmtEuro(w.umsatzBezahlt), w.umsatzBezahlt ? 'won' : ''),
+      tile('Rechnung offen', fmtEuro(w.offenerBetrag), w.ueberfaellig ? 'late' : ''),
+      tile('Monatlich', fmtEuro(w.monatlich), w.monatlich ? 'won' : ''),
+    ].join('');
+    const docRow = (nr, title, date, amount, status) => `<div class="av-doc">
+      <div class="av-doc-main"><span class="mono">${escHtml(nr)}</span> ${escHtml(title || '')}<div class="av-doc-sub">${fmtDateOnly(date)}</div></div>
+      <div class="av-doc-side"><b>${amount}</b><span class="av-chip s-${escHtml(status)}">${escHtml(ANGEBOT_STATUS[status] || status)}</span></div>
+    </div>`;
+    const angebote = (k.angebote || []).slice(0, 5).map(a => docRow(a.nummer, a.betreff, a.datum, fmtEuro(a.brutto) + (a.monatlich ? ` + ${fmtEuro(a.monatlich)}/M` : ''), a.status)).join('');
+    const rechnungen = (k.rechnungen || []).slice(0, 5).map(x => docRow(x.nummer, x.titel, x.datum, fmtEuro(x.brutto), x.status)).join('');
+    const links = r.links;
+    return `
+      <div class="av-kunde"><i class="fas fa-building"></i> ${escHtml(k.nummer)} · ${escHtml(k.firma)}</div>
+      <div class="av-tiles">${tiles}</div>
+      ${angebote ? `<div class="av-head">Angebote</div>${angebote}` : ''}
+      ${rechnungen ? `<div class="av-head">Rechnungen</div>${rechnungen}` : ''}
+      ${!angebote && !rechnungen ? '<div class="panel-empty">Noch keine Angebote oder Rechnungen.</div>' : ''}
+      ${links ? `<div class="panel-row" style="margin-top:10px;flex-wrap:wrap">
+        <a class="btn btn-primary btn-sm" href="${escHtml(links.neuesAngebot)}" target="_blank" rel="noopener"><i class="fas fa-plus"></i> Neues Angebot</a>
+        <a class="btn btn-ghost btn-sm" href="${escHtml(links.angebote)}" target="_blank" rel="noopener"><i class="fas fa-external-link-alt"></i> Im Angebotstool öffnen</a>
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="AngebotsInfo.load(_panelLead)" title="Aktualisieren"><i class="fas fa-sync"></i></button>
+      </div>` : ''}`;
+  },
+  async uebernehmen(leadId, btn) {
+    if (btn) btn.disabled = true;
+    try {
+      const r = await api('POST', `/angebote/lead/${leadId}/kunde`);
+      showToast(r.neu ? `Kunde ${r.kunde.nummer} im Angebotstool angelegt ✓` : `Mit Kunde ${r.kunde.nummer} verknüpft ✓`);
+      const lead = (typeof _panelLead !== 'undefined' && _panelLead && _panelLead.id === leadId) ? _panelLead : { id: leadId };
+      document.getElementById(`angeboteBody-${leadId}`).innerHTML = this.render(lead, { enabled: true, kunde: r.kunde, links: r.links });
+      LeadWerte.load(true);
+      if (r.links && r.links.neuesAngebot) window.open(r.links.neuesAngebot, '_blank', 'noopener');
+    } catch (e) {
+      showToast(e.message, 'err');
+      if (btn) btn.disabled = false;
+    }
+  },
+};
+function fmtDateOnly(d) {
+  if (!d) return '';
+  const [y, m, day] = String(d).slice(0, 10).split('-');
+  return day && m && y ? `${day}.${m}.${y}` : escHtml(d);
+}
+
+// ── Push-Benachrichtigungen (Anrufe, Erinnerungen) aufs Handy ─
+// iPhone: nur möglich, wenn das CRM über „Teilen → Zum Home-Bildschirm“ als App
+// installiert ist (ab iOS 16.4). Android/Desktop: direkt im Browser.
+const PushNotify = {
+  supported() { return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; },
+  isIos() { return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); },
+  isStandalone() { return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; },
+  async registration() {
+    if (!('serviceWorker' in navigator)) return null;
+    return navigator.serviceWorker.register('/sw.js');
+  },
+  async current() {
+    if (!this.supported()) return null;
+    const reg = await navigator.serviceWorker.getRegistration('/');
+    return reg ? reg.pushManager.getSubscription() : null;
+  },
+  _key(base64) {
+    const pad = '='.repeat((4 - base64.length % 4) % 4);
+    const raw = atob((base64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+    return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+  },
+  async enable() {
+    const cfg = await api('GET', '/push/config');
+    if (!cfg.enabled) throw new Error('Push ist auf dem Server nicht verfügbar');
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') throw new Error('Benachrichtigungen wurden nicht erlaubt (Browser-/Handy-Einstellungen prüfen)');
+    const reg = await this.registration();
+    await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: this._key(cfg.public_key) });
+    await api('POST', '/push/subscribe', { subscription: sub.toJSON() });
+  },
+  async disable() {
+    const sub = await this.current();
+    if (sub) {
+      await api('POST', '/push/unsubscribe', { endpoint: sub.endpoint }).catch(() => {});
+      await sub.unsubscribe().catch(() => {});
+    }
+  },
+  // Bereits erlaubte Geräte bei jedem Start beim Server auffrischen
+  async refresh() {
+    try {
+      if (!this.supported() || Notification.permission !== 'granted') return;
+      await this.registration();
+      const sub = await this.current();
+      if (sub) await api('POST', '/push/subscribe', { subscription: sub.toJSON() });
+    } catch (_) {}
+  },
+};
+
+async function renderPushSettings(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!PushNotify.supported()) {
+    el.innerHTML = PushNotify.isIos() && !PushNotify.isStandalone()
+      ? `<div class="callerid-hint"><i class="fas fa-info-circle"></i> Auf dem iPhone: CRM in Safari öffnen → <b>Teilen</b> → <b>Zum Home-Bildschirm</b>. Danach das CRM über das neue App-Symbol öffnen und hier aktivieren.</div>`
+      : `<div class="callerid-hint"><i class="fas fa-info-circle"></i> Dieser Browser unterstützt keine Push-Benachrichtigungen.</div>`;
+    return;
+  }
+  const sub = await PushNotify.current().catch(() => null);
+  const on = !!sub && Notification.permission === 'granted';
+  el.innerHTML = `
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Ruft ein Kunde an, erscheint auf diesem Gerät sofort, wer es ist – mit Status, Zuständigem und offenen Angeboten. Auch Erinnerungen und verpasste Anrufe kommen hier an.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      ${on
+        ? `<span class="callerid-ok"><i class="fas fa-check-circle"></i> Auf diesem Gerät aktiv</span>
+           <button class="btn btn-ghost btn-sm" onclick="testPush(this)"><i class="fas fa-bell"></i> Test senden</button>
+           <button class="btn btn-ghost btn-sm" onclick="togglePush('${containerId}', false, this)">Deaktivieren</button>`
+        : `<button class="btn btn-primary btn-sm" onclick="togglePush('${containerId}', true, this)"><i class="fas fa-mobile-alt"></i> Auf diesem Gerät aktivieren</button>`}
+    </div>`;
+}
+async function togglePush(containerId, on, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    if (on) { await PushNotify.enable(); showToast('Benachrichtigungen aktiviert ✓'); }
+    else    { await PushNotify.disable(); showToast('Benachrichtigungen deaktiviert'); }
+  } catch (e) { showToast(e.message, 'err'); }
+  renderPushSettings(containerId);
+}
+async function testPush(btn) {
+  if (btn) btn.disabled = true;
+  try {
+    const r = await api('POST', '/push/test');
+    showToast(r.sent ? `Test an ${r.sent} Gerät(e) gesendet ✓` : 'Kein Gerät erreicht – bitte neu aktivieren', r.sent ? 'ok' : 'err');
+  } catch (e) { showToast(e.message, 'err'); }
+  if (btn) btn.disabled = false;
+}
+
+// Link aus Benachrichtigung: …html?lead=123 → Lead direkt öffnen
+function openLeadFromUrl(openFn) {
+  const id = parseInt(new URLSearchParams(location.search).get('lead'));
+  if (!id) return;
+  history.replaceState(null, '', location.pathname);
+  openFn(id);
+}
+// Klick auf Benachrichtigung, während das CRM schon offen ist
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data && e.data.type === 'open-lead' && e.data.leadId && typeof window.__openLeadById === 'function') {
+      window.__openLeadById(e.data.leadId);
+    }
+  });
+}

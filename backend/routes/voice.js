@@ -10,6 +10,8 @@ const db     = require('../db');
 const { auth } = require('../middleware/auth');
 const { log } = require('../helpers/logger');
 const { toE164 } = require('../helpers/phone');
+const push   = require('../helpers/push');
+const angebotTool = require('../helpers/angebotTool');
 
 let twilio = null;
 try { twilio = require('twilio'); } catch (_) { /* Paket nicht installiert → Telefonie aus */ }
@@ -223,5 +225,192 @@ router.post('/dial-status', express.urlencoded({ extended: false }), twilioWebho
   res.type('text/xml').send(new twilio.twiml.VoiceResponse().toString());
 });
 
+// ══ Eingehende Anrufe auf die Firmennummer ═══════════════════
+// Einrichtung: in Twilio bei der gekauften Nummer unter „A call comes in“
+// den Webhook https://<BASE_URL>/api/voice/incoming (HTTP POST) eintragen.
+// Ablauf:
+//  1. Twilio: POST /api/voice/incoming → Anrufer im CRM suchen, Push ans Handy
+//     („Müller Bau GmbH ruft an …“), Anruf ans Handy des Zuständigen weiterleiten
+//  2. Beim Abheben sagt Twilio kurz an, wer anruft (/api/voice/whisper)
+//  3. Twilio: POST /api/voice/incoming-status → Dauer bzw. „verpasst“ im Lead
+const euro = n => (Number(n) || 0).toLocaleString('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+const STATUS_LABELS = { neu: 'Neu', kontaktiert: 'Kontaktiert', nicht_erreicht: 'Nicht erreicht', kein_interesse: 'Kein Interesse', rueckruf: 'Rückruf', kunde: 'Kunde' };
+
+// Lead zur Nummer finden (Nummern sind im CRM frei formatiert gespeichert)
+async function findLeadByPhone(number) {
+  const digits = number.replace(/\D/g, '');
+  if (digits.length < 7) return null;
+  const [rows] = await db.query(
+    `SELECT l.id, l.company, l.ceo, l.phone, l.email, l.status, l.assigned_to, u.full_name AS assigned_name
+     FROM leads l LEFT JOIN users u ON u.id = l.assigned_to
+     WHERE l.archived_at IS NULL AND l.phone IS NOT NULL
+       AND REGEXP_REPLACE(l.phone, '[^0-9]', '') LIKE ?
+     ORDER BY l.updated_at DESC LIMIT 20`,
+    ['%' + digits.slice(-8)]
+  );
+  return rows.find(l => toE164(l.phone) === number) || null;
+}
+
+// Wer klingelt? Zuständiger Mitarbeiter, sonst die Admins. Gewählt wird die
+// Handynummer aus den Einstellungen („Meine Telefonnummer“), sonst die bestätigte
+// Anrufnummer. So kann die Anrufnummer die Firmennummer sein und trotzdem
+// klingelt bei eingehenden Anrufen das Handy.
+async function inboundRecipients(lead, from = null) {
+  const [users] = await db.query(
+    `SELECT id, full_name, role, IF(caller_id_verified=1, caller_id, NULL) AS caller_id, phone
+     FROM users WHERE is_active=1`
+  );
+  const withNumber = u => {
+    const number = toE164(u.phone) || toE164(u.caller_id);
+    // Ruft ein Mitarbeiter selbst die Firmennummer an, nicht zu ihm zurückleiten
+    return { ...u, number: number && number !== from ? number : null };
+  };
+  const all = users.map(withNumber);
+  const admins = all.filter(u => u.role === 'admin');
+  const assigned = lead && lead.assigned_to ? all.find(u => u.id === lead.assigned_to) : null;
+  let ring = assigned && assigned.number ? [assigned] : admins.filter(u => u.number);
+  ring = ring.slice(0, 10); // Twilio wählt max. 10 Nummern gleichzeitig
+  // Push bekommen: wer klingelt + Zuständiger + alle Admins (behalten den Überblick)
+  const notify = [...new Map([...ring, ...(assigned ? [assigned] : []), ...admins].map(u => [u.id, u])).values()];
+  return { ring, notify, assigned };
+}
+
+// Wert des Kunden aus dem Angebotstool – darf den Anruf nicht aufhalten
+async function leadValue(lead) {
+  if (!lead || !angebotTool.isConfigured()) return null;
+  try {
+    const kunden = await Promise.race([
+      angebotTool.alleKunden(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 1500)),
+    ]);
+    return angebotTool.werteJeLead(kunden, [lead]).get(lead.id) || null;
+  } catch (_) { return null; }
+}
+
+function callerSummary(lead, from, value, missed = false) {
+  if (!lead) {
+    return { title: `${missed ? '❗ Verpasster Anruf' : '📞 Anruf'} von ${from || 'unbekannter Nummer'}`, body: 'Nicht im CRM gespeichert.' };
+  }
+  const name = lead.company || lead.ceo || from;
+  const line1 = [lead.ceo && lead.company ? lead.ceo : null, `Status: ${STATUS_LABELS[lead.status] || lead.status}`,
+    lead.assigned_name ? `zuständig: ${lead.assigned_name}` : 'nicht zugewiesen'].filter(Boolean).join(' · ');
+  const parts = [];
+  if (value) {
+    if (value.angeboteOffen) parts.push(`Angebot offen ${euro(value.angeboteOffen)}`);
+    if (value.umsatzBezahlt) parts.push(`Umsatz ${euro(value.umsatzBezahlt)}`);
+    if (value.offenerBetrag) parts.push(`Rechnung offen ${euro(value.offenerBetrag)}`);
+    if (value.monatlich) parts.push(`${euro(value.monatlich)}/Monat`);
+  }
+  return { title: missed ? `❗ Verpasster Anruf: ${name}` : `📞 ${name} ruft an`, body: [line1, parts.join(' · ')].filter(Boolean).join('\n') };
+}
+
+const leadUrl = (user, leadId) => leadId
+  ? `/${user.role === 'admin' ? 'admin' : 'closer'}.html?lead=${leadId}`
+  : `/${user.role === 'admin' ? 'admin' : 'closer'}.html`;
+
+function notifyUsers(users, summary, leadId, tag, extra = {}) {
+  users.forEach(u => {
+    push.sendToUser(u.id, { ...summary, url: leadUrl(u, leadId), tag, ...extra })
+      .catch(e => console.error('[Voice] Push:', e.message));
+  });
+}
+
+router.post('/incoming', express.urlencoded({ extended: false }), twilioWebhook, async (req, res) => {
+  const vr = new twilio.twiml.VoiceResponse();
+  try {
+    const from = toE164(req.body.From); // unterdrückte Nummer → null
+    const lead = from ? await findLeadByPhone(from) : null;
+    const [{ ring, notify }, value] = await Promise.all([inboundRecipients(lead, from), leadValue(lead)]);
+
+    const ownerId = (ring[0] || notify[0] || {}).id;
+    let callLogId = null;
+    if (ownerId) {
+      const [r] = await db.query(
+        `INSERT INTO call_logs (lead_id, user_id, phone_number, direction, started_at, status, twilio_call_sid)
+         VALUES (?, ?, ?, 'inbound', NOW(), 'started', ?)`,
+        [lead ? lead.id : null, ownerId, from || String(req.body.From || 'unbekannt').slice(0, 50), req.body.CallSid || null]
+      );
+      callLogId = r.insertId;
+    }
+
+    const summary = callerSummary(lead, from, value);
+    // Push nicht abwarten – das Handy soll sofort klingeln
+    notifyUsers(notify, summary, lead && lead.id, `call-${req.body.CallSid || callLogId}`, { requireInteraction: true });
+
+    if (!ring.length || !callLogId) {
+      if (callLogId) await db.query("UPDATE call_logs SET status='no-answer', ended_at=NOW() WHERE id=?", [callLogId]);
+      vr.say({ language: 'de-DE' }, 'Vielen Dank für Ihren Anruf. Leider ist gerade niemand erreichbar. Wir rufen Sie schnellstmöglich zurück.');
+      vr.hangup();
+      return res.type('text/xml').send(vr.toString());
+    }
+
+    const base = baseUrl(req);
+    const dialOpts = {
+      answerOnBridge: true,
+      timeout: 22,
+      action: `${base}/api/voice/incoming-status?callLogId=${callLogId}`,
+      method: 'POST',
+    };
+    // Beim Weiterleiten darf die Nummer des Anrufers angezeigt werden → auf dem
+    // Handy erscheint der Kunde (bzw. sein Name, wenn er im Telefonbuch steht)
+    if (from) dialOpts.callerId = from;
+    const dial = vr.dial(dialOpts);
+    ring.forEach(u => dial.number({ url: `${base}/api/voice/whisper?callLogId=${callLogId}`, method: 'POST' }, u.number));
+    res.type('text/xml').send(vr.toString());
+  } catch (e) {
+    console.error('Voice incoming error:', e);
+    vr.say({ language: 'de-DE' }, 'Es ist ein technischer Fehler aufgetreten. Bitte versuchen Sie es später erneut.');
+    res.type('text/xml').send(vr.toString());
+  }
+});
+
+// Ansage nur für den Mitarbeiter, bevor der Anrufer durchgestellt wird
+router.post('/whisper', express.urlencoded({ extended: false }), twilioWebhook, async (req, res) => {
+  const vr = new twilio.twiml.VoiceResponse();
+  try {
+    const callLogId = parseInt(req.query.callLogId);
+    const [[row]] = await db.query(
+      `SELECT l.company, l.ceo FROM call_logs cl LEFT JOIN leads l ON l.id = cl.lead_id WHERE cl.id=?`, [callLogId]
+    );
+    const name = row && (row.company || row.ceo);
+    vr.say({ language: 'de-DE' }, name ? `CRM-Anruf von ${name}.` : 'CRM-Anruf, unbekannte Nummer.');
+  } catch (e) {
+    console.error('Voice whisper error:', e.message);
+  }
+  res.type('text/xml').send(vr.toString());
+});
+
+router.post('/incoming-status', express.urlencoded({ extended: false }), twilioWebhook, async (req, res) => {
+  const vr = new twilio.twiml.VoiceResponse();
+  try {
+    const callLogId = parseInt(req.query.callLogId);
+    const answered  = req.body.DialCallStatus === 'completed' || req.body.DialCallStatus === 'answered';
+    const duration  = parseInt(req.body.DialCallDuration);
+    await db.query(
+      `UPDATE call_logs SET status=?, duration_seconds=?, ended_at=NOW() WHERE id=? AND direction='inbound'`,
+      [answered ? 'reached' : 'no-answer', Number.isFinite(duration) ? duration : null, callLogId]
+    );
+    if (!answered) {
+      const [[call]] = await db.query('SELECT lead_id, phone_number FROM call_logs WHERE id=?', [callLogId]);
+      const lead = call && call.lead_id ? (await db.query(
+        `SELECT l.id, l.company, l.ceo, l.phone, l.email, l.status, l.assigned_to, u.full_name AS assigned_name
+         FROM leads l LEFT JOIN users u ON u.id = l.assigned_to WHERE l.id=?`, [call.lead_id]))[0][0] : null;
+      const { notify, assigned } = await inboundRecipients(lead);
+      notifyUsers(notify, callerSummary(lead, call && call.phone_number, null, true), lead && lead.id, `missed-${callLogId}`);
+      // Rückruf-Erinnerung für den Zuständigen
+      if (lead && assigned) {
+        await db.query('INSERT INTO reminders (lead_id, user_id, remind_at, note) VALUES (?, ?, NOW(), ?)',
+          [lead.id, assigned.id, 'Rückruf – verpasster Anruf']).catch(() => {});
+      }
+      vr.say({ language: 'de-DE' }, 'Leider ist gerade niemand erreichbar. Wir rufen Sie schnellstmöglich zurück. Auf Wiederhören.');
+      vr.hangup();
+    }
+  } catch (e) {
+    console.error('Voice incoming-status error:', e);
+  }
+  res.type('text/xml').send(vr.toString());
+});
+
 module.exports = router;
 module.exports.isConfigured = isConfigured;
+module.exports.findLeadByPhone = findLeadByPhone;

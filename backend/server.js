@@ -25,6 +25,8 @@ const toolRoutes           = require('./routes/tools');
 const canvaRoutes          = require('./routes/canva');
 const emailRoutes          = require('./routes/emails');
 const voiceRoutes          = require('./routes/voice');
+const angeboteRoutes       = require('./routes/angebote');
+const pushRoutes           = require('./routes/push');
 const { startReminderCron } = require('./cron/reminders');
 const { pollIncomingEmails } = require('./cron/emailPoller');
 const cron           = require('node-cron');
@@ -100,6 +102,8 @@ app.use('/api/tools',           toolRoutes);
 app.use('/api/canva',           canvaRoutes);
 app.use('/api/emails',          emailRoutes);
 app.use('/api/voice',           voiceRoutes);
+app.use('/api/angebote',        angeboteRoutes);
+app.use('/api/push',            pushRoutes);
 
 // ── SPA Fallback ──────────────────────────────────────────────
 app.get('*', (req, res) => {
@@ -291,6 +295,24 @@ db.query('ALTER TABLE unmatched_emails MODIFY COLUMN body_text MEDIUMTEXT').catc
 db.query('ALTER TABLE users ADD COLUMN caller_id VARCHAR(30) NULL').catch(() => {});
 db.query('ALTER TABLE users ADD COLUMN caller_id_verified TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
 db.query('ALTER TABLE call_logs ADD COLUMN twilio_call_sid VARCHAR(64) NULL').catch(() => {});
+
+// ── Eingehende Anrufe + Push aufs Handy ──────────────────────
+// Eingehende Anrufe unbekannter Nummern haben keinen Lead
+db.query('ALTER TABLE call_logs MODIFY COLUMN lead_id INT NULL').catch(() => {});
+db.query('CREATE INDEX idx_call_logs_sid ON call_logs (twilio_call_sid)').catch(() => {});
+db.query('ALTER TABLE reminders ADD COLUMN pushed TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
+db.query(`CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id            INT AUTO_INCREMENT PRIMARY KEY,
+  user_id       INT NOT NULL,
+  endpoint_hash CHAR(64) NOT NULL,
+  endpoint      VARCHAR(1000) NOT NULL,
+  p256dh        VARCHAR(255) NOT NULL,
+  auth          VARCHAR(255) NOT NULL,
+  user_agent    VARCHAR(255) NULL,
+  created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_push_endpoint (endpoint_hash),
+  INDEX idx_push_user (user_id)
+)`).catch(() => {});
 
 // ── Settings-Tabelle ─────────────────────────────────────────
 db.query(`CREATE TABLE IF NOT EXISTS app_settings (
