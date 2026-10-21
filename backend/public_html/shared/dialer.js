@@ -26,6 +26,8 @@ const Dialer = {
 
   async open(opts = {}) {
     this.opts = opts;
+    // Fokus aus Eingabefeldern dahinter nehmen, sonst greifen die Tasten 1–8 nicht
+    if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
     this._ensureDom();
     document.getElementById('dialer').classList.add('open');
     document.body.classList.add('dialer-open');
@@ -154,6 +156,8 @@ const Dialer = {
             <input type="datetime-local" id="dlFollowUpAt" class="form-control" onchange="Dialer.setFollowUp('custom')">
           </div>
 
+          <div id="dlDeal" class="dl-deal" hidden></div>
+
           <div class="dl-error" id="dlError"></div>
           <button class="btn btn-primary dl-save" id="dlSaveBtn" onclick="Dialer.save()" disabled>
             <i class="fas fa-check"></i> Speichern &amp; nächster Lead <kbd>Strg</kbd>+<kbd>Enter</kbd>
@@ -220,7 +224,39 @@ const Dialer = {
     if (o.followUp && o.followUp !== 'required') this.setFollowUp(o.followUp);
     else this.setFollowUp(o.followUp === 'required' ? null : 'none');
     if (o.followUp === 'required' && !auto) document.getElementById('dlFollowUpAt').focus();
+    this._renderDeal(key);
     this._validate();
+  },
+
+  // Deal direkt aus dem Gespräch: anlegen, Wert anpassen oder als gewonnen buchen
+  _renderDeal(key) {
+    const el = document.getElementById('dlDeal');
+    const l = this.lead;
+    const prevValue = document.getElementById('dlDealValue')?.value;
+    const hasDeal = !!l.deal_id;
+    const valueInput = (label, val) => `
+      <div class="dl-deal-row">
+        <label for="dlDealValue">${label}</label>
+        <div class="dl-deal-input"><input type="text" id="dlDealValue" class="form-control" inputmode="decimal" placeholder="z.B. 2.500" value="${escHtml(prevValue ?? val ?? '')}"><span>€</span></div>
+      </div>`;
+    const dealInfo = hasDeal
+      ? `<div class="dl-deal-info"><i class="fas fa-handshake"></i><span><b>${escHtml(l.deal_title)}</b> · ${escHtml(l.deal_stage || '')}</span></div>` : '';
+    const existingVal = hasDeal && Number(l.deal_value) ? Number(l.deal_value).toLocaleString('de-DE') : '';
+    let html = '';
+    if (key === 'kunde') {
+      html = `<div class="dl-label">Deal</div>${dealInfo}
+        ${valueInput(hasDeal ? 'Auftragswert – Deal wird als gewonnen gebucht' : 'Auftragswert – wird als gewonnener Deal gebucht', existingVal)}`;
+    } else if (key === 'interesse' || key === 'rueckruf') {
+      html = hasDeal
+        ? `<div class="dl-label">Deal</div>${dealInfo}${valueInput('Wert anpassen', existingVal)}`
+        : `<div class="dl-label">Deal</div>
+           <label class="dl-deal-check"><input type="checkbox" id="dlDealCreate" ${key === 'interesse' ? 'checked' : ''} onchange="document.getElementById('dlDealValueWrap').hidden=!this.checked"> Deal in der Pipeline anlegen</label>
+           <div id="dlDealValueWrap" ${key === 'interesse' ? '' : 'hidden'}>${valueInput('Geschätzter Wert', '')}</div>`;
+    } else if (key === 'kein_interesse' && hasDeal) {
+      html = `<div class="dl-label">Deal</div>${dealInfo}<div class="dl-deal-hint">Der offene Deal wird als verloren markiert („Kein Bedarf“).</div>`;
+    }
+    el.innerHTML = html;
+    el.hidden = !html;
   },
 
   setFollowUp(key) {
@@ -293,6 +329,10 @@ const Dialer = {
       await api('POST', `/leads/${l.id}/outcome`, {
         outcome: this.outcome,
         note: document.getElementById('dlNote').value,
+        deal: document.getElementById('dlDealValue') || document.getElementById('dlDealCreate') ? {
+          create: !!document.getElementById('dlDealCreate')?.checked,
+          value: document.getElementById('dlDealValue')?.value || undefined,
+        } : undefined,
         call_log_id: this.callLogId,
         duration_seconds: this.durationSec,
         follow_up_at: this.followUp ? this._toSql(this.followUp) : null,

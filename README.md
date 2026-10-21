@@ -201,6 +201,19 @@ leadhunter/
   → **Strg+Enter** speichert alles in einem Schritt (Anruf, Status, Verlauf, nächster Termin) und öffnet den nächsten Lead.
 - „Rückruf vereinbart“ lässt sich nur mit Termin speichern – kein Lead geht verloren.
 
+### Deals (wie bei Pipedrive):
+- Ein Lead (Firma/Ansprechpartner) kann mehrere **Deals** haben: Titel, Wert (netto, €), Phase,
+  erwarteter Abschluss, Verantwortlicher, Notizen. Abschluss als **Gewonnen** oder **Verloren** (mit Grund).
+- Menüpunkt **Deals**: Pipeline-Board mit Summe pro Phase, Karten per Drag & Drop verschieben,
+  beim Ziehen erscheinen die Zonen „Gewonnen“ / „Verloren“. Daneben eine Liste aller Deals (offen/gewonnen/verloren).
+- Kennzahlen: offene Pipeline, gewichtete Prognose (Wert × Wahrscheinlichkeit der Phase),
+  Umsatz im Monat, geplante Abschlüsse; im Admin-Dashboard zusätzlich Umsatz je Closer.
+- Rot markierte Karten liegen länger als eingestellt in einer Phase („Rot nach x Tagen“).
+- Phasen, Wahrscheinlichkeiten und „Rot nach“ stellt der Admin unter Deals → **Phasen bearbeiten** ein.
+- Im Anrufmodus: „Interesse“/„Rückruf“ legt auf Wunsch direkt einen Deal mit Wert an,
+  „Abschluss“ bucht den offenen Deal als gewonnen (oder legt einen gewonnenen an),
+  „Kein Interesse“ schließt offene Deals als verloren.
+
 ### Closer kann:
 - Nur eigene (zugewiesene) Leads sehen
 - Status setzen: Neu / Kontaktiert / Nicht erreicht / Kein Interesse / Rückruf / Kunde

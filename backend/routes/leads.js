@@ -3,6 +3,7 @@ const db      = require('../db');
 const { auth, adminOnly } = require('../middleware/auth');
 const { log } = require('../helpers/logger');
 const { sendLeadEmail } = require('../helpers/mailer');
+const { createDeal, markWon, markLost, parseValue } = require('./deals');
 
 const VALID_STATUSES = ['neu','kontaktiert','nicht_erreicht','kein_interesse','rueckruf','kunde'];
 
@@ -200,6 +201,7 @@ router.get('/queue', auth, async (req, res) => {
               l.website, l.industry,
               r.id AS reminder_id, r.remind_at, r.note AS reminder_note,
               lc.last_call_at, lc.call_count,
+              od.id AS deal_id, od.title AS deal_title, od.value AS deal_value, ds.name AS deal_stage,
               (SELECT MIN(r2.remind_at) FROM reminders r2
                 WHERE r2.lead_id = l.id AND r2.user_id = ? AND r2.done_at IS NULL) AS next_reminder_at
        FROM leads l
@@ -213,6 +215,11 @@ router.get('/queue', auth, async (req, res) => {
          SELECT lead_id, MAX(started_at) AS last_call_at, COUNT(*) AS call_count
          FROM call_logs GROUP BY lead_id
        ) lc ON lc.lead_id = l.id
+       LEFT JOIN (
+         SELECT lead_id, MAX(id) AS id FROM deals WHERE status = 'open' GROUP BY lead_id
+       ) odm ON odm.lead_id = l.id
+       LEFT JOIN deals od ON od.id = odm.id
+       LEFT JOIN deal_stages ds ON ds.id = od.stage_id
        WHERE l.assigned_to = ? AND l.archived_at IS NULL
          AND l.status NOT IN ('kunde','kein_interesse')`,
       [uid, uid, uid]
@@ -263,7 +270,9 @@ const OUTCOMES = {
 
 router.post('/:id/outcome', auth, async (req, res) => {
   const leadId = parseInt(req.params.id);
-  const { outcome, note, call_log_id, duration_seconds, follow_up_at, follow_up_note } = req.body;
+  const { outcome, note, call_log_id, duration_seconds, follow_up_at, follow_up_note, deal } = req.body;
+  const dealValue = deal ? parseValue(deal.value) : undefined;
+  if (Number.isNaN(dealValue)) return res.status(400).json({ error: 'Ungültiger Deal-Wert' });
   const o = OUTCOMES[outcome];
   if (!o) return res.status(400).json({ error: 'Ungültiges Ergebnis' });
   const noteClean = typeof note === 'string' ? note.trim().slice(0, 2000) : '';
@@ -324,9 +333,31 @@ router.post('/:id/outcome', auth, async (req, res) => {
       reminderId = r.insertId;
     }
 
+    // 5) Deal: bei Interesse/Rückruf anlegen bzw. Wert aktualisieren, bei Abschluss
+    //    gewinnen, bei "Kein Interesse" offene Deals als verloren schließen
+    let dealId = null;
+    const [[openDeal]] = await db.query(
+      "SELECT * FROM deals WHERE lead_id=? AND status='open' ORDER BY id DESC LIMIT 1", [leadId]);
+    if (outcome === 'kunde') {
+      if (openDeal) { await markWon(openDeal, req.user.id, dealValue); dealId = openDeal.id; }
+      else dealId = await createDeal({ leadId, userId: req.user.id, value: dealValue || 0,
+                                       ownerId: lead.assigned_to || req.user.id, status: 'won' });
+    } else if (outcome === 'kein_interesse' && openDeal) {
+      await markLost(openDeal, req.user.id, 'Kein Bedarf');
+      dealId = openDeal.id;
+    } else if (deal && ['interesse', 'rueckruf'].includes(outcome)) {
+      if (openDeal) {
+        if (dealValue !== undefined) await db.query('UPDATE deals SET value=? WHERE id=?', [dealValue, openDeal.id]);
+        dealId = openDeal.id;
+      } else if (deal.create) {
+        dealId = await createDeal({ leadId, userId: req.user.id, title: deal.title, value: dealValue || 0,
+                                   ownerId: lead.assigned_to || req.user.id });
+      }
+    }
+
     await log(req.user.id, 'call_logged', 'lead', leadId,
-      { outcome, call_id: callId, follow_up_at: follow_up_at || null }, req.ip);
-    res.json({ ok: true, call_id: callId, status: o.status || lead.status, reminder_id: reminderId });
+      { outcome, call_id: callId, follow_up_at: follow_up_at || null, deal_id: dealId }, req.ip);
+    res.json({ ok: true, call_id: callId, status: o.status || lead.status, reminder_id: reminderId, deal_id: dealId });
   } catch (e) {
     console.error('Outcome error:', e);
     res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
@@ -342,7 +373,7 @@ router.get('/activity-feed', auth, adminOnly, async (req, res) => {
        FROM activity_log a
        LEFT JOIN users u ON u.id = a.user_id
        LEFT JOIN leads l ON l.id = a.target_id AND a.target_type = 'lead'
-       ORDER BY a.created_at DESC LIMIT 40`
+       ORDER BY a.created_at DESC, a.id DESC LIMIT 40`
     );
     res.json(rows);
   } catch(e) { res.status(500).json({ error: 'Fehler' }); }
@@ -585,7 +616,16 @@ router.get('/:id', auth, async (req, res) => {
     `SELECT id, direction, from_address, from_name, to_address, subject, body_text, received_at, created_at, is_read
      FROM lead_emails WHERE lead_id = ? ORDER BY COALESCE(received_at, created_at) ASC`, [id]
   ).catch(() => [[]]);
-  res.json({ ...lead, comments, reminders, call_logs, email_thread });
+  const [deals] = await db.query(
+    `SELECT d.id, d.title, d.value, d.status, d.stage_id, d.owner_id,
+            DATE_FORMAT(d.expected_close_date, '%Y-%m-%d') AS expected_close_date,
+            d.won_at, d.lost_at, d.lost_reason, s.name AS stage_name, u.full_name AS owner_name
+     FROM deals d
+     LEFT JOIN deal_stages s ON s.id = d.stage_id
+     LEFT JOIN users u ON u.id = d.owner_id
+     WHERE d.lead_id = ? ORDER BY d.status = 'open' DESC, d.created_at DESC`, [id]
+  ).catch(() => [[]]);
+  res.json({ ...lead, comments, reminders, call_logs, email_thread, deals });
 });
 
 // ── PATCH /api/leads/:id/status ──────────────────────────────

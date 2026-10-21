@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf20">
+<link rel="stylesheet" href="/shared/style.css?v=nf21">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -45,6 +45,7 @@
       <div class="nav-item active" data-tab="dashboard" onclick="showTab('dashboard')"><i class="fas fa-tachometer-alt"></i> Dashboard</div>
       <div class="nav-item" data-tab="leads" onclick="showTab('leads')"><i class="fas fa-database"></i> Alle Leads</div>
       <div class="nav-item" data-tab="myLeads" onclick="showTab('myLeads')"><i class="fas fa-user-check"></i> Meine Leads</div>
+      <div class="nav-item" data-tab="deals" onclick="showTab('deals')"><i class="fas fa-handshake"></i> Deals</div>
       <div class="nav-item" data-tab="inbox" onclick="showTab('inbox')"><i class="fas fa-inbox"></i> Posteingang <span id="inboxBadge" style="display:none;margin-left:auto" class="badge" title="Ungelesene Kunden-E-Mails">0</span></div>
       <div class="nav-item" data-tab="generate" onclick="showTab('generate')"><i class="fas fa-search"></i> Generieren</div>
       <div class="nav-sep"></div>
@@ -79,6 +80,9 @@
       </div>
       <div id="dashboardContent"><div class="wiki-empty">Kennzahlen werden geladen …</div></div>
     </div>
+
+    <!-- ── TAB: DEALS ─────────────────────────────────── -->
+    <div id="tab-deals" class="tab-panel"><div id="dealsRoot"></div></div>
 
     <!-- ── TAB: LEADS ─────────────────────────────────── -->
     <div id="tab-leads" class="tab-panel">
@@ -722,8 +726,9 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf20"></script>
-<script src="/shared/dialer.js?v=nf20"></script>
+<script src="/shared/api.js?v=nf21"></script>
+<script src="/shared/dialer.js?v=nf21"></script>
+<script src="/shared/deals.js?v=nf21"></script>
 <script>
 let allLeads = [], allUsers = [], generatedLeads = [], editingUserId = null;
 let panelDirty = false;
@@ -822,6 +827,7 @@ function showTab(name) {
     loadLeads();
   }
   if (name === 'myLeads')  renderMyLeads();
+  if (name === 'deals')    Deals.show();
   if (name === 'users')    { loadUsers(); loadAppSettings(); }
   if (name === 'tracking') loadTracking();
   if (name === 'inbox')    { loadInbox(); loadUnmatchedEmails(); loadMailStatus(); }
@@ -1495,6 +1501,8 @@ function renderLeadDetail(l) {
       <div class="panel-section-title">Status ändern</div>
       <div class="panel-status">${statusHtml}</div>
     </div>
+
+    ${Deals.leadSection(l, true)}
 
     <div class="panel-section">
       <div class="panel-section-title">Kommentare</div>
@@ -2239,14 +2247,14 @@ async function loadActivityFeed() {
   try {
     const rows = await api('GET', '/leads/activity-feed');
     if (!rows.length) { list.innerHTML = '<div class="wiki-empty" style="margin-top:12px"><i class="fas fa-stream"></i>Noch keine Aktivitäten.</div>'; return; }
-    const ACTION_ICONS = { status_change:'exchange-alt', comment_add:'sticky-note', lead_create_manual:'plus', leads_bulk_create:'plus', leads_csv_import:'file-import', lead_assign:'user-tag', lead_update:'pen', lead_archive:'archive', lead_restore:'undo', lead_email_sent:'envelope', email_assigned:'envelope-open', call_started:'phone', call_logged:'phone', reminder_set:'bell', login:'sign-in-alt', logout:'sign-out-alt' };
-    const FEED_LABELS = { status_change:'Status geändert', comment_add:'Notiz hinzugefügt', lead_create_manual:'Lead angelegt', leads_bulk_create:'Leads angelegt', leads_csv_import:'CSV importiert', lead_assign:'Lead übernommen', lead_update:'Lead bearbeitet', lead_archive:'Lead archiviert', lead_restore:'Lead wiederhergestellt', lead_email_sent:'E-Mail gesendet', email_assigned:'E-Mail zugeordnet', call_started:'Anruf gestartet', call_logged:'Anruf dokumentiert', reminder_set:'Wiedervorlage gesetzt', login:'Angemeldet', logout:'Abgemeldet' };
+    const ACTION_ICONS = { status_change:'exchange-alt', comment_add:'sticky-note', lead_create_manual:'plus', leads_bulk_create:'plus', leads_csv_import:'file-import', lead_assign:'user-tag', lead_update:'pen', lead_archive:'archive', lead_restore:'undo', lead_email_sent:'envelope', email_assigned:'envelope-open', call_started:'phone', call_logged:'phone', reminder_set:'bell', login:'sign-in-alt', logout:'sign-out-alt', deal_create:'handshake', deal_stage_change:'arrow-right', deal_update:'pen', deal_won:'trophy', deal_lost:'times-circle', deal_reopen:'undo', deal_delete:'trash' };
+    const FEED_LABELS = { status_change:'Status geändert', comment_add:'Notiz hinzugefügt', lead_create_manual:'Lead angelegt', leads_bulk_create:'Leads angelegt', leads_csv_import:'CSV importiert', lead_assign:'Lead übernommen', lead_update:'Lead bearbeitet', lead_archive:'Lead archiviert', lead_restore:'Lead wiederhergestellt', lead_email_sent:'E-Mail gesendet', email_assigned:'E-Mail zugeordnet', call_started:'Anruf gestartet', call_logged:'Anruf dokumentiert', reminder_set:'Wiedervorlage gesetzt', login:'Angemeldet', logout:'Abgemeldet', deal_create:'Deal angelegt', deal_stage_change:'Deal verschoben', deal_update:'Deal bearbeitet', deal_won:'Deal gewonnen', deal_lost:'Deal verloren', deal_reopen:'Deal wieder geöffnet', deal_delete:'Deal gelöscht' };
     list.innerHTML = rows.map(r => {
       const icon = ACTION_ICONS[r.action] || 'dot-circle';
       const dt = new Date(r.created_at);
       const timeStr = dt.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'}) + ' · ' + dt.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
       let detail = '';
-      try { const d = JSON.parse(r.details || '{}'); detail = d.outcome || d.to || d.subject || ''; } catch(e) {}
+      try { const d = JSON.parse(r.details || '{}'); detail = d.outcome || d.stage || d.reason || d.to || d.subject || ''; } catch(e) {}
       const label = FEED_LABELS[r.action] || String(r.action || '').replace(/_/g,' ');
       return `<div class="feed-item">
         <div class="feed-icon"><i class="fas fa-${icon}"></i></div>
@@ -2909,6 +2917,18 @@ async function saveNotifSettings() {
   } catch(e) { showToast(e.message, 'err'); }
 }
 
+// ── DEALS ────────────────────────────────────────────────────
+Deals.mount({
+  rootId: 'dealsRoot',
+  isAdmin: true,
+  canViewAll: true,
+  defaultOwner: 'all',
+  openLead: id => openLeadPanel(id),
+  onChange: () => {
+    if (_panelLead && document.getElementById('leadPanel').classList.contains('open')) { panelDirty = true; openLeadPanel(_panelLead.id); }
+  },
+});
+
 // ── ANRUFMODUS ───────────────────────────────────────────────
 async function startDialer() {
   let script = '', goal = 50;
@@ -3146,7 +3166,11 @@ async function saveInviteAdmin() {
 // ── DASHBOARD ─────────────────────────────────────────────────
 async function loadDashboard() {
   try {
-    const data = await api('GET', '/leads/dashboard');
+    const [data, deals] = await Promise.all([
+      api('GET', '/leads/dashboard'),
+      api('GET', '/deals/summary?owner=all').catch(() => null),
+    ]);
+    data.deals = deals;
     renderDashboard(data);
   } catch(e) {
     const el = document.getElementById('dashboardContent');
@@ -3188,7 +3212,26 @@ function renderDashboard(data) {
     </div>`;
   }).join('') : '<div class="wiki-empty" style="margin:14px 0"><i class="fas fa-user-clock"></i>Heute noch keine Closer-Aktivität.</div>';
 
-  el.innerHTML = `
+  const dl = data.deals;
+  const salesRows = dl && dl.per_owner.length ? dl.per_owner.map((o, i) => `
+    <div class="lb-row">
+      <span class="lb-rank">${i + 1}</span>
+      <span class="lb-avatar">${escHtml((o.full_name || '?')[0].toUpperCase())}</span>
+      <div class="lb-main"><div class="lb-name">${escHtml(o.full_name || '—')}</div></div>
+      <div class="lb-stats">
+        <div class="lb-stat"><b>${Deals.fmtShort(o.won_value)}</b><span>${o.won_count} gewonnen</span></div>
+        <div class="lb-stat"><b>${Deals.fmtShort(o.open_value)}</b><span>${o.open_count} offen</span></div>
+      </div>
+    </div>`).join('') : '<div class="wiki-empty" style="margin:14px 0"><i class="fas fa-handshake"></i>Noch keine Deals. Closer legen Deals im Lead oder im Anrufmodus an.</div>';
+  const dealsHtml = dl ? `
+    <div class="dash-kpis">
+      ${kpi('c-green', 'fa-euro-sign', 'Umsatz diesen Monat', Deals.fmtShort(dl.won_month.value), `<b>${dl.won_month.count}</b> gewonnene Deals`, "showTab('deals')")}
+      ${kpi('', 'fa-funnel-dollar', 'Offene Pipeline', Deals.fmtShort(dl.open.value), `<b>${dl.open.count}</b> offene Deals`, "showTab('deals')")}
+      ${kpi('c-ink', 'fa-balance-scale', 'Gewichtete Prognose', Deals.fmtShort(dl.open.weighted), 'Wert × Wahrscheinlichkeit', "showTab('deals')")}
+      ${kpi('c-copper', 'fa-calendar-check', 'Abschluss bis Monatsende', Deals.fmtShort(dl.closing_month.value), `<b>${dl.closing_month.count}</b> geplant · <b>${dl.lost_month.count}</b> verloren`, "showTab('deals')")}
+    </div>` : '';
+
+  el.innerHTML = `${dealsHtml}
     <div class="dash-kpis">
       ${kpi('', 'fa-phone-alt', 'Anrufe heute', n(data.callsToday), `Ø <b>${avgCalls}</b> pro Closer`, "showTab('tracking')")}
       ${kpi('c-green', 'fa-trophy', 'Abschlüsse diese Woche', n(data.winsThisWeek), 'Status „Kunde“ seit Montag', "showTab('leads')")}
@@ -3200,6 +3243,10 @@ function renderDashboard(data) {
         <div class="card-header"><div class="card-title"><i class="fas fa-medal"></i> Closer heute</div><span class="data-badge live">${closers.length} aktiv</span></div>
         <div class="lb-list">${rows}</div>
         <div class="lb-foot"><span>Team gesamt <b>${teamCalls}</b> Anrufe heute</span><span><b>${teamLeads}</b> zugewiesene Leads</span></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title"><i class="fas fa-euro-sign"></i> Umsatz je Closer (Monat)</div></div>
+        <div class="lb-list">${salesRows}</div>
       </div>
       <div class="card">
         <div class="card-header"><div class="card-title"><i class="fas fa-bolt"></i> Schnellzugriff</div></div>

@@ -23,6 +23,7 @@ const emailTemplateRoutes  = require('./routes/emailtemplates');
 const toolRoutes           = require('./routes/tools');
 const emailRoutes          = require('./routes/emails');
 const voiceRoutes          = require('./routes/voice');
+const dealRoutes           = require('./routes/deals');
 const { startReminderCron } = require('./cron/reminders');
 const { pollIncomingEmails } = require('./cron/emailPoller');
 const cron           = require('node-cron');
@@ -96,6 +97,7 @@ app.use('/api/email-templates', emailTemplateRoutes);
 app.use('/api/tools',           toolRoutes);
 app.use('/api/emails',          emailRoutes);
 app.use('/api/voice',           voiceRoutes);
+app.use('/api/deals',           dealRoutes);
 
 // ── SPA Fallback ──────────────────────────────────────────────
 app.get('*', (req, res) => {
@@ -347,6 +349,48 @@ migrate('CREATE INDEX idx_rem_lead_done ON reminders (lead_id, done_at)').catch(
 migrate('CREATE INDEX idx_rem_user_done ON reminders (user_id, done_at, remind_at)').catch(() => {});
 migrate('CREATE INDEX idx_call_logs_lead ON call_logs (lead_id, started_at)').catch(() => {});
 migrate('CREATE INDEX idx_call_logs_user ON call_logs (user_id, started_at)').catch(() => {});
+
+// ── Deals (Pipedrive-Prinzip: Pipeline-Phasen + Deals mit Wert) ──
+migrate(`CREATE TABLE IF NOT EXISTS deal_stages (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  name        VARCHAR(100) NOT NULL,
+  probability TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  rot_days    SMALLINT UNSIGNED NOT NULL DEFAULT 14,
+  sort_order  INT NOT NULL DEFAULT 0,
+  is_active   TINYINT(1) NOT NULL DEFAULT 1,
+  created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)`).then(() => migrate('SELECT COUNT(*) AS cnt FROM deal_stages')).then(([[{ cnt }]]) => {
+  if (cnt > 0) return;
+  // Standard-Pipeline, im CRM unter Deals → „Phasen bearbeiten“ anpassbar
+  const stages = [
+    ['Qualifiziert', 10, 1], ['Termin vereinbart', 30, 2], ['Angebot gesendet', 60, 3], ['Verhandlung', 80, 4],
+  ];
+  return Promise.all(stages.map(([name, prob, sort]) =>
+    migrate('INSERT INTO deal_stages (name, probability, sort_order) VALUES (?,?,?)', [name, prob, sort])));
+}).catch(() => {});
+migrate(`CREATE TABLE IF NOT EXISTS deals (
+  id                  INT AUTO_INCREMENT PRIMARY KEY,
+  lead_id             INT NOT NULL,
+  title               VARCHAR(200) NOT NULL,
+  value               DECIMAL(12,2) NOT NULL DEFAULT 0,
+  stage_id            INT NULL,
+  status              ENUM('open','won','lost') NOT NULL DEFAULT 'open',
+  owner_id            INT NULL,
+  expected_close_date DATE NULL,
+  won_at              DATETIME NULL,
+  lost_at             DATETIME NULL,
+  lost_reason         VARCHAR(300) NULL,
+  notes               TEXT NULL,
+  stage_changed_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_by          INT NULL,
+  created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE,
+  INDEX idx_deals_status_stage (status, stage_id),
+  INDEX idx_deals_owner_status (owner_id, status),
+  INDEX idx_deals_lead (lead_id),
+  INDEX idx_deals_won (status, won_at)
+)`).catch(() => {});
 
 // ── Cron: Activity Log nach 7 Tagen bereinigen ───────────────
 cron.schedule('0 3 * * *', async () => {
