@@ -364,6 +364,25 @@ migrate('CREATE INDEX idx_rem_user_done ON reminders (user_id, done_at, remind_a
 migrate('CREATE INDEX idx_call_logs_lead ON call_logs (lead_id, started_at)').catch(() => {});
 migrate('CREATE INDEX idx_call_logs_user ON call_logs (user_id, started_at)').catch(() => {});
 
+// ── Einmalig: Mails aufräumen, die nach der alten Logik im CRM gelandet sind ──
+// Ins CRM gehören nur Antworten auf Mails aus dem CRM. Entfernt werden
+//  - alle Kopien „unzugeordneter“ Mails (die Originale bleiben im Postfach)
+//  - eingehende Mails an Leads, denen vorher nie eine CRM-Mail geschickt wurde
+//    (können keine Antwort sein, wurden früher nur über die Absenderadresse zugeordnet)
+migrate("SELECT value FROM app_settings WHERE key_name='cleanup_mails_v1'").then(async ([rows]) => {
+  if (rows.length) return;
+  const [u] = await migrate('DELETE FROM unmatched_emails');
+  const [l] = await migrate(
+    `DELETE le FROM lead_emails le
+     WHERE le.direction = 'inbound' AND NOT EXISTS (
+       SELECT 1 FROM (SELECT lead_id, MIN(COALESCE(received_at, created_at)) AS first_out
+                      FROM lead_emails WHERE direction = 'outbound' GROUP BY lead_id) o
+       WHERE o.lead_id = le.lead_id AND o.first_out <= COALESCE(le.received_at, le.created_at))`);
+  await migrate("INSERT INTO app_settings (key_name, value) VALUES ('cleanup_mails_v1', ?)",
+    [JSON.stringify({ at: new Date().toISOString(), unmatched: u.affectedRows, lead_emails: l.affectedRows })]);
+  console.log(`Mail-Aufräumen: ${u.affectedRows} unzugeordnete, ${l.affectedRows} fremde Lead-Mails entfernt`);
+}).catch(e => console.error('Mail-Aufräumen fehlgeschlagen:', e.message));
+
 // ── Deals (Pipedrive-Prinzip: Pipeline-Phasen + Deals mit Wert) ──
 migrate(`CREATE TABLE IF NOT EXISTS deal_stages (
   id          INT AUTO_INCREMENT PRIMARY KEY,
