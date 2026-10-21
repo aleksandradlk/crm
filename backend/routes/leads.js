@@ -4,6 +4,8 @@ const { auth, adminOnly } = require('../middleware/auth');
 const { log } = require('../helpers/logger');
 const { sendLeadEmail } = require('../helpers/mailer');
 const { createDeal, markWon, markLost, parseValue } = require('./deals');
+const { refreshNorm, findDuplicates, normFields } = require('../helpers/dedupe');
+const { buildQueue } = require('../helpers/queue');
 
 const VALID_STATUSES = ['neu','kontaktiert','nicht_erreicht','kein_interesse','rueckruf','kunde'];
 
@@ -91,9 +93,20 @@ router.get('/', auth, async (req, res) => {
 
 // ── POST /api/leads — einzelnen Lead manuell anlegen ────
 router.post('/', auth, async (req, res) => {
-  const { company, ceo, email, phone, location, website, industry, notes } = req.body;
+  const { company, ceo, email, phone, location, website, industry, notes, force } = req.body;
   if (!company?.trim()) return res.status(400).json({ error: 'Firmenname ist erforderlich' });
   try {
+    // Dubletten-Check (Telefon, E-Mail, Website) – mit force=true trotzdem anlegen
+    if (!force) {
+      const duplicates = await findDuplicates({ phone, email, website });
+      if (duplicates.length) {
+        const d = duplicates[0];
+        return res.status(409).json({
+          error: `Mögliche Dublette: ${d.company}${d.assigned_name ? ' (betreut von ' + d.assigned_name + ')' : ' (nicht zugewiesen)'} – gleiche ${d.matched_on.replace(/,/g, ', ')}`,
+          duplicates,
+        });
+      }
+    }
     const [r] = await db.query(
       `INSERT INTO leads (company, ceo, email, phone, location, website, industry, notes,
         status, assigned_to, created_by, source, confidence)
@@ -103,6 +116,7 @@ router.post('/', auth, async (req, res) => {
        'neu', req.user.role === 'closer' ? req.user.id : null,
        req.user.id, 'manuell', 80]
     );
+    await refreshNorm(r.insertId);
     await log(req.user.id, 'lead_create_manual', 'lead', r.insertId, { company }, req.ip);
     res.status(201).json({ ok: true, id: r.insertId });
   } catch(e) {
@@ -186,68 +200,110 @@ router.get('/next', auth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: 'Fehler' }); }
 });
 
-// ── GET /api/leads/queue — Anrufmodus: wen rufe ich als Nächstes an? ──────────
-// Reihenfolge:
-//   1. fällige / überfällige Wiedervorlagen (älteste zuerst)
-//   2. Rückruf ohne Termin
-//   3. neue Leads (noch nie angerufen)
-//   4. nicht erreicht / kontaktiert, die heute noch nicht angerufen wurden
-// Leads mit einer Wiedervorlage in der Zukunft tauchen erst zum Termin wieder auf.
-router.get('/queue', auth, async (req, res) => {
-  const uid = req.user.id;
+// ── GET /api/leads/duplicates/check — Live-Prüfung beim Anlegen/Bearbeiten ──
+router.get('/duplicates/check', auth, async (req, res) => {
+  const { phone, email, website } = req.query;
+  res.json(await findDuplicates({ phone, email, website }, parseInt(req.query.exclude_id) || 0));
+});
+
+// ── GET /api/leads/duplicates — alle Dubletten-Gruppen (Admin) ──
+router.get('/duplicates', auth, adminOnly, async (req, res) => {
   try {
-    const [rows] = await db.query(
-      `SELECT l.id, l.company, l.ceo, l.phone, l.email, l.location, l.status,
-              l.website, l.industry,
-              r.id AS reminder_id, r.remind_at, r.note AS reminder_note,
-              lc.last_call_at, lc.call_count,
-              od.id AS deal_id, od.title AS deal_title, od.value AS deal_value, ds.name AS deal_stage,
-              (SELECT MIN(r2.remind_at) FROM reminders r2
-                WHERE r2.lead_id = l.id AND r2.user_id = ? AND r2.done_at IS NULL) AS next_reminder_at
-       FROM leads l
-       LEFT JOIN (
-         SELECT lead_id, MIN(id) AS id FROM reminders
-         WHERE user_id = ? AND done_at IS NULL AND remind_at <= NOW()
-         GROUP BY lead_id
-       ) rd ON rd.lead_id = l.id
-       LEFT JOIN reminders r ON r.id = rd.id
-       LEFT JOIN (
-         SELECT lead_id, MAX(started_at) AS last_call_at, COUNT(*) AS call_count
-         FROM call_logs GROUP BY lead_id
-       ) lc ON lc.lead_id = l.id
-       LEFT JOIN (
-         SELECT lead_id, MAX(id) AS id FROM deals WHERE status = 'open' GROUP BY lead_id
-       ) odm ON odm.lead_id = l.id
-       LEFT JOIN deals od ON od.id = odm.id
-       LEFT JOIN deal_stages ds ON ds.id = od.stage_id
-       WHERE l.assigned_to = ? AND l.archived_at IS NULL
-         AND l.status NOT IN ('kunde','kein_interesse')`,
-      [uid, uid, uid]
-    );
-    const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
-    const STATUS_RANK = { rueckruf: 1, neu: 2, nicht_erreicht: 3, kontaktiert: 4 };
-    const queue = [];
-    for (const l of rows) {
-      if (l.reminder_id) {
-        queue.push({ ...l, rank: 0, sortKey: new Date(l.remind_at).getTime(), reason: 'Wiedervorlage' });
-        continue;
-      }
-      if (l.next_reminder_at) continue;  // Termin in der Zukunft
-      if (l.last_call_at && new Date(l.last_call_at) >= startOfToday) continue;  // heute schon angerufen
-      const rank = STATUS_RANK[l.status] || 5;
-      const reason = { 1: 'Rückruf ohne Termin', 2: 'Neu', 3: 'Erneut versuchen', 4: 'Nachfassen' }[rank] || '';
-      // Neue Leads: älteste zuerst. Wiederholungen: am längsten nicht angerufen zuerst.
-      const sortKey = new Date(l.last_call_at || l.created_at || 0).getTime() || l.id;
-      queue.push({ ...l, rank, sortKey, reason });
+    const [pairs] = await db.query(
+      `SELECT 'Telefon' AS kind, GROUP_CONCAT(id ORDER BY id) AS ids FROM leads
+         WHERE archived_at IS NULL AND phone_norm IS NOT NULL GROUP BY phone_norm HAVING COUNT(*) > 1
+       UNION ALL
+       SELECT 'E-Mail', GROUP_CONCAT(id ORDER BY id) FROM leads
+         WHERE archived_at IS NULL AND email_norm IS NOT NULL GROUP BY email_norm HAVING COUNT(*) > 1
+       UNION ALL
+       SELECT 'Website', GROUP_CONCAT(id ORDER BY id) FROM leads
+         WHERE archived_at IS NULL AND domain_norm IS NOT NULL GROUP BY domain_norm HAVING COUNT(*) > 1
+       LIMIT 1000`);
+    // Überlappende Treffer (gleiche Nummer UND gleiche Domain …) zu einer Gruppe zusammenfassen
+    const parent = new Map();
+    const find = x => { while (parent.get(x) !== x) x = parent.get(x); return x; };
+    const kinds = new Map();
+    for (const p of pairs) {
+      const ids = String(p.ids).split(',').map(Number);
+      ids.forEach(id => { if (!parent.has(id)) parent.set(id, id); });
+      ids.slice(1).forEach(id => parent.set(find(id), find(ids[0])));
+      ids.forEach(id => kinds.set(id, new Set([...(kinds.get(id) || []), p.kind])));
     }
-    queue.sort((a, b) => a.rank - b.rank || a.sortKey - b.sortKey || a.id - b.id);
-    const withPhone = queue.filter(l => l.phone);
-    res.json({
-      total: queue.length,
-      without_phone: queue.length - withPhone.length,
-      due_followups: queue.filter(l => l.rank === 0).length,
-      leads: withPhone.slice(0, 300).map(({ rank, sortKey, ...l }) => l),
-    });
+    const groups = new Map();
+    for (const id of parent.keys()) {
+      const root = find(id);
+      if (!groups.has(root)) groups.set(root, []);
+      groups.get(root).push(id);
+    }
+    const allIds = [...parent.keys()];
+    if (!allIds.length) return res.json([]);
+    const [leads] = await db.query(
+      `SELECT l.id, l.company, l.ceo, l.phone, l.email, l.website, l.location, l.status, l.created_at,
+              u.full_name AS assigned_name,
+              (SELECT COUNT(*) FROM call_logs c WHERE c.lead_id = l.id) AS calls,
+              (SELECT COUNT(*) FROM deals d WHERE d.lead_id = l.id) AS deals
+       FROM leads l LEFT JOIN users u ON u.id = l.assigned_to WHERE l.id IN (?)`, [allIds]);
+    const byId = new Map(leads.map(l => [l.id, l]));
+    res.json([...groups.values()].slice(0, 200).map(ids => {
+      const k = new Set(); ids.forEach(id => (kinds.get(id) || []).forEach(x => k.add(x)));
+      return { matched_on: [...k], leads: ids.sort((a, b) => a - b).map(id => byId.get(id)).filter(Boolean) };
+    }));
+  } catch (e) {
+    console.error('Duplicates error:', e);
+    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
+  }
+});
+
+// ── POST /api/leads/:id/merge — Dublette in diesen Lead übernehmen (Admin) ──
+// Verlauf, Anrufe, Wiedervorlagen, Mails und Deals wandern zum Ziel-Lead, leere
+// Felder werden ergänzt, die Dublette wird archiviert (wiederherstellbar).
+router.post('/:id/merge', auth, adminOnly, async (req, res) => {
+  const targetId = parseInt(req.params.id);
+  const fromId = parseInt(req.body.from_id);
+  if (!fromId || fromId === targetId) return res.status(400).json({ error: 'Ungültige Dublette' });
+  try {
+    const [[a]] = await db.query('SELECT * FROM leads WHERE id=? AND archived_at IS NULL', [targetId]);
+    const [[b]] = await db.query('SELECT * FROM leads WHERE id=? AND archived_at IS NULL', [fromId]);
+    if (!a || !b) return res.status(404).json({ error: 'Lead nicht gefunden' });
+    for (const t of ['comments', 'reminders', 'call_logs', 'lead_emails', 'deals']) {
+      await db.query(`UPDATE ${t} SET lead_id=? WHERE lead_id=?`, [targetId, fromId]);
+    }
+    await db.query('UPDATE chat_rooms SET lead_id=? WHERE lead_id=?', [targetId, fromId]).catch(() => {});
+    const fill = {};
+    for (const f of ['ceo', 'email', 'phone', 'location', 'website', 'linkedin_url', 'industry', 'employees', 'revenue']) {
+      if (!a[f] && b[f]) fill[f] = b[f];
+    }
+    if (b.notes && b.notes !== a.notes) fill.notes = [a.notes, b.notes].filter(Boolean).join('\n\n');
+    if (!a.assigned_to && b.assigned_to) fill.assigned_to = b.assigned_to;
+    if (a.status === 'neu' && b.status !== 'neu') fill.status = b.status;
+    if (Object.keys(fill).length) {
+      await db.query(`UPDATE leads SET ${Object.keys(fill).map(k => k + '=?').join(',')} WHERE id=?`,
+        [...Object.values(fill), targetId]);
+    }
+    await db.query('UPDATE leads SET archived_at=NOW(), archived_by=?, archive_reason=? WHERE id=?',
+      [req.user.id, `Dublette – zusammengeführt mit #${targetId} ${a.company || ''}`.slice(0, 500), fromId]);
+    await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',
+      [targetId, req.user.id, `🔗 Dublette zusammengeführt: ${b.company || '#' + fromId}`]);
+    await refreshNorm(targetId);
+    await log(req.user.id, 'lead_merge', 'lead', targetId, { from_id: fromId, company: b.company }, req.ip);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('Merge error:', e);
+    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
+  }
+});
+
+// ── GET /api/leads/queue — Anrufmodus: wen rufe ich als Nächstes an? ──────────
+// Reihenfolge siehe helpers/queue.js. ?list=<id> nutzt die Filter einer Wählliste.
+router.get('/queue', auth, async (req, res) => {
+  try {
+    let filters = null;
+    if (req.query.list) {
+      const list = await require('./calllists').loadVisible(req.user, parseInt(req.query.list));
+      if (!list) return res.status(404).json({ error: 'Wählliste nicht gefunden' });
+      filters = list.filters;
+    }
+    res.json(await buildQueue(req.user, filters));
   } catch (e) {
     console.error('Queue error:', e);
     res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
@@ -282,8 +338,19 @@ router.post('/:id/outcome', auth, async (req, res) => {
   try {
     const [[lead]] = await db.query('SELECT id, status, phone, assigned_to FROM leads WHERE id=? AND archived_at IS NULL', [leadId]);
     if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
+    // Freier Lead (z.B. aus einer Wählliste): wer ihn anruft, übernimmt ihn
+    if (lead.assigned_to === null) {
+      const [r] = await db.query('UPDATE leads SET assigned_to=? WHERE id=? AND assigned_to IS NULL', [req.user.id, leadId]);
+      if (r.affectedRows) {
+        lead.assigned_to = req.user.id;
+        await log(req.user.id, 'lead_assign', 'lead', leadId, { assigned_to: req.user.id, via: 'anrufmodus' }, req.ip);
+      } else {
+        const [[cur]] = await db.query('SELECT assigned_to FROM leads WHERE id=?', [leadId]);
+        lead.assigned_to = cur?.assigned_to ?? null;
+      }
+    }
     if (req.user.role !== 'admin' && lead.assigned_to !== req.user.id)
-      return res.status(403).json({ error: 'Nur eigene Leads bearbeitbar' });
+      return res.status(403).json({ error: 'Dieser Lead wurde inzwischen von einem Kollegen übernommen' });
 
     // 1) Anruf dokumentieren (bestehenden Eintrag aus "Anrufen" ergänzen oder neu anlegen)
     const dur = Number.isFinite(parseInt(duration_seconds)) && parseInt(duration_seconds) >= 0
@@ -399,29 +466,32 @@ router.post('/import', auth, adminOnly, multerMem.single('csv'), async (req, res
     const iMail = idx(['email','e-mail','mail']);
     const iWeb  = idx(['website','web','url','homepage']);
     if (iComp < 0) return res.status(400).json({ error: 'Spalte "Firmenname" nicht gefunden' });
-    let imported = 0, skipped = 0;
+    let imported = 0, skipped = 0, duplicates = 0;
+    const seen = new Set();  // Dubletten innerhalb der Datei
     for (let i = 1; i < rows.length; i++) {
       const cols = rows[i].map(c => c.trim());
       const company = iComp >= 0 ? cols[iComp] : '';
       if (!company) { skipped++; continue; }
       const phone = iPhone >= 0 ? cols[iPhone] : null;
       const email = iMail >= 0 ? cols[iMail] : null;
-      const exists = phone || email ? await db.query(
-        `SELECT id FROM leads WHERE archived_at IS NULL AND (${phone?'phone=?':'1=0'}${email?' OR email=?':''})`,
-        [phone, email].filter(Boolean)
-      ).then(([r]) => r.length > 0).catch(() => false) : false;
-      if (exists) { skipped++; continue; }
-      const ok = await db.query(
+      const website = iWeb >= 0 ? cols[iWeb] : null;
+      const n = normFields({ phone, email, website });
+      const keys = [n.phone_norm && 'p:' + n.phone_norm, n.email_norm && 'e:' + n.email_norm, n.domain_norm && 'd:' + n.domain_norm].filter(Boolean);
+      if (keys.some(k => seen.has(k)) || (await findDuplicates({ phone, email, website }, 0, 1)).length) {
+        duplicates++; continue;
+      }
+      keys.forEach(k => seen.add(k));
+      const id = await db.query(
         `INSERT INTO leads (company, industry, location, phone, email, website, status, assigned_to, created_by, source)
          VALUES (?,?,?,?,?,?,?,?,?,?)`,
         [company, iIndu>=0?cols[iIndu]||null:null, iLoc>=0?cols[iLoc]||null:null,
          phone||null, email||null, iWeb>=0?cols[iWeb]||null:null,
          'neu', assignTo, req.user.id, 'csv-import']
-      ).then(() => true, () => false);
-      if (ok) imported++; else skipped++;
+      ).then(([r]) => r.insertId, () => null);
+      if (id) { await refreshNorm(id); imported++; } else skipped++;
     }
-    await log(req.user.id, 'leads_csv_import', 'lead', null, { imported, skipped }, req.ip);
-    res.json({ ok: true, imported, skipped });
+    await log(req.user.id, 'leads_csv_import', 'lead', null, { imported, skipped, duplicates }, req.ip);
+    res.json({ ok: true, imported, skipped: skipped + duplicates, duplicates });
   } catch(e) { console.error('CSV import error:', e); res.status(500).json({ error: 'Importfehler: ' + e.message }); }
 });
 
@@ -435,7 +505,9 @@ router.post('/bulk', auth, async (req, res) => {
 
   try {
     const inserted = [];
+    const skippedDuplicates = [];
     for (const l of leads) {
+      if ((await findDuplicates(l, 0, 1)).length) { skippedDuplicates.push(l.company); continue; }
       const [r] = await db.query(
         `INSERT INTO leads
           (company, ceo, email, phone, location, website, linkedin_url,
@@ -448,11 +520,12 @@ router.post('/bulk', auth, async (req, res) => {
          l.source||'web', l.confidence||50, l.notes||null,
          'neu', assigned_to||null, req.user.id]
       );
+      await refreshNorm(r.insertId);
       inserted.push(r.insertId);
     }
     await log(req.user.id, 'leads_bulk_create', 'lead', null,
-      { count: inserted.length, assigned_to }, req.ip);
-    res.status(201).json({ ok: true, ids: inserted });
+      { count: inserted.length, assigned_to, duplicates: skippedDuplicates.length }, req.ip);
+    res.status(201).json({ ok: true, ids: inserted, skipped_duplicates: skippedDuplicates });
   } catch(e) {
     console.error('Bulk insert error:', e);
     res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
@@ -570,7 +643,8 @@ router.get('/:id', auth, async (req, res) => {
      LEFT JOIN users u ON u.id = d.owner_id
      WHERE d.lead_id = ? ORDER BY d.status = 'open' DESC, d.created_at DESC`, [id]
   ).catch(() => [[]]);
-  res.json({ ...lead, comments, reminders, call_logs, email_thread, deals });
+  const duplicates = await findDuplicates(lead, lead.id).catch(() => []);
+  res.json({ ...lead, comments, reminders, call_logs, email_thread, deals, duplicates });
 });
 
 // ── PATCH /api/leads/:id/status ──────────────────────────────
@@ -621,6 +695,7 @@ router.patch('/:id', auth, async (req, res) => {
   if (!updates.length) return res.status(400).json({ error: 'Nichts zu aktualisieren' });
   params.push(id);
   await db.query(`UPDATE leads SET ${updates.join(',')} WHERE id=?`, params);
+  if (['phone', 'email', 'website'].some(k => req.body[k] !== undefined)) await refreshNorm(id);
   await log(req.user.id, 'lead_update', 'lead', id, req.body, req.ip);
   res.json({ ok: true });
 });

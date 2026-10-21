@@ -36,13 +36,14 @@ const Dialer = {
     this._body('<div class="dl-empty"><i class="fas fa-spinner fa-spin"></i></div>');
     try {
       const [q, dash] = await Promise.all([
-        api('GET', '/leads/queue'),
+        api('GET', '/leads/queue' + (opts.listId ? `?list=${opts.listId}` : '')),
         api('GET', '/leads/dashboard/closer').catch(() => ({})),
       ]);
       this.queue = q.leads || [];
       this.meta = q;
       this.callsToday = dash.callsToday || 0;
       this.idx = 0;
+      document.getElementById('dlListName').textContent = opts.listName ? `· ${opts.listName}` : '';
       this._show();
     } catch (e) {
       this._body(`<div class="dl-empty"><i class="fas fa-exclamation-triangle"></i>${escHtml(e.message)}</div>`);
@@ -65,7 +66,7 @@ const Dialer = {
     el.className = 'dialer';
     el.innerHTML = `
       <div class="dl-top">
-        <div class="dl-title"><i class="fas fa-headset"></i> Anrufmodus</div>
+        <div class="dl-title"><i class="fas fa-headset"></i> Anrufmodus <span class="dl-listname" id="dlListName"></span></div>
         <div class="dl-progress" id="dlProgress"></div>
         <div class="dl-goal" id="dlGoal"></div>
         <button class="btn btn-ghost btn-sm" onclick="Dialer.close()" title="Schließen (Esc)"><i class="fas fa-times"></i> Beenden</button>
@@ -120,6 +121,7 @@ const Dialer = {
       <div class="dl-main">
         <div class="dl-card dl-lead">
           <div class="dl-reason ${reasonCls}"><i class="fas ${l.reminder_id ? 'fa-bell' : 'fa-circle'}"></i>${reasonText}</div>
+          ${!l.assigned_to ? '<div class="dl-free"><i class="fas fa-hand-pointer"></i>Freier Lead – wird beim Speichern dir zugewiesen</div>' : ''}
           <h2 class="dl-company">${escHtml(l.company || '—')}</h2>
           ${l.ceo ? `<div class="dl-contact"><i class="fas fa-user"></i>${escHtml(l.ceo)}</div>` : ''}
           <div class="dl-phone-row">

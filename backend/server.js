@@ -24,6 +24,8 @@ const toolRoutes           = require('./routes/tools');
 const emailRoutes          = require('./routes/emails');
 const voiceRoutes          = require('./routes/voice');
 const dealRoutes           = require('./routes/deals');
+const callListRoutes       = require('./routes/calllists');
+const todayRoutes          = require('./routes/today');
 const { startReminderCron } = require('./cron/reminders');
 const { pollIncomingEmails } = require('./cron/emailPoller');
 const cron           = require('node-cron');
@@ -110,6 +112,8 @@ app.use('/api/tools',           toolRoutes);
 app.use('/api/emails',          emailRoutes);
 app.use('/api/voice',           voiceRoutes);
 app.use('/api/deals',           dealRoutes);
+app.use('/api/call-lists',      callListRoutes);
+app.use('/api/today',           todayRoutes);
 
 // ── SPA Fallback ──────────────────────────────────────────────
 app.get('*', (req, res) => {
@@ -383,6 +387,29 @@ migrate("SELECT value FROM app_settings WHERE key_name='cleanup_mails_v1'").then
   console.log(`Mail-Aufräumen: ${u.affectedRows} unzugeordnete, ${l.affectedRows} fremde Lead-Mails entfernt`);
 }).catch(e => console.error('Mail-Aufräumen fehlgeschlagen:', e.message));
 
+// ── Dubletten-Erkennung: normalisierte Kontaktdaten je Lead ──
+migrate('ALTER TABLE leads ADD COLUMN phone_norm VARCHAR(20) NULL').catch(() => {});
+migrate('ALTER TABLE leads ADD COLUMN email_norm VARCHAR(150) NULL').catch(() => {});
+migrate('ALTER TABLE leads ADD COLUMN domain_norm VARCHAR(150) NULL').catch(() => {});
+migrate('ALTER TABLE leads ADD COLUMN norm_v TINYINT NULL').catch(() => {});
+migrate('CREATE INDEX idx_leads_phone_norm ON leads (phone_norm)').catch(() => {});
+migrate('CREATE INDEX idx_leads_email_norm ON leads (email_norm)').catch(() => {});
+migrate('CREATE INDEX idx_leads_domain_norm ON leads (domain_norm)').catch(() => {});
+migrate('CREATE INDEX idx_leads_norm_v ON leads (norm_v)').catch(() => {});
+
+// ── Wähllisten (gespeicherte Filter für den Anrufmodus) ──
+migrate(`CREATE TABLE IF NOT EXISTS call_lists (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  user_id    INT NOT NULL,
+  name       VARCHAR(100) NOT NULL,
+  filters    TEXT NOT NULL,
+  shared     TINYINT(1) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_call_lists_user (user_id)
+)`).catch(() => {});
+// Art der Wiedervorlage, z.B. 'missed_call' für verpasste eingehende Anrufe
+migrate('ALTER TABLE reminders ADD COLUMN kind VARCHAR(20) NULL').catch(() => {});
+
 // ── Deals (Pipedrive-Prinzip: Pipeline-Phasen + Deals mit Wert) ──
 migrate(`CREATE TABLE IF NOT EXISTS deal_stages (
   id          INT AUTO_INCREMENT PRIMARY KEY,
@@ -442,6 +469,10 @@ _migChain.then(() => app.listen(PORT, () => {
   console.log(`LeadHunter Pro läuft auf Port ${PORT}`);
   console.log(`Umgebung: ${process.env.NODE_ENV || 'development'}`);
   startReminderCron();
+  // Normalisierte Kontaktdaten für vorhandene Leads nachrechnen (läuft im Hintergrund)
+  require('./helpers/dedupe').backfillNorm()
+    .then(n => { if (n) console.log(`Dubletten-Index: ${n} Leads aufbereitet`); })
+    .catch(e => console.error('Dubletten-Index fehlgeschlagen:', e.message));
   // IMAP-Polling alle 2 Minuten
   cron.schedule('*/2 * * * *', pollIncomingEmails);
   // Erster Abruf leicht verzögert, damit die App nach dem Start sofort erreichbar ist
