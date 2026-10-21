@@ -39,22 +39,15 @@ function htmlToText(html) {
     .replace(/\n{3,}/g, '\n\n');
 }
 
-async function findLeadId(parsed, subject, fromAddr) {
-  // Stufe 1: X-CRM-Lead-ID Header (direkter Treffer)
-  const crmHeader = parsed.headers?.get('x-crm-lead-id');
-  if (crmHeader) {
-    const cid = parseInt(String(crmHeader).trim());
-    if (!isNaN(cid)) {
-      const [[row]] = await db.query(
-        'SELECT id FROM leads WHERE id=? AND archived_at IS NULL LIMIT 1', [cid]
-      );
-      if (row) return row.id;
-    }
-  }
-
-  // Stufe 2: In-Reply-To / References gegen gespeicherte Message-IDs
-  // (greift, wenn der Kunde in seinem Mailprogramm auf „Antworten“ drückt)
-  const refIds = extractMessageIds(parsed.inReplyTo, parsed.references);
+// Eine Mail gehört nur dann ins CRM, wenn sie eine Antwort auf eine Mail aus dem
+// CRM ist. Alle anderen Mails an das Postfach (Newsletter, Rechnungen, private
+// Anfragen …) werden weder geladen noch gespeichert und sind für niemanden im CRM sichtbar.
+//   1. In-Reply-To / References verweisen auf eine aus dem CRM gesendete Mail
+//      (Kunde hat in seinem Mailprogramm auf „Antworten“ geklickt)
+//   2. Fallback: Lead-Kennung [NF-123] im Betreff, falls das Mailprogramm die
+//      Antwort-Header nicht mitschickt
+async function findLeadId({ inReplyTo, references, subject }) {
+  const refIds = extractMessageIds(inReplyTo, references);
   if (refIds.length) {
     const placeholders = refIds.map(() => '?').join(',');
     const [[row]] = await db.query(
@@ -65,20 +58,10 @@ async function findLeadId(parsed, subject, fromAddr) {
     );
     if (row) return row.lead_id;
   }
-
-  // Stufe 3: [NF-{id}] im Betreff
-  const match = subject.match(/\[NF-(\d+)\]/i);
-  if (match) {
+  const match = String(subject || '').match(/\[NF-(\d+)\]/i);
+  if (match && /^\s*(re|aw|antw|antwort|wg|fw|fwd)\s*:/i.test(subject)) {
     const [[row]] = await db.query(
       'SELECT id FROM leads WHERE id=? AND archived_at IS NULL LIMIT 1', [parseInt(match[1])]
-    );
-    if (row) return row.id;
-  }
-
-  // Stufe 4: E-Mail-Adresse des Absenders (Fallback)
-  if (fromAddr) {
-    const [[row]] = await db.query(
-      'SELECT id FROM leads WHERE LOWER(email)=? AND archived_at IS NULL ORDER BY updated_at DESC LIMIT 1', [fromAddr]
     );
     if (row) return row.id;
   }
@@ -105,7 +88,7 @@ async function pollIncomingEmails() {
   _running = true;
 
   const ownAddresses = [user, process.env.SMTP_USER].filter(Boolean).map(a => a.toLowerCase());
-  const stats = { checked: 0, matched: 0, unmatched: 0, failed: 0, pending: 0 };
+  const stats = { checked: 0, matched: 0, ignored: 0, failed: 0, pending: 0 };
 
   try {
     // Letzten erfolgreichen Abruf aus DB lesen
@@ -138,23 +121,26 @@ async function pollIncomingEmails() {
       try {
         const uids = await client.search({ since }, { uid: true });
         if (uids && uids.length > 0) {
-          // Schritt 1: nur Umschläge holen (leichtgewichtig). Bereits verarbeitete
-          // Mails (Message-ID) und eigene Mails werden hier schon aussortiert,
-          // damit sie nicht bei jedem Abruf erneut komplett geladen werden.
-          const envelopes = [];
-          for await (const msg of client.fetch(uids, { envelope: true }, { uid: true })) {
+          // Schritt 1: nur Umschläge + References-Header holen (leichtgewichtig) und
+          // hier schon entscheiden, ob die Mail eine Antwort auf eine CRM-Mail ist.
+          // Nur diese werden danach komplett geladen.
+          const candidates = [];
+          for await (const msg of client.fetch(uids, { envelope: true, headers: ['references'] }, { uid: true })) {
             const messageId = msg.envelope?.messageId;
             const from = (msg.envelope?.from?.[0]?.address || '').toLowerCase();
-            if (messageId && !ownAddresses.includes(from)) envelopes.push({ uid: msg.uid, messageId });
+            if (!messageId || ownAddresses.includes(from)) continue;
+            const refHeader = msg.headers ? msg.headers.toString().replace(/^references:\s*/i, '') : '';
+            candidates.push({ uid: msg.uid, messageId, inReplyTo: msg.envelope?.inReplyTo, references: refHeader, subject: msg.envelope?.subject || '' });
           }
           const newUids = [];
-          for (const { uid, messageId } of envelopes) {
-            const [[existing]] = await db.query(
-              `SELECT 1 AS x FROM lead_emails WHERE message_id=?
-               UNION SELECT 1 FROM unmatched_emails WHERE message_id=? LIMIT 1`,
-              [messageId, messageId]
-            );
-            if (!existing) newUids.push(uid);
+          const leadByUid = new Map();
+          for (const c of candidates) {
+            const [[existing]] = await db.query('SELECT 1 AS x FROM lead_emails WHERE message_id=? LIMIT 1', [c.messageId]);
+            if (existing) continue;
+            const leadId = await findLeadId(c);
+            if (!leadId) { stats.ignored++; continue; }
+            leadByUid.set(c.uid, leadId);
+            newUids.push(c.uid);
           }
           newUids.sort((a, b) => a - b);
 
@@ -187,17 +173,7 @@ async function pollIncomingEmails() {
               const bodyText = (parsed.text || htmlToText(parsed.html) || '')
                 .replace(/\r\n/g, '\n').trim().slice(0, 60000);
 
-              const leadId = await findLeadId(parsed, subject, fromAddr);
-
-              if (!leadId) {
-                await db.query(
-                  `INSERT IGNORE INTO unmatched_emails (from_address, from_name, to_address, subject, body_text, message_id, received_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                  [fromAddr, fromName || null, toAddr, subject, bodyText, messageId, receivedAt]
-                );
-                stats.unmatched++;
-                continue;
-              }
+              const leadId = leadByUid.get(uid);
 
               await db.query(
                 `INSERT IGNORE INTO lead_emails (lead_id, direction, from_address, from_name, to_address, subject, body_text, message_id, received_at, is_read)

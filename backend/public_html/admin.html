@@ -402,7 +402,7 @@
     <!-- ── TAB: POSTEINGANG ──────────────────────────── -->
     <div id="tab-inbox" class="tab-panel">
       <div class="page-header">
-        <div><h1 data-eyebrow="Hauptnavigation">Posteingang</h1><p class="page-desc">Alle Kunden-E-Mails, die im CRM-Postfach eingehen. Antworten werden automatisch dem richtigen Lead zugeordnet.</p></div>
+        <div><h1 data-eyebrow="Hauptnavigation">Posteingang</h1><p class="page-desc">Antworten von Kunden auf E-Mails aus dem CRM. Andere Mails an das Postfach erscheinen hier bewusst nicht.</p></div>
         <div class="page-actions">
           <div class="view-toggle">
             <button id="inboxFilterUnread" class="active" onclick="setInboxFilter('unread')">Ungelesen</button>
@@ -414,16 +414,6 @@
       <div class="inbox-status" id="inboxMailStatus" style="margin-bottom:12px"></div>
       <div id="inboxList"></div>
 
-      <section class="wiki-section" style="margin-top:24px">
-        <div class="wiki-section-head">
-          <div class="wiki-section-title"><i class="fas fa-envelope-open-text"></i> Unzugeordnete E-Mails</div>
-          <button class="btn btn-ghost btn-sm btn-icon" onclick="loadUnmatchedEmails()" title="Aktualisieren"><i class="fas fa-sync"></i></button>
-        </div>
-        <p class="page-desc" style="margin:-4px 0 10px">Mails, die keinem Lead zugeordnet werden konnten (z.B. neue Absenderadresse). Per „Zuordnen“ landen sie beim Lead – künftige Mails dieses Absenders dann automatisch.</p>
-        <div class="card" id="unmatchedEmailsCard">
-          <div class="wiki-empty" style="border:none;background:transparent"><i class="fas fa-spinner fa-spin"></i>Wird geladen …</div>
-        </div>
-      </section>
     </div>
 
     <!-- ── TAB: WIKI ─────────────────────────────────── -->
@@ -592,17 +582,6 @@
 </div>
 
 <!-- EMAIL MODAL -->
-<div class="modal-overlay" id="assignMailModal" onclick="if(event.target===this)closeAssignMail()">
-  <div class="modal" style="max-width:460px">
-    <div class="modal-head">
-      <h2><i class="fas fa-link" style="color:var(--accent);margin-right:8px"></i>E-Mail einem Lead zuordnen</h2>
-      <button class="modal-x" onclick="closeAssignMail()" title="Schließen"><i class="fas fa-times"></i></button>
-    </div>
-    <div class="form-group"><input type="text" id="assignMailSearch" class="form-control" placeholder="Firma, Ansprechpartner oder E-Mail suchen …" oninput="renderAssignMailResults()"></div>
-    <div id="assignMailResults" class="chat-list" style="max-height:320px;overflow-y:auto"></div>
-  </div>
-</div>
-
 <div class="modal-overlay" id="adminEmailModal">
   <div class="modal modal-flex" style="max-width:560px">
     <div class="modal-header">
@@ -830,7 +809,7 @@ function showTab(name) {
   if (name === 'deals')    Deals.show();
   if (name === 'users')    { loadUsers(); loadAppSettings(); }
   if (name === 'tracking') loadTracking();
-  if (name === 'inbox')    { loadInbox(); loadUnmatchedEmails(); loadMailStatus(); }
+  if (name === 'inbox')    { loadInbox(); loadMailStatus(); }
   if (name === 'wiki')     { loadWiki(); loadEmailTemplatesForAdmin(); }
   if (name === 'chat')     loadChats();
   if (name === 'feedback') loadFeedback();
@@ -2081,69 +2060,6 @@ function downloadActivityLog() {
     .catch(e => showToast('Download fehlgeschlagen', 'err'));
 }
 
-// ── UNZUGEORDNETE E-MAILS ─────────────────────────────────────
-async function loadUnmatchedEmails() {
-  const card = document.getElementById('unmatchedEmailsCard');
-  if (!card) return;
-  try {
-    const rows = await api('GET', '/leads/unmatched-emails');
-    if (!rows.length) {
-      card.innerHTML = '<div style="color:var(--text3);padding:20px;text-align:center;font-size:13px"><i class="fas fa-check-circle" style="color:var(--green);margin-right:6px"></i>Keine unzugeordneten E-Mails</div>';
-      return;
-    }
-    card.innerHTML = `
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Eingang</th><th>Von</th><th>Betreff</th><th>Nachricht</th><th></th></tr></thead>
-          <tbody>
-            ${rows.map(m => `
-              <tr>
-                <td style="white-space:nowrap;font-size:12px">${fmtDate(m.received_at||m.created_at)}</td>
-                <td style="font-size:12px">${m.from_name ? `<div style="font-weight:600">${escHtml(m.from_name)}</div>` : ''}${escHtml(m.from_address||'')}</td>
-                <td style="font-size:12px">${escHtml(m.subject||'(kein Betreff)')}</td>
-                <td style="font-size:12px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml((m.body_text||'').slice(0,120))}</td>
-                <td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="openAssignMail(${parseInt(m.id)})" title="Einem Lead zuordnen"><i class="fas fa-link"></i> Zuordnen</button>
-                  <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteUnmatchedEmail(${parseInt(m.id)})" title="Löschen"><i class="fas fa-trash"></i></button></td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>`;
-  } catch(e) {
-    card.innerHTML = `<div style="color:var(--red);padding:16px;font-size:13px">Fehler: ${escHtml(e.message)}</div>`;
-  }
-}
-// ── Unzugeordnete E-Mail einem Lead zuordnen ─────────────────
-let _assignMailId = null;
-async function openAssignMail(id) {
-  _assignMailId = id;
-  if (!allLeads.length) { try { await loadLeads(); } catch (_) {} }
-  document.getElementById('assignMailSearch').value = '';
-  renderAssignMailResults();
-  document.getElementById('assignMailModal').classList.add('open');
-  setTimeout(() => document.getElementById('assignMailSearch').focus(), 50);
-}
-function closeAssignMail() { document.getElementById('assignMailModal').classList.remove('open'); _assignMailId = null; }
-function renderAssignMailResults() {
-  const q = document.getElementById('assignMailSearch').value.trim().toLowerCase();
-  const hits = (q ? allLeads.filter(l => [l.company, l.ceo, l.email, l.location].some(v => (v || '').toLowerCase().includes(q))) : allLeads).slice(0, 30);
-  document.getElementById('assignMailResults').innerHTML = hits.length
-    ? hits.map(l => `<div class="chat-item" style="padding:8px 10px" onclick="assignMailToLead(${l.id})">
-        <div class="chat-main"><div class="chat-title"><span class="t">${escHtml(l.company || '—')}</span></div>
-        <div class="chat-meta"><span class="t">${escHtml([l.ceo, l.email, l.location].filter(Boolean).join(' · '))}</span></div></div>
-        <i class="fas fa-link chat-chevron"></i></div>`).join('')
-    : '<div style="color:var(--text3);font-size:12px;padding:10px">Kein Lead gefunden</div>';
-}
-async function assignMailToLead(leadId) {
-  if (!_assignMailId) return;
-  try {
-    await api('POST', `/leads/unmatched-emails/${_assignMailId}/assign`, { lead_id: leadId });
-    showToast('E-Mail zugeordnet ✓');
-    closeAssignMail();
-    loadUnmatchedEmails(); loadInbox(); Inbox.refreshBadge();
-  } catch (e) { showToast(e.message, 'err'); }
-}
-
 // ── POSTEINGANG ──────────────────────────────────────────────
 let _inboxFilter = 'unread';
 function setInboxFilter(f) {
@@ -2185,24 +2101,16 @@ async function pollMailboxNow() {
     const r = await api('POST', '/emails/poll');
     const st = r.status || {};
     if (st.ok === false) showToast('Abruf fehlgeschlagen: ' + (st.error || ''), 'err');
-    else showToast(`Abruf fertig ✓ ${st.matched || 0} zugeordnet, ${st.unmatched || 0} unzugeordnet`);
+    else showToast(`Abruf fertig ✓ ${st.matched || 0} neue Kundenantworten`);
   } catch (e) { showToast(e.message, 'err'); }
-  loadMailStatus(); loadInbox(); loadUnmatchedEmails(); Inbox.refreshBadge();
+  loadMailStatus(); loadInbox(); Inbox.refreshBadge();
 }
 async function openInboxMail(leadId) {
   await openLeadPanel(leadId);
   if (document.getElementById('tab-inbox')?.classList.contains('active')) loadInbox();
 }
 function onInboxChanged() {
-  if (document.getElementById('tab-inbox')?.classList.contains('active')) { loadInbox(); loadUnmatchedEmails(); }
-}
-
-async function deleteUnmatchedEmail(id) {
-  if (!confirm('Eintrag löschen?')) return;
-  try {
-    await api('DELETE', `/leads/unmatched-emails/${id}`);
-    loadUnmatchedEmails();
-  } catch(e) { showToast(e.message,'err'); }
+  if (document.getElementById('tab-inbox')?.classList.contains('active')) loadInbox();
 }
 
 // ── CSV EXPORT ────────────────────────────────────────────────

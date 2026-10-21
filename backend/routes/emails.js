@@ -2,11 +2,10 @@ const router = require('express').Router();
 const db     = require('../db');
 const { auth, adminOnly } = require('../middleware/auth');
 
-// Posteingang: Admin sieht alle Kundenmails, Closer nur die seiner Leads.
-// Mails an noch unzugewiesene Leads sieht jeder, der den Lead öffnen darf.
+// Posteingang: Admin sieht alle Kundenantworten, Vertriebler nur die zu ihren
+// eigenen Leads – nie Mails von Leads anderer Kollegen.
 function inboxScope(user) {
   if (user.role === 'admin') return { where: '1=1', params: [] };
-  if (user.can_view_all_leads) return { where: '(l.assigned_to = ? OR l.assigned_to IS NULL)', params: [user.id] };
   return { where: 'l.assigned_to = ?', params: [user.id] };
 }
 
@@ -53,9 +52,9 @@ router.get('/unread-count', auth, async (req, res) => {
 });
 
 async function canAccessLead(user, leadId) {
-  if (user.role === 'admin' || user.can_view_all_leads) return true;
+  if (user.role === 'admin') return true;
   const [[lead]] = await db.query('SELECT assigned_to FROM leads WHERE id=?', [leadId]);
-  return !!lead && (lead.assigned_to === user.id || lead.assigned_to === null);
+  return !!lead && lead.assigned_to === user.id;
 }
 
 // ── POST /api/emails/lead/:leadId/read — alle Mails eines Leads als gelesen ──

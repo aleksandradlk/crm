@@ -87,30 +87,30 @@ server {
 
 ## Schritt 6 — Ersten Admin anlegen
 
-1. Browser öffnen: `https://leads.novaflowservices.de/setup.html`
+1. Browser öffnen: `https://leads.novaflowservices.de/setup`
 2. Admin-Account ausfüllen und erstellen
-3. Mit `/login.html` anmelden
+3. Mit `/login` anmelden
 
 ---
 
 ## E-Mail-Eingang (Kundenantworten im CRM)
 
 Das CRM ruft alle 2 Minuten das Postfach aus `IMAP_USER` ab (Standard: `info@novaflowservices.de`).
-Eingehende Mails werden automatisch dem passenden Lead zugeordnet:
+Ins CRM kommen **nur Antworten auf Mails, die aus dem CRM verschickt wurden**:
 
-1. Antwort auf eine Mail aus dem CRM (Kunde drückt „Antworten“, erkannt über `In-Reply-To`/`References`)
-2. Lead-Kennung im Betreff, z.B. `[NF-123]`
-3. Absenderadresse = E-Mail-Adresse eines Leads
+1. Der Kunde drückt in seinem Mailprogramm „Antworten“ (erkannt über `In-Reply-To`/`References`)
+2. Fallback: Antwort („Re:“/„AW:“) mit Lead-Kennung im Betreff, z.B. `[NF-123]`
 
-Zugeordnete Mails erscheinen im **Posteingang** (mit Ungelesen-Zähler) und im E-Mail-Verlauf des Leads,
-dort mit „Antworten“-Button. Nicht zuordenbare Mails landen beim Admin unter
-**Posteingang → Unzugeordnete E-Mails** und lassen sich dort per „Zuordnen“ einem Lead zuweisen.
+Alle anderen Mails an das Postfach (Newsletter, Rechnungen, neue Anfragen …) werden nicht geladen,
+nicht gespeichert und sind im CRM für niemanden sichtbar – sie bleiben ganz normal im Postfach.
+Zugeordnete Antworten sieht nur der Vertriebler, dem der Lead gehört (und der Admin):
+im **Posteingang** (mit Ungelesen-Zähler) und im E-Mail-Verlauf des Leads, dort mit „Antworten“-Button.
 
 Mails aus dem CRM gehen mit dem Namen des Mitarbeiters raus („Max Muster | NovaFlow Services“),
 aber über das gemeinsame Postfach, damit Antworten wieder im CRM landen.
 
 `.env`: `IMAP_HOST`, `IMAP_PORT` (993), `IMAP_USER`, `IMAP_PASS`. Beim ersten Abruf werden die letzten
-30 Tage importiert. Status und „Jetzt abrufen“ findest du als Admin unter **Posteingang**.
+30 Tage geprüft. Status und „Jetzt abrufen“ findest du als Admin unter **Posteingang**.
 
 ---
 

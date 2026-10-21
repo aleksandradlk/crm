@@ -67,6 +67,18 @@ app.use('/api/auth/setup',    rateLimit({ windowMs: 15*60*1000, max: 5 }));
 app.use('/api/auth/password', rateLimit({ windowMs: 15*60*1000, max: 10 }));
 app.use('/api/generate',      rateLimit({ windowMs: 60*1000, max: 5 }));
 
+// ── Saubere Adressen: /login, /admin, /closer, /setup (ohne .html) ──
+const PAGES = ['login', 'admin', 'closer', 'setup'];
+app.get(/^\/(login|admin|closer|setup)\.html$/, (req, res) => {
+  const q = req.originalUrl.indexOf('?');
+  res.redirect(301, '/' + req.params[0] + (q >= 0 ? req.originalUrl.slice(q) : ''));
+});
+app.get(['/', ...PAGES.map(p => '/' + p)], (req, res) => {
+  const page = req.path === '/' ? 'login' : req.path.slice(1);
+  res.set('Cache-Control', 'no-cache, must-revalidate');
+  res.sendFile(path.join(__dirname, 'public_html', page + '.html'));
+});
+
 // ── Static Frontend ───────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public_html'), {
   setHeaders(res, filePath) {
@@ -102,7 +114,9 @@ app.use('/api/deals',           dealRoutes);
 // ── SPA Fallback ──────────────────────────────────────────────
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not found' });
-  res.sendFile(path.join(__dirname, 'public_html/login.html'), (err) => { if (err) res.status(404).end(); });
+  // Fehlende Dateien (Bilder, Skripte …) nicht auf die Login-Seite umleiten
+  if (/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).end();
+  res.redirect(302, '/login');
 });
 
 // ── Auto-Migration ────────────────────────────────────────────

@@ -24,12 +24,12 @@ const Auth = {
     return !!user[perm];
   },
   requireAuth() {
-    if (!this.getToken()) { window.location.href = '/login.html'; return false; }
+    if (!this.getToken()) { window.location.href = '/login'; return false; }
     return true;
   },
   requireAdmin() {
     if (!this.requireAuth()) return false;
-    if (!this.isAdmin()) { window.location.href = '/closer.html'; return false; }
+    if (!this.isAdmin()) { window.location.href = '/closer'; return false; }
     return true;
   },
 };
@@ -51,7 +51,7 @@ async function api(method, path, body) {
   if (res.status === 401) {
     if (path === '/auth/login') throw new Error(data.error || 'Ungültige Zugangsdaten');
     Auth.clear();
-    window.location.href = '/login.html';
+    window.location.href = '/login';
     throw new Error('Session abgelaufen');
   }
 
@@ -369,7 +369,7 @@ function resetInactiveTimer() {
     showToast('Automatisch abgemeldet (5 Min. Inaktivität)', 'info');
     try { await api('POST', '/auth/logout', { reason: 'inactivity' }); } catch {}
     Auth.clear();
-    setTimeout(() => window.location.href = '/login.html', 1500);
+    setTimeout(() => window.location.href = '/login', 1500);
   }, INACTIVITY_MS);
 }
 
@@ -446,7 +446,7 @@ function renderSidebarUser() {
 async function logout() {
   try { await api('POST', '/auth/logout'); } catch {}
   Auth.clear();
-  window.location.href = '/login.html';
+  window.location.href = '/login';
 }
 
 function initTheme() {

@@ -128,7 +128,7 @@ async function doSetup() {
   try {
     await api('POST', '/auth/setup', { full_name, username, email, password });
     msg.innerHTML = '<span style="color:var(--green)">✓ Account erstellt — du wirst weitergeleitet...</span>';
-    setTimeout(() => window.location.href = '/login.html', 1500);
+    setTimeout(() => window.location.href = '/login', 1500);
   } catch (e) {
     msg.innerHTML = `<span style="color:var(--red)">${escHtml(e.message)}</span>`;
     btn.disabled = false;

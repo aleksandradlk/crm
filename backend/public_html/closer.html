@@ -318,7 +318,7 @@
     <!-- POSTEINGANG -->
     <div id="sec-inbox" style="display:none">
       <div class="page-header">
-        <div><h1 data-eyebrow="Aufgaben">Posteingang</h1><p class="page-desc">Antworten und E-Mails deiner Kunden. Klick öffnet den Lead mit dem ganzen Verlauf.</p></div>
+        <div><h1 data-eyebrow="Aufgaben">Posteingang</h1><p class="page-desc">Antworten deiner Kunden auf E-Mails aus dem CRM. Klick öffnet den Lead mit dem ganzen Verlauf.</p></div>
         <div class="page-actions">
           <div class="view-toggle">
             <button id="inboxFilterUnread" class="active" onclick="setInboxFilter('unread')">Ungelesen</button>
@@ -640,7 +640,7 @@ let _visibleAllLeads = [];
 let _panelSourceList = [];
 
 Auth.requireAuth();
-if (Auth.isAdmin()) window.location.href = '/admin.html';
+if (Auth.isAdmin()) window.location.href = '/admin';
 initTheme();
 renderSidebarUser();
 startActivityTracking();

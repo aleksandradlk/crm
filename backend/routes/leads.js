@@ -474,63 +474,6 @@ router.get('/reminders', auth, async (req, res) => {
 });
 
 // ── GET /api/leads/archived — archivierte Leads (Admin) ─────
-// ── GET /api/leads/unmatched-emails — Unzugeordnete Emails (Admin) ──
-router.get('/unmatched-emails', auth, adminOnly, async (req, res) => {
-  try {
-    const [rows] = await db.query(
-      `SELECT id, from_address, from_name, to_address, subject, body_text, received_at, created_at
-       FROM unmatched_emails
-       ORDER BY COALESCE(received_at, created_at) DESC
-       LIMIT 200`
-    );
-    res.json(rows);
-  } catch(e) {
-    console.error('Unmatched emails error:', e);
-    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
-  }
-});
-
-// ── POST /api/leads/unmatched-emails/:id/assign — Unzugeordnete Email einem Lead zuordnen (Admin) ──
-router.post('/unmatched-emails/:id/assign', auth, adminOnly, async (req, res) => {
-  const id     = parseInt(req.params.id);
-  const leadId = parseInt(req.body.lead_id);
-  if (!leadId) return res.status(400).json({ error: 'lead_id ist erforderlich' });
-  try {
-    const [[mail]] = await db.query('SELECT * FROM unmatched_emails WHERE id=?', [id]);
-    if (!mail) return res.status(404).json({ error: 'E-Mail nicht gefunden' });
-    const [[lead]] = await db.query('SELECT id, email FROM leads WHERE id=? AND archived_at IS NULL', [leadId]);
-    if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
-
-    await db.query(
-      `INSERT IGNORE INTO lead_emails (lead_id, direction, from_address, from_name, to_address, subject, body_text, message_id, received_at, is_read)
-       VALUES (?, 'inbound', ?, ?, ?, ?, ?, ?, ?, 0)`,
-      [leadId, mail.from_address, mail.from_name || null, mail.to_address, mail.subject, mail.body_text, mail.message_id, mail.received_at]
-    );
-    await db.query('DELETE FROM unmatched_emails WHERE id=?', [id]);
-    // Absenderadresse am Lead hinterlegen, falls noch keine vorhanden —
-    // dann werden künftige Mails dieses Absenders automatisch zugeordnet.
-    if (!lead.email && mail.from_address) {
-      await db.query('UPDATE leads SET email=? WHERE id=?', [mail.from_address, leadId]);
-    }
-    await db.query('UPDATE leads SET updated_at=NOW() WHERE id=?', [leadId]).catch(() => {});
-    await log(req.user.id, 'email_assigned', 'lead', leadId, { from: mail.from_address, subject: mail.subject }, req.ip);
-    res.json({ ok: true });
-  } catch(e) {
-    console.error('Unmatched assign error:', e);
-    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
-  }
-});
-
-// ── DELETE /api/leads/unmatched-emails/:id — Unzugeordnete Email löschen (Admin) ──
-router.delete('/unmatched-emails/:id', auth, adminOnly, async (req, res) => {
-  const id = parseInt(req.params.id);
-  if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'Ungültige ID' });
-  try {
-    await db.query('DELETE FROM unmatched_emails WHERE id=?', [id]);
-    res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: 'Fehler beim Löschen' }); }
-});
-
 router.get('/archived', auth, adminOnly, async (req, res) => {
   try {
     const [rows] = await db.query(
@@ -612,7 +555,9 @@ router.get('/:id', auth, async (req, res) => {
      JOIN users u ON u.id = cl.user_id
      WHERE cl.lead_id = ? ORDER BY cl.started_at DESC`, [id]
   ).catch(() => [[]]);
-  const [email_thread] = await db.query(
+  // Kundenmails sieht nur, wer den Lead betreut (und der Admin)
+  const seesMail = req.user.role === 'admin' || lead.assigned_to === req.user.id;
+  const [email_thread] = !seesMail ? [[]] : await db.query(
     `SELECT id, direction, from_address, from_name, to_address, subject, body_text, received_at, created_at, is_read
      FROM lead_emails WHERE lead_id = ? ORDER BY COALESCE(received_at, created_at) ASC`, [id]
   ).catch(() => [[]]);
