@@ -20,11 +20,10 @@ const callRoutes     = require('./routes/calls');
 const feedbackRoutes  = require('./routes/feedback');
 const settingsRoutes       = require('./routes/settings');
 const emailTemplateRoutes  = require('./routes/emailtemplates');
-const agentLogRoutes       = require('./routes/agentlog');
 const toolRoutes           = require('./routes/tools');
-const canvaRoutes          = require('./routes/canva');
 const emailRoutes          = require('./routes/emails');
 const voiceRoutes          = require('./routes/voice');
+const dealRoutes           = require('./routes/deals');
 const { startReminderCron } = require('./cron/reminders');
 const { pollIncomingEmails } = require('./cron/emailPoller');
 const cron           = require('node-cron');
@@ -37,7 +36,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc:  ["'self'"],
-      scriptSrc:   ["'self'", "'unsafe-inline'"],
+      scriptSrc:   ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
       // Die Oberfläche nutzt onclick="…" an Buttons. Helmet setzt sonst standardmäßig
       // script-src-attr 'none' — dann reagiert kein Button (auch nicht „Anmelden“).
       scriptSrcAttr: ["'unsafe-inline'"],
@@ -68,6 +67,18 @@ app.use('/api/auth/setup',    rateLimit({ windowMs: 15*60*1000, max: 5 }));
 app.use('/api/auth/password', rateLimit({ windowMs: 15*60*1000, max: 10 }));
 app.use('/api/generate',      rateLimit({ windowMs: 60*1000, max: 5 }));
 
+// ── Saubere Adressen: /login, /admin, /closer, /setup (ohne .html) ──
+const PAGES = ['login', 'admin', 'closer', 'setup'];
+app.get(/^\/(login|admin|closer|setup)\.html$/, (req, res) => {
+  const q = req.originalUrl.indexOf('?');
+  res.redirect(301, '/' + req.params[0] + (q >= 0 ? req.originalUrl.slice(q) : ''));
+});
+app.get(['/', ...PAGES.map(p => '/' + p)], (req, res) => {
+  const page = req.path === '/' ? 'login' : req.path.slice(1);
+  res.set('Cache-Control', 'no-cache, must-revalidate');
+  res.sendFile(path.join(__dirname, 'public_html', page + '.html'));
+});
+
 // ── Static Frontend ───────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public_html'), {
   setHeaders(res, filePath) {
@@ -95,25 +106,35 @@ app.use('/api/calls',    callRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/settings',        settingsRoutes);
 app.use('/api/email-templates', emailTemplateRoutes);
-app.use('/api/agent-log',       agentLogRoutes);
 app.use('/api/tools',           toolRoutes);
-app.use('/api/canva',           canvaRoutes);
 app.use('/api/emails',          emailRoutes);
 app.use('/api/voice',           voiceRoutes);
+app.use('/api/deals',           dealRoutes);
 
 // ── SPA Fallback ──────────────────────────────────────────────
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not found' });
-  res.sendFile(path.join(__dirname, 'public_html/login.html'), (err) => { if (err) res.status(404).end(); });
+  // Fehlende Dateien (Bilder, Skripte …) nicht auf die Login-Seite umleiten
+  if (/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).end();
+  res.redirect(302, '/login');
 });
 
 // ── Auto-Migration ────────────────────────────────────────────
 const db = require('./db');
-db.query("ALTER TABLE users MODIFY COLUMN email VARCHAR(150) NULL")
+// Migrationen strikt nacheinander ausführen: parallel abgefeuerte ALTER TABLEs auf
+// dieselbe Tabelle blockieren sich gegenseitig, und weil Fehler bewusst ignoriert
+// werden ("Spalte existiert schon"), fehlten danach still einzelne Spalten.
+let _migChain = Promise.resolve();
+function migrate(sql, params) {
+  const p = _migChain.then(() => db.query(sql, params));
+  _migChain = p.catch(() => {});
+  return p;
+}
+migrate("ALTER TABLE users MODIFY COLUMN email VARCHAR(150) NULL")
   .then(() => console.log('Migration: email nullable'))
   .catch(() => {});
 
-db.query(`CREATE TABLE IF NOT EXISTS wiki_files (
+migrate(`CREATE TABLE IF NOT EXISTS wiki_files (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   category VARCHAR(100) NOT NULL,
@@ -124,7 +145,7 @@ db.query(`CREATE TABLE IF NOT EXISTS wiki_files (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )`).catch(() => {});
 
-db.query(`CREATE TABLE IF NOT EXISTS email_template (
+migrate(`CREATE TABLE IF NOT EXISTS email_template (
   id INT PRIMARY KEY,
   subject VARCHAR(500),
   body TEXT,
@@ -133,13 +154,13 @@ db.query(`CREATE TABLE IF NOT EXISTS email_template (
 )`).catch(() => {});
 
 // ── Neue DB-Migrationen ───────────────────────────────────────
-db.query('ALTER TABLE comments ADD COLUMN edited_at DATETIME NULL').catch(() => {});
-db.query('ALTER TABLE users ADD COLUMN notify_email TINYINT(1) NOT NULL DEFAULT 1').catch(() => {});
-db.query('ALTER TABLE users ADD COLUMN notify_sms   TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
-db.query('ALTER TABLE users ADD COLUMN phone        VARCHAR(50) NULL').catch(() => {});
-db.query('ALTER TABLE users ADD COLUMN onboarding_shown TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
+migrate('ALTER TABLE comments ADD COLUMN edited_at DATETIME NULL').catch(() => {});
+migrate('ALTER TABLE users ADD COLUMN notify_email TINYINT(1) NOT NULL DEFAULT 1').catch(() => {});
+migrate('ALTER TABLE users ADD COLUMN notify_sms   TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
+migrate('ALTER TABLE users ADD COLUMN phone        VARCHAR(50) NULL').catch(() => {});
+migrate('ALTER TABLE users ADD COLUMN onboarding_shown TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
 
-db.query(`CREATE TABLE IF NOT EXISTS chat_rooms (
+migrate(`CREATE TABLE IF NOT EXISTS chat_rooms (
   id INT AUTO_INCREMENT PRIMARY KEY,
   title VARCHAR(255) NOT NULL,
   created_by INT NOT NULL,
@@ -147,14 +168,14 @@ db.query(`CREATE TABLE IF NOT EXISTS chat_rooms (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )`).catch(() => {});
 
-db.query(`CREATE TABLE IF NOT EXISTS chat_participants (
+migrate(`CREATE TABLE IF NOT EXISTS chat_participants (
   chat_id INT NOT NULL,
   user_id INT NOT NULL,
   joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (chat_id, user_id)
 )`).catch(() => {});
 
-db.query(`CREATE TABLE IF NOT EXISTS chat_messages (
+migrate(`CREATE TABLE IF NOT EXISTS chat_messages (
   id INT AUTO_INCREMENT PRIMARY KEY,
   chat_id INT NOT NULL,
   user_id INT NOT NULL,
@@ -162,15 +183,15 @@ db.query(`CREATE TABLE IF NOT EXISTS chat_messages (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )`).catch(() => {});
 
-db.query('ALTER TABLE chat_rooms ADD COLUMN lead_id INT NULL').catch(() => {});
-db.query('ALTER TABLE users ADD COLUMN can_edit_contacts  TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
-db.query('ALTER TABLE users ADD COLUMN can_archive_leads  TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
-db.query('ALTER TABLE users ADD COLUMN can_reassign_leads TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
-db.query('ALTER TABLE users ADD COLUMN can_view_all_leads TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
-db.query('ALTER TABLE users ADD COLUMN can_create_users   TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
-db.query('ALTER TABLE users ADD COLUMN can_generate_leads TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
+migrate('ALTER TABLE chat_rooms ADD COLUMN lead_id INT NULL').catch(() => {});
+migrate('ALTER TABLE users ADD COLUMN can_edit_contacts  TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
+migrate('ALTER TABLE users ADD COLUMN can_archive_leads  TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
+migrate('ALTER TABLE users ADD COLUMN can_reassign_leads TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
+migrate('ALTER TABLE users ADD COLUMN can_view_all_leads TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
+migrate('ALTER TABLE users ADD COLUMN can_create_users   TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
+migrate('ALTER TABLE users ADD COLUMN can_generate_leads TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
 
-db.query(`CREATE TABLE IF NOT EXISTS feedback (
+migrate(`CREATE TABLE IF NOT EXISTS feedback (
   id          INT AUTO_INCREMENT PRIMARY KEY,
   user_id     INT NOT NULL,
   title       VARCHAR(300) NOT NULL,
@@ -182,7 +203,7 @@ db.query(`CREATE TABLE IF NOT EXISTS feedback (
 )`).catch(() => {});
 
 // ── Call Logs ─────────────────────────────────────────────────
-db.query(`CREATE TABLE IF NOT EXISTS call_logs (
+migrate(`CREATE TABLE IF NOT EXISTS call_logs (
   id               INT AUTO_INCREMENT PRIMARY KEY,
   lead_id          INT NOT NULL,
   user_id          INT NOT NULL,
@@ -197,19 +218,19 @@ db.query(`CREATE TABLE IF NOT EXISTS call_logs (
 )`).catch(() => {});
 // ENUM erweitern — enthält alte Werte (completed, manual) für Rückwärtskompatibilität
 // Bestehende Zeilen bleiben erhalten; neue Einträge nutzen die neuen Werte
-db.query(`ALTER TABLE call_logs MODIFY COLUMN status ENUM('started','reached','no-answer','busy','failed','wrong_number','completed','manual') DEFAULT 'started'`).catch(() => {});
+migrate(`ALTER TABLE call_logs MODIFY COLUMN status ENUM('started','reached','no-answer','busy','failed','wrong_number','completed','manual') DEFAULT 'started'`).catch(() => {});
 
 // ── Index-Migrationen (idempotent — Fehler = Index existiert bereits) ────────
-db.query('CREATE INDEX idx_leads_status     ON leads (status)').catch(() => {});
-db.query('CREATE INDEX idx_leads_created_at ON leads (created_at)').catch(() => {});
-db.query('CREATE INDEX idx_leads_updated_at ON leads (updated_at)').catch(() => {});
-db.query('CREATE INDEX idx_rem_user_sent_time ON reminders (user_id, sent, remind_at)').catch(() => {});
-db.query('CREATE INDEX idx_activity_created_at ON activity_log (created_at)').catch(() => {});
-db.query('CREATE INDEX idx_leads_assigned_status ON leads (assigned_to, status)').catch(() => {});
-db.query('CREATE INDEX idx_leads_status_created  ON leads (status, created_at)').catch(() => {});
+migrate('CREATE INDEX idx_leads_status     ON leads (status)').catch(() => {});
+migrate('CREATE INDEX idx_leads_created_at ON leads (created_at)').catch(() => {});
+migrate('CREATE INDEX idx_leads_updated_at ON leads (updated_at)').catch(() => {});
+migrate('CREATE INDEX idx_rem_user_sent_time ON reminders (user_id, sent, remind_at)').catch(() => {});
+migrate('CREATE INDEX idx_activity_created_at ON activity_log (created_at)').catch(() => {});
+migrate('CREATE INDEX idx_leads_assigned_status ON leads (assigned_to, status)').catch(() => {});
+migrate('CREATE INDEX idx_leads_status_created  ON leads (status, created_at)').catch(() => {});
 
 // ── E-Mail-Vorlagen-Tabelle + Seed ───────────────────────────
-db.query(`CREATE TABLE IF NOT EXISTS email_templates (
+migrate(`CREATE TABLE IF NOT EXISTS email_templates (
   id         INT AUTO_INCREMENT PRIMARY KEY,
   name       VARCHAR(200) NOT NULL,
   subject    VARCHAR(500) NOT NULL,
@@ -221,7 +242,7 @@ db.query(`CREATE TABLE IF NOT EXISTS email_templates (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 )`).then(() => {
-  db.query('SELECT COUNT(*) AS cnt FROM email_templates').then(([[{ cnt }]]) => {
+  migrate('SELECT COUNT(*) AS cnt FROM email_templates').then(([[{ cnt }]]) => {
     if (cnt > 0) return;
     const seeds = [
       ['Allgemeine Informationen', 'Weitere Informationen zu {{firma}}',
@@ -244,14 +265,14 @@ db.query(`CREATE TABLE IF NOT EXISTS email_templates (
        'Nachfassen'],
     ];
     Promise.all(seeds.map(([name, subject, body, category]) =>
-      db.query('INSERT INTO email_templates (name, subject, body, category) VALUES (?,?,?,?)',
+      migrate('INSERT INTO email_templates (name, subject, body, category) VALUES (?,?,?,?)',
         [name, subject, body, category])
     )).catch(() => {});
   }).catch(() => {});
 }).catch(() => {});
 
 // ── E-Mail-Eingang-Tabelle ────────────────────────────────────
-db.query(`CREATE TABLE IF NOT EXISTS lead_emails (
+migrate(`CREATE TABLE IF NOT EXISTS lead_emails (
   id           INT AUTO_INCREMENT PRIMARY KEY,
   lead_id      INT NOT NULL,
   direction    ENUM('inbound','outbound') DEFAULT 'inbound',
@@ -266,7 +287,7 @@ db.query(`CREATE TABLE IF NOT EXISTS lead_emails (
 )`).catch(() => {});
 
 // ── Unzugeordnete eingehende E-Mails ─────────────────────────
-db.query(`CREATE TABLE IF NOT EXISTS unmatched_emails (
+migrate(`CREATE TABLE IF NOT EXISTS unmatched_emails (
   id           INT AUTO_INCREMENT PRIMARY KEY,
   from_address VARCHAR(255),
   to_address   VARCHAR(255),
@@ -280,29 +301,29 @@ db.query(`CREATE TABLE IF NOT EXISTS unmatched_emails (
 
 // ── Posteingang + Telefonie ──────────────────────────────────
 // is_read: Default 1, damit bestehende Mails nicht plötzlich als ungelesen erscheinen
-db.query('ALTER TABLE lead_emails ADD COLUMN is_read TINYINT(1) NOT NULL DEFAULT 1').catch(() => {});
-db.query('ALTER TABLE lead_emails ADD COLUMN from_name VARCHAR(255) NULL').catch(() => {});
-db.query('ALTER TABLE lead_emails ADD COLUMN user_id INT NULL').catch(() => {});
-db.query('ALTER TABLE lead_emails MODIFY COLUMN body_text MEDIUMTEXT').catch(() => {});
-db.query('CREATE INDEX idx_lead_emails_lead ON lead_emails (lead_id)').catch(() => {});
-db.query('CREATE INDEX idx_lead_emails_inbox ON lead_emails (direction, is_read)').catch(() => {});
-db.query('ALTER TABLE unmatched_emails ADD COLUMN from_name VARCHAR(255) NULL').catch(() => {});
-db.query('ALTER TABLE unmatched_emails MODIFY COLUMN body_text MEDIUMTEXT').catch(() => {});
-db.query('ALTER TABLE users ADD COLUMN caller_id VARCHAR(30) NULL').catch(() => {});
-db.query('ALTER TABLE users ADD COLUMN caller_id_verified TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
-db.query('ALTER TABLE call_logs ADD COLUMN twilio_call_sid VARCHAR(64) NULL').catch(() => {});
+migrate('ALTER TABLE lead_emails ADD COLUMN is_read TINYINT(1) NOT NULL DEFAULT 1').catch(() => {});
+migrate('ALTER TABLE lead_emails ADD COLUMN from_name VARCHAR(255) NULL').catch(() => {});
+migrate('ALTER TABLE lead_emails ADD COLUMN user_id INT NULL').catch(() => {});
+migrate('ALTER TABLE lead_emails MODIFY COLUMN body_text MEDIUMTEXT').catch(() => {});
+migrate('CREATE INDEX idx_lead_emails_lead ON lead_emails (lead_id)').catch(() => {});
+migrate('CREATE INDEX idx_lead_emails_inbox ON lead_emails (direction, is_read)').catch(() => {});
+migrate('ALTER TABLE unmatched_emails ADD COLUMN from_name VARCHAR(255) NULL').catch(() => {});
+migrate('ALTER TABLE unmatched_emails MODIFY COLUMN body_text MEDIUMTEXT').catch(() => {});
+migrate('ALTER TABLE users ADD COLUMN caller_id VARCHAR(30) NULL').catch(() => {});
+migrate('ALTER TABLE users ADD COLUMN caller_id_verified TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
+migrate('ALTER TABLE call_logs ADD COLUMN twilio_call_sid VARCHAR(64) NULL').catch(() => {});
 
 // ── Settings-Tabelle ─────────────────────────────────────────
-db.query(`CREATE TABLE IF NOT EXISTS app_settings (
+migrate(`CREATE TABLE IF NOT EXISTS app_settings (
   key_name VARCHAR(100) PRIMARY KEY,
   value TEXT NOT NULL
 )`).catch(() => {});
-db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('closer_sees_admins','false')").catch(() => {});
-db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('closer_sees_tool','false')").catch(() => {});
-db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('maintenance_mode','false')").catch(() => {});
-db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('maintenance_until','')").catch(() => {});
+migrate("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('closer_sees_admins','false')").catch(() => {});
+migrate("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('closer_sees_tool','false')").catch(() => {});
+migrate("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('maintenance_mode','false')").catch(() => {});
+migrate("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('maintenance_until','')").catch(() => {});
 
-db.query(`CREATE TABLE IF NOT EXISTS tools (
+migrate(`CREATE TABLE IF NOT EXISTS tools (
   id             INT AUTO_INCREMENT PRIMARY KEY,
   name           VARCHAR(200) NOT NULL,
   url            VARCHAR(500) NOT NULL,
@@ -310,45 +331,99 @@ db.query(`CREATE TABLE IF NOT EXISTS tools (
   sort_order     INT         NOT NULL DEFAULT 0,
   created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )`).then(() => {
-  db.query('SELECT COUNT(*) AS cnt FROM tools').then(([[{ cnt }]]) => {
+  migrate('SELECT COUNT(*) AS cnt FROM tools').then(([[{ cnt }]]) => {
     if (cnt === 0) {
-      db.query("INSERT INTO tools (name, url, closer_visible) VALUES ('Angebots-Tool', 'https://tool.novaflowservices.de', 0)").catch(() => {});
+      migrate("INSERT INTO tools (name, url, closer_visible) VALUES ('Angebots-Tool', 'https://tool.novaflowservices.de', 0)").catch(() => {});
     }
   }).catch(() => {});
 }).catch(() => {});
-db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('call_script','')").catch(() => {});
-db.query("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('daily_call_goal','50')").catch(() => {});
-
-// ── Agent-Log-Tabelle (Green Bureau: Recherche/Content/Kundenservice/Buchhaltung) ──
-db.query(`CREATE TABLE IF NOT EXISTS agent_log (
-  id         INT AUTO_INCREMENT PRIMARY KEY,
-  agent      VARCHAR(50) NOT NULL,
-  action     VARCHAR(255) NOT NULL,
-  detail     TEXT NULL,
-  status     ENUM('ok','error') NOT NULL DEFAULT 'ok',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)`).catch(() => {});
-db.query('CREATE INDEX idx_agent_log_created_at ON agent_log (created_at)').catch(() => {});
-db.query("ALTER TABLE agent_log MODIFY COLUMN status ENUM('ok','error','pending','rejected') NOT NULL DEFAULT 'ok'").catch(() => {});
-db.query('ALTER TABLE agent_log ADD COLUMN created_by INT NULL').catch(() => {});
-db.query('ALTER TABLE agent_log ADD COLUMN design_url VARCHAR(500) NULL').catch(() => {});
-
-// ── Canva-Anbindung (Green Bureau Content-Agent) ──────────────
-db.query(`CREATE TABLE IF NOT EXISTS canva_auth (
-  id            INT PRIMARY KEY,
-  access_token  TEXT NOT NULL,
-  refresh_token TEXT NOT NULL,
-  expires_at    DATETIME NOT NULL
-)`).catch(() => {});
+migrate("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('call_script','')").catch(() => {});
+migrate("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('daily_call_goal','50')").catch(() => {});
 
 // ── Audit-Migrationen ─────────────────────────────────────────
-db.query('ALTER TABLE users ADD COLUMN created_by INT NULL').catch(() => {});
-db.query('ALTER TABLE users ADD COLUMN can_manage_email_templates TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
-db.query('ALTER TABLE leads ADD COLUMN archived_at DATETIME NULL').catch(() => {});
-db.query('ALTER TABLE leads ADD COLUMN archived_by INT NULL').catch(() => {});
-db.query('ALTER TABLE leads ADD COLUMN archive_reason VARCHAR(500) NULL').catch(() => {});
-db.query('CREATE INDEX idx_leads_archived ON leads (archived_at)').catch(() => {});
-db.query('ALTER TABLE leads ADD FULLTEXT INDEX ft_leads_search (company, ceo, location)').catch(() => {});
+migrate('ALTER TABLE users ADD COLUMN created_by INT NULL').catch(() => {});
+migrate('ALTER TABLE users ADD COLUMN can_manage_email_templates TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
+migrate('ALTER TABLE leads ADD COLUMN archived_at DATETIME NULL').catch(() => {});
+migrate('ALTER TABLE leads ADD COLUMN archived_by INT NULL').catch(() => {});
+migrate('ALTER TABLE leads ADD COLUMN archive_reason VARCHAR(500) NULL').catch(() => {});
+migrate('CREATE INDEX idx_leads_archived ON leads (archived_at)').catch(() => {});
+migrate('ALTER TABLE leads ADD FULLTEXT INDEX ft_leads_search (company, ceo, location)').catch(() => {});
+
+// ── Reminder: "erledigt" getrennt von "Benachrichtigung verschickt" ──
+// Bisher verschwanden fällige Reminder aus allen Listen, sobald die Erinnerungsmail raus war.
+// Beim ersten Start: alte, längst verschickte Reminder als erledigt markieren, die der
+// letzten 7 Tage bleiben offen (tauchen als überfällig auf, statt verloren zu sein).
+migrate('ALTER TABLE reminders ADD COLUMN done_at DATETIME NULL')
+  .then(() => migrate(
+    'UPDATE reminders SET done_at = remind_at WHERE sent = 1 AND remind_at < DATE_SUB(NOW(), INTERVAL 7 DAY)'
+  ))
+  .then(() => console.log('Migration: reminders.done_at'))
+  .catch(() => {});
+migrate('CREATE INDEX idx_rem_lead_done ON reminders (lead_id, done_at)').catch(() => {});
+migrate('CREATE INDEX idx_rem_user_done ON reminders (user_id, done_at, remind_at)').catch(() => {});
+migrate('CREATE INDEX idx_call_logs_lead ON call_logs (lead_id, started_at)').catch(() => {});
+migrate('CREATE INDEX idx_call_logs_user ON call_logs (user_id, started_at)').catch(() => {});
+
+// ── Einmalig: Mails aufräumen, die nach der alten Logik im CRM gelandet sind ──
+// Ins CRM gehören nur Antworten auf Mails aus dem CRM. Entfernt werden
+//  - alle Kopien „unzugeordneter“ Mails (die Originale bleiben im Postfach)
+//  - eingehende Mails an Leads, denen vorher nie eine CRM-Mail geschickt wurde
+//    (können keine Antwort sein, wurden früher nur über die Absenderadresse zugeordnet)
+migrate("SELECT value FROM app_settings WHERE key_name='cleanup_mails_v1'").then(async ([rows]) => {
+  if (rows.length) return;
+  const [u] = await migrate('DELETE FROM unmatched_emails');
+  const [l] = await migrate(
+    `DELETE le FROM lead_emails le
+     WHERE le.direction = 'inbound' AND NOT EXISTS (
+       SELECT 1 FROM (SELECT lead_id, MIN(COALESCE(received_at, created_at)) AS first_out
+                      FROM lead_emails WHERE direction = 'outbound' GROUP BY lead_id) o
+       WHERE o.lead_id = le.lead_id AND o.first_out <= COALESCE(le.received_at, le.created_at))`);
+  await migrate("INSERT INTO app_settings (key_name, value) VALUES ('cleanup_mails_v1', ?)",
+    [JSON.stringify({ at: new Date().toISOString(), unmatched: u.affectedRows, lead_emails: l.affectedRows })]);
+  console.log(`Mail-Aufräumen: ${u.affectedRows} unzugeordnete, ${l.affectedRows} fremde Lead-Mails entfernt`);
+}).catch(e => console.error('Mail-Aufräumen fehlgeschlagen:', e.message));
+
+// ── Deals (Pipedrive-Prinzip: Pipeline-Phasen + Deals mit Wert) ──
+migrate(`CREATE TABLE IF NOT EXISTS deal_stages (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  name        VARCHAR(100) NOT NULL,
+  probability TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  rot_days    SMALLINT UNSIGNED NOT NULL DEFAULT 14,
+  sort_order  INT NOT NULL DEFAULT 0,
+  is_active   TINYINT(1) NOT NULL DEFAULT 1,
+  created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)`).then(() => migrate('SELECT COUNT(*) AS cnt FROM deal_stages')).then(([[{ cnt }]]) => {
+  if (cnt > 0) return;
+  // Standard-Pipeline, im CRM unter Deals → „Phasen bearbeiten“ anpassbar
+  const stages = [
+    ['Qualifiziert', 10, 1], ['Termin vereinbart', 30, 2], ['Angebot gesendet', 60, 3], ['Verhandlung', 80, 4],
+  ];
+  return Promise.all(stages.map(([name, prob, sort]) =>
+    migrate('INSERT INTO deal_stages (name, probability, sort_order) VALUES (?,?,?)', [name, prob, sort])));
+}).catch(() => {});
+migrate(`CREATE TABLE IF NOT EXISTS deals (
+  id                  INT AUTO_INCREMENT PRIMARY KEY,
+  lead_id             INT NOT NULL,
+  title               VARCHAR(200) NOT NULL,
+  value               DECIMAL(12,2) NOT NULL DEFAULT 0,
+  stage_id            INT NULL,
+  status              ENUM('open','won','lost') NOT NULL DEFAULT 'open',
+  owner_id            INT NULL,
+  expected_close_date DATE NULL,
+  won_at              DATETIME NULL,
+  lost_at             DATETIME NULL,
+  lost_reason         VARCHAR(300) NULL,
+  notes               TEXT NULL,
+  stage_changed_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_by          INT NULL,
+  created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE,
+  INDEX idx_deals_status_stage (status, stage_id),
+  INDEX idx_deals_owner_status (owner_id, status),
+  INDEX idx_deals_lead (lead_id),
+  INDEX idx_deals_won (status, won_at)
+)`).catch(() => {});
 
 // ── Cron: Activity Log nach 7 Tagen bereinigen ───────────────
 cron.schedule('0 3 * * *', async () => {
@@ -361,7 +436,9 @@ cron.schedule('0 3 * * *', async () => {
 });
 
 // ── Start ─────────────────────────────────────────────────────
-app.listen(PORT, () => {
+// Erst starten, wenn alle Migrationen durch sind (sonst schlagen Logins fehl,
+// solange Spalten noch fehlen)
+_migChain.then(() => app.listen(PORT, () => {
   console.log(`LeadHunter Pro läuft auf Port ${PORT}`);
   console.log(`Umgebung: ${process.env.NODE_ENV || 'development'}`);
   startReminderCron();
@@ -369,4 +446,4 @@ app.listen(PORT, () => {
   cron.schedule('*/2 * * * *', pollIncomingEmails);
   // Erster Abruf leicht verzögert, damit die App nach dem Start sofort erreichbar ist
   setTimeout(pollIncomingEmails, 30 * 1000);
-});
+}));

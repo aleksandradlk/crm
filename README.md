@@ -87,30 +87,30 @@ server {
 
 ## Schritt 6 — Ersten Admin anlegen
 
-1. Browser öffnen: `https://leads.novaflowservices.de/setup.html`
+1. Browser öffnen: `https://leads.novaflowservices.de/setup`
 2. Admin-Account ausfüllen und erstellen
-3. Mit `/login.html` anmelden
+3. Mit `/login` anmelden
 
 ---
 
 ## E-Mail-Eingang (Kundenantworten im CRM)
 
 Das CRM ruft alle 2 Minuten das Postfach aus `IMAP_USER` ab (Standard: `info@novaflowservices.de`).
-Eingehende Mails werden automatisch dem passenden Lead zugeordnet:
+Ins CRM kommen **nur Antworten auf Mails, die aus dem CRM verschickt wurden**:
 
-1. Antwort auf eine Mail aus dem CRM (Kunde drückt „Antworten“, erkannt über `In-Reply-To`/`References`)
-2. Lead-Kennung im Betreff, z.B. `[NF-123]`
-3. Absenderadresse = E-Mail-Adresse eines Leads
+1. Der Kunde drückt in seinem Mailprogramm „Antworten“ (erkannt über `In-Reply-To`/`References`)
+2. Fallback: Antwort („Re:“/„AW:“) mit Lead-Kennung im Betreff, z.B. `[NF-123]`
 
-Zugeordnete Mails erscheinen im **Posteingang** (mit Ungelesen-Zähler) und im E-Mail-Verlauf des Leads,
-dort mit „Antworten“-Button. Nicht zuordenbare Mails landen beim Admin unter
-**Posteingang → Unzugeordnete E-Mails** und lassen sich dort per „Zuordnen“ einem Lead zuweisen.
+Alle anderen Mails an das Postfach (Newsletter, Rechnungen, neue Anfragen …) werden nicht geladen,
+nicht gespeichert und sind im CRM für niemanden sichtbar – sie bleiben ganz normal im Postfach.
+Zugeordnete Antworten sieht nur der Vertriebler, dem der Lead gehört (und der Admin):
+im **Posteingang** (mit Ungelesen-Zähler) und im E-Mail-Verlauf des Leads, dort mit „Antworten“-Button.
 
 Mails aus dem CRM gehen mit dem Namen des Mitarbeiters raus („Max Muster | NovaFlow Services“),
 aber über das gemeinsame Postfach, damit Antworten wieder im CRM landen.
 
 `.env`: `IMAP_HOST`, `IMAP_PORT` (993), `IMAP_USER`, `IMAP_PASS`. Beim ersten Abruf werden die letzten
-30 Tage importiert. Status und „Jetzt abrufen“ findest du als Admin unter **Posteingang**.
+30 Tage geprüft. Status und „Jetzt abrufen“ findest du als Admin unter **Posteingang**.
 
 ---
 
@@ -192,6 +192,27 @@ leadhunter/
 - Tracking sehen: Sitzungsdauer, Klick-Anzahl, letzter Login
 - Aktivitätslog: wer hat wann was gemacht
 - CSV exportieren
+
+### Anrufmodus (für alle):
+- Button **„Anrufmodus starten“** (Seitenleiste bzw. „Meine Leads“): Leads werden nacheinander angezeigt,
+  in sinnvoller Reihenfolge – erst fällige Wiedervorlagen, dann Rückrufe ohne Termin, neue Leads,
+  dann Leads, die heute noch nicht angerufen wurden. Leads mit Termin in der Zukunft tauchen erst zum Termin auf.
+- Pro Lead: **Anrufen** → Ergebnis wählen (Tasten **1–8**) → Notiz → Wiedervorlage (vorausgefüllt)
+  → **Strg+Enter** speichert alles in einem Schritt (Anruf, Status, Verlauf, nächster Termin) und öffnet den nächsten Lead.
+- „Rückruf vereinbart“ lässt sich nur mit Termin speichern – kein Lead geht verloren.
+
+### Deals (wie bei Pipedrive):
+- Ein Lead (Firma/Ansprechpartner) kann mehrere **Deals** haben: Titel, Wert (netto, €), Phase,
+  erwarteter Abschluss, Verantwortlicher, Notizen. Abschluss als **Gewonnen** oder **Verloren** (mit Grund).
+- Menüpunkt **Deals**: Pipeline-Board mit Summe pro Phase, Karten per Drag & Drop verschieben,
+  beim Ziehen erscheinen die Zonen „Gewonnen“ / „Verloren“. Daneben eine Liste aller Deals (offen/gewonnen/verloren).
+- Kennzahlen: offene Pipeline, gewichtete Prognose (Wert × Wahrscheinlichkeit der Phase),
+  Umsatz im Monat, geplante Abschlüsse; im Admin-Dashboard zusätzlich Umsatz je Closer.
+- Rot markierte Karten liegen länger als eingestellt in einer Phase („Rot nach x Tagen“).
+- Phasen, Wahrscheinlichkeiten und „Rot nach“ stellt der Admin unter Deals → **Phasen bearbeiten** ein.
+- Im Anrufmodus: „Interesse“/„Rückruf“ legt auf Wunsch direkt einen Deal mit Wert an,
+  „Abschluss“ bucht den offenen Deal als gewonnen (oder legt einen gewonnenen an),
+  „Kein Interesse“ schließt offene Deals als verloren.
 
 ### Closer kann:
 - Nur eigene (zugewiesene) Leads sehen

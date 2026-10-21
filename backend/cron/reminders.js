@@ -13,17 +13,17 @@ function startReminderCron() {
       const [due] = await db.query(
         `SELECT r.id, r.note, r.remind_at,
                 l.company,
-                u.email, u.full_name
+                u.email, u.full_name, u.notify_email
          FROM reminders r
          JOIN leads l ON l.id = r.lead_id
          JOIN users u ON u.id = r.user_id
-         WHERE r.sent = 0 AND r.remind_at <= NOW()`
+         WHERE r.sent = 0 AND r.done_at IS NULL AND r.remind_at <= NOW()`
       );
 
       for (const r of due) {
-        if (!r.email) {
+        if (!r.email || !r.notify_email) {
           await db.query('UPDATE reminders SET sent = 1 WHERE id = ?', [r.id]);
-          console.log(`Reminder (id=${r.id}) als in-App zugestellt markiert — User hat keine E-Mail-Adresse`);
+          console.log(`Reminder (id=${r.id}) als in-App zugestellt markiert — keine E-Mail-Adresse oder E-Mail-Benachrichtigung aus`);
           continue;
         }
         try {

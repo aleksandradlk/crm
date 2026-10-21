@@ -3,8 +3,30 @@ const db      = require('../db');
 const { auth, adminOnly } = require('../middleware/auth');
 const { log } = require('../helpers/logger');
 const { sendLeadEmail } = require('../helpers/mailer');
+const { createDeal, markWon, markLost, parseValue } = require('./deals');
 
 const VALID_STATUSES = ['neu','kontaktiert','nicht_erreicht','kein_interesse','rueckruf','kunde'];
+
+// CSV mit Anführungszeichen ("Müller, Meier GmbH") und Zeilenumbrüchen in Feldern
+function parseCsv(text, delim) {
+  const rows = [];
+  let row = [], field = '', quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
+      else if (c === '"') quoted = false;
+      else field += c;
+    } else if (c === '"') quoted = true;
+    else if (c === delim) { row.push(field); field = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(field); rows.push(row); row = []; field = '';
+    } else field += c;
+  }
+  if (field || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
 
 function canView(user, lead) {
   if (user.role === 'admin') return true;
@@ -19,7 +41,10 @@ router.get('/', auth, async (req, res) => {
                   l.status, l.assigned_to, l.created_by,
                   l.created_at, l.updated_at, l.confidence,
                   u1.full_name AS assigned_name,
-                  u2.full_name AS created_name
+                  u2.full_name AS created_name,
+                  (SELECT MAX(cl.started_at) FROM call_logs cl WHERE cl.lead_id = l.id) AS last_call_at,
+                  (SELECT MIN(r.remind_at) FROM reminders r
+                    WHERE r.lead_id = l.id AND r.done_at IS NULL) AS next_reminder_at
            FROM leads l
            LEFT JOIN users u1 ON u1.id = l.assigned_to
            LEFT JOIN users u2 ON u2.id = l.created_by`;
@@ -30,7 +55,10 @@ router.get('/', auth, async (req, res) => {
     where.push('l.status = ?');
     params.push(status);
   }
-  if (assigned_to === 'none') {
+  if (req.query.mine === '1') {
+    where.push('l.assigned_to = ?');
+    params.push(req.user.id);
+  } else if (assigned_to === 'none') {
     where.push('l.assigned_to IS NULL');
   } else if (assigned_to && /^\d+$/.test(assigned_to)) {
     where.push('l.assigned_to = ?');
@@ -50,7 +78,9 @@ router.get('/', auth, async (req, res) => {
   if (where.length) q += ' WHERE ' + where.join(' AND ');
   q += ' ORDER BY l.created_at DESC';
 
-  const limit  = Math.min(parseInt(req.query.limit)  || 100, 500);
+  // Eigene Leads komplett laden (sonst fallen ältere Leads aus "Meine Leads" heraus)
+  const maxLimit = req.query.mine === '1' ? 5000 : 500;
+  const limit  = Math.min(parseInt(req.query.limit)  || 100, maxLimit);
   const offset = Math.max(parseInt(req.query.offset) || 0, 0);
   q += ' LIMIT ? OFFSET ?';
   params.push(limit, offset);
@@ -156,16 +186,194 @@ router.get('/next', auth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: 'Fehler' }); }
 });
 
+// ── GET /api/leads/queue — Anrufmodus: wen rufe ich als Nächstes an? ──────────
+// Reihenfolge:
+//   1. fällige / überfällige Wiedervorlagen (älteste zuerst)
+//   2. Rückruf ohne Termin
+//   3. neue Leads (noch nie angerufen)
+//   4. nicht erreicht / kontaktiert, die heute noch nicht angerufen wurden
+// Leads mit einer Wiedervorlage in der Zukunft tauchen erst zum Termin wieder auf.
+router.get('/queue', auth, async (req, res) => {
+  const uid = req.user.id;
+  try {
+    const [rows] = await db.query(
+      `SELECT l.id, l.company, l.ceo, l.phone, l.email, l.location, l.status,
+              l.website, l.industry,
+              r.id AS reminder_id, r.remind_at, r.note AS reminder_note,
+              lc.last_call_at, lc.call_count,
+              od.id AS deal_id, od.title AS deal_title, od.value AS deal_value, ds.name AS deal_stage,
+              (SELECT MIN(r2.remind_at) FROM reminders r2
+                WHERE r2.lead_id = l.id AND r2.user_id = ? AND r2.done_at IS NULL) AS next_reminder_at
+       FROM leads l
+       LEFT JOIN (
+         SELECT lead_id, MIN(id) AS id FROM reminders
+         WHERE user_id = ? AND done_at IS NULL AND remind_at <= NOW()
+         GROUP BY lead_id
+       ) rd ON rd.lead_id = l.id
+       LEFT JOIN reminders r ON r.id = rd.id
+       LEFT JOIN (
+         SELECT lead_id, MAX(started_at) AS last_call_at, COUNT(*) AS call_count
+         FROM call_logs GROUP BY lead_id
+       ) lc ON lc.lead_id = l.id
+       LEFT JOIN (
+         SELECT lead_id, MAX(id) AS id FROM deals WHERE status = 'open' GROUP BY lead_id
+       ) odm ON odm.lead_id = l.id
+       LEFT JOIN deals od ON od.id = odm.id
+       LEFT JOIN deal_stages ds ON ds.id = od.stage_id
+       WHERE l.assigned_to = ? AND l.archived_at IS NULL
+         AND l.status NOT IN ('kunde','kein_interesse')`,
+      [uid, uid, uid]
+    );
+    const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+    const STATUS_RANK = { rueckruf: 1, neu: 2, nicht_erreicht: 3, kontaktiert: 4 };
+    const queue = [];
+    for (const l of rows) {
+      if (l.reminder_id) {
+        queue.push({ ...l, rank: 0, sortKey: new Date(l.remind_at).getTime(), reason: 'Wiedervorlage' });
+        continue;
+      }
+      if (l.next_reminder_at) continue;  // Termin in der Zukunft
+      if (l.last_call_at && new Date(l.last_call_at) >= startOfToday) continue;  // heute schon angerufen
+      const rank = STATUS_RANK[l.status] || 5;
+      const reason = { 1: 'Rückruf ohne Termin', 2: 'Neu', 3: 'Erneut versuchen', 4: 'Nachfassen' }[rank] || '';
+      // Neue Leads: älteste zuerst. Wiederholungen: am längsten nicht angerufen zuerst.
+      const sortKey = new Date(l.last_call_at || l.created_at || 0).getTime() || l.id;
+      queue.push({ ...l, rank, sortKey, reason });
+    }
+    queue.sort((a, b) => a.rank - b.rank || a.sortKey - b.sortKey || a.id - b.id);
+    const withPhone = queue.filter(l => l.phone);
+    res.json({
+      total: queue.length,
+      without_phone: queue.length - withPhone.length,
+      due_followups: queue.filter(l => l.rank === 0).length,
+      leads: withPhone.slice(0, 300).map(({ rank, sortKey, ...l }) => l),
+    });
+  } catch (e) {
+    console.error('Queue error:', e);
+    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
+  }
+});
+
+// ── POST /api/leads/:id/outcome — Anrufergebnis in einem Schritt ─────────────
+// Dokumentiert den Anruf, setzt den Status, schreibt die Notiz in den Verlauf,
+// schließt fällige Wiedervorlagen und legt (optional) die nächste an.
+const OUTCOMES = {
+  nicht_erreicht: { call: 'no-answer',    status: 'nicht_erreicht', label: 'Nicht erreicht' },
+  besetzt:        { call: 'busy',         status: 'nicht_erreicht', label: 'Besetzt' },
+  mailbox:        { call: 'no-answer',    status: 'nicht_erreicht', label: 'Mailbox' },
+  rueckruf:       { call: 'reached',      status: 'rueckruf',       label: 'Rückruf vereinbart' },
+  interesse:      { call: 'reached',      status: 'kontaktiert',    label: 'Interesse, nachfassen' },
+  kein_interesse: { call: 'reached',      status: 'kein_interesse', label: 'Kein Interesse' },
+  kunde:          { call: 'reached',      status: 'kunde',          label: 'Abschluss' },
+  falsche_nummer: { call: 'wrong_number', status: null,             label: 'Falsche Nummer' },
+};
+
+router.post('/:id/outcome', auth, async (req, res) => {
+  const leadId = parseInt(req.params.id);
+  const { outcome, note, call_log_id, duration_seconds, follow_up_at, follow_up_note, deal } = req.body;
+  const dealValue = deal ? parseValue(deal.value) : undefined;
+  if (Number.isNaN(dealValue)) return res.status(400).json({ error: 'Ungültiger Deal-Wert' });
+  const o = OUTCOMES[outcome];
+  if (!o) return res.status(400).json({ error: 'Ungültiges Ergebnis' });
+  const noteClean = typeof note === 'string' ? note.trim().slice(0, 2000) : '';
+  if (follow_up_at && Number.isNaN(new Date(follow_up_at).getTime()))
+    return res.status(400).json({ error: 'Ungültiger Termin für die Wiedervorlage' });
+
+  try {
+    const [[lead]] = await db.query('SELECT id, status, phone, assigned_to FROM leads WHERE id=? AND archived_at IS NULL', [leadId]);
+    if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
+    if (req.user.role !== 'admin' && lead.assigned_to !== req.user.id)
+      return res.status(403).json({ error: 'Nur eigene Leads bearbeitbar' });
+
+    // 1) Anruf dokumentieren (bestehenden Eintrag aus "Anrufen" ergänzen oder neu anlegen)
+    const dur = Number.isFinite(parseInt(duration_seconds)) && parseInt(duration_seconds) >= 0
+      ? parseInt(duration_seconds) : null;
+    let callId = parseInt(call_log_id) || null;
+    if (callId) {
+      const [r] = await db.query(
+        `UPDATE call_logs SET status=?, ended_at=COALESCE(ended_at, NOW()),
+                duration_seconds=COALESCE(?, duration_seconds), note=?
+         WHERE id=? AND lead_id=? AND user_id=?`,
+        [o.call, dur, noteClean.slice(0, 1000) || null, callId, leadId, req.user.id]
+      );
+      if (!r.affectedRows) callId = null;
+    }
+    if (!callId) {
+      const [r] = await db.query(
+        `INSERT INTO call_logs (lead_id, user_id, phone_number, direction, started_at, ended_at, duration_seconds, status, note)
+         VALUES (?, ?, ?, 'outbound', NOW(), NOW(), ?, ?, ?)`,
+        [leadId, req.user.id, lead.phone, dur, o.call, noteClean.slice(0, 1000) || null]
+      );
+      callId = r.insertId;
+    }
+
+    // 2) Status
+    if (o.status && o.status !== lead.status) {
+      await db.query('UPDATE leads SET status=? WHERE id=?', [o.status, leadId]);
+      await log(req.user.id, 'status_change', 'lead', leadId, { from: lead.status, to: o.status }, req.ip);
+    } else {
+      await db.query('UPDATE leads SET updated_at=NOW() WHERE id=?', [leadId]);
+    }
+
+    // 3) Verlauf
+    await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',
+      [leadId, req.user.id, `📞 ${o.label}${noteClean ? ' – ' + noteClean : ''}`]);
+
+    // 4) Fällige Wiedervorlagen schließen, nächste anlegen
+    await db.query(
+      'UPDATE reminders SET done_at=NOW() WHERE lead_id=? AND user_id=? AND done_at IS NULL AND remind_at <= NOW()',
+      [leadId, req.user.id]
+    );
+    let reminderId = null;
+    if (follow_up_at) {
+      const [r] = await db.query(
+        'INSERT INTO reminders (lead_id, user_id, remind_at, note) VALUES (?,?,?,?)',
+        [leadId, req.user.id, follow_up_at, (follow_up_note || o.label).toString().slice(0, 500)]
+      );
+      reminderId = r.insertId;
+    }
+
+    // 5) Deal: bei Interesse/Rückruf anlegen bzw. Wert aktualisieren, bei Abschluss
+    //    gewinnen, bei "Kein Interesse" offene Deals als verloren schließen
+    let dealId = null;
+    const [[openDeal]] = await db.query(
+      "SELECT * FROM deals WHERE lead_id=? AND status='open' ORDER BY id DESC LIMIT 1", [leadId]);
+    if (outcome === 'kunde') {
+      if (openDeal) { await markWon(openDeal, req.user.id, dealValue); dealId = openDeal.id; }
+      else dealId = await createDeal({ leadId, userId: req.user.id, value: dealValue || 0,
+                                       ownerId: lead.assigned_to || req.user.id, status: 'won' });
+    } else if (outcome === 'kein_interesse' && openDeal) {
+      await markLost(openDeal, req.user.id, 'Kein Bedarf');
+      dealId = openDeal.id;
+    } else if (deal && ['interesse', 'rueckruf'].includes(outcome)) {
+      if (openDeal) {
+        if (dealValue !== undefined) await db.query('UPDATE deals SET value=? WHERE id=?', [dealValue, openDeal.id]);
+        dealId = openDeal.id;
+      } else if (deal.create) {
+        dealId = await createDeal({ leadId, userId: req.user.id, title: deal.title, value: dealValue || 0,
+                                   ownerId: lead.assigned_to || req.user.id });
+      }
+    }
+
+    await log(req.user.id, 'call_logged', 'lead', leadId,
+      { outcome, call_id: callId, follow_up_at: follow_up_at || null, deal_id: dealId }, req.ip);
+    res.json({ ok: true, call_id: callId, status: o.status || lead.status, reminder_id: reminderId, deal_id: dealId });
+  } catch (e) {
+    console.error('Outcome error:', e);
+    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
+  }
+});
+
 // ── GET /api/leads/activity-feed — letzte Aktivitäten (Admin, Feature 7) ──
 router.get('/activity-feed', auth, adminOnly, async (req, res) => {
   try {
     const [rows] = await db.query(
-      `SELECT a.id, a.action, a.entity_type, a.entity_id, a.details,
-              a.created_at, u.full_name, l.company
+      `SELECT a.id, a.action, a.target_type AS entity_type, a.target_id AS entity_id,
+              a.detail AS details, a.created_at, u.full_name, l.company
        FROM activity_log a
        LEFT JOIN users u ON u.id = a.user_id
-       LEFT JOIN leads l ON l.id = a.entity_id AND a.entity_type = 'lead'
-       ORDER BY a.created_at DESC LIMIT 40`
+       LEFT JOIN leads l ON l.id = a.target_id AND a.target_type = 'lead'
+       ORDER BY a.created_at DESC, a.id DESC LIMIT 40`
     );
     res.json(rows);
   } catch(e) { res.status(500).json({ error: 'Fehler' }); }
@@ -175,13 +383,14 @@ router.get('/activity-feed', auth, adminOnly, async (req, res) => {
 const multerMem = require('multer')({ storage: require('multer').memoryStorage(), limits: { fileSize: 5*1024*1024 } });
 router.post('/import', auth, adminOnly, multerMem.single('csv'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Keine Datei' });
-  const assignTo = parseInt(req.body.assigned_to) || null;
+  const assignTo = parseInt(req.body.assigned_to ?? req.body.assign_to) || null;
   try {
     const text = req.file.buffer.toString('utf-8').replace(/^﻿/, '');
-    const lines = text.split(/\r?\n/).filter(l => l.trim());
-    if (!lines.length) return res.status(400).json({ error: 'Leere CSV' });
-    const delim = lines[0].includes(';') ? ';' : ',';
-    const headers = lines[0].split(delim).map(h => h.trim().toLowerCase().replace(/[^a-z]/g,''));
+    const firstLine = text.split(/\r?\n/, 1)[0] || '';
+    const delim = firstLine.includes(';') ? ';' : ',';
+    const rows = parseCsv(text, delim).filter(r => r.some(c => c.trim()));
+    if (!rows.length) return res.status(400).json({ error: 'Leere CSV' });
+    const headers = rows[0].map(h => h.trim().toLowerCase().replace(/[^a-z]/g,''));
     const idx = (names) => { for (const n of names) { const i = headers.indexOf(n); if (i>=0) return i; } return -1; };
     const iComp = idx(['firmenname','company','name','unternehmen']);
     const iIndu = idx(['branche','industry','kategorie']);
@@ -191,8 +400,8 @@ router.post('/import', auth, adminOnly, multerMem.single('csv'), async (req, res
     const iWeb  = idx(['website','web','url','homepage']);
     if (iComp < 0) return res.status(400).json({ error: 'Spalte "Firmenname" nicht gefunden' });
     let imported = 0, skipped = 0;
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(delim).map(c => c.trim().replace(/^"|"$/g,'').trim());
+    for (let i = 1; i < rows.length; i++) {
+      const cols = rows[i].map(c => c.trim());
       const company = iComp >= 0 ? cols[iComp] : '';
       if (!company) { skipped++; continue; }
       const phone = iPhone >= 0 ? cols[iPhone] : null;
@@ -202,14 +411,14 @@ router.post('/import', auth, adminOnly, multerMem.single('csv'), async (req, res
         [phone, email].filter(Boolean)
       ).then(([r]) => r.length > 0).catch(() => false) : false;
       if (exists) { skipped++; continue; }
-      await db.query(
+      const ok = await db.query(
         `INSERT INTO leads (company, industry, location, phone, email, website, status, assigned_to, created_by, source)
          VALUES (?,?,?,?,?,?,?,?,?,?)`,
         [company, iIndu>=0?cols[iIndu]||null:null, iLoc>=0?cols[iLoc]||null:null,
          phone||null, email||null, iWeb>=0?cols[iWeb]||null:null,
          'neu', assignTo, req.user.id, 'csv-import']
-      ).catch(() => { skipped++; return null; });
-      imported++;
+      ).then(() => true, () => false);
+      if (ok) imported++; else skipped++;
     }
     await log(req.user.id, 'leads_csv_import', 'lead', null, { imported, skipped }, req.ip);
     res.json({ ok: true, imported, skipped });
@@ -256,7 +465,8 @@ router.get('/reminders', auth, async (req, res) => {
     const [rows] = await db.query(
       `SELECT r.id, r.note, r.remind_at, r.lead_id, l.company, l.status, l.phone
        FROM reminders r JOIN leads l ON l.id = r.lead_id
-       WHERE r.user_id = ? AND r.sent = 0 ORDER BY r.remind_at ASC`,
+       WHERE r.user_id = ? AND r.done_at IS NULL AND l.archived_at IS NULL
+       ORDER BY r.remind_at ASC`,
       [req.user.id]
     );
     res.json(rows);
@@ -264,63 +474,6 @@ router.get('/reminders', auth, async (req, res) => {
 });
 
 // ── GET /api/leads/archived — archivierte Leads (Admin) ─────
-// ── GET /api/leads/unmatched-emails — Unzugeordnete Emails (Admin) ──
-router.get('/unmatched-emails', auth, adminOnly, async (req, res) => {
-  try {
-    const [rows] = await db.query(
-      `SELECT id, from_address, from_name, to_address, subject, body_text, received_at, created_at
-       FROM unmatched_emails
-       ORDER BY COALESCE(received_at, created_at) DESC
-       LIMIT 200`
-    );
-    res.json(rows);
-  } catch(e) {
-    console.error('Unmatched emails error:', e);
-    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
-  }
-});
-
-// ── POST /api/leads/unmatched-emails/:id/assign — Unzugeordnete Email einem Lead zuordnen (Admin) ──
-router.post('/unmatched-emails/:id/assign', auth, adminOnly, async (req, res) => {
-  const id     = parseInt(req.params.id);
-  const leadId = parseInt(req.body.lead_id);
-  if (!leadId) return res.status(400).json({ error: 'lead_id ist erforderlich' });
-  try {
-    const [[mail]] = await db.query('SELECT * FROM unmatched_emails WHERE id=?', [id]);
-    if (!mail) return res.status(404).json({ error: 'E-Mail nicht gefunden' });
-    const [[lead]] = await db.query('SELECT id, email FROM leads WHERE id=? AND archived_at IS NULL', [leadId]);
-    if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
-
-    await db.query(
-      `INSERT IGNORE INTO lead_emails (lead_id, direction, from_address, from_name, to_address, subject, body_text, message_id, received_at, is_read)
-       VALUES (?, 'inbound', ?, ?, ?, ?, ?, ?, ?, 0)`,
-      [leadId, mail.from_address, mail.from_name || null, mail.to_address, mail.subject, mail.body_text, mail.message_id, mail.received_at]
-    );
-    await db.query('DELETE FROM unmatched_emails WHERE id=?', [id]);
-    // Absenderadresse am Lead hinterlegen, falls noch keine vorhanden —
-    // dann werden künftige Mails dieses Absenders automatisch zugeordnet.
-    if (!lead.email && mail.from_address) {
-      await db.query('UPDATE leads SET email=? WHERE id=?', [mail.from_address, leadId]);
-    }
-    await db.query('UPDATE leads SET updated_at=NOW() WHERE id=?', [leadId]).catch(() => {});
-    await log(req.user.id, 'email_assigned', 'lead', leadId, { from: mail.from_address, subject: mail.subject }, req.ip);
-    res.json({ ok: true });
-  } catch(e) {
-    console.error('Unmatched assign error:', e);
-    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
-  }
-});
-
-// ── DELETE /api/leads/unmatched-emails/:id — Unzugeordnete Email löschen (Admin) ──
-router.delete('/unmatched-emails/:id', auth, adminOnly, async (req, res) => {
-  const id = parseInt(req.params.id);
-  if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'Ungültige ID' });
-  try {
-    await db.query('DELETE FROM unmatched_emails WHERE id=?', [id]);
-    res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: 'Fehler beim Löschen' }); }
-});
-
 router.get('/archived', auth, adminOnly, async (req, res) => {
   try {
     const [rows] = await db.query(
@@ -395,18 +548,29 @@ router.get('/:id', auth, async (req, res) => {
   const [reminders] = await db.query(
     `SELECT r.*, u.full_name FROM reminders r
      JOIN users u ON u.id = r.user_id
-     WHERE r.lead_id = ? ORDER BY r.remind_at ASC`, [id]
+     WHERE r.lead_id = ? AND r.done_at IS NULL ORDER BY r.remind_at ASC`, [id]
   );
   const [call_logs] = await db.query(
     `SELECT cl.*, u.full_name FROM call_logs cl
      JOIN users u ON u.id = cl.user_id
      WHERE cl.lead_id = ? ORDER BY cl.started_at DESC`, [id]
   ).catch(() => [[]]);
-  const [email_thread] = await db.query(
+  // Kundenmails sieht nur, wer den Lead betreut (und der Admin)
+  const seesMail = req.user.role === 'admin' || lead.assigned_to === req.user.id;
+  const [email_thread] = !seesMail ? [[]] : await db.query(
     `SELECT id, direction, from_address, from_name, to_address, subject, body_text, received_at, created_at, is_read
      FROM lead_emails WHERE lead_id = ? ORDER BY COALESCE(received_at, created_at) ASC`, [id]
   ).catch(() => [[]]);
-  res.json({ ...lead, comments, reminders, call_logs, email_thread });
+  const [deals] = await db.query(
+    `SELECT d.id, d.title, d.value, d.status, d.stage_id, d.owner_id,
+            DATE_FORMAT(d.expected_close_date, '%Y-%m-%d') AS expected_close_date,
+            d.won_at, d.lost_at, d.lost_reason, s.name AS stage_name, u.full_name AS owner_name
+     FROM deals d
+     LEFT JOIN deal_stages s ON s.id = d.stage_id
+     LEFT JOIN users u ON u.id = d.owner_id
+     WHERE d.lead_id = ? ORDER BY d.status = 'open' DESC, d.created_at DESC`, [id]
+  ).catch(() => [[]]);
+  res.json({ ...lead, comments, reminders, call_logs, email_thread, deals });
 });
 
 // ── PATCH /api/leads/:id/status ──────────────────────────────
@@ -551,10 +715,10 @@ router.post('/:id/reminders', auth, async (req, res) => {
   res.status(201).json({ ok: true, id: r.insertId });
 });
 
-// ── DELETE /api/leads/:id/reminders/:rid ────────────────────
+// ── DELETE /api/leads/:id/reminders/:rid — Reminder erledigt ─
 router.delete('/:id/reminders/:rid', auth, async (req, res) => {
   await db.query(
-    'DELETE FROM reminders WHERE id=? AND user_id=?',
+    'UPDATE reminders SET done_at=NOW() WHERE id=? AND user_id=? AND done_at IS NULL',
     [parseInt(req.params.rid), req.user.id]
   );
   res.json({ ok: true });

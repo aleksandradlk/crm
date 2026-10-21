@@ -46,7 +46,7 @@
       </button>
 
       <div class="setup-link" id="setupLink" style="display:none">
-        Erster Start? <a href="/setup.html">Admin-Account erstellen</a>
+        Erster Start? <a href="/setup">Admin-Account erstellen</a>
       </div>
     </div>
     <div class="auth-foot">NovaFlow Services · Interner Zugang</div>
@@ -98,7 +98,7 @@
 <script>
   // Redirect if already logged in
   if (Auth.getToken()) {
-    window.location.href = Auth.isAdmin() ? '/admin.html' : '/closer.html';
+    window.location.href = Auth.isAdmin() ? '/admin' : '/closer';
   }
 
   // Check if setup needed
@@ -133,7 +133,7 @@
     try {
       const data = await api('POST', '/auth/login', { username, password });
       Auth.setSession(data.token, data.user);
-      window.location.href = data.user.role === 'admin' ? '/admin.html' : '/closer.html';
+      window.location.href = data.user.role === 'admin' ? '/admin' : '/closer';
     } catch (e) {
       err.textContent = e.message;
       btn.disabled = false;
