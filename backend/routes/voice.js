@@ -10,6 +10,7 @@ const db     = require('../db');
 const { auth } = require('../middleware/auth');
 const { log } = require('../helpers/logger');
 const { toE164 } = require('../helpers/phone');
+const { findLeadByPhone, refreshNorm } = require('../helpers/dedupe');
 
 let twilio = null;
 try { twilio = require('twilio'); } catch (_) { /* Paket nicht installiert → Telefonie aus */ }
@@ -96,7 +97,8 @@ router.post('/token', auth, async (req, res) => {
     identity: `user-${req.user.id}`,
     ttl: 3600,
   });
-  token.addGrant(new AccessToken.VoiceGrant({ outgoingApplicationSid: e.appSid, incomingAllow: false }));
+  // incomingAllow: eingehende Anrufe auf die Firmennummer klingeln im Browser
+  token.addGrant(new AccessToken.VoiceGrant({ outgoingApplicationSid: e.appSid, incomingAllow: true }));
   res.json({ token: token.toJwt(), identity: `user-${req.user.id}` });
 });
 
@@ -221,6 +223,138 @@ router.post('/dial-status', express.urlencoded({ extended: false }), twilioWebho
     console.error('Voice dial-status error:', e);
   }
   res.type('text/xml').send(new twilio.twiml.VoiceResponse().toString());
+});
+
+// ── Eingehende Anrufe ────────────────────────────────────────
+// Die Twilio-Firmennummer (Voice-Webhook: <BASE_URL>/api/voice/incoming) klingelt im CRM:
+//   1. Anrufer wird über die Telefonnummer einem Lead zugeordnet
+//      (unbekannte Nummer → neuer Lead „Anrufer +49 …“)
+//   2. Es klingelt zuerst beim betreuenden Vertriebler (20 s), dann beim ganzen Team (25 s)
+//   3. Nimmt niemand ab: Ansage + automatische Rückruf-Aufgabe („Verpasster Anruf“)
+const RING_OWNER_SEC = 20;
+const RING_TEAM_SEC  = 25;
+
+async function firstAdminId() {
+  const [[a]] = await db.query("SELECT id FROM users WHERE role='admin' AND is_active=1 ORDER BY id LIMIT 1");
+  return a?.id || null;
+}
+
+function dialClients(vr, req, users, { callLogId, lead, stage, timeout }) {
+  const dial = vr.dial({
+    timeout,
+    answerOnBridge: true,
+    action: `${baseUrl(req)}/api/voice/incoming-next?callLogId=${callLogId}&stage=${stage}`,
+    method: 'POST',
+  });
+  for (const u of users.slice(0, 10)) {   // Twilio: max. 10 Ziele pro <Dial>
+    const client = dial.client();
+    client.identity(`user-${u.id}`);
+    client.parameter({ name: 'callLogId', value: String(callLogId) });
+    client.parameter({ name: 'leadId', value: String(lead.id) });
+    client.parameter({ name: 'company', value: String(lead.company || '').slice(0, 100) });
+  }
+}
+
+async function teamUsers(excludeId) {
+  const [rows] = await db.query(
+    'SELECT id FROM users WHERE is_active=1 AND id <> ? ORDER BY role=\'admin\', id', [excludeId || 0]);
+  return rows;
+}
+
+router.post('/incoming', express.urlencoded({ extended: false }), twilioWebhook, async (req, res) => {
+  const vr = new twilio.twiml.VoiceResponse();
+  try {
+    const from = toE164(req.body.From) || String(req.body.From || '').slice(0, 30);
+    let lead = await findLeadByPhone(from);
+    if (!lead) {
+      // Unbekannte Nummer: als neuen Lead anlegen, damit Rückruf und Verlauf nicht verloren gehen
+      const adminId = await firstAdminId();
+      const [r] = await db.query(
+        `INSERT INTO leads (company, phone, status, created_by, source, confidence)
+         VALUES (?, ?, 'neu', ?, 'eingehender-anruf', 50)`, [`Anrufer ${from}`, from, adminId]);
+      await refreshNorm(r.insertId);
+      lead = { id: r.insertId, company: `Anrufer ${from}`, assigned_to: null };
+    }
+    const ownerId = lead.assigned_to || null;
+    const [c] = await db.query(
+      `INSERT INTO call_logs (lead_id, user_id, phone_number, direction, started_at, status, twilio_call_sid)
+       VALUES (?, ?, ?, 'inbound', NOW(), 'started', ?)`,
+      [lead.id, ownerId || await firstAdminId(), from, req.body.CallSid || null]);
+    const callLogId = c.insertId;
+
+    const [[owner]] = ownerId
+      ? await db.query('SELECT id FROM users WHERE id=? AND is_active=1', [ownerId]) : [[null]];
+    if (owner) dialClients(vr, req, [owner], { callLogId, lead, stage: 1, timeout: RING_OWNER_SEC });
+    else dialClients(vr, req, await teamUsers(0), { callLogId, lead, stage: 2, timeout: RING_TEAM_SEC });
+    res.type('text/xml').send(vr.toString());
+  } catch (e) {
+    console.error('Voice incoming error:', e);
+    sayAndHangup(res, 'Leider ist gerade niemand erreichbar. Wir rufen Sie schnellstmöglich zurück.');
+  }
+});
+
+router.post('/incoming-next', express.urlencoded({ extended: false }), twilioWebhook, async (req, res) => {
+  const vr = new twilio.twiml.VoiceResponse();
+  const callLogId = parseInt(req.query.callLogId);
+  const stage = parseInt(req.query.stage) || 2;
+  try {
+    const [[call]] = await db.query(
+      `SELECT c.*, l.company, l.assigned_to FROM call_logs c JOIN leads l ON l.id = c.lead_id WHERE c.id=?`, [callLogId]);
+    if (!call) { vr.hangup(); return res.type('text/xml').send(vr.toString()); }
+    const status = req.body.DialCallStatus;
+    if (status === 'completed' || status === 'answered') {
+      const duration = parseInt(req.body.DialCallDuration);
+      await db.query(
+        `UPDATE call_logs SET status=IF(status='started','reached',status),
+                duration_seconds=COALESCE(?, duration_seconds), ended_at=COALESCE(ended_at, NOW()) WHERE id=?`,
+        [Number.isFinite(duration) ? duration : null, callLogId]);
+      vr.hangup();
+      return res.type('text/xml').send(vr.toString());
+    }
+    if (stage === 1) {
+      // Betreuer hat nicht abgenommen → ganzes Team
+      const users = await teamUsers(call.assigned_to);
+      if (users.length) {
+        dialClients(vr, req, users, { callLogId, lead: { id: call.lead_id, company: call.company }, stage: 2, timeout: RING_TEAM_SEC });
+        return res.type('text/xml').send(vr.toString());
+      }
+    }
+    // Niemand erreichbar → Rückruf-Aufgabe für den Betreuer (sonst Admin)
+    await db.query("UPDATE call_logs SET status='no-answer', ended_at=NOW() WHERE id=? AND status='started'", [callLogId]);
+    const userId = call.assigned_to || await firstAdminId();
+    if (userId) {
+      await db.query(
+        `INSERT INTO reminders (lead_id, user_id, remind_at, note, kind, sent) VALUES (?, ?, NOW(), ?, 'missed_call', 1)`,
+        [call.lead_id, userId, `Verpasster Anruf von ${call.phone_number}`]);
+    }
+    await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',
+      [call.lead_id, userId || call.user_id, `📞 Verpasster Anruf von ${call.phone_number}`]);
+    vr.say({ language: 'de-DE' }, 'Vielen Dank für Ihren Anruf. Leider ist gerade niemand erreichbar. Wir rufen Sie schnellstmöglich zurück.');
+    vr.hangup();
+    res.type('text/xml').send(vr.toString());
+  } catch (e) {
+    console.error('Voice incoming-next error:', e);
+    sayAndHangup(res, 'Wir rufen Sie schnellstmöglich zurück.');
+  }
+});
+
+// ── POST /api/voice/incoming/accept — Mitarbeiter hat im Browser angenommen ──
+router.post('/incoming/accept', auth, async (req, res) => {
+  const callLogId = parseInt(req.body.callLogId);
+  try {
+    const [[call]] = await db.query(
+      "SELECT c.id, c.lead_id, l.assigned_to FROM call_logs c JOIN leads l ON l.id=c.lead_id WHERE c.id=? AND c.direction='inbound'",
+      [callLogId]);
+    if (!call) return res.status(404).json({ error: 'Anruf nicht gefunden' });
+    await db.query("UPDATE call_logs SET user_id=?, status=IF(status='started','reached',status) WHERE id=?", [req.user.id, callLogId]);
+    // Freier / neuer Lead: wer abnimmt, betreut ihn
+    if (!call.assigned_to) await db.query('UPDATE leads SET assigned_to=? WHERE id=? AND assigned_to IS NULL', [req.user.id, call.lead_id]);
+    await log(req.user.id, 'call_incoming_accepted', 'lead', call.lead_id, { call_id: callLogId }, req.ip);
+    res.json({ ok: true, lead_id: call.lead_id });
+  } catch (e) {
+    console.error('Voice accept error:', e);
+    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
+  }
 });
 
 module.exports = router;

@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf21">
+<link rel="stylesheet" href="/shared/style.css?v=nf22">
 <style>
 .notif-panel{position:fixed;top:0;right:0;bottom:0;width:340px;background:var(--bg2);border-left:1px solid var(--border2);z-index:150;transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;padding:20px}
 .notif-panel.open{transform:translateX(0)}
@@ -51,8 +51,9 @@
     <nav class="nav">
       <span class="nav-group-label">Hauptnavigation</span>
       <div class="nav-item dialer-launch" onclick="startDialer()" title="Leads nacheinander abtelefonieren"><i class="fas fa-headset"></i> Anrufmodus starten</div>
+      <div class="nav-item" data-sec="today" onclick="showSection('today')"><i class="fas fa-sun"></i> Heute <span id="todayBadge" style="display:none;margin-left:auto" class="badge" title="Fällig heute">0</span></div>
       <div class="nav-item" data-sec="allLeads" onclick="showSection('allLeads')"><i class="fas fa-list"></i> Alle Leads</div>
-      <div class="nav-item active" data-sec="myLeads" onclick="showSection('myLeads')"><i class="fas fa-user-check"></i> Meine Leads <span id="rueckrufBadge" style="display:none;margin-left:auto" class="badge" title="Rückrufe offen">0</span></div>
+      <div class="nav-item" data-sec="myLeads" onclick="showSection('myLeads')"><i class="fas fa-user-check"></i> Meine Leads <span id="rueckrufBadge" style="display:none;margin-left:auto" class="badge" title="Rückrufe offen">0</span></div>
       <div class="nav-item" data-sec="deals" onclick="showSection('deals')"><i class="fas fa-handshake"></i> Deals</div>
       <div class="nav-item" data-sec="inbox" onclick="showSection('inbox')"><i class="fas fa-inbox"></i> Posteingang <span id="inboxBadge" style="display:none;margin-left:auto" class="badge" title="Ungelesene Kunden-E-Mails">0</span></div>
       <div class="nav-item" data-sec="reminders" onclick="showSection('reminders')"><i class="fas fa-bell"></i> Reminder <span id="reminderBadge" style="display:none" class="badge">0</span></div>
@@ -204,6 +205,9 @@
         <div class="pipeline-board" id="pipelineBoard"></div>
       </div>
     </div>
+
+    <!-- HEUTE -->
+    <div id="sec-today" style="display:none"><div id="todayRoot"></div></div>
 
     <!-- DEALS -->
     <div id="sec-deals" style="display:none"><div id="dealsRoot"></div></div>
@@ -575,9 +579,12 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf21"></script>
-<script src="/shared/dialer.js?v=nf21"></script>
-<script src="/shared/deals.js?v=nf21"></script>
+<script src="/shared/api.js?v=nf22"></script>
+<script src="/shared/dialer.js?v=nf22"></script>
+<script src="/shared/deals.js?v=nf22"></script>
+<script src="/shared/calllists.js?v=nf22"></script>
+<script src="/shared/today.js?v=nf22"></script>
+<script src="/shared/duplicates.js?v=nf22"></script>
 <script>
 const ME = Auth.getUser();
 const CAN = {
@@ -763,7 +770,7 @@ function closeMobileNav() {
 
 function showSection(name) {
   closeMobileNav();
-  ['myLeads','allLeads','deals','inbox','wiki','reminders','chat','feedback','createUser','generateLeads'].forEach(s => {
+  ['today','myLeads','allLeads','deals','inbox','wiki','reminders','chat','feedback','createUser','generateLeads'].forEach(s => {
     document.getElementById('sec-' + s).style.display = s === name ? '' : 'none';
   });
   document.querySelectorAll('.nav-item[data-sec]').forEach(el => {
@@ -772,6 +779,7 @@ function showSection(name) {
   if (name !== 'chat') { clearInterval(chatPollTimer); chatPollTimer = null; }
   if (name === 'reminders') loadReminders();
   if (name === 'deals')     Deals.show();
+  if (name === 'today')     Today.load();
   if (name === 'inbox')     loadInbox();
   if (name === 'wiki')      loadWiki();
   if (name === 'chat')      loadChats();
@@ -1444,6 +1452,7 @@ function renderDetail(l) {
     : '';
 
   return `
+    ${Dupes.panelWarning(l)}
     ${assignSection}
 
     ${_callScript ? `<div class="panel-section"><details class="panel-script">
@@ -1888,28 +1897,19 @@ async function saveManualLead(force = false) {
     website: get('cl-website'), notes: get('cl-notes') };
   if (!body.company) { document.getElementById('clLeadErr').textContent = 'Firmenname ist erforderlich'; return; }
 
-  if (!force) {
-    const norm = s => (s||'').toLowerCase().replace(/[\s\-\/]/g,'');
-    const normPhone = norm(body.phone);
-    const normCompany = norm(body.company);
-    const dup = allLeads.find(l =>
-      (body.phone && normPhone && norm(l.phone) === normPhone) ||
-      (norm(l.company) === normCompany)
-    );
-    if (dup) {
-      const err = document.getElementById('clLeadErr');
-      err.innerHTML = `⚠️ Mögliches Duplikat: <b>${escHtml(dup.company)}</b> (${escHtml(dup.location||'')}) existiert bereits.<br>
-        <button class="btn btn-ghost btn-sm" style="margin-top:6px;font-size:11px" onclick="saveManualLead(true)">Trotzdem speichern</button>`;
-      return;
-    }
-  }
-
   try {
-    await api('POST', '/leads', body);
+    await api('POST', '/leads', { ...body, force });
     showToast('Lead hinzugefügt ✓');
     closeAddLeadModal();
     loadLeads();
-  } catch(e) { document.getElementById('clLeadErr').textContent = e.message; }
+  } catch(e) {
+    const err = document.getElementById('clLeadErr');
+    // Server meldet mögliche Dublette (gleiche Telefonnummer, E-Mail oder Website)
+    if (e.status === 409 && e.data?.duplicates) {
+      err.innerHTML = `⚠️ ${escHtml(e.message)}<br>
+        <button class="btn btn-ghost btn-sm" style="margin-top:6px;font-size:11px" onclick="saveManualLead(true)">Trotzdem anlegen</button>`;
+    } else err.textContent = e.message;
+  }
 }
 
 // ── PASSWORT ÄNDERN ───────────────────────────────────────────
@@ -2487,7 +2487,7 @@ async function closeOnboarding() {
 
 // ── Init ──────────────────────────────────────────────────────
 ['myLeadsBody','allLeadsBody'].forEach(id => { const b = document.getElementById(id); if (b) b.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)"><i class="fas fa-spinner fa-spin"></i></td></tr>'; });
-showSection('myLeads');
+showSection('today');
 loadLeads();
 let _callScript = '';
 let _dailyGoal = 50;
@@ -2567,15 +2567,29 @@ Deals.mount({
 });
 
 // Anrufmodus: Leads nacheinander abtelefonieren
-function startDialer() {
+function startDialer(list = {}) {
   closeMobileNav();
   Dialer.open({
     script: _callScript,
     goal: _dailyGoal,
+    listId: list.listId, listName: list.listName,
     openLead: id => openPanel(id),
-    onClose: () => { loadLeads(); loadCloserDashboard(); loadReminders(); },
+    onClose: () => {
+      loadLeads(); loadCloserDashboard(); loadReminders();
+      if (document.getElementById('sec-today').style.display !== 'none') Today.load();
+    },
   });
 }
+
+// Heute-Seite, Wähllisten, Dubletten-Hinweise
+Today.mount({
+  rootId: 'todayRoot',
+  isAdmin: false,
+  openLead: id => openPanel(id),
+  call: (id, phone) => startCallCl(id, phone),
+  startDialer: o => startDialer(o),
+});
+Dupes.init({ isAdmin: false, openLead: id => openPanel(id) });
 
 // Einstellungen laden (call_script, daily_goal)
 async function loadCloserSettings() {
@@ -2588,7 +2602,13 @@ async function loadCloserSettings() {
 loadCloserSettings();
 loadCloserDashboard();
 Inbox.start();
-Softphone.loadConfig();
+Softphone.loadConfig().then(() => Softphone.initIncoming({
+  onStart: id => openPanel(id),
+  onEnd: ({ leadId, callLogId, durationSec, phone }) => {
+    if (leadId) openPanel(leadId);
+    if (callLogId) openCallDocCl(leadId, phone, callLogId, { answered: true, durationSec });
+  },
+}));
 setInterval(loadCloserDashboard, 60000);
 setInterval(loadReminders, 5 * 60 * 1000);
 checkReminderNotifications();
@@ -2749,8 +2769,9 @@ async function clSaveGeneratedLeads() {
   const btn = document.getElementById('clSaveLeadsBtn');
   btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Speichere...';
   try {
-    await api('POST', '/leads/bulk', { leads: generatedLeadsCl, assigned_to: ME?.id || null });
-    showToast(`${generatedLeadsCl.length} Leads gespeichert ✓`);
+    const r = await api('POST', '/leads/bulk', { leads: generatedLeadsCl, assigned_to: ME?.id || null });
+    const dupCount = (r.skipped_duplicates || []).length;
+    showToast(`${r.ids.length} Leads gespeichert ✓${dupCount ? ` · ${dupCount} Dubletten übersprungen` : ''}`);
     document.getElementById('clGenResultsCard').style.display = 'none';
     generatedLeadsCl = [];
     loadLeads();

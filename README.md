@@ -138,6 +138,22 @@ mit vorausgefülltem Ergebnis und Gesprächsdauer. Ohne Twilio-Konfiguration ble
    eigene Nummer hinterlegt hat. Muss eine bei Twilio gekaufte oder dort verifizierte Nummer sein.
 8. `npm install` im Ordner `backend`, dann `pm2 restart leadhunter`.
 
+### Eingehende Anrufe auf die Firmennummer
+
+Kunden rufen eine Twilio-Firmennummer an, und es klingelt direkt im CRM (Browser-Tab muss offen sein):
+
+1. In Twilio eine deutsche Nummer kaufen (Console → Phone Numbers → Buy a number; für deutsche
+   Nummern verlangt Twilio einmalig einen Adress-/Firmennachweis, „Regulatory Bundle“).
+2. Bei der Nummer unter „Voice Configuration“ → „A call comes in“: Webhook
+   `https://leads.novaflowservices.de/api/voice/incoming` (HTTP POST) eintragen.
+3. Dieselbe Nummer als `TWILIO_CALLER_ID` in `.env` eintragen – dann sehen Kunden bei
+   ausgehenden Anrufen diese Nummer und landen beim Rückruf wieder im CRM.
+
+Ablauf: Der Anrufer wird über die Telefonnummer dem Lead zugeordnet (unbekannte Nummer → neuer Lead
+„Anrufer +49 …“). Es klingelt zuerst 20 Sekunden beim betreuenden Vertriebler, danach beim ganzen Team.
+Wer annimmt, sieht sofort den Lead; danach öffnet sich die Anruf-Dokumentation. Nimmt niemand ab,
+hört der Anrufer eine Ansage und im CRM entsteht unter **Heute → Verpasste Anrufe** eine Rückruf-Aufgabe.
+
 **Pro Mitarbeiter (einmalig, ca. 30 Sekunden):** Einstellungen → „Telefonie im Browser“ → eigene
 Nummer eintragen → „Übernehmen“. Das CRM zeigt einen 6-stelligen Code, das Telefon klingelt kurz,
 Code eintippen – fertig. Diese einmalige Bestätigung ist Pflicht: Telefonanbieter dürfen nur Nummern
@@ -200,6 +216,16 @@ leadhunter/
 - Pro Lead: **Anrufen** → Ergebnis wählen (Tasten **1–8**) → Notiz → Wiedervorlage (vorausgefüllt)
   → **Strg+Enter** speichert alles in einem Schritt (Anruf, Status, Verlauf, nächster Termin) und öffnet den nächsten Lead.
 - „Rückruf vereinbart“ lässt sich nur mit Termin speichern – kein Lead geht verloren.
+
+### Heute, Wähllisten, Dubletten:
+- **Heute** (Startseite der Vertriebler): verpasste Anrufe, fällige Rückrufe, neue Kundenantworten,
+  Deals ohne nächsten Schritt / mit erreichtem Abschlussdatum – jeweils mit Anrufen-Knopf.
+- **Wähllisten**: gespeicherte Filter (Status, Branche, Ort/PLZ, nie erreicht, letzter Anruf vor x Tagen,
+  max. Versuche, mit/ohne Deal, Quelle, inkl. freier Leads) – „Anrufen“ startet den Anrufmodus nur mit diesen Leads.
+  Freie Leads werden beim Speichern des Ergebnisses automatisch übernommen. Admins können Listen fürs Team teilen.
+- **Dubletten-Check**: gleiche Telefonnummer (egal wie geschrieben), E-Mail oder Website-Domain wird beim
+  Anlegen, CSV-Import und der KI-Generierung erkannt. Im Lead erscheint ein Hinweis; Admins führen Dubletten
+  unter Alle Leads → **Dubletten** zusammen (Verlauf, Anrufe, Deals wandern mit, die Kopie wird archiviert).
 
 ### Deals (wie bei Pipedrive):
 - Ein Lead (Firma/Ansprechpartner) kann mehrere **Deals** haben: Titel, Wert (netto, €), Phase,

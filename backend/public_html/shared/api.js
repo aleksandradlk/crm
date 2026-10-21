@@ -75,7 +75,12 @@ async function api(method, path, body) {
     throw new Error('maintenance');
   }
 
-  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  if (!res.ok) {
+    const err = new Error(data.error || `HTTP ${res.status}`);
+    err.status = res.status;
+    err.data = data;   // z.B. data.duplicates bei 409 (mögliche Dublette)
+    throw err;
+  }
   return data;
 }
 
@@ -829,7 +834,12 @@ const Softphone = {
     device.on('tokenWillExpire', async () => {
       try { const r = await api('POST', '/voice/token'); device.updateToken(r.token); } catch (_) {}
     });
-    device.on('error', err => showToast('Telefonie: ' + (err.message || err), 'err'));
+    // Fehler nur während eines Gesprächs anzeigen – Verbindungsprobleme im Leerlauf
+    // (z.B. Anmeldung für eingehende Anrufe) sollen nicht bei jedem Seitenaufruf stören
+    device.on('error', err => {
+      if (this.call || this._incoming) showToast('Telefonie: ' + (err.message || err), 'err');
+      else console.warn('Telefonie:', err.message || err);
+    });
     this.device = device;
     return device;
   },
@@ -887,6 +897,99 @@ const Softphone = {
       showToast(msg, 'err');
       finish();
     }
+  },
+
+  // ── Eingehende Anrufe (Firmennummer klingelt im Browser) ──
+  // onStart(leadId) beim Annehmen, onEnd({ leadId, callLogId, answered, durationSec, phone }) nach dem Auflegen
+  async initIncoming({ onStart, onEnd } = {}) {
+    if (!this.isEnabled() || this._incomingReady) return;
+    this._incomingReady = true;
+    this._onIncomingStart = onStart;
+    this._onIncomingEnd = onEnd;
+    try {
+      const device = await this._ensureDevice();
+      device.on('incoming', call => this._onIncoming(call));
+      await device.register();
+    } catch (e) {
+      this._incomingReady = false;
+      console.warn('Eingehende Anrufe nicht verfügbar:', e.message || e);
+    }
+  },
+
+  _onIncoming(call) {
+    if (this.call) { call.reject(); return; }  // läuft schon ein Gespräch → Team übernimmt
+    const p = call.customParameters || new Map();
+    const info = {
+      callLogId: parseInt(p.get('callLogId')) || null,
+      leadId: parseInt(p.get('leadId')) || null,
+      company: p.get('company') || '',
+      phone: call.parameters?.From || '',
+    };
+    this._incoming = call;
+    let box = document.getElementById('incomingCall');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'incomingCall';
+      box.className = 'incoming-call';
+      document.body.appendChild(box);
+    }
+    box.innerHTML = `
+      <div class="ic-pulse"><i class="fas fa-phone-alt"></i></div>
+      <div class="ic-info">
+        <div class="ic-eyebrow">Eingehender Anruf</div>
+        <div class="ic-name">${escHtml(info.company || info.phone || 'Unbekannt')}</div>
+        <div class="ic-phone mono">${escHtml(info.phone)}</div>
+      </div>
+      <button class="ic-btn ic-reject" onclick="Softphone.rejectIncoming()" title="Ablehnen"><i class="fas fa-phone-slash"></i></button>
+      <button class="ic-btn ic-accept" onclick="Softphone.acceptIncoming()" title="Annehmen"><i class="fas fa-phone-alt"></i> Annehmen</button>`;
+    box.classList.add('open');
+    const close = () => { box.classList.remove('open'); if (this._incoming === call) this._incoming = null; };
+    call.on('cancel', close);   // Kollege hat abgenommen oder Anrufer hat aufgelegt
+    call.on('reject', close);
+    call.on('disconnect', close);
+    this._incomingInfo = info;
+  },
+
+  async acceptIncoming() {
+    const call = this._incoming, info = this._incomingInfo || {};
+    if (!call) return;
+    document.getElementById('incomingCall')?.classList.remove('open');
+    this._incoming = null;
+    call.accept();
+    this.call = call;
+    const startedAt = Date.now();
+    this._showBar(info.company, info.phone);
+    this._setState('Verbunden', true);
+    this._timer = setInterval(() => {
+      const s = Math.round((Date.now() - startedAt) / 1000);
+      this._setState(`Verbunden · ${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`, true);
+    }, 1000);
+    let leadId = info.leadId;
+    if (info.callLogId) {
+      try { leadId = (await api('POST', '/voice/incoming/accept', { callLogId: info.callLogId })).lead_id || leadId; }
+      catch (e) { showToast(e.message, 'err'); }
+    }
+    if (leadId && typeof this._onIncomingStart === 'function') this._onIncomingStart(leadId);
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      this.call = null;
+      clearInterval(this._timer);
+      this._hideBar();
+      if (typeof this._onIncomingEnd === 'function') {
+        this._onIncomingEnd({ leadId, callLogId: info.callLogId, answered: true,
+          durationSec: Math.round((Date.now() - startedAt) / 1000), phone: info.phone });
+      }
+    };
+    call.on('disconnect', finish);
+    call.on('error', finish);
+  },
+
+  rejectIncoming() {
+    if (this._incoming) this._incoming.reject();
+    document.getElementById('incomingCall')?.classList.remove('open');
+    this._incoming = null;
   },
 
   hangup() {

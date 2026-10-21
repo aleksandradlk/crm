@@ -26,12 +26,10 @@ und CentralStationCRM (Bewertungen von Vertrieblern auf G2, Capterra, OMR, Trust
 - [x] E-Mails: nur Kundenantworten ins CRM, nur für den betreuenden Vertriebler sichtbar
 - [x] Saubere Adressen (/login, /admin, /closer)
 - [x] Agenten entfernt
-
-## In Arbeit
-- [ ] „Heute“-Liste: fällige Rückrufe, neue Kundenantworten, verpasste Anrufe, Deals ohne nächsten Schritt
-- [ ] Dubletten-Check: gleiche Telefonnummer, E-Mail oder Website bei Import und Anlegen erkennen
-- [ ] Gespeicherte Filter als Wählliste: Filter speichern und direkt im Anrufmodus abtelefonieren
-- [ ] Eingehende Anrufe: Anrufer erkennen, im Browser annehmen, verpasste Anrufe als Rückruf-Aufgabe
+- [x] „Heute“-Liste: verpasste Anrufe, fällige Rückrufe, neue Kundenantworten, Deals mit Handlungsbedarf
+- [x] Dubletten-Check (Telefon, E-Mail, Website) bei Anlegen, Import, KI-Generierung + Zusammenführen
+- [x] Wähllisten: gespeicherte Filter direkt im Anrufmodus abtelefonieren
+- [x] Eingehende Anrufe: Anrufer erkennen, im Browser annehmen, verpasste Anrufe als Rückruf-Aufgabe
 
 ## Später
 | Feature | Nutzen | Aufwand |
