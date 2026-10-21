@@ -193,6 +193,14 @@ leadhunter/
 - Aktivitätslog: wer hat wann was gemacht
 - CSV exportieren
 
+### Anrufmodus (für alle):
+- Button **„Anrufmodus starten“** (Seitenleiste bzw. „Meine Leads“): Leads werden nacheinander angezeigt,
+  in sinnvoller Reihenfolge – erst fällige Wiedervorlagen, dann Rückrufe ohne Termin, neue Leads,
+  dann Leads, die heute noch nicht angerufen wurden. Leads mit Termin in der Zukunft tauchen erst zum Termin auf.
+- Pro Lead: **Anrufen** → Ergebnis wählen (Tasten **1–8**) → Notiz → Wiedervorlage (vorausgefüllt)
+  → **Strg+Enter** speichert alles in einem Schritt (Anruf, Status, Verlauf, nächster Termin) und öffnet den nächsten Lead.
+- „Rückruf vereinbart“ lässt sich nur mit Termin speichern – kein Lead geht verloren.
+
 ### Closer kann:
 - Nur eigene (zugewiesene) Leads sehen
 - Status setzen: Neu / Kontaktiert / Nicht erreicht / Kein Interesse / Rückruf / Kunde

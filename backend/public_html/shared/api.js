@@ -184,6 +184,23 @@ function fmtCallDuration(sec) {
   if (sec < 60) return `${sec} Sek`;
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')} Min`;
 }
+// "Nächster Schritt" einer Lead-Zeile: offene Wiedervorlage (rot = überfällig,
+// kupfer = heute) oder Warnhinweis, wenn ein offener Lead keinen nächsten Schritt hat.
+function nextStepCell(l) {
+  const last = l.last_call_at ? `<div class="cell-sub">Anruf ${fmtDateShort(l.last_call_at)}</div>` : '';
+  if (l.next_reminder_at) {
+    const d = new Date(l.next_reminder_at);
+    const endToday = new Date(); endToday.setHours(23, 59, 59, 999);
+    const time = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    let cls = 'ns-future', label = `${fmtDateShort(d)} ${time}`;
+    if (d.getTime() < Date.now()) { cls = 'ns-overdue'; label = `überfällig · ${d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}`; }
+    else if (d <= endToday) { cls = 'ns-today'; label = `heute ${time}`; }
+    return `<span class="next-step ${cls}"><i class="fas fa-bell"></i>${label}</span>${last}`;
+  }
+  if (['kunde', 'kein_interesse'].includes(l.status)) return `<span class="cell-sub">—</span>${last}`;
+  return `<span class="next-step ns-none" title="Kein nächster Schritt geplant"><i class="fas fa-exclamation-triangle"></i>nicht geplant</span>${last}`;
+}
+
 function fmtDateShort(d) {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' });
