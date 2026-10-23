@@ -4,7 +4,7 @@ const db       = require('../db');
 const { auth, adminOnly } = require('../middleware/auth');
 const { log }  = require('../helpers/logger');
 
-const PERM_FIELDS = ['can_edit_contacts','can_archive_leads','can_reassign_leads','can_view_all_leads','can_create_users','can_generate_leads','can_manage_email_templates'];
+const PERM_FIELDS = ['can_edit_contacts','can_archive_leads','can_reassign_leads','can_view_all_leads','can_create_users','can_generate_leads','can_manage_email_templates','can_abrechnung'];
 
 // GET /api/users — alle User (Admin)
 router.get('/', auth, adminOnly, async (req, res) => {
@@ -13,6 +13,7 @@ router.get('/', auth, adminOnly, async (req, res) => {
             u.last_login, u.created_at,
             u.can_edit_contacts, u.can_archive_leads, u.can_reassign_leads,
             u.can_view_all_leads, u.can_create_users, u.can_generate_leads,
+            u.can_manage_email_templates, u.can_abrechnung,
             s.last_active, s.click_count, s.login_at AS session_start,
             c.full_name AS creator_name, c.email AS creator_email
      FROM users u

@@ -1,14 +1,15 @@
 // ============================================================
 // Abrechnung im CRM (Angebote, Rechnungen, Mahnungen, Abos)
 // Das Modul stammt aus dem Angebotstool (aleksandradlk/angebot-tool) und
-// läuft hier nur mit dem NovaFlow-Bestand, ausschließlich für Admins.
+// läuft hier nur mit dem NovaFlow-Bestand – für Admins und Closer mit der
+// Berechtigung „Angebote & Rechnungen“.
 //
 // Daten: SQLite-Datei + archivierte PDFs außerhalb des App-Ordners
 // (Hostinger baut jede Version in einen frischen Ordner):
 //   ABRECHNUNG_DATA_DIR, sonst ~/crm-abrechnung
-// Beim ersten Start wird der NovaFlow-Bestand aus dem Angebotstool kopiert
-// (~/angebot-tool-daten bzw. ANGEBOT_TOOL_DATA_DIR) – das Tool selbst bleibt
-// dabei unverändert.
+// Bei jedem Start (und auf Knopfdruck) gleicht das CRM den NovaFlow-Bestand
+// mit dem Angebotstool ab (~/angebot-tool-daten bzw. ANGEBOT_TOOL_DATA_DIR),
+// siehe abgleich.js – das Tool selbst bleibt dabei unverändert.
 // ============================================================
 const fs      = require('fs');
 const os      = require('os');
@@ -19,64 +20,28 @@ const db      = require('../db');
 const { log } = require('../helpers/logger');
 
 const COOKIE = 'crm_abr';
-const status = { aktiv: false, grund: null, datenordner: null, uebernahme: null };
+const status = { aktiv: false, grund: null, datenordner: null, abgleich: null };
 
 function datenordner() {
   return path.resolve(process.env.ABRECHNUNG_DATA_DIR || path.join(os.homedir(), 'crm-abrechnung'));
 }
-function toolDatenordner() {
-  return path.resolve(process.env.ANGEBOT_TOOL_DATA_DIR || path.join(os.homedir(), 'angebot-tool-daten'));
-}
-
-// ── Einmalige Übernahme des NovaFlow-Bestands aus dem Angebotstool ──
-// Kopiert Datenbank-Inhalte (Kunden, Artikel, Angebote, Rechnungen, Abos,
-// Stammdaten, Nummernkreise) und die archivierten PDFs/Anhänge.
-// Läuft nur, solange die CRM-Abrechnung noch leer ist.
-function uebernehmeAusTool(ziel, sqlite, { ersetzen = false } = {}) {
-  const quelleBasis = path.join(toolDatenordner(), 'abrechnung');
-  const quelleDb = path.join(quelleBasis, 'abrechnung.sqlite');
-  if (!fs.existsSync(quelleDb)) return null;
-  const quelle = new sqlite.DatabaseSync(quelleDb, { readOnly: true });
-  try {
-    const dokumente = quelle.prepare('SELECT sammlung, id, json, geaendert FROM dokumente').all();
-    const einstellungen = quelle.prepare('SELECT schluessel, json, geaendert FROM einstellungen').all();
-    const zielDb = new sqlite.DatabaseSync(path.join(ziel, 'abrechnung', 'abrechnung.sqlite'));
-    try {
-      zielDb.exec('BEGIN IMMEDIATE');
-      // Erneute Übernahme: bisherigen (unveränderten) Stand vollständig ersetzen
-      if (ersetzen) { zielDb.exec('DELETE FROM dokumente'); zielDb.exec('DELETE FROM einstellungen'); }
-      const d = zielDb.prepare('INSERT OR REPLACE INTO dokumente (sammlung, id, json, geaendert) VALUES (?, ?, ?, ?)');
-      dokumente.forEach(r => d.run(r.sammlung, r.id, r.json, r.geaendert));
-      const e = zielDb.prepare('INSERT OR REPLACE INTO einstellungen (schluessel, json, geaendert) VALUES (?, ?, ?)');
-      einstellungen.forEach(r => e.run(r.schluessel, r.json, r.geaendert));
-      zielDb.exec('COMMIT');
-    } catch (err) {
-      zielDb.exec('ROLLBACK');
-      throw err;
-    } finally {
-      zielDb.close();
-    }
-    // Archivierte PDFs (Pfade sind relativ zum Datenordner gespeichert) und Anhänge
-    const kopiere = (von, nach) => { if (fs.existsSync(von)) fs.cpSync(von, nach, { recursive: true, force: false, errorOnExist: false }); };
-    kopiere(path.join(toolDatenordner(), 'Buchhaltung'), path.join(ziel, 'Buchhaltung'));
-    kopiere(path.join(quelleBasis, 'anhaenge'), path.join(ziel, 'abrechnung', 'anhaenge'));
-    const anzahl = s => dokumente.filter(r => r.sammlung === s).length;
-    return {
-      von: quelleDb, am: new Date().toISOString(),
-      kunden: anzahl('kunden'), angebote: anzahl('angebote'), rechnungen: anzahl('rechnungen'), abos: anzahl('abos'),
-    };
-  } finally {
-    quelle.close();
-  }
-}
+const { gleicheAb, toolDatenordner } = require('./abgleich');
 
 // ── Anmeldung: CRM-Token (Header) oder kurzlebiges Cookie für Downloads ──
 // PDFs, ZIP- und CSV-Exporte werden als normale Links geöffnet und können
 // keinen Authorization-Header mitschicken – dafür setzt die Seite beim Laden
 // ein eigenes, nur für /api/abrechnung gültiges Cookie.
-async function ladeAdmin(id) {
-  const [[u]] = await db.query('SELECT id, role, is_active, full_name FROM users WHERE id=?', [id]);
-  return u && u.is_active && u.role === 'admin' ? u : null;
+// Zugriff: Admins immer, Closer nur mit der Berechtigung „Angebote & Rechnungen“
+async function ladeBerechtigten(id) {
+  const [[u]] = await db.query('SELECT id, role, is_active, full_name, can_abrechnung FROM users WHERE id=?', [id]);
+  return u && u.is_active && (u.role === 'admin' || u.can_abrechnung) ? u : null;
+}
+// Firmendaten, Sicherungen und Wiederherstellen bleiben Admins vorbehalten
+const NUR_ADMIN = [/^\/stammdaten$/, /^\/wiederherstellen$/, /^\/sicherung\//, /^\/email\/test$/];
+function adminBereich(req, res, next) {
+  if (req.user.role !== 'admin' && (/^\/export\//.test(req.path) || (req.method !== 'GET' && NUR_ADMIN.some(r => r.test(req.path)))))
+    return res.status(403).json({ success: false, error: 'Das darf nur ein Admin ändern.' });
+  next();
 }
 function cookieWert(req) {
   for (const teil of String(req.headers.cookie || '').split(';')) {
@@ -85,14 +50,14 @@ function cookieWert(req) {
   }
   return null;
 }
-async function nurAdmin(req, res, next) {
+async function nurBerechtigte(req, res, next) {
   try {
     const header = req.headers.authorization || '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : cookieWert(req);
     if (!token) return res.status(401).json({ success: false, error: 'Bitte zuerst im CRM anmelden.' });
     const payload = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await ladeAdmin(payload.id);
-    if (!user) return res.status(403).json({ success: false, error: 'Nur für Admins.' });
+    const user = await ladeBerechtigten(payload.id);
+    if (!user) return res.status(403).json({ success: false, error: 'Für Angebote & Rechnungen fehlt dir die Berechtigung. Ein Admin kann sie unter Benutzer freischalten.' });
     req.user = user;
     next();
   } catch (_) {
@@ -135,11 +100,11 @@ function registriere(app, { ki } = {}) {
   }
 
   // Sitzungs-Cookie für Downloads setzen (gilt 8 Stunden, nur für /api/abrechnung)
-  app.post('/api/abrechnung-sitzung', express.json(), nurAdmin, (req, res) => {
+  app.post('/api/abrechnung-sitzung', express.json(), nurBerechtigte, (req, res) => {
     const token = jwt.sign({ id: req.user.id, zweck: 'abrechnung' }, process.env.JWT_SECRET, { expiresIn: '8h' });
     const sicher = req.secure || req.headers['x-forwarded-proto'] === 'https';
     res.setHeader('Set-Cookie', `${COOKIE}=${token}; Path=/api/abrechnung; HttpOnly; SameSite=Strict; Max-Age=28800${sicher ? '; Secure' : ''}`);
-    res.json({ success: true, aktiv: status.aktiv, grund: status.grund, uebernahme: status.uebernahme });
+    res.json({ success: true, aktiv: status.aktiv, grund: status.grund, rolle: req.user.role });
   });
 
   if (!sqlite) {
@@ -151,23 +116,27 @@ function registriere(app, { ki } = {}) {
   fs.mkdirSync(path.join(DATA_DIR, 'abrechnung'), { recursive: true });
   status.datenordner = DATA_DIR;
 
-  // Datenbank anlegen (leer) und ggf. Bestand aus dem Angebotstool übernehmen
-  const datenbank = require('./db');
-  const probe = datenbank.oeffne(path.join(DATA_DIR, 'abrechnung'));
-  const leer = probe.leer();
-  probe.schliesse();
-  if (leer) {
+  // Bestand aus dem Angebotstool holen, bevor die Abrechnung startet (sonst legt sie
+  // bei leerer Datenbank erst ihre Standard-Artikel und leere Stammdaten an)
+  function abgleichen(anlass) {
     try {
-      const u = uebernehmeAusTool(DATA_DIR, sqlite);
-      if (u) {
-        fs.writeFileSync(path.join(DATA_DIR, 'abrechnung', '_uebernahme.json'), JSON.stringify(u, null, 2));
-        console.log(`Abrechnung: aus dem Angebotstool übernommen – ${u.kunden} Kunden, ${u.angebote} Angebote, ${u.rechnungen} Rechnungen, ${u.abos} Abos`);
+      const e = gleicheAb(DATA_DIR, sqlite);
+      if (e) {
+        status.abgleich = e;
+        console.log(`Abrechnung: Abgleich mit dem Angebotstool (${anlass}) – ${e.neu} neu, ${e.aktualisiert} aktualisiert, ${e.dateien} Dateien, Archiv ${e.archiv}`);
       }
-    } catch (e) {
-      console.error('Abrechnung: Übernahme aus dem Angebotstool fehlgeschlagen:', e.message);
+      return e;
+    } catch (err) {
+      console.error('Abrechnung: Abgleich mit dem Angebotstool fehlgeschlagen:', err.message);
+      throw err;
     }
   }
-  try { status.uebernahme = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'abrechnung', '_uebernahme.json'), 'utf8')); } catch (_) {}
+  try { abgleichen('Start'); } catch (_) {}
+  if (!status.abgleich) {
+    try { status.abgleich = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'abrechnung', '_abgleich-ergebnis.json'), 'utf8')); } catch (_) {}
+  }
+  // Solange das Tool noch parallel benutzt wird: alle 3 Stunden nachziehen
+  setInterval(() => { try { abgleichen('regelmäßig'); } catch (_) {} }, 3 * 60 * 60 * 1000).unref();
 
   const { bauMandant } = require('./index');
   const mandant = bauMandant(express.Router(), {
@@ -181,7 +150,7 @@ function registriere(app, { ki } = {}) {
   // API nur für angemeldete Admins; die Seite selbst ist statisch und holt
   // ihre Daten erst nach der Anmeldung. Größere Bodies (Logo, PDF-Anhänge,
   // Wiederherstellung) erst nach der Admin-Prüfung annehmen.
-  app.use('/api/abrechnung', nurAdmin, express.json({ limit: '50mb' }));
+  app.use('/api/abrechnung', nurBerechtigte, adminBereich, express.json({ limit: '50mb' }));
   app.use((req, res, next) => {
     const p = req.path;
     if (p.startsWith('/api/abrechnung/') || p === '/abrechnung' || p.startsWith('/abrechnung/')) return mandant.router(req, res, next);
@@ -190,7 +159,7 @@ function registriere(app, { ki } = {}) {
 
   // ── Verknüpfung mit Leads & Deals (für das Lead-Panel und den Deal-Dialog) ──
   const crmApi = express.Router();
-  crmApi.use(nurAdmin);
+  crmApi.use(nurBerechtigte);
   async function ladeLead(id) {
     const [[l]] = await db.query('SELECT id, company, ceo, email, phone, location FROM leads WHERE id=?', [id]);
     return l;
@@ -220,32 +189,18 @@ function registriere(app, { ki } = {}) {
       res.status(400).json({ success: false, error: e.message });
     }
   });
-  // ── Übernahme aus dem Angebotstool: Stand anzeigen / erneut übernehmen ──
-  // Erneut übernehmen geht nur, solange im CRM seit der Übernahme nichts an der
-  // Abrechnung geändert wurde – so kann nichts überschrieben werden.
-  function erneutMoeglich() {
-    if (!status.uebernahme) return false;
-    const pruef = new sqlite.DatabaseSync(path.join(DATA_DIR, 'abrechnung', 'abrechnung.sqlite'), { readOnly: true });
-    try {
-      const [a] = pruef.prepare('SELECT MAX(geaendert) AS m FROM dokumente').all();
-      const [b] = pruef.prepare('SELECT MAX(geaendert) AS m FROM einstellungen').all();
-      const zuletzt = [a && a.m, b && b.m].filter(Boolean).sort().pop() || '';
-      return zuletzt <= status.uebernahme.am;
-    } finally { pruef.close(); }
-  }
-  crmApi.get('/uebernahme', (req, res) => {
-    res.json({ success: true, uebernahme: status.uebernahme,
-      quelleVorhanden: fs.existsSync(path.join(toolDatenordner(), 'abrechnung', 'abrechnung.sqlite')), erneutMoeglich: erneutMoeglich() });
+  // ── Abgleich mit dem Angebotstool: Stand anzeigen / jetzt abgleichen ──
+  crmApi.get('/abgleich', (req, res) => {
+    res.json({ success: true, abgleich: status.abgleich,
+      quelleVorhanden: fs.existsSync(path.join(toolDatenordner(), 'abrechnung', 'abrechnung.sqlite')) });
   });
-  crmApi.post('/uebernahme', async (req, res) => {
+  crmApi.post('/abgleich', async (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ success: false, error: 'Nur für Admins.' });
     try {
-      if (!erneutMoeglich()) return res.status(409).json({ success: false, error: 'Im CRM wurde die Abrechnung seit der Übernahme bereits geändert – eine erneute Übernahme würde das überschreiben.' });
-      const u = uebernehmeAusTool(DATA_DIR, sqlite, { ersetzen: true });
-      if (!u) return res.status(404).json({ success: false, error: 'Im Angebotstool wurden keine Daten gefunden.' });
-      fs.writeFileSync(path.join(DATA_DIR, 'abrechnung', '_uebernahme.json'), JSON.stringify(u, null, 2));
-      status.uebernahme = u;
-      await log(req.user.id, 'abrechnung_uebernahme', 'system', null, u, req.ip);
-      res.json({ success: true, uebernahme: u });
+      const e = abgleichen('von Hand');
+      if (!e) return res.status(404).json({ success: false, error: 'Im Angebotstool wurden keine Daten gefunden.' });
+      await log(req.user.id, 'abrechnung_abgleich', 'system', null, { neu: e.neu, aktualisiert: e.aktualisiert, konflikte: e.konflikte }, req.ip);
+      res.json({ success: true, abgleich: e });
     } catch (e) {
       res.status(500).json({ success: false, error: e.message });
     }

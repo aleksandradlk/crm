@@ -370,6 +370,10 @@ migrate("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('daily_call_g
 // ── Audit-Migrationen ─────────────────────────────────────────
 migrate('ALTER TABLE users ADD COLUMN created_by INT NULL').catch(() => {});
 migrate('ALTER TABLE users ADD COLUMN can_manage_email_templates TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
+// Angebote & Rechnungen für Closer freischalten (Standard: aus, nur Admins)
+migrate('ALTER TABLE users ADD COLUMN can_abrechnung TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
+// Hell/Dunkel je Benutzer (gilt auf allen Geräten, bis der Benutzer es ändert)
+migrate("ALTER TABLE users ADD COLUMN theme VARCHAR(10) NULL").catch(() => {});
 migrate('ALTER TABLE leads ADD COLUMN archived_at DATETIME NULL').catch(() => {});
 migrate('ALTER TABLE leads ADD COLUMN archived_by INT NULL').catch(() => {});
 migrate('ALTER TABLE leads ADD COLUMN archive_reason VARCHAR(500) NULL').catch(() => {});

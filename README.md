@@ -230,19 +230,23 @@ leadhunter/
   → **Strg+Enter** speichert alles in einem Schritt (Anruf, Status, Verlauf, nächster Termin) und öffnet den nächsten Lead.
 - „Rückruf vereinbart“ lässt sich nur mit Termin speichern – kein Lead geht verloren.
 
-### Angebote & Rechnungen (nur Admin):
+### Angebote & Rechnungen (Admins, Closer nur mit Berechtigung):
 - Menüpunkt **Angebote & Rechnungen**: die komplette Abrechnung aus dem früheren Angebotstool – Kunden,
   Artikel (Pakete & Preise), Angebote mit KI-Entwurf, Rechnungen mit lückenlosen Nummernkreisen,
   Mahnungen, Abos, PDF-Archiv, E-Mail-Versand und Export für die Buchhaltung.
+- **Berechtigung:** Closer sehen den Bereich nur, wenn ein Admin unter Benutzer → Bearbeiten
+  „Angebote & Rechnungen“ anhakt (Standard: aus). Stammdaten, Export und Sicherungen bleiben Admins vorbehalten.
 - **Verknüpft mit Leads & Deals:** „Angebot erstellen“ im Lead oder im Deal-Fenster legt den Kunden an
   (bzw. findet ihn über E-Mail/Firma) und öffnet den Angebotsentwurf. Wird das Angebot versendet, rückt der
   Deal in „Angebot gesendet“; angenommen → Deal gewonnen (mit Angebotswert), abgelehnt → Deal verloren.
   Im Lead stehen alle Angebote und Rechnungen des Kunden.
 - **Daten:** liegen außerhalb des App-Ordners in `~/crm-abrechnung` (SQLite + archivierte PDFs), damit sie
   bei jedem Deploy erhalten bleiben (anderer Ort: `ABRECHNUNG_DATA_DIR`).
-- **Umzug aus dem Angebotstool:** Beim ersten Start übernimmt das CRM den NovaFlow-Bestand automatisch aus
-  `~/angebot-tool-daten` (Kunden, Angebote, Rechnungen, Abos, Stammdaten, Nummernkreise, PDFs). Das Tool
-  bleibt dabei unverändert; die Handwerker-Betriebe arbeiten dort weiter.
+- **Abgleich mit dem Angebotstool:** Bei jedem Start, alle 3 Stunden und per „Jetzt abgleichen“ holt das CRM
+  alles aus `~/angebot-tool-daten`: Kunden, Artikel, Angebote, Rechnungen, Abos, Stammdaten, Nummernkreise,
+  PDFs und Anhänge. Im Tool Geändertes wird übernommen, im CRM Geändertes bleibt, bei beidem gewinnt der neuere
+  Stand; Nummernkreise werden zusammengeführt. Zusätzlich landen die Sicherungen des Tools und alle
+  Betriebe-Daten als Kopie in `~/crm-abrechnung/angebotstool-archiv`. Das Tool selbst wird nur gelesen.
 - Voraussetzung: Node.js 22.13 oder neuer. E-Mails gehen als „NovaFlow Services <SMTP_USER>“ raus
   (anders: `ABRECHNUNG_SMTP_FROM`), KI-Entwürfe nutzen `CLAUDE_API_KEY`.
 

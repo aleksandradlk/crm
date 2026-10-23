@@ -338,8 +338,13 @@ async function anmelden() {
   const res = await fetch('/api/abrechnung-sitzung', { method: 'POST', headers: { Authorization: 'Bearer ' + token } });
   if (res.status === 401) { zumLogin(); throw new Error('Bitte im CRM anmelden.'); }
   const d = await res.json().catch(() => ({}));
-  if (res.status === 403) throw new Error('Die Abrechnung ist nur für Admins.');
+  if (res.status === 403) throw new Error(d.error || 'Für Angebote & Rechnungen fehlt dir die Berechtigung.');
   if (!d.aktiv) throw new Error(d.grund || 'Die Abrechnung ist auf dem Server nicht verfügbar.');
+  // Closer mit Berechtigung: Firmendaten und Export/Sicherung bleiben Admins vorbehalten
+  if (d.rolle !== 'admin') {
+    document.querySelectorAll('[data-view="stammdaten"], [data-view="export"]').forEach(b => b.remove());
+    const z = document.querySelector('header a.zurueck'); if (z) z.href = '/closer';
+  }
   return d;
 }
 async function api(pfad, methode = 'GET', body) {
