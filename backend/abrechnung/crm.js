@@ -118,9 +118,11 @@ function registriere(app, { ki } = {}) {
 
   // Bestand aus dem Angebotstool holen, bevor die Abrechnung startet (sonst legt sie
   // bei leerer Datenbank erst ihre Standard-Artikel und leere Stammdaten an)
+  let konten = null;   // Kundenkonten-Ansicht, wird unten angelegt
   function abgleichen(anlass) {
     try {
       const e = gleicheAb(DATA_DIR, sqlite);
+      if (konten) konten.neuLaden();
       if (e) {
         status.abgleich = e;
         console.log(`Abrechnung: Abgleich mit dem Angebotstool (${anlass}) – ${e.neu} neu, ${e.aktualisiert} aktualisiert, ${e.dateien} Dateien, Archiv ${e.archiv}`);
@@ -146,13 +148,18 @@ function registriere(app, { ki } = {}) {
     onAngebotStatus: angebotStatusAnCrm,
   });
   status.aktiv = true;
+  // Kundenkonten (Betriebe) aus dem Angebotstool, nur zur Ansicht
+  konten = require('./kundenkonten').erstelle(DATA_DIR);
 
   // API nur für angemeldete Admins; die Seite selbst ist statisch und holt
   // ihre Daten erst nach der Anmeldung. Größere Bodies (Logo, PDF-Anhänge,
   // Wiederherstellung) erst nach der Admin-Prüfung annehmen.
   app.use('/api/abrechnung', nurBerechtigte, adminBereich, express.json({ limit: '50mb' }));
+  const SEITE = path.join(__dirname, '..', 'public_html', 'abrechnung.html');
+  app.get(['/abrechnung/konten/:slug', '/abrechnung/konten/:slug/:bereich'], (req, res) => res.sendFile(SEITE));
   app.use((req, res, next) => {
     const p = req.path;
+    if (p.startsWith('/api/abrechnung/konten/')) return konten.api(req, res, next);
     if (p.startsWith('/api/abrechnung/') || p === '/abrechnung' || p.startsWith('/abrechnung/')) return mandant.router(req, res, next);
     next();
   });
@@ -204,6 +211,14 @@ function registriere(app, { ki } = {}) {
     } catch (e) {
       res.status(500).json({ success: false, error: e.message });
     }
+  });
+  // Kundenkonten aus dem Angebotstool (nur Admin)
+  crmApi.get('/kundenkonten', async (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ success: false, error: 'Nur für Admins.' });
+    try {
+      res.json({ success: true, konten: await konten.liste(), abgleich: status.abgleich, ordner: toolDatenordner(),
+        gefunden: fs.existsSync(path.join(toolDatenordner(), 'betriebe')) });
+    } catch (e) { res.status(500).json({ success: false, error: e.message }); }
   });
   app.use('/api/abrechnung-crm', crmApi);
 

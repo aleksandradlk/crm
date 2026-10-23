@@ -151,6 +151,9 @@ router.post('/', auth, async (req, res) => {
 router.patch('/:id', auth, adminOnly, async (req, res) => {
   const { username, full_name, email, password, is_active, role } = req.body;
   const id = parseInt(req.params.id);
+  // Sich selbst nicht aussperren: eigene Rolle und eigenes Konto bleiben unverändert
+  if (id === req.user.id && ((role && role !== 'admin') || is_active === false || is_active === 0))
+    return res.status(400).json({ error: 'Du kannst dir selbst nicht die Admin-Rolle nehmen oder dich sperren.' });
 
   if (username) {
     const [[exists]] = await db.query('SELECT id FROM users WHERE username = ? AND id != ?', [username, id]);

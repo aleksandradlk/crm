@@ -261,6 +261,11 @@ leadhunter/
   PDFs und Anhänge. Im Tool Geändertes wird übernommen, im CRM Geändertes bleibt, bei beidem gewinnt der neuere
   Stand; Nummernkreise werden zusammengeführt. Zusätzlich landen die Sicherungen des Tools und alle
   Betriebe-Daten als Kopie in `~/crm-abrechnung/angebotstool-archiv`. Das Tool selbst wird nur gelesen.
+- **Kundenkonten aus dem Angebotstool** (Umschalter oben in „Angebote & Rechnungen“, nur Admin): alle Betriebe
+  mit Firmendaten, Zugang, letztem Login, Kunden, Angeboten, Rechnungen, Umsatz und offenem Betrag; „Ansehen“ zeigt
+  die komplette Abrechnung des Betriebs inkl. PDFs – nur zur Ansicht, bearbeitet wird weiterhin im Tool. Ist der
+  Betrieb auch als Lead im CRM, führt „Lead“ direkt dorthin. Liegt das Tool nicht unter `~/angebot-tool-daten`,
+  sucht das CRM den Ordner im Home-Verzeichnis selbst.
 - Voraussetzung: Node.js 22.13 oder neuer. E-Mails gehen als „NovaFlow Services <SMTP_USER>“ raus
   (anders: `ABRECHNUNG_SMTP_FROM`), KI-Entwürfe nutzen `CLAUDE_API_KEY`.
 
