@@ -145,6 +145,13 @@ function customConfirm(message, { title = 'Bitte bestätigen', okLabel = 'Bestä
 }
 
 // ── Helpers ───────────────────────────────────────────────────
+// Deutsche Nummer lesbar: +49 30 5555555, +49 171 2345678 (Vorwahl geschätzt)
+function fmtPhoneDE(n) {
+  const m = String(n || '').match(/^\+49(\d+)$/);
+  if (!m) return n || '';
+  const d = m[1], len = /^(30|40|69|89)/.test(d) ? 2 : 3;
+  return `+49 ${d.slice(0, len)} ${d.slice(len)}`;
+}
 function escHtml(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
@@ -1026,6 +1033,13 @@ async function renderCallerIdSettings(containerId) {
   const cfg = await Softphone.loadConfig();
   if (!cfg.enabled) {
     el.innerHTML = `<div class="callerid-hint"><i class="fas fa-info-circle"></i> Telefonie im Browser ist noch nicht eingerichtet. Bis dahin wird über dein Telefon gewählt.</div>`;
+    return;
+  }
+  // Vom Admin zugeteilte NovaFlow-Nummer: nichts einzurichten
+  if (cfg.phone_line) {
+    el.innerHTML = `<div class="line-current"><span class="line-ic"><i class="fas fa-phone-volume"></i></span>
+      <div class="line-main"><b class="mono">${escHtml(fmtPhoneDE(cfg.phone_line))}</b>
+      <span>Deine NovaFlow-Nummer: Kunden sehen sie bei deinen Anrufen, Anrufe darauf klingeln bei dir im CRM – im Browser und auf dem Handy.</span></div></div>`;
     return;
   }
   const status = cfg.caller_id
