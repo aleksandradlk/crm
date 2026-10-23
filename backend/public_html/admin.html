@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf22">
+<link rel="stylesheet" href="/shared/style.css?v=nf23">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -433,51 +433,7 @@
     </div>
 
     <!-- ── TAB: WIKI ─────────────────────────────────── -->
-    <div id="tab-wiki" class="tab-panel">
-      <div class="page-header">
-        <div><h1 data-eyebrow="Ressourcen">Wissensdatenbank</h1><p class="page-desc">E-Mail-Vorlagen und Unterlagen für dein Team an einem Ort.</p></div>
-        <div class="page-actions">
-          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('wikiUploadCard').scrollIntoView({behavior:'smooth',block:'start'});document.getElementById('wiki-file-input').focus()"><i class="fas fa-upload"></i> Datei hochladen</button>
-          <button class="btn btn-primary btn-sm" onclick="openTemplateMgmtModal()"><i class="fas fa-plus"></i> Neue Vorlage</button>
-        </div>
-      </div>
-
-      <!-- E-Mail Vorlagen -->
-      <section class="wiki-section">
-        <div class="wiki-section-head">
-          <div class="wiki-section-title"><i class="fas fa-envelope"></i> E-Mail-Vorlagen</div>
-          <div class="wiki-placeholders">Platzhalter: <code>{{kunde}}</code> <code>{{firma}}</code> <code>{{closer}}</code> <code>{{telefon}}</code> <code>{{email}}</code></div>
-        </div>
-        <div id="adminTemplateList" class="tpl-grid"></div>
-      </section>
-
-      <!-- Unterlagen + Upload -->
-      <section class="wiki-section">
-        <div class="wiki-section-head">
-          <div class="wiki-section-title"><i class="fas fa-folder-open"></i> Unterlagen</div>
-        </div>
-        <div class="wiki-layout">
-          <div id="wikiFilesContainer"></div>
-          <aside class="card wiki-upload" id="wikiUploadCard">
-            <div class="card-header"><div class="card-title"><i class="fas fa-upload"></i> Datei hochladen</div></div>
-            <div class="card-body" style="padding:16px 18px">
-              <div class="form-group"><label>Datei</label><input type="file" id="wiki-file-input" class="form-control" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.docx,.xlsx,.txt" style="padding:8px"></div>
-              <div class="form-group"><label>Bezeichnung <span style="color:var(--text3);font-weight:400">(optional)</span></label><input type="text" id="wiki-file-name" class="form-control" placeholder="z.B. Preisliste 2026"></div>
-              <div class="form-group"><label>Kategorie</label>
-                <select id="wiki-file-cat" class="form-control">
-                  <option value="Vorlagen">Vorlagen</option>
-                  <option value="Preislisten">Preislisten</option>
-                  <option value="Dienstleistungen">Dienstleistungen</option>
-                  <option value="Sonstiges">Sonstiges</option>
-                </select>
-              </div>
-              <div class="form-group"><label>Notiz für Closer <span style="color:var(--text3);font-weight:400">(optional)</span></label><textarea id="wiki-file-note" class="form-control" rows="2" placeholder="z.B. Bitte vor dem ersten Kundengespräch lesen. Preisliste gültig ab 2026."></textarea></div>
-              <button class="btn btn-primary" style="width:100%" onclick="uploadWikiFile()"><i class="fas fa-upload"></i> Hochladen</button>
-            </div>
-          </aside>
-        </div>
-      </section>
-    </div>
+    <div id="tab-wiki" class="tab-panel"></div>
 
     <!-- ── TAB: CHAT ─────────────────────────────────── -->
     <div id="tab-chat" class="tab-panel">
@@ -721,12 +677,13 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf22"></script>
-<script src="/shared/dialer.js?v=nf22"></script>
-<script src="/shared/deals.js?v=nf22"></script>
-<script src="/shared/calllists.js?v=nf22"></script>
-<script src="/shared/today.js?v=nf22"></script>
-<script src="/shared/duplicates.js?v=nf22"></script>
+<script src="/shared/api.js?v=nf23"></script>
+<script src="/shared/dialer.js?v=nf23"></script>
+<script src="/shared/deals.js?v=nf23"></script>
+<script src="/shared/calllists.js?v=nf23"></script>
+<script src="/shared/today.js?v=nf23"></script>
+<script src="/shared/duplicates.js?v=nf23"></script>
+<script src="/shared/wiki.js?v=nf23"></script>
 <script>
 let allLeads = [], allUsers = [], generatedLeads = [], editingUserId = null;
 let panelDirty = false;
@@ -2381,6 +2338,7 @@ function renderAdminTemplateList() {
   if (!el) return;
   if (!_emailTemplates.length) {
     el.innerHTML = '<div class="wiki-empty" style="grid-column:1/-1"><i class="fas fa-envelope-open-text"></i>Noch keine Vorlagen. Lege die erste an, damit dein Team mit einem Klick E-Mails schreiben kann.</div>';
+    Wiki.templatesChanged();
     return;
   }
   el.innerHTML = _emailTemplates.map(t => renderTemplateCard(t, {
@@ -2388,6 +2346,7 @@ function renderAdminTemplateList() {
     toggle: `toggleTemplateActive(${t.id},${t.is_active ? 0 : 1})`,
     remove: `deleteEmailTemplate(${t.id},'${escHtml(String(t.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"))}')`,
   })).join('');
+  Wiki.templatesChanged();
 }
 
 
@@ -2545,11 +2504,18 @@ function initWikiEditor() {
   });
 }
 
-async function loadWiki() {
-  try {
-    const files = await api('GET', '/wiki/files');
-    renderWikiFiles(files, 'wikiFilesContainer', true);
-  } catch(e) { showToast(e.message, 'err'); }
+function loadWiki() {
+  Wiki.mount({
+    rootId: 'tab-wiki', isAdmin: true,
+    title: 'Wissen für dein Team',
+    sub: 'Alles, was deine Closer für Gespräche und Angebote brauchen, an einem Ort. Neue Unterlagen einfach hier hineinziehen.',
+    templates: {
+      mode: 'manage', onNew: 'openTemplateMgmtModal()',
+      slotHtml: '<div id="adminTemplateList" class="tpl-grid"></div>',
+      hint: 'Platzhalter: <code>{{kunde}}</code> <code>{{firma}}</code> <code>{{closer}}</code> <code>{{telefon}}</code> <code>{{email}}</code>',
+    },
+  });
+  Wiki.load();
 }
 
 async function saveTemplate() {
@@ -2560,216 +2526,6 @@ async function saveTemplate() {
     showToast('Vorlage gespeichert ✓');
   } catch(e) { showToast(e.message, 'err'); }
 }
-
-async function uploadWikiFile() {
-  const fileInput = document.getElementById('wiki-file-input');
-  const name      = document.getElementById('wiki-file-name').value.trim();
-  const category  = document.getElementById('wiki-file-cat').value;
-  if (!fileInput.files[0]) { showToast('Datei auswählen', 'err'); return; }
-  const formData = new FormData();
-  formData.append('file', fileInput.files[0]);
-  formData.append('category', category);
-  if (name) formData.append('name', name);
-  const note = document.getElementById('wiki-file-note').value.trim();
-  if (note) formData.append('note', note);
-  try {
-    const res = await fetch('/api/wiki/files', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + Auth.getToken() },
-      body: formData
-    });
-    if (!res.ok) { const e = await res.json(); throw new Error(e.error); }
-    showToast('Datei hochgeladen ✓');
-    fileInput.value = '';
-    document.getElementById('wiki-file-name').value = '';
-    document.getElementById('wiki-file-note').value = '';
-    loadWiki();
-  } catch(e) { showToast(e.message, 'err'); }
-}
-
-async function deleteWikiFile(id) {
-  if (!confirm('Datei wirklich löschen?')) return;
-  try {
-    await api('DELETE', `/wiki/files/${id}`);
-    showToast('Datei gelöscht');
-    loadWiki();
-  } catch(e) { showToast(e.message, 'err'); }
-}
-
-async function showWikiNoPreviewModal(filename, displayName) {
-  const existing = document.getElementById('wikiNoPreviewModal');
-  if (existing) existing.remove();
-  const ext = filename.split('.').pop().toLowerCase();
-  const isDocx = /^docx?$/.test(ext);
-  const label = displayName || filename;
-  const safeFile = filename.replace(/'/g, "\\'");
-  const safeEnc  = encodeURIComponent(label);
-
-  const overlay = document.createElement('div');
-  overlay.id = 'wikiNoPreviewModal';
-  overlay.className = 'modal-overlay';
-  overlay.style.cssText = 'display:flex;z-index:9999';
-
-  const dlBtn = `<button class="btn btn-primary" style="margin-top:16px" onclick="document.getElementById('wikiNoPreviewModal').remove();wikiFileOpen('${safeFile}','${safeEnc}',true)"><i class="fas fa-download" style="margin-right:6px"></i>Herunterladen</button>`;
-
-  if (isDocx) {
-    overlay.innerHTML = `
-      <div class="modal" style="max-width:780px;width:95vw;max-height:85vh;display:flex;flex-direction:column">
-        <button class="modal-close" onclick="document.getElementById('wikiNoPreviewModal').remove()"><i class="fas fa-times"></i></button>
-        <div class="modal-title" style="margin-bottom:12px;flex-shrink:0">${escHtml(label)}</div>
-        <div id="wikiDocxBody" style="flex:1;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:24px 28px;background:#fff;color:#111;font-family:Georgia,serif;font-size:14px;line-height:1.7">
-          <div style="color:var(--text3);text-align:center;padding:40px"><i class="fas fa-spinner fa-spin" style="font-size:24px"></i><br><br>Dokument wird geladen…</div>
-        </div>
-        <div style="flex-shrink:0;text-align:right">${dlBtn}</div>
-      </div>`;
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-    document.body.appendChild(overlay);
-
-    try {
-      const res = await fetch(`/api/wiki/files/${encodeURIComponent(filename)}`, {
-        headers: { 'Authorization': 'Bearer ' + Auth.getToken() }
-      });
-      if (!res.ok) throw new Error('Datei nicht verfügbar');
-      const arrayBuffer = await res.arrayBuffer();
-      const result = await mammoth.convertToHtml({ arrayBuffer });
-      document.getElementById('wikiDocxBody').innerHTML = result.value || '<p style="color:var(--text3)">Dokument ist leer oder konnte nicht gelesen werden.</p>';
-    } catch(e) {
-      const body = document.getElementById('wikiDocxBody');
-      if (body) body.innerHTML = `<p style="color:var(--red);text-align:center">${escHtml(e.message)}</p>`;
-    }
-  } else {
-    overlay.innerHTML = `
-      <div class="modal" style="max-width:420px;text-align:center">
-        <button class="modal-close" onclick="document.getElementById('wikiNoPreviewModal').remove()"><i class="fas fa-times"></i></button>
-        <div style="margin-bottom:16px"><i class="fas fa-file-alt" style="font-size:48px;color:var(--accent);opacity:.7"></i></div>
-        <div class="modal-title" style="margin-bottom:8px">${escHtml(label)}</div>
-        <p style="color:var(--text3);font-size:13px;margin-bottom:8px">${ext.toUpperCase()}-Dateien können nicht direkt im Browser angezeigt werden.<br>Bitte lade die Datei herunter, um sie zu öffnen.</p>
-        ${dlBtn}
-      </div>`;
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-    document.body.appendChild(overlay);
-  }
-}
-
-async function wikiFileOpen(filename, encodedName, forceDownload) {
-  if (!forceDownload) {
-    const ext = filename.split('.').pop().toLowerCase();
-    const isOffice = /^(docx?|xlsx?|pptx?|odt|ods|odp)$/.test(ext);
-    if (isOffice) {
-      showWikiNoPreviewModal(filename, encodedName ? decodeURIComponent(encodedName) : filename);
-      return;
-    }
-    try {
-      const _wr = await fetch(`/api/wiki/files/${encodeURIComponent(filename)}`, {
-        headers: { 'Authorization': 'Bearer ' + Auth.getToken() }
-      });
-      if (!_wr.ok) { showToast('Datei nicht verfügbar', 'err'); return; }
-      const _wb = await _wr.blob();
-      const _wu = URL.createObjectURL(_wb);
-      window.open(_wu, '_blank');
-      setTimeout(() => URL.revokeObjectURL(_wu), 30000);
-    } catch { showToast('Datei konnte nicht geöffnet werden', 'err'); }
-    return;
-  }
-  try {
-    const res = await fetch(`/api/wiki/files/${encodeURIComponent(filename)}`, {
-      headers: { 'Authorization': 'Bearer ' + Auth.getToken() }
-    });
-    if (!res.ok) { showToast('Datei nicht verfügbar', 'err'); return; }
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = encodedName ? decodeURIComponent(encodedName) : filename;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-  } catch(e) { showToast('Fehler beim Laden', 'err'); }
-}
-
-function openWikiNoteModal(id, currentNote) {
-  const existing = document.getElementById('wikiNoteModal');
-  if (existing) existing.remove();
-  const overlay = document.createElement('div');
-  overlay.id = 'wikiNoteModal';
-  overlay.className = 'modal-overlay';
-  overlay.style.cssText = 'display:flex;z-index:9999';
-  overlay.innerHTML = `
-    <div class="modal" style="max-width:480px">
-      <button class="modal-close" onclick="document.getElementById('wikiNoteModal').remove()"><i class="fas fa-times"></i></button>
-      <div class="modal-title" style="margin-bottom:16px">Notiz bearbeiten</div>
-      <div class="form-group">
-        <label>Notiz für Closer <span style="color:var(--text3);font-weight:400">(optional)</span></label>
-        <textarea id="wikiNoteInput" class="form-control" rows="4" placeholder="z.B. Bitte vor dem ersten Kundengespräch lesen.">${escHtml(currentNote || '')}</textarea>
-      </div>
-      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
-        <button class="btn btn-ghost" onclick="document.getElementById('wikiNoteModal').remove()">Abbrechen</button>
-        <button class="btn btn-primary" onclick="saveWikiNote(${id})"><i class="fas fa-save" style="margin-right:6px"></i>Speichern</button>
-      </div>
-    </div>`;
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-  document.body.appendChild(overlay);
-  document.getElementById('wikiNoteInput').focus();
-}
-
-async function saveWikiNote(id) {
-  const note = document.getElementById('wikiNoteInput')?.value || '';
-  try {
-    const res = await fetch(`/api/wiki/files/${id}`, {
-      method: 'PATCH',
-      headers: { 'Authorization': 'Bearer ' + Auth.getToken(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ note })
-    });
-    if (!res.ok) throw new Error('Fehler beim Speichern');
-    document.getElementById('wikiNoteModal').remove();
-    showToast('Notiz gespeichert ✓');
-    loadWiki();
-  } catch(e) { showToast(e.message, 'err'); }
-}
-
-function openWikiReplaceModal(id, displayName) {
-  const existing = document.getElementById('wikiReplaceModal');
-  if (existing) existing.remove();
-  const overlay = document.createElement('div');
-  overlay.id = 'wikiReplaceModal';
-  overlay.className = 'modal-overlay';
-  overlay.style.cssText = 'display:flex;z-index:9999';
-  overlay.innerHTML = `
-    <div class="modal" style="max-width:460px">
-      <button class="modal-close" onclick="document.getElementById('wikiReplaceModal').remove()"><i class="fas fa-times"></i></button>
-      <div class="modal-title" style="margin-bottom:6px">Datei austauschen</div>
-      <p style="font-size:13px;color:var(--text3);margin-bottom:16px">Ersetzt die Datei von <strong>${escHtml(displayName)}</strong>. Name, Kategorie und Notiz bleiben erhalten.</p>
-      <div class="form-group">
-        <label>Neue Datei</label>
-        <input type="file" id="wikiReplaceInput" class="form-control">
-      </div>
-      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
-        <button class="btn btn-ghost" onclick="document.getElementById('wikiReplaceModal').remove()">Abbrechen</button>
-        <button class="btn btn-primary" onclick="saveWikiReplace(${id})"><i class="fas fa-upload" style="margin-right:6px"></i>Austauschen</button>
-      </div>
-    </div>`;
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-  document.body.appendChild(overlay);
-}
-
-async function saveWikiReplace(id) {
-  const input = document.getElementById('wikiReplaceInput');
-  if (!input?.files[0]) { showToast('Datei auswählen', 'err'); return; }
-  const formData = new FormData();
-  formData.append('file', input.files[0]);
-  try {
-    const res = await fetch(`/api/wiki/files/${id}/replace`, {
-      method: 'PUT',
-      headers: { 'Authorization': 'Bearer ' + Auth.getToken() },
-      body: formData
-    });
-    if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
-    document.getElementById('wikiReplaceModal').remove();
-    showToast('Datei ausgetauscht ✓');
-    loadWiki();
-  } catch(e) { showToast(e.message, 'err'); }
-}
-
-
 
 // ── COMMENT EDIT / DELETE (Admin — kein Ownership-Check) ──────
 function editComment(leadId, cid, text) {

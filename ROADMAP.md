@@ -31,6 +31,8 @@ und CentralStationCRM (Bewertungen von Vertrieblern auf G2, Capterra, OMR, Trust
 - [x] Wähllisten: gespeicherte Filter direkt im Anrufmodus abtelefonieren
 - [x] Eingehende Anrufe: Anrufer erkennen, im Browser annehmen, verpasste Anrufe als Rückruf-Aufgabe
 - [x] Automatische Prüfung jedes Pull Requests (Test-Datenbank, CRM testweise starten) vor dem Live-Gang über Hostinger
+- [x] Angebote & Rechnungen (Abrechnung aus dem Angebotstool) direkt im CRM, nur für Admins
+- [x] Wissensdatenbank neu: Suche, Kategorien, Vorschaubilder, Hochladen per Drag & Drop, Vorlagen-Vorschau für Closer
 
 ## Später
 | Feature | Nutzen | Aufwand |
