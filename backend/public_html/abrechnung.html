@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Abrechnung – NovaFlow Services</title>
+  <link rel="icon" type="image/png" href="/novaflow-logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --navy: #2C3A55; --navy-dark: #1F2C44; --ink: #1A2330; --text: #1A2330;
+      --text-dark: #131A24; --muted: #59616E; --border: #E2E8F0; --white: #FFFFFF;
+      --paper-card: #F5F7FA; --copper: #C2691E; --copper-light: #E59346;
+      --gruen: #2E7D32; --rot: #B3261E; --gelb: #8A6D00; --bg: #EEF1F6;
+    }
+    body { font-family: 'Montserrat', 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    html.eingebettet header { display: none; }
+    html.eingebettet body { background: transparent; }
+    header {
+      background: rgba(26, 35, 48, 0.94); backdrop-filter: blur(10px);
+      position: sticky; top: 0; z-index: 10; padding: 14px 24px;
+      display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    }
+    header img { height: 34px; }
+    header .wordmark { font-size: 1.05rem; font-weight: 600; color: var(--white); }
+    header .titel { font-size: 1.05rem; font-weight: 600; color: var(--white); margin-left: 14px; padding-left: 14px; border-left: 1px solid rgba(255,255,255,.2); }
+    header .rechts { margin-left: auto; display: flex; gap: 8px; }
+    header a.zurueck { color: var(--white); text-decoration: none; font-size: 0.85rem; border: 1px solid rgba(255,255,255,.3); border-radius: 50px; padding: 7px 16px; }
+    header a.zurueck:hover { background: rgba(255,255,255,.08); }
+    nav.tabs { background: var(--white); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; gap: 4px; overflow-x: auto; }
+    nav.tabs button { background: none; border: none; border-bottom: 3px solid transparent; padding: 14px 14px; font-family: inherit; font-size: 0.88rem; font-weight: 500; color: var(--muted); cursor: pointer; white-space: nowrap; }
+    nav.tabs button.aktiv { color: var(--navy); border-bottom-color: var(--copper); font-weight: 600; }
+    nav.tabs button:hover { color: var(--navy); }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 28px 20px 60px; }
+    .view { display: none; }
+    .view.aktiv { display: block; }
+    .kopfzeile { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+    .section-label { font-size: 0.85rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--copper); }
+    .card {
+      background: var(--white); border-radius: 24px; padding: 8px; margin-bottom: 20px;
+      box-shadow: 0 1px 2px rgba(20,30,45,.05), 0 24px 48px -20px rgba(20,30,45,.22);
+      overflow-x: auto;
+    }
+    .form-card { padding: 26px 28px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+    thead th { text-align: left; padding: 12px 14px; color: var(--muted); font-weight: 600; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    tbody td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: var(--paper-card); }
+    td.zahl, th.zahl { text-align: right; white-space: nowrap; }
+    td.aktionen { white-space: nowrap; text-align: right; }
+    .name { font-weight: 600; color: var(--text-dark); }
+    .sub { font-size: 0.76rem; color: var(--muted); }
+    .chip { display: inline-block; padding: 2px 9px; border-radius: 50px; font-size: 0.72rem; font-weight: 600; white-space: nowrap; }
+    .chip.entwurf { background: var(--paper-card); color: var(--muted); }
+    .chip.versendet, .chip.offen { background: #EAF0FA; color: var(--navy); }
+    .chip.angenommen, .chip.bezahlt, .chip.aktiv { background: #E7F3E8; color: var(--gruen); }
+    .chip.abgelehnt, .chip.ueberfaellig, .chip.storniert { background: #FBEDEC; color: var(--rot); }
+    .chip.abgelaufen, .chip.storno, .chip.beendet { background: #F6F0DC; color: var(--gelb); }
+    .leer { padding: 40px; text-align: center; color: var(--muted); font-size: 0.9rem; }
+    .stat-zeile { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+    .stat-tile { background: var(--white); border-radius: 18px; padding: 16px 18px; flex: 1; min-width: 128px; box-shadow: 0 1px 2px rgba(20,30,45,.05), 0 16px 32px -18px rgba(20,30,45,.2); }
+    .stat-tile .label { font-size: 0.74rem; color: var(--muted); margin-bottom: 4px; }
+    .stat-tile .wert { font-size: 1.45rem; font-weight: 600; color: var(--text-dark); }
+    .stat-tile.warn .wert { color: var(--rot); }
+
+    .row { display: flex; gap: 14px; }
+    .field { flex: 1; margin-bottom: 14px; min-width: 0; }
+    .field.klein { flex: 0 0 150px; }
+    .field label { display: block; font-size: 0.78rem; font-weight: 500; color: var(--muted); margin-bottom: 6px; }
+    .field input, .field select, .field textarea {
+      width: 100%; padding: 11px 14px; border: 1px solid var(--border); border-radius: 14px;
+      font-size: 0.92rem; font-family: inherit; color: var(--text-dark); background: var(--white);
+    }
+    .field textarea { min-height: 70px; resize: vertical; }
+    .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--navy); }
+    .field .hint { font-size: 0.72rem; color: var(--muted); margin-top: 5px; }
+    .check { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; margin: 6px 0 14px; cursor: pointer; }
+    .check input { width: 18px; height: 18px; accent-color: var(--navy); }
+    .btn { padding: 12px 24px; background: var(--copper); color: var(--white); border: none; border-radius: 16px; font-size: 0.9rem; font-weight: 500; font-family: inherit; cursor: pointer; box-shadow: 0 14px 28px -10px rgba(194,105,30,.5); transition: background .15s; }
+    .btn:hover { background: #A2571A; }
+    .btn:disabled { background: var(--border); box-shadow: none; cursor: not-allowed; }
+    .btn.sekundaer { background: var(--white); color: var(--navy); border: 1px solid var(--border); box-shadow: none; }
+    .btn.sekundaer:hover { background: var(--paper-card); }
+    .btn.klein { padding: 7px 12px; font-size: 0.78rem; border-radius: 12px; box-shadow: none; }
+    .btn.gefahr { background: var(--white); color: var(--rot); border: 1px solid #F0C9C6; box-shadow: none; }
+    .btn.gefahr:hover { background: #FBEDEC; }
+    .btn-zeile { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+    .status-text { font-size: 0.8rem; min-height: 1em; margin-left: 6px; }
+    .status-text.ok { color: var(--gruen); }
+    .status-text.fehler { color: var(--rot); }
+    .mono { font-family: ui-monospace, monospace; font-size: 0.82rem; color: var(--muted); }
+    .hinweis { background: var(--paper-card); border-left: 3px solid var(--copper); border-radius: 10px; padding: 12px 16px; font-size: 0.83rem; color: var(--muted); margin-bottom: 18px; }
+    .untertitel { font-size: 0.95rem; font-weight: 600; color: var(--navy); margin: 18px 0 10px; }
+
+    /* Positionen-Editor */
+    .pos-tabelle { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+    .pos-tabelle th { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; text-align: left; padding: 6px 6px; }
+    .pos-tabelle td { padding: 4px 6px; vertical-align: top; }
+    .pos-tabelle input, .pos-tabelle select, .pos-tabelle textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; font-family: inherit; font-size: 0.85rem; color: var(--text-dark); }
+    .pos-tabelle textarea { min-height: 48px; resize: vertical; font-size: 0.78rem; margin-top: 4px; }
+    .pos-tabelle .zahl input { text-align: right; }
+    .pos-tabelle .entf { background: none; border: none; color: var(--rot); cursor: pointer; font-size: 1.1rem; padding: 6px; }
+    .summe-box { display: flex; justify-content: flex-end; }
+    .summe-box table { width: auto; min-width: 300px; }
+    .summe-box td { padding: 5px 12px; border: none; }
+    .summe-box tr.gesamt td { font-weight: 700; border-top: 1px solid var(--navy); font-size: 1rem; }
+    .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--white); padding: 12px 22px; border-radius: 50px; font-size: 0.86rem; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 50; max-width: 90vw; }
+    .toast.sichtbar { opacity: 1; }
+    .toast.fehler { background: var(--rot); }
+    .modal-hg { position: fixed; inset: 0; background: rgba(26,35,48,.55); display: none; align-items: center; justify-content: center; z-index: 40; padding: 20px; }
+    .modal-hg.sichtbar { display: flex; }
+    .modal { background: var(--white); border-radius: 22px; padding: 26px 28px; max-width: 560px; width: 100%; max-height: 92vh; overflow-y: auto; }
+    .modal h3 { font-size: 1.05rem; margin-bottom: 8px; color: var(--navy); }
+    .modal p { font-size: 0.88rem; color: var(--muted); margin-bottom: 16px; }
+    @media (max-width: 700px) { .row { flex-direction: column; gap: 0; } .field.klein { flex: 1; } header .titel { display: none; } }
+  </style>
+</head>
+<body>
+
+<header>
+  <a href="/abrechnung" title="Zur Übersicht" style="display:flex;align-items:center;gap:14px;text-decoration:none">
+    <img src="/novaflow-logo.png" alt="NovaFlow Logo" />
+    <span class="wordmark">NovaFlow</span>
+  </a>
+  <span class="titel">Abrechnung</span>
+  <div class="rechts">
+    <a class="zurueck" href="/admin" target="_top">← Zurück zum CRM</a>
+  </div>
+</header>
+<nav class="tabs" id="tabs">
+  <button data-view="uebersicht" class="aktiv">Übersicht</button>
+  <button data-view="angebote">Angebote</button>
+  <button data-view="rechnungen">Rechnungen</button>
+  <button data-view="abos">Abos</button>
+  <button data-view="kunden">Kunden</button>
+  <button data-view="artikel">Artikel</button>
+  <button data-view="stammdaten">Stammdaten</button>
+  <button data-view="export">Export</button>
+</nav>
+
+<div class="container">
+
+  <!-- ÜBERSICHT -->
+  <section class="view aktiv" id="view-uebersicht">
+    <div class="stat-zeile" id="stat-zeile"></div>
+    <div class="hinweis" id="ku-hinweis"></div>
+    <div class="kopfzeile"><span class="section-label">Offene Rechnungen</span></div>
+    <div class="card"><div id="uebersicht-offen"></div></div>
+    <div class="kopfzeile"><span class="section-label">Rechnungsentwürfe</span></div>
+    <div class="card"><div id="uebersicht-entwuerfe"></div></div>
+  </section>
+
+  <!-- ANGEBOTE -->
+  <section class="view" id="view-angebote">
+    <div class="kopfzeile">
+      <span class="section-label">Angebote</span>
+      <button class="btn klein" onclick="angebotNeu()">+ Neues Angebot</button>
+    </div>
+    <div class="card form-card" id="angebot-editor" style="display:none"></div>
+    <div class="card"><div id="angebote-liste"></div></div>
+  </section>
+
+  <!-- RECHNUNGEN -->
+  <section class="view" id="view-rechnungen">
+    <div class="kopfzeile">
+      <span class="section-label">Rechnungen</span>
+      <button class="btn klein" onclick="rechnungNeu()">+ Neue Rechnung</button>
+    </div>
+    <div class="card form-card" id="rechnung-editor" style="display:none"></div>
+    <div class="card"><div id="rechnungen-liste"></div></div>
+  </section>
+
+  <!-- ABOS -->
+  <section class="view" id="view-abos">
+    <div class="kopfzeile">
+      <span class="section-label">Abos (monatliche Leistungen)</span>
+      <div class="btn-zeile" style="margin:0">
+        <button class="btn klein sekundaer" onclick="aboLauf()">Abo-Lauf jetzt ausführen</button>
+        <button class="btn klein" onclick="aboNeu()">+ Neues Abo</button>
+      </div>
+    </div>
+    <div class="hinweis">Zum Stichtag (Stammdaten) legt das Tool automatisch pro Abo und Monat einen Rechnungsentwurf an – Leistungszeitraum ist der Kalendermonat. Gibt es im selben Monat schon einen Raten-Entwurf für den Kunden, wird das Abo dort als Position ergänzt. Freigeben musst du den Entwurf selbst unter „Rechnungen“.</div>
+    <div class="card form-card" id="abo-editor" style="display:none"></div>
+    <div class="card"><div id="abos-liste"></div></div>
+  </section>
+
+  <!-- KUNDEN -->
+  <section class="view" id="view-kunden">
+    <div class="kopfzeile">
+      <span class="section-label">Kunden</span>
+      <button class="btn klein" onclick="kundeNeu()">+ Neuer Kunde</button>
+    </div>
+    <div class="card form-card" id="kunde-editor" style="display:none"></div>
+    <div class="card"><div id="kunden-liste"></div></div>
+  </section>
+
+  <!-- ARTIKEL -->
+  <section class="view" id="view-artikel">
+    <div class="kopfzeile">
+      <span class="section-label">Artikelkatalog</span>
+      <button class="btn klein" onclick="artikelNeu()">+ Neuer Artikel</button>
+    </div>
+    <div class="card form-card" id="artikel-editor" style="display:none"></div>
+    <div class="card"><div id="artikel-liste"></div></div>
+  </section>
+
+  <!-- STAMMDATEN -->
+  <section class="view" id="view-stammdaten">
+    <div class="kopfzeile"><span class="section-label">Stammdaten</span></div>
+    <div class="card form-card">
+      <div class="row">
+        <div class="field"><label>Firma</label><input id="st-firma"></div>
+        <div class="field"><label id="st-inhaberin-label">Inhaberin</label><input id="st-inhaberin"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Straße</label><input id="st-strasse"></div>
+        <div class="field klein"><label>PLZ</label><input id="st-plz"></div>
+        <div class="field"><label>Ort</label><input id="st-ort"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Steuernummer</label><input id="st-steuernummer"><div class="hint">Pflichtangabe auf jeder Rechnung (§ 14 UStG).</div></div>
+        <div class="field"><label>Telefon</label><input id="st-telefon"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>E-Mail</label><input id="st-email"></div>
+        <div class="field"><label>Website</label><input id="st-website"></div>
+      </div>
+      <div class="nur-logo" style="display:none">
+      <div class="untertitel">Logo</div>
+      <div class="hint" style="margin:-6px 0 10px">Erscheint oben links auf allen Angeboten, Rechnungen und Mahnungen. PNG oder JPG, max. ca. 500 KB.</div>
+      <div class="btn-zeile" style="margin:0 0 16px;align-items:center">
+        <img id="st-logo-vorschau" alt="" style="display:none;max-height:56px;max-width:180px;border:1px solid var(--border);border-radius:10px;padding:6px;background:#fff">
+        <input type="file" id="st-logo-datei" accept="image/png,image/jpeg" style="font-size:0.85rem">
+        <button class="btn klein sekundaer" onclick="logoHochladen()">Logo speichern</button>
+        <button class="btn klein gefahr" id="st-logo-entfernen" style="display:none" onclick="logoEntfernen()">Logo entfernen</button>
+        <span class="status-text" id="st-logo-status"></span>
+      </div>
+      </div>
+      <div class="untertitel">Bankverbindung</div>
+      <div class="row">
+        <div class="field"><label>Bank</label><input id="st-bank-name"></div>
+        <div class="field"><label id="st-kontoinhaber-label">Kontoinhaberin</label><input id="st-bank-inhaberin"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>IBAN</label><input id="st-bank-iban"></div>
+        <div class="field klein"><label>BIC</label><input id="st-bank-bic"></div>
+      </div>
+      <div class="untertitel">Steuer &amp; Fristen</div>
+      <label class="check"><input type="checkbox" id="st-ku"> <span id="st-ku-label">Kleinunternehmerin</span>&nbsp;nach § 19 UStG (keine Umsatzsteuer, Hinweis auf den Dokumenten)</label>
+      <div class="row">
+        <div class="field klein"><label>Zahlungsziel (Tage)</label><input type="number" id="st-zahlungsziel" min="0"></div>
+        <div class="field klein"><label>Angebot gültig (Tage)</label><input type="number" id="st-gueltig" min="1"></div>
+        <div class="field klein"><label>Abo-Stichtag (Tag im Monat)</label><input type="number" id="st-stichtag" min="1" max="28"></div>
+      </div>
+      <div class="untertitel">Mahnwesen</div>
+      <div class="row">
+        <div class="field klein"><label>Zahlungsfrist in Mahnung (Tage)</label><input type="number" id="st-mahnfrist" min="1"></div>
+        <div class="field klein"><label>Mahngebühr 1. Mahnung (€)</label><input type="number" step="0.01" id="st-mahngebuehr2" min="0"></div>
+        <div class="field klein"><label>Mahngebühr 2. Mahnung (€)</label><input type="number" step="0.01" id="st-mahngebuehr3" min="0"></div>
+      </div>
+      <div class="hint" style="margin:-6px 0 14px">Reihenfolge: Zahlungserinnerung (ohne Gebühr) → 1. Mahnung → 2. Mahnung. Gebühren dürfen nur den tatsächlichen Verzugsschaden abdecken, 0 ist rechtlich immer sicher.</div>
+      <div class="nur-email">
+      <div class="untertitel">E-Mail-Versand</div>
+      <div class="hinweis" id="st-email-status">…</div>
+      <div class="btn-zeile" style="margin:-6px 0 16px"><button class="btn klein sekundaer" onclick="emailTest()">Test-E-Mail an mich senden</button><span class="status-text" id="st-email-test"></span></div>
+      </div>
+      <div class="nur-admin">
+      <div class="untertitel">Automatische Sicherung per E-Mail</div>
+      <label class="check"><input type="checkbox" id="st-sich-aktiv"> Regelmäßig eine Sicherungs-Mail mit allen Daten und einem Statusbericht schicken</label>
+      <div class="row">
+        <div class="field"><label>An (leer = E-Mail aus den Stammdaten)</label><input id="st-sich-an" placeholder="info@novaflowservices.de"></div>
+        <div class="field klein"><label>Alle … Tage</label><input type="number" id="st-sich-tage" min="1" max="31"></div>
+      </div>
+      <div class="hint" style="margin:-6px 0 10px">Anhang: Abrechnungsdaten (JSON), Kundenkonten des Angebotstools (JSON), am Monatsanfang zusätzlich das Buchhaltungs-ZIP des Vormonats. Im Text: überfällige Rechnungen, offene Entwürfe, unbeantwortete Angebote. Beide Dateien lassen sich im Tool per Klick wieder einspielen.</div>
+      <div class="btn-zeile" style="margin:0 0 16px"><button class="btn klein sekundaer" onclick="sicherungJetzt()">Sicherungs-Mail jetzt senden</button><span class="status-text" id="st-sich-status"></span></div>
+      </div>
+      <div class="btn-zeile"><button class="btn" onclick="stammdatenSpeichern()">Stammdaten speichern</button><span class="status-text" id="st-status"></span></div>
+    </div>
+  </section>
+
+  <!-- EXPORT -->
+  <section class="view" id="view-export">
+    <div class="kopfzeile"><span class="section-label">Export &amp; Archiv</span></div>
+    <div class="hinweis">Finalisierte Rechnungen werden unverändert als PDF unter <span class="mono">data/Buchhaltung/JJJJ/MM/Einnahmen/</span> abgelegt (versendete Angebote unter <span class="mono">…/Angebote/</span>). Nichts wird automatisch gelöscht – Aufbewahrung mindestens 10 Jahre. Pro Monat gibt es hier ein ZIP mit allen PDFs plus CSV-Liste für die Buchhaltung.</div>
+    <div class="card"><div id="export-liste"></div></div>
+    <div class="kopfzeile"><span class="section-label">Gesamtarchiv für den PC</span></div>
+    <div class="card form-card">
+      <p style="font-size:0.88rem;color:var(--muted);margin-bottom:14px">Lädt alle Angebote, Rechnungen und Mahnungen als PDF mit der Ordnerstruktur <span class="mono">Buchhaltung\JJJJ\MM\…</span> herunter, dazu pro Jahr eine CSV-Liste und eine Sicherung der Rohdaten. Die ZIP-Datei einfach in deinen Buchhaltungsordner auf dem PC entpacken. Bestehende Dateien werden dabei nur ergänzt, nie verändert.</p>
+      <div class="btn-zeile">
+        <a class="btn" href="/api/abrechnung/export/gesamt" style="text-decoration:none">Gesamtarchiv herunterladen (ZIP)</a>
+        <a class="btn sekundaer" id="btn-jahr-export" href="/api/abrechnung/export/gesamt?jahr=" style="text-decoration:none">Nur aktuelles Jahr</a>
+        <a class="btn sekundaer" href="/api/abrechnung/export/daten.json" style="text-decoration:none">Nur Daten (JSON)</a>
+      </div>
+    </div>
+    <div class="kopfzeile"><span class="section-label">Sicherung wieder einspielen</span></div>
+    <div class="card form-card">
+      <p style="font-size:0.88rem;color:var(--muted);margin-bottom:14px">Falls Daten verloren gehen: die Datei <span class="mono">NovaFlow-Abrechnung-Daten….json</span> aus dem Gesamtarchiv (Ordner „Datensicherung“) oder aus „Nur Daten (JSON)“ auswählen. Fehlende Kunden, Artikel, Angebote, Rechnungen und Abos werden ergänzt, vorhandene bleiben unverändert. Rechnungsnummern werden dabei nie zurückgesetzt.</p>
+      <div class="row"><div class="field"><label>Sicherungsdatei</label><input type="file" id="wh-datei" accept="application/json,.json"></div></div>
+      <label class="check"><input type="checkbox" id="wh-ueberschreiben"> Vorhandene Datensätze mit der Sicherung überschreiben</label>
+      <div class="btn-zeile"><button class="btn" onclick="wiederherstellen()">Sicherung einspielen</button><span class="status-text" id="wh-status"></span></div>
+    </div>
+  </section>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="modal-hg" id="modal"><div class="modal"><h3 id="modal-titel"></h3><p id="modal-text"></p><div id="modal-extra"></div><div class="btn-zeile"><button class="btn" id="modal-ok">OK</button><button class="btn sekundaer" onclick="modalSchliessen()">Abbrechen</button></div></div></div>
+
+<script>
+// ── Hilfen ────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const euro = n => (Number(n) || 0).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+const datumDe = iso => iso ? iso.slice(0, 10).split('-').reverse().join('.') : '–';
+const heute = () => new Date().toISOString().slice(0, 10);
+const plusTage = (iso, t) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + t); return d.toISOString().slice(0, 10); };
+const round2 = n => Math.round((Number(n) || 0) * 100) / 100;
+
+let toastTimer;
+function toast(text, fehler) {
+  const t = $('toast'); t.textContent = text; t.className = 'toast sichtbar' + (fehler ? ' fehler' : '');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.className = 'toast', fehler ? 5000 : 2500);
+}
+// ── Anmeldung über das CRM ─────────────────────────────────
+// Die Seite läuft im CRM (eingebettet im Admin-Bereich oder als eigene Seite).
+// Mit dem CRM-Token wird ein Sitzungs-Cookie für /api/abrechnung gesetzt –
+// damit funktionieren auch PDF-, ZIP- und CSV-Links direkt.
+const EINGEBETTET = window.self !== window.top;
+if (EINGEBETTET) document.documentElement.classList.add('eingebettet');
+function zumLogin() { (EINGEBETTET ? window.top : window).location.href = '/login'; }
+async function anmelden() {
+  const token = localStorage.getItem('lh_token');
+  if (!token) { zumLogin(); throw new Error('Bitte im CRM anmelden.'); }
+  const res = await fetch('/api/abrechnung-sitzung', { method: 'POST', headers: { Authorization: 'Bearer ' + token } });
+  if (res.status === 401) { zumLogin(); throw new Error('Bitte im CRM anmelden.'); }
+  const d = await res.json().catch(() => ({}));
+  if (res.status === 403) throw new Error('Die Abrechnung ist nur für Admins.');
+  if (!d.aktiv) throw new Error(d.grund || 'Die Abrechnung ist auf dem Server nicht verfügbar.');
+  return d;
+}
+async function api(pfad, methode = 'GET', body) {
+  const res = await fetch('/api/abrechnung' + pfad, { method: methode, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+  if (res.status === 401) { zumLogin(); throw new Error('Bitte im CRM anmelden.'); }
+  const data = await res.json().catch(() => ({ success: false, error: 'Unerwartete Antwort.' }));
+  if (!data.success) throw new Error(data.error || 'Fehler');
+  return data;
+}
+function modal(titel, text, extraHtml) {
+  return new Promise(resolve => {
+    $('modal-titel').textContent = titel; $('modal-text').textContent = text; $('modal-extra').innerHTML = extraHtml || '';
+    $('modal').classList.add('sichtbar');
+    $('modal-ok').onclick = () => { $('modal').classList.remove('sichtbar'); resolve(true); };
+    $('modal')._abbrechen = () => resolve(false);
+  });
+}
+function modalSchliessen() { $('modal').classList.remove('sichtbar'); if ($('modal')._abbrechen) $('modal')._abbrechen(); }
+const chip = (s, text) => `<span class="chip ${esc(s)}">${esc(text || STATUS_TEXT[s] || s)}</span>`;
+const STATUS_TEXT = { entwurf: 'Entwurf', versendet: 'Versendet', angenommen: 'Angenommen', abgelehnt: 'Abgelehnt', abgelaufen: 'Abgelaufen', offen: 'Offen', bezahlt: 'Bezahlt', ueberfaellig: 'Überfällig', storno: 'Stornorechnung', storniert: 'Storniert', aktiv: 'Aktiv', beendet: 'Beendet' };
+
+// ── Zustand ───────────────────────────────────────────────
+const S = { stammdaten: null, artikel: [], kunden: [], angebote: [], rechnungen: [], abos: [] };
+let KONTEXT = { admin: false, emailMoeglich: false, emailErlaubt: false, inhaberLabel: 'Inhaberin', firma: '' };
+
+async function ladeBasis() {
+  const [kx, st, ar, ku] = await Promise.all([api('/kontext'), api('/stammdaten'), api('/artikel'), api('/kunden')]);
+  KONTEXT = kx; S.stammdaten = st.stammdaten; S.artikel = ar.artikel; S.kunden = ku.kunden;
+  // Oberfläche an Konto anpassen: Betriebe sehen keine Admin-Links und keine E-Mail-/Sicherungsfunktionen
+  document.querySelectorAll('.nur-admin').forEach(el => { el.style.display = KONTEXT.admin ? '' : 'none'; });
+  document.querySelectorAll('.nur-email').forEach(el => { el.style.display = KONTEXT.emailErlaubt ? '' : 'none'; });
+  const t = document.querySelector('header .titel'); if (t) t.textContent = KONTEXT.admin ? 'Abrechnung' : 'Abrechnung · ' + KONTEXT.firma;
+  const lbl = $('st-inhaberin-label'); if (lbl) lbl.textContent = KONTEXT.inhaberLabel;
+  const kl = $('st-kontoinhaber-label'); if (kl) kl.textContent = KONTEXT.admin ? 'Kontoinhaberin' : 'Kontoinhaber/in';
+  const kuLbl = $('st-ku-label'); if (kuLbl) kuLbl.textContent = KONTEXT.admin ? 'Kleinunternehmerin' : 'Kleinunternehmer/in';
+  document.querySelectorAll('.nur-logo').forEach(el => { el.style.display = KONTEXT.logoErlaubt ? '' : 'none'; });
+}
+const kundeName = id => { const k = S.kunden.find(x => x.id === id); return k ? k.firma : '–'; };
+const kundenOptionen = (gewaehlt) => '<option value="">– Kunde wählen –</option>' + S.kunden.map(k => `<option value="${k.id}" ${k.id === gewaehlt ? 'selected' : ''}>${esc(k.nummer)} · ${esc(k.firma)}${k.ansprechpartner ? ' (' + esc(k.ansprechpartner) + ')' : ''}</option>`).join('');
+
+// ── Tabs ──────────────────────────────────────────────────
+const LADER = { uebersicht: zeigeUebersicht, angebote: zeigeAngebote, rechnungen: zeigeRechnungen, abos: zeigeAbos, kunden: zeigeKunden, artikel: zeigeArtikel, stammdaten: zeigeStammdaten, export: zeigeExport };
+// Adresse: /abrechnung/<bereich> (sauber) – alte Form abrechnung.html#bereich funktioniert weiter
+const SAUBERE_PFADE = location.pathname.startsWith('/abrechnung') && !location.pathname.endsWith('.html');
+function bereichAusAdresse() {
+  const ausPfad = SAUBERE_PFADE ? location.pathname.replace(/^\/abrechnung\/?/, '').replace(/\/$/, '') : '';
+  return ausPfad || location.hash.replace('#', '') || 'uebersicht';
+}
+function wechsle(view, ohneVerlauf) {
+  document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('aktiv', b.dataset.view === view));
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('aktiv', v.id === 'view-' + view));
+  if (!ohneVerlauf) {
+    if (SAUBERE_PFADE) history.pushState({ view }, '', view === 'uebersicht' ? '/abrechnung' : '/abrechnung/' + view);
+    else location.hash = view;
+  }
+  LADER[view]().catch(e => toast(e.message, true));
+}
+$('tabs').addEventListener('click', e => { if (e.target.dataset.view) wechsle(e.target.dataset.view); });
+window.addEventListener('popstate', () => { const v = bereichAusAdresse(); if (LADER[v]) wechsle(v, true); });
+window.addEventListener('hashchange', () => { const v = location.hash.replace('#', ''); if (LADER[v] && !document.getElementById('view-' + v).classList.contains('aktiv')) wechsle(v, true); });
+
+// ── Übersicht ─────────────────────────────────────────────
+async function zeigeUebersicht() {
+  const [u, r] = await Promise.all([api('/uebersicht'), api('/rechnungen')]);
+  S.rechnungen = r.rechnungen;
+  const tile = (label, wert, warn) => `<div class="stat-tile ${warn ? 'warn' : ''}"><div class="label">${label}</div><div class="wert">${wert}</div></div>`;
+  $('stat-zeile').innerHTML = tile('Umsatz ' + heute().slice(0, 4), euro(u.umsatzJahr)) + tile('Offene Rechnungen', `${u.offen} · ${euro(u.offenerBetrag)}`) + tile('Überfällig', u.ueberfaellig, u.ueberfaellig > 0) + tile('Rechnungsentwürfe', u.entwuerfe) + tile('Offene Angebote', u.angeboteOffen) + tile('Aktive Abos', u.abosAktiv) + tile('Kunden', u.kunden);
+  $('ku-hinweis').innerHTML = u.kleinunternehmer ? 'Kleinunternehmerregelung aktiv: Dokumente werden ohne Umsatzsteuer mit § 19-Hinweis erstellt.' : 'Regelbesteuerung aktiv: Dokumente weisen Netto, 19 % USt und Brutto aus.';
+  $('uebersicht-offen').innerHTML = rechnungsTabelle(S.rechnungen.filter(x => x.zahlungsstatus === 'offen' || x.zahlungsstatus === 'ueberfaellig'), 'Keine offenen Rechnungen.');
+  $('uebersicht-entwuerfe').innerHTML = rechnungsTabelle(S.rechnungen.filter(x => x.status === 'entwurf'), 'Keine Entwürfe.');
+}
+
+// ── Positionen-Editor (Angebot & Rechnung) ────────────────
+let POS = [];
+function artikelOptionen(gewaehlt) {
+  return '<option value="">– frei –</option>' + S.artikel.filter(a => a.aktiv !== false || a.nr === gewaehlt).map(a => `<option value="${esc(a.nr)}" ${a.nr === gewaehlt ? 'selected' : ''}>${esc(a.nr)} · ${esc(a.titel)}</option>`).join('');
+}
+function posRender(mitAbrechnung) {
+  const ku = S.stammdaten.kleinunternehmer;
+  const rows = POS.map((p, i) => `<tr>
+    <td style="width:170px"><select onchange="posArtikel(${i}, this.value)">${artikelOptionen(p.artikelNr)}</select></td>
+    <td><input value="${esc(p.titel)}" placeholder="Bezeichnung" oninput="POS[${i}].titel=this.value"><textarea placeholder="Beschreibung (erscheint im Dokument)" oninput="POS[${i}].beschreibung=this.value">${esc(p.beschreibung)}</textarea></td>
+    <td class="zahl" style="width:70px"><input type="number" step="1" min="0" value="${p.menge}" oninput="POS[${i}].menge=Number(this.value);posSumme()"></td>
+    <td style="width:100px"><input value="${esc(p.einheit)}" placeholder="Einzahl" oninput="POS[${i}].einheit=this.value"><input value="${esc(p.einheitMehrzahl || '')}" placeholder="Mehrzahl" style="margin-top:4px" oninput="POS[${i}].einheitMehrzahl=this.value"></td>
+    <td class="zahl" style="width:110px"><input type="number" step="0.01" value="${p.einzelpreis}" oninput="POS[${i}].einzelpreis=Number(this.value);posSumme()"></td>
+    <td class="zahl" style="width:70px"><input type="number" step="1" min="0" max="100" value="${p.rabatt || 0}" oninput="POS[${i}].rabatt=Number(this.value);posSumme()"></td>
+    ${mitAbrechnung ? `<td style="width:120px"><select onchange="POS[${i}].abrechnung=this.value;posSumme()"><option value="einmalig" ${p.abrechnung !== 'monatlich' ? 'selected' : ''}>einmalig</option><option value="monatlich" ${p.abrechnung === 'monatlich' ? 'selected' : ''}>monatlich</option></select></td>` : ''}
+    <td style="width:36px"><button class="entf" title="Position entfernen" onclick="POS.splice(${i},1);posRender(${mitAbrechnung})">✕</button></td>
+  </tr>`).join('');
+  $('pos-body').innerHTML = rows || `<tr><td colspan="8" class="sub" style="padding:12px">Noch keine Positionen – Artikel wählen oder frei eintragen.</td></tr>`;
+  posSumme();
+}
+function posArtikel(i, nr) {
+  const a = S.artikel.find(x => x.nr === nr);
+  POS[i].artikelNr = nr || null;
+  if (a) { Object.assign(POS[i], { titel: a.titel, beschreibung: a.beschreibung, einheit: a.einheit, einheitMehrzahl: a.einheitMehrzahl || '', einzelpreis: a.preis, abrechnung: a.abrechnung }); }
+  posRender($('pos-body').dataset.abrechnung === '1');
+}
+function posNeu(mitAbrechnung) { POS.push({ artikelNr: null, titel: '', beschreibung: '', menge: 1, einheit: mitAbrechnung ? 'Paket' : 'Stück', einheitMehrzahl: mitAbrechnung ? 'Pakete' : 'Stück', einzelpreis: 0, rabatt: 0, abrechnung: 'einmalig' }); posRender(mitAbrechnung); }
+function posSumme() {
+  const ku = S.stammdaten.kleinunternehmer;
+  const einmalig = POS.filter(p => p.abrechnung !== 'monatlich');
+  const monatlich = POS.filter(p => p.abrechnung === 'monatlich');
+  const zeilenSumme = p => round2((Number(p.menge) || 0) * (Number(p.einzelpreis) || 0) * (1 - (Number(p.rabatt) || 0) / 100));
+  const voll = round2(einmalig.reduce((s, p) => s + (Number(p.menge) || 0) * (Number(p.einzelpreis) || 0), 0));
+  const netto = round2(einmalig.reduce((s, p) => s + zeilenSumme(p), 0));
+  const ust = ku ? 0 : round2(netto * 0.19);
+  const mon = round2(monatlich.reduce((s, p) => s + zeilenSumme(p), 0));
+  let html = '<table>';
+  if (voll !== netto) html += `<tr><td>Summe Positionen</td><td class="zahl">${euro(voll)}</td></tr><tr><td>abzgl. Rabatt</td><td class="zahl">${euro(netto - voll)}</td></tr>`;
+  if (!ku) html += `<tr><td>Zwischensumme netto</td><td class="zahl">${euro(netto)}</td></tr><tr><td>zzgl. 19 % USt</td><td class="zahl">${euro(ust)}</td></tr>`;
+  html += `<tr class="gesamt"><td>Gesamtbetrag${ku ? '' : ' brutto'} (einmalig)</td><td class="zahl">${euro(netto + ust)}</td></tr>`;
+  if (mon) html += `<tr><td>Zusätzlich monatlich${ku ? '' : ' (netto)'}</td><td class="zahl">${euro(mon)}</td></tr>`;
+  html += '</table>';
+  const box = $('pos-summe'); if (box) box.innerHTML = html;
+  const rp = $('ratenplan-vorschau'); if (rp) ratenVorschau(netto + ust);
+}
+function posEditorHtml(mitAbrechnung) {
+  return `<div class="untertitel">Positionen</div>
+  <table class="pos-tabelle"><thead><tr><th>Artikel</th><th>Bezeichnung &amp; Beschreibung</th><th>Menge</th><th>Einheit (Einzahl / Mehrzahl)</th><th>Einzelpreis${S.stammdaten.kleinunternehmer ? '' : ' (netto)'}</th><th>Rabatt %</th>${mitAbrechnung ? '<th>Abrechnung</th>' : ''}<th></th></tr></thead>
+  <tbody id="pos-body" data-abrechnung="${mitAbrechnung ? 1 : 0}"></tbody></table>
+  <button class="btn klein sekundaer" onclick="posNeu(${mitAbrechnung})">+ Position</button>
+  <div class="summe-box" id="pos-summe"></div>`;
+}
+const textFeld = (id, label, wert, hint, zeilen) => `<div class="field"><label>${label}</label><textarea id="${id}" style="min-height:${zeilen || 50}px">${esc(wert || '')}</textarea>${hint ? `<div class="hint">${hint}</div>` : ''}</div>`;
+
+// ── Angebote ──────────────────────────────────────────────
+async function zeigeAngebote() {
+  await ladeBasis();
+  S.angebote = (await api('/angebote')).angebote;
+  const rows = S.angebote.map(a => `<tr>
+    <td><span class="name">${esc(a.nummer)}</span><div class="sub">${datumDe(a.datum)} · gültig bis ${datumDe(a.gueltigBis)}</div></td>
+    <td>${esc(a.kunde ? a.kunde.firma : '–')}<div class="sub">${esc(a.betreff)}${(a.anhaenge || []).length ? ' · 📎 ' + a.anhaenge.length : ''}</div></td>
+    <td class="zahl">${euro(a.summen.brutto)}${a.monatlichSumme ? `<div class="sub">+ ${euro(a.monatlichSumme)}/Monat</div>` : ''}<div class="sub">${a.zahlung.art === 'raten' ? a.zahlung.anzahl + ' Raten' : a.zahlung.art === 'anzahlung' ? a.zahlung.anzahlungProzent + ' % Anzahlung' : 'Einmalzahlung'}</div></td>
+    <td>${chip(a.statusEffektiv)}${a.umgewandelt ? '<div class="sub">umgewandelt</div>' : ''}${(a.versand || []).length ? `<div class="sub">gemailt ${datumDe((a.versand[a.versand.length - 1].am))}</div>` : ''}</td>
+    <td class="aktionen">
+      <a class="btn klein sekundaer" href="/api/abrechnung/angebote/${a.id}/pdf" target="_blank" style="text-decoration:none">PDF</a>
+      ${KONTEXT.emailErlaubt && a.status !== 'abgelehnt' ? `<button class="btn klein sekundaer" onclick="emailDialog('/angebote/${a.id}/email', 'Angebot ${esc(a.nummer)} per E-Mail senden', zeigeAngebote)">E-Mail</button>` : ''}
+      ${!a.umgewandelt ? `<button class="btn klein sekundaer" onclick="angebotBearbeiten('${a.id}')">Bearbeiten</button>` : ''}
+      ${a.status === 'entwurf' ? `<button class="btn klein" onclick="angebotStatus('${a.id}','versendet')">Versendet</button>` : ''}
+      ${(a.status === 'versendet') ? `<button class="btn klein" onclick="angebotStatus('${a.id}','angenommen')">Angenommen</button><button class="btn klein gefahr" onclick="angebotStatus('${a.id}','abgelehnt')">Abgelehnt</button>` : ''}
+      ${(a.status === 'versendet' || a.status === 'angenommen') && !a.umgewandelt ? `<button class="btn klein" onclick="angebotUmwandeln('${a.id}')">In Rechnung(en) umwandeln</button>` : ''}
+      ${a.status === 'entwurf' ? `<button class="btn klein gefahr" onclick="angebotLoeschen('${a.id}')">Löschen</button>` : ''}
+    </td></tr>`).join('');
+  $('angebote-liste').innerHTML = rows ? `<table><thead><tr><th>Nummer</th><th>Kunde · Betreff</th><th class="zahl">Summe</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="leer">Noch keine Angebote. Lege zuerst einen Kunden an, dann ein Angebot.</div>';
+}
+function angebotNeu() { angebotEditor({ kundeId: '', datum: heute(), gueltigBis: plusTage(heute(), S.stammdaten.angebotGueltigTage || 14), betreff: '', positionen: [], zahlung: { art: 'einmal', anzahl: 3, ersteRate: '' }, projektvereinbarung: true }); }
+async function angebotBearbeiten(id) { angebotEditor((await api('/angebote/' + id)).angebot); }
+function angebotEditor(a) {
+  POS = a.positionen.map(p => ({ ...p }));
+  const z = a.zahlung || {};
+  $('angebot-editor').style.display = 'block';
+  $('angebot-editor').innerHTML = `
+    <div class="kopfzeile"><span class="section-label">${a.id ? 'Angebot ' + esc(a.nummer) + ' bearbeiten' : 'Neues Angebot'}</span><button class="btn klein sekundaer" onclick="$('angebot-editor').style.display='none'">Schließen</button></div>
+    <div class="row">
+      <div class="field"><label>Kunde</label><select id="ag-kunde">${kundenOptionen(a.kundeId)}</select></div>
+      <div class="field klein"><label>Datum</label><input type="date" id="ag-datum" value="${a.datum}"></div>
+      <div class="field klein"><label>Gültig bis</label><input type="date" id="ag-gueltig" value="${a.gueltigBis}"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Betreff</label><input id="ag-betreff" value="${esc(a.betreff)}" placeholder="${KONTEXT.admin ? 'z. B. Automation Business' : 'z. B. Elektroinstallation Küche'}"></div>
+      <div class="field"><label>Anrede (leer = automatisch: „Hey Max,“ bei Du, „Guten Tag Max Muster,“ bei Sie)</label><input id="ag-anrede" value="${esc(a.anrede || '')}"><div class="hint">Beginnt deine Einleitung selbst mit „Hey …“ oder „Guten Tag …“, wird keine zusätzliche Anrede eingefügt.</div></div>
+    </div>
+    ${textFeld('ag-einleitung', 'Einleitung (leer = Standardtext)', a.einleitung)}
+    ${KONTEXT.kiVerfuegbar ? `<div class="hinweis" style="border-left-color:var(--navy)">
+      <b>Mit KI vorschlagen:</b> Beschreibe den Auftrag in deinen Worten, die KI macht daraus Betreff, Einleitung, Positionen (aus deinem Artikelkatalog, sonst mit Preisvorschlag) und Schlusstext. Alles bleibt danach editierbar.
+      <textarea id="ag-ki-text" style="width:100%;margin:10px 0 8px;min-height:64px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;font-family:inherit;font-size:0.9rem" placeholder="${KONTEXT.admin ? 'z. B. Website mit Anfrageformular für einen Malerbetrieb, danach monatliche Betreuung …' : 'z. B. Komplette Elektroinstallation einer 90 m² Wohnung, 3 Zimmer, Küche, Bad, inkl. Unterverteilung …'}"></textarea>
+      <div class="btn-zeile" style="margin:0"><button class="btn klein" onclick="kiVorschlag()">Vorschlag erstellen</button><span class="status-text" id="ag-ki-status"></span></div>
+    </div>` : ''}
+    ${posEditorHtml(true)}
+    <div class="untertitel">${KONTEXT.admin ? 'Anhänge (Projektvereinbarung als PDF)' : 'Anhänge (PDF, z. B. Vereinbarung oder AGB)'}</div>
+    <div id="ag-anhaenge">${a.id ? anhaengeHtml(a) : `<div class="sub" style="margin-bottom:12px">Nach „Angebot anlegen“ kannst du hier z. B. eine Vereinbarung oder AGB als PDF hochladen. ${KONTEXT.emailErlaubt ? 'Sie wird beim E-Mail-Versand automatisch mitgeschickt.' : 'Sie wird beim Versenden mit archiviert.'}</div>`}</div>
+    <div class="untertitel">Zahlung (einmalige Positionen)</div>
+    <div class="row">
+      <div class="field klein"><label>Zahlungsart</label><select id="ag-zahlart" onchange="ratenFelder()"><option value="einmal" ${!['raten', 'anzahlung'].includes(z.art) ? 'selected' : ''}>Einmalzahlung</option><option value="anzahlung" ${z.art === 'anzahlung' ? 'selected' : ''}>Anzahlung + Schlussrechnung</option><option value="raten" ${z.art === 'raten' ? 'selected' : ''}>Ratenzahlung (monatlich)</option></select></div>
+      <div class="field klein" id="ag-anz-prozent-feld"><label>Anzahlung %</label><input type="number" id="ag-anz-prozent" min="1" max="99" value="${z.anzahlungProzent || 50}" oninput="posSumme()"></div>
+      <div class="field" id="ag-anz-text-feld"><label>Anzahlung fällig …</label><input id="ag-anz-text" value="${esc(z.anzahlungText || 'bei Auftragserteilung')}" oninput="posSumme()"></div>
+      <div class="field" id="ag-rest-text-feld"><label>Rest fällig …</label><input id="ag-rest-text" value="${esc(z.restText || 'nach Abschluss des Projekts')}" oninput="posSumme()"></div>
+      <div class="field klein" id="ag-raten-anzahl-feld"><label>Anzahl Raten</label><input type="number" id="ag-raten-anzahl" min="2" max="36" value="${z.anzahl || 3}" oninput="posSumme()"></div>
+      <div class="field klein" id="ag-raten-erste-feld"><label>1. Rate fällig am</label><input type="date" id="ag-raten-erste" value="${z.ersteRate || plusTage(a.datum || heute(), 14)}" oninput="posSumme()"></div>
+      <div class="field"><label>Monatliche Leistungen ab</label><input type="date" id="ag-monatlich-start" value="${a.monatlichStart || ''}"><div class="hint">Leer = 1. des Folgemonats. Monatliche Positionen erscheinen nicht in der Einmalsumme, sondern als „Zusätzlich ab …“.</div></div>
+    </div>
+    <div id="ratenplan-vorschau" class="sub" style="margin-bottom:12px"></div>
+    <label class="check"><input type="checkbox" id="ag-pv" ${a.projektvereinbarung !== false ? 'checked' : ''}> „Es gilt die beiliegende Projektvereinbarung.“ ins Angebot aufnehmen</label>
+    <div class="row">${textFeld('ag-schluss', 'Schlusstext (leer = Standardtext)', a.schlusstext)}<div class="field klein"><label>Gruß (leer = automatisch)</label><input id="ag-gruss" value="${esc(a.gruss || '')}"></div></div>
+    <div class="btn-zeile"><button class="btn" onclick="angebotSpeichern('${a.id || ''}')">${a.id ? 'Änderungen speichern' : 'Angebot anlegen'}</button><span class="status-text" id="ag-status"></span></div>`;
+  posRender(true); ratenFelder();
+  $('angebot-editor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function anhaengeHtml(a) {
+  const liste = (a.anhaenge || []).map(n => `<div class="sub" style="margin-bottom:6px">📎 <a href="/api/abrechnung/angebote/${a.id}/anhang/${encodeURIComponent(n)}" target="_blank">${esc(n)}</a> · <a href="#" onclick="anhangLoeschen('${a.id}','${esc(n)}');return false" style="color:var(--rot)">entfernen</a></div>`).join('');
+  return `${liste || '<div class="sub" style="margin-bottom:6px">Noch kein Anhang.</div>'}
+    <div class="btn-zeile" style="margin:4px 0 12px"><input type="file" id="ag-anhang-datei" accept="application/pdf,.pdf" style="font-size:0.85rem"><button class="btn klein sekundaer" onclick="anhangHochladen('${a.id}')">PDF anhängen</button><span class="status-text" id="ag-anhang-status"></span></div>`;
+}
+async function anhangHochladen(id) {
+  const el = $('ag-anhang-status'); el.className = 'status-text'; el.textContent = '';
+  const datei = $('ag-anhang-datei').files[0];
+  if (!datei) { el.textContent = 'Bitte zuerst eine PDF auswählen.'; el.className = 'status-text fehler'; return; }
+  el.textContent = 'Lade hoch …';
+  const daten = await new Promise((ok, nein) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = nein; r.readAsDataURL(datei); });
+  try { const d = await api(`/angebote/${id}/anhang`, 'POST', { name: datei.name, daten }); $('ag-anhaenge').innerHTML = anhaengeHtml(d.angebot); toast('Anhang gespeichert.'); }
+  catch (e) { el.textContent = e.message; el.className = 'status-text fehler'; }
+}
+async function anhangLoeschen(id, name) {
+  try { const d = await api(`/angebote/${id}/anhang/${encodeURIComponent(name)}`, 'DELETE'); $('ag-anhaenge').innerHTML = anhaengeHtml(d.angebot); } catch (e) { toast(e.message, true); }
+}
+async function kiVorschlag() {
+  const el = $('ag-ki-status'); el.className = 'status-text'; el.textContent = 'Die KI denkt nach …';
+  try {
+    const d = await api('/ki/angebot', 'POST', { beschreibung: $('ag-ki-text').value, kundeId: $('ag-kunde').value });
+    const v = d.vorschlag;
+    if (v.betreff && !$('ag-betreff').value) $('ag-betreff').value = v.betreff;
+    if (v.einleitung) $('ag-einleitung').value = v.einleitung;
+    if (v.schlusstext) $('ag-schluss').value = v.schlusstext;
+    POS = v.positionen.map(p => ({ ...p })); posRender(true);
+    el.textContent = `${v.positionen.length} Positionen vorgeschlagen – bitte Preise und Texte prüfen.`; el.className = 'status-text ok';
+  } catch (e) { el.textContent = e.message; el.className = 'status-text fehler'; }
+}
+function ratenFelder() {
+  const art = $('ag-zahlart').value;
+  $('ag-raten-anzahl-feld').style.display = art === 'raten' ? '' : 'none';
+  $('ag-raten-erste-feld').style.display = art === 'raten' ? '' : 'none';
+  $('ag-anz-prozent-feld').style.display = art === 'anzahlung' ? '' : 'none';
+  $('ag-anz-text-feld').style.display = art === 'anzahlung' ? '' : 'none';
+  $('ag-rest-text-feld').style.display = art === 'anzahlung' ? '' : 'none';
+  posSumme();
+}
+function ratenVorschau(gesamt) {
+  const box = $('ratenplan-vorschau'); if (!box) return;
+  if (!$('ag-zahlart')) return;
+  if ($('ag-zahlart').value === 'anzahlung') {
+    const p = Math.max(1, Math.min(99, Number($('ag-anz-prozent').value) || 50));
+    const anz = round2(gesamt * p / 100);
+    box.textContent = `Im PDF: „${p} % Anzahlung (${euro(anz)}) ${$('ag-anz-text').value}, die restlichen ${round2(100 - p)} % (${euro(gesamt - anz)}) ${$('ag-rest-text').value}.“ Beim Umwandeln entstehen zwei Rechnungsentwürfe: Anzahlung und Schlussrechnung.`;
+    return;
+  }
+  if ($('ag-zahlart').value !== 'raten') { box.textContent = 'Zahlungsbedingung im PDF: „Einmalzahlung, 14 Tage nach Rechnungsstellung.“'; return; }
+  const n = Math.max(1, parseInt($('ag-raten-anzahl').value, 10) || 1);
+  const rate = round2(gesamt / n);
+  const letzte = round2(gesamt - rate * (n - 1));
+  box.textContent = `Ratenplan im PDF: ${n} × ${euro(rate)} monatlich ab ${datumDe($('ag-raten-erste').value)}${letzte !== rate ? ` (letzte Rate ${euro(letzte)} wegen Rundung)` : ''}.`;
+}
+async function angebotSpeichern(id) {
+  const body = {
+    kundeId: $('ag-kunde').value, datum: $('ag-datum').value, gueltigBis: $('ag-gueltig').value, betreff: $('ag-betreff').value,
+    anrede: $('ag-anrede').value, einleitung: $('ag-einleitung').value, schlusstext: $('ag-schluss').value, gruss: $('ag-gruss').value,
+    positionen: POS, zahlung: { art: $('ag-zahlart').value, anzahl: $('ag-raten-anzahl').value, ersteRate: $('ag-raten-erste').value, anzahlungProzent: $('ag-anz-prozent').value, anzahlungText: $('ag-anz-text').value, restText: $('ag-rest-text').value },
+    monatlichStart: $('ag-monatlich-start').value || null, projektvereinbarung: $('ag-pv').checked
+  };
+  try {
+    const d = await api(id ? '/angebote/' + id : '/angebote', id ? 'PUT' : 'POST', body);
+    toast(id ? `Angebot ${d.angebot.nummer} gespeichert.` : `Angebot ${d.angebot.nummer} als Entwurf angelegt – jetzt kannst du die Projektvereinbarung anhängen.`);
+    if (id) { $('angebot-editor').style.display = 'none'; zeigeAngebote(); }
+    else { await zeigeAngebote(); angebotEditor(d.angebot); }
+  } catch (e) { $('ag-status').textContent = e.message; $('ag-status').className = 'status-text fehler'; }
+}
+async function angebotStatus(id, status) {
+  try { await api(`/angebote/${id}/status`, 'POST', { status }); toast('Status gesetzt: ' + STATUS_TEXT[status]); zeigeAngebote(); } catch (e) { toast(e.message, true); }
+}
+async function angebotUmwandeln(id) {
+  const a = S.angebote.find(x => x.id === id);
+  const teile = [];
+  if (a.summen.brutto > 0) teile.push(a.zahlung.art === 'raten' ? `${a.zahlung.anzahl} Rechnungsentwürfe (eine pro Rate)` : '1 Rechnungsentwurf');
+  if (a.monatlichSumme) teile.push(`1 Abo über ${euro(a.monatlichSumme)}/Monat`);
+  if (!await modal('In Rechnung(en) umwandeln', `Es entstehen: ${teile.join(' und ') || 'keine Dokumente (keine Positionen)'}. Das Angebot wird danach auf „Angenommen“ gesetzt und gesperrt.`)) return;
+  try { const d = await api(`/angebote/${id}/umwandeln`, 'POST', {}); toast(`${d.rechnungen.length} Rechnungsentwürfe, ${d.abos.length} Abo angelegt.`); wechsle('rechnungen'); } catch (e) { toast(e.message, true); }
+}
+async function angebotLoeschen(id) {
+  if (!await modal('Angebot löschen', 'Der Entwurf wird endgültig gelöscht. Die Angebotsnummer wird nicht neu vergeben.')) return;
+  try { await api('/angebote/' + id, 'DELETE'); toast('Gelöscht.'); zeigeAngebote(); } catch (e) { toast(e.message, true); }
+}
+
+// ── Rechnungen ────────────────────────────────────────────
+function rechnungsTabelle(liste, leerText) {
+  if (!liste.length) return `<div class="leer">${leerText}</div>`;
+  const rows = liste.map(r => `<tr>
+    <td><span class="name">${r.nummer ? esc(r.nummer) : 'Entwurf'}</span>${r.typ === 'storno' ? '<div class="sub">Storno zu ' + esc(r.bezug.originalNummer) + '</div>' : ''}<div class="sub">${r.datum ? datumDe(r.datum) : 'noch kein Datum'}${r.faelligAm && r.typ !== 'storno' ? ' · fällig ' + datumDe(r.faelligAm) : ''}</div></td>
+    <td>${esc(r.kunde ? r.kunde.firma : '–')}<div class="sub">${esc(r.titel || '')}${r.bezug.anzahlung ? ' · Anzahlung' : r.bezug.schlussrechnung ? ' · Schlussrechnung' : r.bezug.rate ? ` · Rate ${r.bezug.rate}/${r.bezug.ratenGesamt}` : ''}${r.bezug.angebotNummer ? ' · ' + esc(r.bezug.angebotNummer) : ''}${r.bezug.aboIds && r.bezug.aboIds.length ? ' · Abo' : ''}</div></td>
+    <td class="sub">${r.leistungVon === r.leistungBis ? datumDe(r.leistungVon) : datumDe(r.leistungVon) + ' – ' + datumDe(r.leistungBis)}</td>
+    <td class="zahl">${euro(r.summen.brutto)}</td>
+    <td>${r.status === 'entwurf' ? chip('entwurf') : chip(r.zahlungsstatus)}${r.zahlung.bezahltAm ? '<div class="sub">am ' + datumDe(r.zahlung.bezahltAm) + '</div>' : ''}${r.storniertDurch ? '<div class="sub">durch ' + esc(r.storniertDurch.nummer) + '</div>' : ''}${(r.versand || []).length ? `<div class="sub">gemailt ${datumDe(r.versand[r.versand.length - 1].am)}</div>` : ''}
+      ${(r.mahnungen || []).map(m => `<div class="sub">${esc(m.titel)} ${datumDe(m.datum)} · <a href="/api/abrechnung/rechnungen/${r.id}/mahnung/${m.stufe}/pdf" target="_blank">PDF</a>${KONTEXT.emailErlaubt ? ` · <a href="#" onclick="emailDialog('/rechnungen/${r.id}/mahnung/${m.stufe}/email', '${esc(m.titel)} zu ${esc(r.nummer)} senden', zeigeRechnungen);return false">E-Mail</a>${(m.versand || []).length ? ' ✓' : ''}` : ''}</div>`).join('')}</td>
+    <td class="aktionen">
+      <a class="btn klein sekundaer" href="/api/abrechnung/rechnungen/${r.id}/pdf" target="_blank" style="text-decoration:none">PDF</a>
+      ${r.status === 'entwurf' ? `<button class="btn klein sekundaer" onclick="rechnungBearbeiten('${r.id}')">Bearbeiten</button><button class="btn klein" onclick="rechnungFinalisieren('${r.id}')">Finalisieren</button><button class="btn klein gefahr" onclick="rechnungLoeschen('${r.id}')">Löschen</button>` : ''}
+      ${KONTEXT.emailErlaubt && r.status === 'finalisiert' ? `<button class="btn klein sekundaer" onclick="emailDialog('/rechnungen/${r.id}/email', '${r.typ === 'storno' ? 'Stornorechnung' : 'Rechnung'} ${esc(r.nummer)} per E-Mail senden', zeigeRechnungen)">E-Mail</button>` : ''}
+      ${r.zahlungsstatus === 'ueberfaellig' && r.naechsteMahnung ? `<button class="btn klein gefahr" onclick="rechnungMahnen('${r.id}')">${esc(r.naechsteMahnung)}</button>` : ''}
+      ${r.status === 'finalisiert' && (r.zahlungsstatus === 'offen' || r.zahlungsstatus === 'ueberfaellig') ? `<button class="btn klein" onclick="rechnungZahlung('${r.id}','bezahlt')">Bezahlt</button>` : ''}
+      ${r.status === 'finalisiert' && r.zahlungsstatus === 'bezahlt' ? `<button class="btn klein sekundaer" onclick="rechnungZahlung('${r.id}','offen')">Wieder offen</button>` : ''}
+      ${r.status === 'finalisiert' && r.typ !== 'storno' && !r.storniertDurch ? `<button class="btn klein gefahr" onclick="rechnungStorno('${r.id}')">Storno</button>` : ''}
+    </td></tr>`).join('');
+  return `<table><thead><tr><th>Nummer</th><th>Kunde · Titel</th><th>Leistung</th><th class="zahl">Betrag</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+async function zeigeRechnungen() {
+  await ladeBasis();
+  S.rechnungen = (await api('/rechnungen')).rechnungen;
+  $('rechnungen-liste').innerHTML = rechnungsTabelle(S.rechnungen, 'Noch keine Rechnungen. Entwürfe entstehen aus Angeboten, Abos oder manuell.');
+}
+function rechnungNeu() { rechnungEditor({ kundeId: '', titel: '', leistungVon: heute(), leistungBis: heute(), positionen: [], bezug: {} }); }
+async function rechnungBearbeiten(id) { rechnungEditor((await api('/rechnungen/' + id)).rechnung); }
+function rechnungEditor(r) {
+  POS = r.positionen.map(p => ({ ...p }));
+  $('rechnung-editor').style.display = 'block';
+  $('rechnung-editor').innerHTML = `
+    <div class="kopfzeile"><span class="section-label">${r.id ? 'Rechnungsentwurf bearbeiten' : 'Neue Rechnung'}</span><button class="btn klein sekundaer" onclick="$('rechnung-editor').style.display='none'">Schließen</button></div>
+    ${r.bezug && (r.bezug.angebotNummer || r.bezug.korrekturZu) ? `<div class="hinweis">${r.bezug.angebotNummer ? 'Bezug: Angebot ' + esc(r.bezug.angebotNummer) + (r.bezug.rate ? `, Rate ${r.bezug.rate} von ${r.bezug.ratenGesamt}` : '') : ''}${r.bezug.korrekturZu ? 'Korrektur zu Rechnung ' + esc(r.bezug.korrekturZu) : ''}</div>` : ''}
+    <div class="row">
+      <div class="field"><label>Kunde</label><select id="re-kunde">${kundenOptionen(r.kundeId)}</select></div>
+      <div class="field"><label>Titel / Betreff</label><input id="re-titel" value="${esc(r.titel || '')}"></div>
+    </div>
+    <div class="row">
+      <div class="field klein"><label>Leistung von</label><input type="date" id="re-von" value="${r.leistungVon || heute()}"></div>
+      <div class="field klein"><label>Leistung bis</label><input type="date" id="re-bis" value="${r.leistungBis || heute()}"></div>
+      <div class="field klein"><label>Rechnungsdatum</label><input type="date" id="re-datum" value="${r.datum || ''}"><div class="hint">Leer = Tag der Finalisierung</div></div>
+      <div class="field klein"><label>Fällig am</label><input type="date" id="re-faellig" value="${r.faelligAm || ''}"><div class="hint">Leer = Datum + ${S.stammdaten.zahlungszielTage} Tage</div></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Anrede (leer = automatisch)</label><input id="re-anrede" value="${esc(r.anrede || '')}"></div>
+      <div class="field klein"><label>Gruß (leer = automatisch)</label><input id="re-gruss" value="${esc(r.gruss || '')}"></div>
+    </div>
+    ${textFeld('re-einleitung', 'Einleitung (leer = Standardtext)', r.einleitung)}
+    ${posEditorHtml(false)}
+    ${textFeld('re-schluss', 'Schlusstext (leer = Standardtext)', r.schlusstext)}
+    <div class="btn-zeile"><button class="btn" onclick="rechnungSpeichern('${r.id || ''}')">${r.id ? 'Entwurf speichern' : 'Entwurf anlegen'}</button><span class="status-text" id="re-status"></span></div>`;
+  posRender(false);
+  $('rechnung-editor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+async function rechnungSpeichern(id) {
+  const body = { kundeId: $('re-kunde').value, titel: $('re-titel').value, leistungVon: $('re-von').value, leistungBis: $('re-bis').value, datum: $('re-datum').value || null, faelligAm: $('re-faellig').value || null, anrede: $('re-anrede').value, gruss: $('re-gruss').value, einleitung: $('re-einleitung').value, schlusstext: $('re-schluss').value, positionen: POS };
+  try { await api(id ? '/rechnungen/' + id : '/rechnungen', id ? 'PUT' : 'POST', body); toast('Entwurf gespeichert.'); $('rechnung-editor').style.display = 'none'; zeigeRechnungen(); } catch (e) { $('re-status').textContent = e.message; $('re-status').className = 'status-text fehler'; }
+}
+async function rechnungFinalisieren(id) {
+  const r = S.rechnungen.find(x => x.id === id) || {};
+  const okk = await modal('Rechnung finalisieren', `Die Rechnung erhält die nächste fortlaufende Nummer, wird als PDF archiviert und ist danach gesperrt. Änderungen sind nur noch per Storno möglich. Betrag: ${euro(r.summen ? r.summen.brutto : 0)}.`,
+    `<div class="row"><div class="field klein"><label>Rechnungsdatum</label><input type="date" id="fin-datum" value="${r.datum || heute()}"></div><div class="field klein"><label>Fällig am</label><input type="date" id="fin-faellig" value="${r.faelligAm || plusTage(r.datum || heute(), S.stammdaten.zahlungszielTage || 14)}"></div></div>`);
+  if (!okk) return;
+  try { const d = await api(`/rechnungen/${id}/finalisieren`, 'POST', { datum: $('fin-datum').value, faelligAm: $('fin-faellig').value }); toast(`Rechnung ${d.rechnung.nummer} finalisiert und archiviert.`); zeigeRechnungen(); } catch (e) { toast(e.message, true); }
+}
+async function rechnungZahlung(id, status) {
+  let bezahltAm = heute();
+  if (status === 'bezahlt') { if (!await modal('Als bezahlt markieren', 'Wann ist die Zahlung eingegangen?', `<div class="field klein"><label>Bezahlt am</label><input type="date" id="zahl-datum" value="${heute()}"></div>`)) return; bezahltAm = $('zahl-datum').value; }
+  try { await api(`/rechnungen/${id}/zahlung`, 'POST', { status, bezahltAm }); toast('Zahlungsstatus gesetzt.'); zeigeRechnungen(); } catch (e) { toast(e.message, true); }
+}
+async function rechnungStorno(id) {
+  const okk = await modal('Rechnung stornieren', 'Es wird eine Stornorechnung mit eigener Nummer und negativen Beträgen erstellt und archiviert. Die Originalrechnung bleibt unverändert im Archiv.', '<label class="check"><input type="checkbox" id="storno-korrektur" checked> Zusätzlich eine Korrekturrechnung als neuen Entwurf anlegen (Kopie der Positionen)</label>');
+  if (!okk) return;
+  try { const d = await api(`/rechnungen/${id}/storno`, 'POST', { korrektur: $('storno-korrektur').checked }); toast(`Stornorechnung ${d.storno.nummer} erstellt.` + (d.korrektur ? ' Korrektur-Entwurf angelegt.' : '')); zeigeRechnungen(); } catch (e) { toast(e.message, true); }
+}
+async function rechnungMahnen(id) {
+  const r = S.rechnungen.find(x => x.id === id) || {};
+  const stufe = (r.mahnstufe || 0) + 1;
+  const gebuehr = stufe === 2 ? S.stammdaten.mahngebuehr2 : stufe === 3 ? S.stammdaten.mahngebuehr3 : 0;
+  const okk = await modal(r.naechsteMahnung + ' erstellen', `Für Rechnung ${r.nummer} (${euro(r.summen.brutto)}, fällig seit ${datumDe(r.faelligAm)}) wird ein PDF erstellt und archiviert.${KONTEXT.emailErlaubt ? ' Anschließend kannst du es per E-Mail senden.' : ''}`,
+    `<div class="row"><div class="field klein"><label>Neue Zahlungsfrist</label><input type="date" id="mahn-frist" value="${plusTage(heute(), S.stammdaten.mahnfristTage || 7)}"></div>${stufe > 1 ? `<div class="field klein"><label>Mahngebühr (€)</label><input type="number" step="0.01" min="0" id="mahn-gebuehr" value="${gebuehr}"></div>` : ''}</div>
+     <div class="field"><label>Eigener Text (leer = Standardtext)</label><textarea id="mahn-text" style="min-height:60px"></textarea></div>`);
+  if (!okk) return;
+  try {
+    const d = await api(`/rechnungen/${id}/mahnung`, 'POST', { frist: $('mahn-frist').value, gebuehr: stufe > 1 ? $('mahn-gebuehr').value : 0, text: $('mahn-text').value });
+    toast(`${d.mahnung.titel} erstellt.`);
+    await zeigeRechnungen();
+    if (KONTEXT.emailErlaubt) emailDialog(`/rechnungen/${id}/mahnung/${d.mahnung.stufe}/email`, `${d.mahnung.titel} zu ${r.nummer} senden`, zeigeRechnungen);
+  } catch (e) { toast(e.message, true); }
+}
+// E-Mail-Dialog: holt Vorlage vom Server, sendet mit PDF-Anhang
+async function emailDialog(pfad, titel, danach) {
+  let v;
+  try { v = await api(pfad); } catch (e) { return toast(e.message, true); }
+  const st = await api('/email/status').catch(() => ({ konfiguriert: false }));
+  const hinweis = st.konfiguriert ? `Absender: ${st.von}` : 'E-Mail-Versand ist noch nicht eingerichtet (siehe Stammdaten). Du kannst den Text kopieren und das PDF manuell anhängen.';
+  const okk = await modal(titel, hinweis,
+    `<div class="field"><label>An</label><input id="em-an" value="${esc(v.vorlage.an)}" placeholder="kunde@firma.de"></div>
+     <div class="field"><label>Betreff</label><input id="em-betreff" value="${esc(v.vorlage.betreff)}"></div>
+     <div class="field"><label>Text</label><textarea id="em-text" style="min-height:190px;font-size:0.85rem">${esc(v.vorlage.text)}</textarea></div>
+     <label class="check"><input type="checkbox" id="em-kopie" checked> Kopie an mich (BCC)</label>
+     ${v.versand.length ? `<div class="sub">Bereits gesendet: ${v.versand.map(x => datumDe(x.am) + ' an ' + esc(x.an.join(', '))).join(' · ')}</div>` : ''}`);
+  if (!okk) return;
+  try {
+    const d = await api(pfad, 'POST', { an: $('em-an').value, betreff: $('em-betreff').value, text: $('em-text').value, kopie: $('em-kopie').checked });
+    toast(`Gesendet an ${d.versand.an.join(', ')}.`);
+    if (danach) danach();
+  } catch (e) { toast(e.message, true); }
+}
+async function rechnungLoeschen(id) {
+  if (!await modal('Entwurf löschen', 'Der Rechnungsentwurf wird gelöscht. Er hat noch keine Nummer, es entsteht keine Lücke.')) return;
+  try { await api('/rechnungen/' + id, 'DELETE'); toast('Gelöscht.'); zeigeRechnungen(); } catch (e) { toast(e.message, true); }
+}
+
+// ── Abos ──────────────────────────────────────────────────
+async function zeigeAbos() {
+  await ladeBasis();
+  S.abos = (await api('/abos')).abos;
+  const rows = S.abos.map(a => `<tr>
+    <td><span class="name">${esc(a.kunde ? a.kunde.firma : '–')}</span><div class="sub">${esc(a.titel)}${a.angebotNummer ? ' · aus ' + esc(a.angebotNummer) : ''}</div></td>
+    <td class="sub">${a.positionen.map(p => esc(p.titel) + ' (' + euro(p.preis) + ')').join('<br>')}</td>
+    <td class="zahl">${euro(a.monatlich)}<div class="sub">pro Monat</div></td>
+    <td class="sub">ab ${datumDe(a.start)}${a.ende ? '<br>bis ' + datumDe(a.ende) : ''}<br>zuletzt: ${a.letzteAbrechnung || '–'}</td>
+    <td>${chip(a.aktiv ? 'aktiv' : 'beendet')}</td>
+    <td class="aktionen">
+      <button class="btn klein sekundaer" onclick="aboBearbeiten('${a.id}')">Bearbeiten</button>
+      ${a.aktiv ? `<button class="btn klein gefahr" onclick="aboBeenden('${a.id}')">Beenden</button>` : `<button class="btn klein sekundaer" onclick="aboAktiv('${a.id}', true)">Reaktivieren</button>`}
+    </td></tr>`).join('');
+  $('abos-liste').innerHTML = rows ? `<table><thead><tr><th>Kunde · Abo</th><th>Positionen</th><th class="zahl">Betrag</th><th>Laufzeit</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="leer">Keine Abos. Abos entstehen aus Angeboten mit monatlichen Positionen oder manuell.</div>';
+}
+function aboNeu() { aboEditor({ kundeId: '', titel: 'Monatliche Leistungen', start: heute().slice(0, 7) + '-01', ende: '', positionen: [] }); }
+function aboBearbeiten(id) { aboEditor(S.abos.find(x => x.id === id)); }
+function aboEditor(a) {
+  POS = a.positionen.map(p => ({ artikelNr: p.artikelNr, titel: p.titel, beschreibung: p.beschreibung, menge: 1, einheit: 'Monat', einzelpreis: p.preis, abrechnung: 'monatlich' }));
+  $('abo-editor').style.display = 'block';
+  $('abo-editor').innerHTML = `
+    <div class="kopfzeile"><span class="section-label">${a.id ? 'Abo bearbeiten' : 'Neues Abo'}</span><button class="btn klein sekundaer" onclick="$('abo-editor').style.display='none'">Schließen</button></div>
+    <div class="row">
+      <div class="field"><label>Kunde</label><select id="ab-kunde" ${a.id ? 'disabled' : ''}>${kundenOptionen(a.kundeId)}</select></div>
+      <div class="field"><label>Bezeichnung</label><input id="ab-titel" value="${esc(a.titel)}"></div>
+      <div class="field klein"><label>Start</label><input type="date" id="ab-start" value="${a.start}" ${a.id ? 'disabled' : ''}></div>
+      <div class="field klein"><label>Ende (optional)</label><input type="date" id="ab-ende" value="${a.ende || ''}"></div>
+    </div>
+    ${posEditorHtml(false)}
+    <div class="btn-zeile"><button class="btn" onclick="aboSpeichern('${a.id || ''}')">${a.id ? 'Änderungen speichern' : 'Abo anlegen'}</button><span class="status-text" id="ab-status"></span></div>`;
+  posRender(false);
+}
+async function aboSpeichern(id) {
+  const positionen = POS.map(p => ({ artikelNr: p.artikelNr, titel: p.titel, beschreibung: p.beschreibung, preis: round2((Number(p.menge) || 1) * (Number(p.einzelpreis) || 0)) }));
+  const body = { kundeId: $('ab-kunde').value, titel: $('ab-titel').value, start: $('ab-start').value, ende: $('ab-ende').value || null, positionen };
+  try { await api(id ? '/abos/' + id : '/abos', id ? 'PUT' : 'POST', body); toast('Abo gespeichert.'); $('abo-editor').style.display = 'none'; zeigeAbos(); } catch (e) { $('ab-status').textContent = e.message; $('ab-status').className = 'status-text fehler'; }
+}
+async function aboBeenden(id) {
+  if (!await modal('Abo beenden', 'Ab wann soll nicht mehr abgerechnet werden? Der eingetragene Monat wird noch abgerechnet, danach endet das Abo.', `<div class="field klein"><label>Letzter Monat (Ende)</label><input type="date" id="abo-ende" value="${heute()}"></div>`)) return;
+  try { await api('/abos/' + id, 'PUT', { ende: $('abo-ende').value }); toast('Ende gesetzt.'); zeigeAbos(); } catch (e) { toast(e.message, true); }
+}
+async function aboAktiv(id, aktiv) { try { await api('/abos/' + id, 'PUT', { aktiv, ende: null }); zeigeAbos(); } catch (e) { toast(e.message, true); } }
+async function aboLauf() { try { const d = await api('/abos/lauf', 'POST', {}); toast(d.angelegt ? `${d.angelegt} Abrechnung(en) angelegt – siehe Rechnungen.` : 'Nichts fällig – alle Abos sind abgerechnet.'); zeigeAbos(); } catch (e) { toast(e.message, true); } }
+
+// ── Kunden ────────────────────────────────────────────────
+async function zeigeKunden() {
+  await ladeBasis();
+  const rows = S.kunden.map(k => `<tr>
+    <td><span class="mono">${esc(k.nummer)}</span></td>
+    <td><span class="name">${esc(k.firma)}</span><div class="sub">${esc(k.ansprechpartner || '')}${k.anrede === 'du' ? ' · Du' : ' · Sie'}</div></td>
+    <td class="sub">${esc(k.strasse)}<br>${esc(k.plz)} ${esc(k.ort)}<br>${esc(k.email)}</td>
+    <td class="sub">${k.statistik.angebote} Angebote · ${k.statistik.rechnungen} Rechnungen · ${k.statistik.abos} Abos${k.statistik.offenerBetrag ? '<br>offen: ' + euro(k.statistik.offenerBetrag) : ''}</td>
+    <td class="aktionen"><button class="btn klein sekundaer" onclick="kundeBearbeiten('${k.id}')">Bearbeiten</button>${!k.statistik.angebote && !k.statistik.rechnungen && !k.statistik.abos ? `<button class="btn klein gefahr" onclick="kundeLoeschen('${k.id}')">Löschen</button>` : ''}</td>
+  </tr>`).join('');
+  $('kunden-liste').innerHTML = rows ? `<table><thead><tr><th>Nr.</th><th>Kunde</th><th>Kontakt</th><th>Dokumente</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="leer">Noch keine Kunden.</div>';
+}
+function kundeNeu() { kundeEditor({ anrede: 'sie' }); }
+function kundeBearbeiten(id) { kundeEditor(S.kunden.find(x => x.id === id)); }
+function kundeEditor(k) {
+  $('kunde-editor').style.display = 'block';
+  $('kunde-editor').innerHTML = `
+    <div class="kopfzeile"><span class="section-label">${k.id ? esc(k.nummer) + ' bearbeiten' : 'Neuer Kunde'}</span><button class="btn klein sekundaer" onclick="$('kunde-editor').style.display='none'">Schließen</button></div>
+    <div class="row"><div class="field"><label>Firma</label><input id="ku-firma" value="${esc(k.firma || '')}"></div><div class="field"><label>Ansprechpartner</label><input id="ku-ap" value="${esc(k.ansprechpartner || '')}"></div>
+      <div class="field klein"><label>Anrede</label><select id="ku-anrede"><option value="sie" ${k.anrede !== 'du' ? 'selected' : ''}>Sie</option><option value="du" ${k.anrede === 'du' ? 'selected' : ''}>Du</option></select></div></div>
+    <div class="row"><div class="field"><label>Straße</label><input id="ku-strasse" value="${esc(k.strasse || '')}"></div><div class="field klein"><label>PLZ</label><input id="ku-plz" value="${esc(k.plz || '')}"></div><div class="field"><label>Ort</label><input id="ku-ort" value="${esc(k.ort || '')}"></div></div>
+    <div class="row"><div class="field"><label>E-Mail</label><input id="ku-email" value="${esc(k.email || '')}"></div></div>
+    <div class="btn-zeile"><button class="btn" onclick="kundeSpeichern('${k.id || ''}')">${k.id ? 'Speichern' : 'Kunde anlegen'}</button><span class="status-text" id="ku-status"></span></div>`;
+}
+async function kundeSpeichern(id) {
+  const body = { firma: $('ku-firma').value, ansprechpartner: $('ku-ap').value, anrede: $('ku-anrede').value, strasse: $('ku-strasse').value, plz: $('ku-plz').value, ort: $('ku-ort').value, email: $('ku-email').value };
+  try { const d = await api(id ? '/kunden/' + id : '/kunden', id ? 'PUT' : 'POST', body); toast(`${d.kunde.nummer} gespeichert.`); $('kunde-editor').style.display = 'none'; zeigeKunden(); } catch (e) { $('ku-status').textContent = e.message; $('ku-status').className = 'status-text fehler'; }
+}
+async function kundeLoeschen(id) {
+  if (!await modal('Kunde löschen', 'Der Kunde hat keine Dokumente und wird gelöscht.')) return;
+  try { await api('/kunden/' + id, 'DELETE'); toast('Gelöscht.'); zeigeKunden(); } catch (e) { toast(e.message, true); }
+}
+
+// ── Artikel ───────────────────────────────────────────────
+async function zeigeArtikel() {
+  await ladeBasis();
+  const rows = S.artikel.map(a => `<tr>
+    <td><span class="mono">${esc(a.nr)}</span></td>
+    <td><span class="name">${esc(a.titel)}</span><div class="sub">${esc(a.beschreibung)}</div></td>
+    <td class="zahl">${euro(a.preis)}<div class="sub">${a.abrechnung === 'monatlich' ? 'pro Monat' : 'einmalig'} · ${esc(a.einheit)}/${esc(a.einheitMehrzahl || a.einheit)}</div></td>
+    <td>${a.aktiv === false ? chip('beendet', 'Inaktiv') : chip('aktiv')}</td>
+    <td class="aktionen"><button class="btn klein sekundaer" onclick="artikelBearbeiten('${esc(a.nr)}')">Bearbeiten</button><button class="btn klein gefahr" onclick="artikelLoeschen('${esc(a.nr)}')">Löschen</button></td>
+  </tr>`).join('');
+  $('artikel-liste').innerHTML = rows ? `<table><thead><tr><th>Nr.</th><th>Artikel</th><th class="zahl">Preis</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="leer">Keine Artikel.</div>';
+}
+function artikelNeu() { artikelEditor({ nr: '', titel: '', beschreibung: '', preis: 0, abrechnung: 'einmalig', einheit: 'Paket', einheitMehrzahl: 'Pakete', aktiv: true }); }
+function artikelBearbeiten(nr) { artikelEditor({ ...S.artikel.find(x => x.nr === nr), _alt: nr }); }
+function artikelEditor(a) {
+  $('artikel-editor').style.display = 'block';
+  $('artikel-editor').innerHTML = `
+    <div class="kopfzeile"><span class="section-label">${a._alt ? esc(a._alt) + ' bearbeiten' : 'Neuer Artikel'}</span><button class="btn klein sekundaer" onclick="$('artikel-editor').style.display='none'">Schließen</button></div>
+    <div class="row"><div class="field klein"><label>Artikelnummer</label><input id="ar-nr" value="${esc(a.nr)}" placeholder="AB-004"></div><div class="field"><label>Bezeichnung</label><input id="ar-titel" value="${esc(a.titel)}"></div></div>
+    ${textFeld('ar-beschreibung', 'Beschreibung (wird ins Dokument übernommen, dort änderbar)', a.beschreibung, null, 70)}
+    <div class="row"><div class="field klein"><label>Preis${S.stammdaten.kleinunternehmer ? '' : ' (netto)'}</label><input type="number" step="0.01" id="ar-preis" value="${a.preis}"></div>
+      <div class="field klein"><label>Abrechnung</label><select id="ar-abrechnung"><option value="einmalig" ${a.abrechnung !== 'monatlich' ? 'selected' : ''}>einmalig</option><option value="monatlich" ${a.abrechnung === 'monatlich' ? 'selected' : ''}>monatlich</option></select></div>
+      <div class="field klein"><label>Einheit (Einzahl)</label><input id="ar-einheit" value="${esc(a.einheit)}" placeholder="Paket"></div>
+      <div class="field klein"><label>Einheit (Mehrzahl)</label><input id="ar-einheit-mz" value="${esc(a.einheitMehrzahl || '')}" placeholder="Pakete"></div></div>
+    <label class="check"><input type="checkbox" id="ar-aktiv" ${a.aktiv !== false ? 'checked' : ''}> Aktiv (in der Artikelauswahl sichtbar)</label>
+    <div class="btn-zeile"><button class="btn" onclick="artikelSpeichern('${esc(a._alt || '')}')">Speichern</button><span class="status-text" id="ar-status"></span></div>`;
+}
+async function artikelSpeichern(alt) {
+  const body = { nr: $('ar-nr').value, titel: $('ar-titel').value, beschreibung: $('ar-beschreibung').value, preis: $('ar-preis').value, abrechnung: $('ar-abrechnung').value, einheit: $('ar-einheit').value, einheitMehrzahl: $('ar-einheit-mz').value, aktiv: $('ar-aktiv').checked };
+  try { await api(alt ? '/artikel/' + encodeURIComponent(alt) : '/artikel', alt ? 'PUT' : 'POST', body); toast('Artikel gespeichert.'); $('artikel-editor').style.display = 'none'; zeigeArtikel(); } catch (e) { $('ar-status').textContent = e.message; $('ar-status').className = 'status-text fehler'; }
+}
+async function artikelLoeschen(nr) {
+  if (!await modal('Artikel löschen', `${nr} wird aus dem Katalog entfernt. Bestehende Dokumente bleiben unverändert (die Positionen sind dort kopiert).`)) return;
+  try { await api('/artikel/' + encodeURIComponent(nr), 'DELETE'); zeigeArtikel(); } catch (e) { toast(e.message, true); }
+}
+
+// ── Stammdaten ────────────────────────────────────────────
+async function zeigeStammdaten() {
+  await ladeBasis();
+  const s = S.stammdaten;
+  ['firma', 'inhaberin', 'strasse', 'plz', 'ort', 'steuernummer', 'telefon', 'email', 'website'].forEach(f => $('st-' + f).value = s[f] || '');
+  $('st-bank-name').value = s.bank.name || ''; $('st-bank-inhaberin').value = s.bank.kontoinhaberin || ''; $('st-bank-iban').value = s.bank.iban || ''; $('st-bank-bic').value = s.bank.bic || '';
+  $('st-ku').checked = !!s.kleinunternehmer; $('st-zahlungsziel').value = s.zahlungszielTage; $('st-gueltig').value = s.angebotGueltigTage; $('st-stichtag').value = s.aboStichtag;
+  $('st-mahnfrist').value = s.mahnfristTage; $('st-mahngebuehr2').value = s.mahngebuehr2; $('st-mahngebuehr3').value = s.mahngebuehr3;
+  logoAnzeigen(s.logo);
+  $('st-sich-aktiv').checked = (s.sicherungMail || {}).aktiv !== false; $('st-sich-an').value = (s.sicherungMail || {}).an || ''; $('st-sich-tage').value = (s.sicherungMail || {}).rhythmusTage || 7;
+  api('/sicherung/status').then(z => { $('st-sich-status').textContent = z.letzte ? 'Letzte Sicherungs-Mail: ' + new Date(z.letzte).toLocaleString('de-DE') : 'Noch keine Sicherungs-Mail gesendet.'; $('st-sich-status').className = 'status-text'; }).catch(() => {});
+  const st = await api('/email/status');
+  $('st-email-status').innerHTML = st.konfiguriert
+    ? `Versand eingerichtet. Absender: <b>${esc(st.von)}</b>. Antworten gehen an die E-Mail aus den Stammdaten.`
+    : `Noch nicht eingerichtet. In Hostinger unter den Umgebungsvariablen der Node-App setzen: <span class="mono">SMTP_HOST=smtp.hostinger.com</span>, <span class="mono">SMTP_PORT=465</span>, <span class="mono">SMTP_USER</span> (Postfach-Adresse), <span class="mono">SMTP_PASS</span> (Postfach-Passwort), optional <span class="mono">SMTP_FROM</span> („NovaFlow Services &lt;adresse&gt;“). Danach die App neu starten.`;
+}
+async function emailTest() {
+  const el = $('st-email-test'); el.textContent = 'Sende …'; el.className = 'status-text';
+  try { const d = await api('/email/test', 'POST', { an: $('st-email').value }); el.textContent = `Gesendet an ${d.an.join(', ')} – bitte Posteingang prüfen.`; el.className = 'status-text ok'; }
+  catch (e) { el.textContent = e.message; el.className = 'status-text fehler'; }
+}
+function logoAnzeigen(logo) {
+  const img = $('st-logo-vorschau'), btn = $('st-logo-entfernen');
+  if (logo) { img.src = logo; img.style.display = 'inline-block'; btn.style.display = ''; } else { img.style.display = 'none'; btn.style.display = 'none'; }
+}
+async function logoHochladen() {
+  const el = $('st-logo-status'); el.className = 'status-text'; el.textContent = '';
+  const datei = $('st-logo-datei').files[0];
+  if (!datei) { el.textContent = 'Bitte zuerst eine Bilddatei auswählen.'; el.className = 'status-text fehler'; return; }
+  if (datei.size > 500 * 1024) { el.textContent = 'Das Bild ist zu groß (max. 500 KB).'; el.className = 'status-text fehler'; return; }
+  const daten = await new Promise((ok, nein) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = nein; r.readAsDataURL(datei); });
+  try { const d = await api('/stammdaten', 'PUT', { logo: daten }); S.stammdaten = d.stammdaten; logoAnzeigen(d.stammdaten.logo); el.textContent = 'Logo gespeichert.'; el.className = 'status-text ok'; }
+  catch (e) { el.textContent = e.message; el.className = 'status-text fehler'; }
+}
+async function logoEntfernen() {
+  try { const d = await api('/stammdaten', 'PUT', { logo: null }); S.stammdaten = d.stammdaten; logoAnzeigen(null); toast('Logo entfernt.'); } catch (e) { toast(e.message, true); }
+}
+async function sicherungJetzt() {
+  const el = $('st-sich-status'); el.textContent = 'Sende …'; el.className = 'status-text';
+  try { const d = await api('/sicherung/senden', 'POST', {}); el.textContent = `Gesendet an ${d.an.join(', ')} (${d.anhaenge.length} Anhänge).`; el.className = 'status-text ok'; }
+  catch (e) { el.textContent = e.message; el.className = 'status-text fehler'; }
+}
+async function stammdatenSpeichern() {
+  const body = {};
+  ['firma', 'inhaberin', 'strasse', 'plz', 'ort', 'steuernummer', 'telefon', 'email', 'website'].forEach(f => body[f] = $('st-' + f).value);
+  body.bank = { name: $('st-bank-name').value, kontoinhaberin: $('st-bank-inhaberin').value, iban: $('st-bank-iban').value, bic: $('st-bank-bic').value };
+  body.kleinunternehmer = $('st-ku').checked; body.zahlungszielTage = $('st-zahlungsziel').value; body.angebotGueltigTage = $('st-gueltig').value; body.aboStichtag = $('st-stichtag').value;
+  body.mahnfristTage = $('st-mahnfrist').value; body.mahngebuehr2 = $('st-mahngebuehr2').value; body.mahngebuehr3 = $('st-mahngebuehr3').value;
+  body.sicherungMail = { aktiv: $('st-sich-aktiv').checked, an: $('st-sich-an').value, rhythmusTage: $('st-sich-tage').value };
+  try { const d = await api('/stammdaten', 'PUT', body); S.stammdaten = d.stammdaten; $('st-status').textContent = 'Gespeichert.'; $('st-status').className = 'status-text ok'; } catch (e) { $('st-status').textContent = e.message; $('st-status').className = 'status-text fehler'; }
+}
+
+// ── Export ────────────────────────────────────────────────
+async function zeigeExport() {
+  $('btn-jahr-export').href = '/api/abrechnung/export/gesamt?jahr=' + heute().slice(0, 4);
+  $('btn-jahr-export').textContent = 'Nur ' + heute().slice(0, 4);
+  const d = await api('/export/monate');
+  const rows = d.monate.map(m => `<tr><td><span class="name">${m.monat.slice(5)}/${m.monat.slice(0, 4)}</span></td><td class="zahl">${m.anzahl} Rechnungen</td><td class="zahl">${euro(m.summe)}</td>
+    <td class="aktionen"><a class="btn klein sekundaer" href="/api/abrechnung/export/csv?monat=${m.monat}" style="text-decoration:none">CSV</a> <a class="btn klein" href="/api/abrechnung/export/zip?monat=${m.monat}" style="text-decoration:none">ZIP (PDFs + CSV)</a></td></tr>`).join('');
+  $('export-liste').innerHTML = rows ? `<table><thead><tr><th>Monat</th><th class="zahl">Anzahl</th><th class="zahl">Summe</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="leer">Noch keine finalisierten Rechnungen.</div>';
+}
+
+async function wiederherstellen() {
+  const el = $('wh-status'); el.className = 'status-text'; el.textContent = '';
+  const datei = $('wh-datei').files[0];
+  if (!datei) { el.textContent = 'Bitte zuerst eine Datei auswählen.'; el.className = 'status-text fehler'; return; }
+  let daten;
+  try { daten = JSON.parse(await datei.text()); } catch (e) { el.textContent = 'Die Datei ist keine gültige JSON-Sicherung.'; el.className = 'status-text fehler'; return; }
+  const ueber = $('wh-ueberschreiben').checked;
+  if (!await modal('Sicherung einspielen', ueber ? 'Vorhandene Datensätze werden mit der Sicherung überschrieben. Fortfahren?' : 'Fehlende Datensätze werden ergänzt, vorhandene bleiben unverändert. Fortfahren?')) return;
+  try {
+    const d = await api('/wiederherstellen', 'POST', { daten, ueberschreiben: ueber });
+    el.textContent = `${d.eingespielt} Datensätze eingespielt, ${d.uebersprungen} bereits vorhanden.`; el.className = 'status-text ok';
+    await ladeBasis();
+  } catch (e) { el.textContent = e.message; el.className = 'status-text fehler'; }
+}
+
+// ── Start ─────────────────────────────────────────────────
+(async () => {
+  try { await anmelden(); await ladeBasis(); } catch (e) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('aktiv'));
+    document.body.insertAdjacentHTML('beforeend', `<div style="max-width:560px;margin:60px auto;padding:24px 28px;background:#fff;border:1px solid var(--border);border-radius:16px;text-align:center;color:var(--muted)">${esc(e.message)}</div>`);
+    toast(e.message, true); return;
+  }
+  // Direkt ein Angebot öffnen (z. B. aus dem CRM: „Angebot erstellen“ am Deal)
+  const angebotId = new URLSearchParams(location.search).get('angebot');
+  if (angebotId) {
+    wechsle('angebote', true);
+    try { await zeigeAngebote(); angebotBearbeiten(angebotId); } catch (e) { toast(e.message, true); }
+    return;
+  }
+  const start = bereichAusAdresse();
+  wechsle(LADER[start] ? start : 'uebersicht', true);
+})();
+</script>
+</body>
+</html>

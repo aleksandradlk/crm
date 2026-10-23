@@ -389,6 +389,8 @@ const Deals = {
       : d.status === 'lost' ? `<div class="deal-banner lost"><i class="fas fa-times-circle"></i>Verloren am ${fmtDate(d.lost_at)} · ${escHtml(d.lost_reason || '')}</div>` : '';
     document.getElementById('dmStatusBar').innerHTML = banner + steps;
 
+    const angebotBtn = typeof this.opts.onAngebot === 'function' && d.status === 'open'
+      ? `<button class="btn btn-ghost" onclick="Deals.opts.onAngebot(Deals._current)"><i class="fas fa-file-signature"></i> Angebot erstellen</button>` : '';
     const leadBtn = typeof this.opts.openLead === 'function'
       ? `<button class="btn btn-ghost" onclick="Deals.close();Deals.opts.openLead(${d.lead_id})"><i class="fas fa-external-link-alt"></i> Lead</button>` : '';
     const del = this.opts.isAdmin ? `<button class="btn btn-ghost btn-icon" onclick="Deals.remove()" title="Deal löschen"><i class="fas fa-trash"></i></button>` : '';
@@ -397,7 +399,7 @@ const Deals = {
          <span class="dc-spacer"></span>
          <button class="btn deal-btn-won" onclick="Deals.markWon(${d.id})"><i class="fas fa-trophy"></i> Gewonnen</button>
          <button class="btn deal-btn-lost" onclick="Deals.askLost(${d.id})"><i class="fas fa-times-circle"></i> Verloren</button>
-         ${leadBtn}${del}`
+         ${angebotBtn}${leadBtn}${del}`
       : `<button class="btn btn-primary" onclick="Deals.save()"><i class="fas fa-check"></i> Speichern</button>
          <button class="btn btn-ghost" onclick="Deals.reopen(${d.id})"><i class="fas fa-undo"></i> Wieder öffnen</button>
          <span class="dc-spacer"></span>${leadBtn}${del}`;
