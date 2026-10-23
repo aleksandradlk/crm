@@ -38,7 +38,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22   # Abrechnung nutzt node:sqlite (ab 22.13 ohne Zusatzschalter)
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
@@ -66,16 +66,19 @@ jobs:
           DB_USER=lh
           DB_PASSWORD=lh
           DB_NAME=leadhunter
+          ABRECHNUNG_DATA_DIR=/tmp/ci-abrechnung
           EOF
           node server.js > server.log 2>&1 &
           for i in $(seq 1 45); do
             curl -fsS http://localhost:3055/api/health && break
             sleep 2
           done
-          curl -fsS http://localhost:3055/api/health
+          curl -fsS http://localhost:3055/api/health | tee /dev/stderr | grep -q '"abrechnung":true'
           curl -fsS -o /dev/null http://localhost:3055/login
           curl -fsS -o /dev/null http://localhost:3055/shared/api.js
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3055/api/leads)" = 401
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3055/api/abrechnung/uebersicht)" = 401
+          curl -fsS -o /dev/null http://localhost:3055/abrechnung
 
       - name: Server-Log bei Fehler
         if: failure()

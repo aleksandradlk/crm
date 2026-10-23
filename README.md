@@ -230,6 +230,22 @@ leadhunter/
   → **Strg+Enter** speichert alles in einem Schritt (Anruf, Status, Verlauf, nächster Termin) und öffnet den nächsten Lead.
 - „Rückruf vereinbart“ lässt sich nur mit Termin speichern – kein Lead geht verloren.
 
+### Angebote & Rechnungen (nur Admin):
+- Menüpunkt **Angebote & Rechnungen**: die komplette Abrechnung aus dem früheren Angebotstool – Kunden,
+  Artikel (Pakete & Preise), Angebote mit KI-Entwurf, Rechnungen mit lückenlosen Nummernkreisen,
+  Mahnungen, Abos, PDF-Archiv, E-Mail-Versand und Export für die Buchhaltung.
+- **Verknüpft mit Leads & Deals:** „Angebot erstellen“ im Lead oder im Deal-Fenster legt den Kunden an
+  (bzw. findet ihn über E-Mail/Firma) und öffnet den Angebotsentwurf. Wird das Angebot versendet, rückt der
+  Deal in „Angebot gesendet“; angenommen → Deal gewonnen (mit Angebotswert), abgelehnt → Deal verloren.
+  Im Lead stehen alle Angebote und Rechnungen des Kunden.
+- **Daten:** liegen außerhalb des App-Ordners in `~/crm-abrechnung` (SQLite + archivierte PDFs), damit sie
+  bei jedem Deploy erhalten bleiben (anderer Ort: `ABRECHNUNG_DATA_DIR`).
+- **Umzug aus dem Angebotstool:** Beim ersten Start übernimmt das CRM den NovaFlow-Bestand automatisch aus
+  `~/angebot-tool-daten` (Kunden, Angebote, Rechnungen, Abos, Stammdaten, Nummernkreise, PDFs). Das Tool
+  bleibt dabei unverändert; die Handwerker-Betriebe arbeiten dort weiter.
+- Voraussetzung: Node.js 22.13 oder neuer. E-Mails gehen als „NovaFlow Services <SMTP_USER>“ raus
+  (anders: `ABRECHNUNG_SMTP_FROM`), KI-Entwürfe nutzen `CLAUDE_API_KEY`.
+
 ### Heute, Wähllisten, Dubletten:
 - **Heute** (Startseite der Vertriebler): verpasste Anrufe, fällige Rückrufe, neue Kundenantworten,
   Deals ohne nächsten Schritt / mit erreichtem Abschlussdatum – jeweils mit Anrufen-Knopf.

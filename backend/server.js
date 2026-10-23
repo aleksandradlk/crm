@@ -50,7 +50,8 @@ app.use(helmet({
       mediaSrc:    ["'self'", "blob:", "https://sdk.twilio.com"],
       objectSrc:   ["'none'"],
       baseUri:     ["'self'"],
-      frameAncestors: ["'none'"],
+      // Abrechnung wird im Admin-Bereich als eingebettete Seite angezeigt
+      frameAncestors: ["'self'"],
     }
   }
 }));
@@ -61,7 +62,10 @@ app.use(cors({
   allowedHeaders: ['Content-Type','Authorization'],
 }));
 app.set('trust proxy', 1);
-app.use(express.json());
+// JSON-Body: Standard 100 KB. Die Abrechnung (Logos, PDF-Anhänge, Wiederherstellung)
+// parst größere Bodies selbst – erst nach der Admin-Prüfung, siehe abrechnung/crm.js
+const jsonStandard = express.json();
+app.use((req, res, next) => req.path.startsWith('/api/abrechnung/') ? next() : jsonStandard(req, res, next));
 
 // Rate limiting
 app.use('/api/auth/login',    rateLimit({ windowMs: 15*60*1000, max: 20 }));
@@ -115,11 +119,18 @@ app.use('/api/deals',           dealRoutes);
 app.use('/api/call-lists',      callListRoutes);
 app.use('/api/today',           todayRoutes);
 
-// ── Gesundheits-Check (für die automatische Auslieferung) ─────
+// ── Abrechnung (Angebote, Rechnungen, Abos – nur Admin) ───────
+const abrechnung = require('./abrechnung/crm').registriere(app, {
+  ki: process.env.CLAUDE_API_KEY
+    ? { client: new (require('@anthropic-ai/sdk'))({ apiKey: process.env.CLAUDE_API_KEY }), model: 'claude-haiku-4-5', limit: 0 }
+    : null,
+});
+
+// ── Gesundheits-Check ─────────────────────────────────────────
 app.get('/api/health', async (req, res) => {
   try {
     await require('./db').query('SELECT 1');
-    res.json({ ok: true });
+    res.json({ ok: true, abrechnung: abrechnung.status.aktiv });
   } catch (e) {
     res.status(503).json({ ok: false, error: 'Datenbank nicht erreichbar' });
   }

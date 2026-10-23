@@ -47,6 +47,7 @@
       <div class="nav-item" data-tab="leads" onclick="showTab('leads')"><i class="fas fa-database"></i> Alle Leads</div>
       <div class="nav-item" data-tab="myLeads" onclick="showTab('myLeads')"><i class="fas fa-user-check"></i> Meine Leads</div>
       <div class="nav-item" data-tab="deals" onclick="showTab('deals')"><i class="fas fa-handshake"></i> Deals</div>
+      <div class="nav-item" data-tab="abrechnung" onclick="showTab('abrechnung')"><i class="fas fa-file-invoice-dollar"></i> Angebote &amp; Rechnungen</div>
       <div class="nav-item" data-tab="inbox" onclick="showTab('inbox')"><i class="fas fa-inbox"></i> Posteingang <span id="inboxBadge" style="display:none;margin-left:auto" class="badge" title="Ungelesene Kunden-E-Mails">0</span></div>
       <div class="nav-item" data-tab="generate" onclick="showTab('generate')"><i class="fas fa-search"></i> Generieren</div>
       <div class="nav-sep"></div>
@@ -87,6 +88,16 @@
 
     <!-- ── TAB: DEALS ─────────────────────────────────── -->
     <div id="tab-deals" class="tab-panel"><div id="dealsRoot"></div></div>
+
+    <!-- ── TAB: ANGEBOTE & RECHNUNGEN (Abrechnung, eingebettet) ── -->
+    <div id="tab-abrechnung" class="tab-panel">
+      <div class="page-header">
+        <div><h1 data-eyebrow="Vertrieb">Angebote &amp; Rechnungen</h1><p class="page-desc">Angebote, Rechnungen, Mahnungen und Abos von NovaFlow – verknüpft mit deinen Leads und Deals.</p></div>
+        <div class="page-actions"><a class="btn btn-ghost btn-sm" href="/abrechnung" target="_blank" rel="noopener"><i class="fas fa-external-link-alt"></i> Eigenes Fenster</a></div>
+      </div>
+      <div id="abrUebernahme" class="abr-umzug" hidden></div>
+      <iframe id="abrechnungFrame" class="abr-frame" title="Angebote & Rechnungen"></iframe>
+    </div>
 
     <!-- ── TAB: LEADS ─────────────────────────────────── -->
     <div id="tab-leads" class="tab-panel">
@@ -815,6 +826,7 @@ function showTab(name) {
   }
   if (name === 'myLeads')  renderMyLeads();
   if (name === 'deals')    Deals.show();
+  if (name === 'abrechnung') { const f = document.getElementById('abrechnungFrame'); if (!f.getAttribute('src')) f.src = '/abrechnung'; ladeAbrUebernahme(); }
   if (name === 'today')    Today.load();
   if (name === 'users')    { loadUsers(); loadAppSettings(); }
   if (name === 'tracking') loadTracking();
@@ -1224,6 +1236,7 @@ async function openLeadPanel(id) {
     document.getElementById('panelKeyInfo').innerHTML = renderPanelKeyInfo(l);
     document.getElementById('panelContent').innerHTML = renderLeadDetail(l);
     Inbox.markLeadRead(l);
+    ladeLeadAbrechnung(l.id);
   } catch (e) { document.getElementById('panelContent').innerHTML = `<span style="color:var(--red)">${escHtml(e.message)}</span>`; }
 }
 function closeLeadPanel() {
@@ -1493,6 +1506,12 @@ function renderLeadDetail(l) {
     </div>
 
     ${Deals.leadSection(l, true)}
+
+    <div class="panel-section">
+      <div class="panel-section-title">Angebote &amp; Rechnungen</div>
+      <div id="leadAbrDocs" class="panel-list"><div class="panel-empty">Wird geladen …</div></div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="angebotErstellen(${l.id})"><i class="fas fa-file-signature"></i> Angebot erstellen</button>
+    </div>
 
     <div class="panel-section">
       <div class="panel-section-title">Kommentare</div>
@@ -2835,10 +2854,69 @@ Deals.mount({
   canViewAll: true,
   defaultOwner: 'all',
   openLead: id => openLeadPanel(id),
+  onAngebot: deal => angebotErstellen(deal.lead_id, deal.id),
   onChange: () => {
     if (_panelLead && document.getElementById('leadPanel').classList.contains('open')) { panelDirty = true; openLeadPanel(_panelLead.id); }
   },
 });
+
+// ── ANGEBOTE & RECHNUNGEN (Abrechnung) ───────────────────────
+function oeffneAbrechnung(pfad) {
+  closeLeadPanel();
+  if (typeof Deals !== 'undefined') Deals.close();
+  showTab('abrechnung');
+  document.getElementById('abrechnungFrame').src = pfad || '/abrechnung';
+}
+// Hinweis auf die Übernahme aus dem Angebotstool (mit „Erneut übernehmen“)
+async function ladeAbrUebernahme() {
+  const el = document.getElementById('abrUebernahme');
+  try {
+    const d = await api('GET', '/abrechnung-crm/uebernahme');
+    const u = d.uebernahme;
+    if (!u) { el.hidden = true; return; }
+    el.hidden = false;
+    el.innerHTML = `<i class="fas fa-truck-moving"></i><span>Aus dem Angebotstool übernommen am <b>${fmtDate(u.am)}</b>: ${u.kunden} Kunden, ${u.angebote} Angebote, ${u.rechnungen} Rechnungen, ${u.abos} Abos.</span>`
+      + (d.erneutMoeglich && d.quelleVorhanden ? `<button class="btn btn-ghost btn-sm" onclick="abrErneutUebernehmen()"><i class="fas fa-sync"></i> Erneut übernehmen</button>` : '');
+  } catch (e) { el.hidden = true; }
+}
+async function abrErneutUebernehmen() {
+  const ok = await customConfirm('Holt den aktuellen Stand aus dem Angebotstool noch einmal ins CRM (ersetzt die bisherige Übernahme). Im CRM wurde noch nichts an der Abrechnung geändert, es geht also nichts verloren.', { title: 'Erneut übernehmen', okLabel: 'Übernehmen' });
+  if (!ok) return;
+  try {
+    const r = await api('POST', '/abrechnung-crm/uebernahme');
+    showToast(`Übernommen: ${r.uebernahme.angebote} Angebote, ${r.uebernahme.rechnungen} Rechnungen`);
+    ladeAbrUebernahme();
+    document.getElementById('abrechnungFrame').src = '/abrechnung';
+  } catch (e) { showToast(e.message, 'err'); }
+}
+// Neuen Angebotsentwurf für Lead (und optional Deal) anlegen und direkt öffnen
+async function angebotErstellen(leadId, dealId) {
+  try {
+    const r = await api('POST', '/abrechnung-crm/angebot', { leadId, dealId: dealId || null });
+    showToast(`Angebot ${r.angebot.nummer} angelegt`);
+    oeffneAbrechnung('/abrechnung/angebote?angebot=' + encodeURIComponent(r.angebot.id));
+  } catch (e) { showToast(e.message, 'err'); }
+}
+const ABR_STATUS = { entwurf: 'Entwurf', versendet: 'Versendet', angenommen: 'Angenommen', abgelehnt: 'Abgelehnt', abgelaufen: 'Abgelaufen',
+  offen: 'Offen', bezahlt: 'Bezahlt', ueberfaellig: 'Überfällig', finalisiert: 'Finalisiert', storniert: 'Storniert', storno: 'Storno' };
+async function ladeLeadAbrechnung(leadId) {
+  const el = document.getElementById('leadAbrDocs');
+  if (!el) return;
+  try {
+    const d = await api('GET', `/abrechnung-crm/lead/${leadId}`);
+    const eur = v => Number(v || 0).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+    const zeile = (icon, nr, text, betrag, st, pfad) => `<button type="button" class="deal-mini" onclick="oeffneAbrechnung('${pfad}')">
+        <span class="deal-mini-main"><b><i class="fas ${icon}" style="color:var(--text3);margin-right:6px"></i>${escHtml(nr)}</b>
+        <span class="cell-sub">${escHtml(text || '')}</span><span class="abr-chip s-${escHtml(st)}">${escHtml(ABR_STATUS[st] || st)}</span></span>
+        <span class="deal-mini-val">${betrag}</span></button>`;
+    const html = d.angebote.map(a => zeile('fa-file-signature', a.nummer, a.betreff, eur(a.brutto) + (a.monatlich ? ` <small>+ ${eur(a.monatlich)}/Mon.</small>` : ''), a.status,
+        '/abrechnung/angebote?angebot=' + a.id)).join('')
+      + d.rechnungen.map(r => zeile('fa-file-invoice', r.nummer, r.titel, eur(r.brutto), r.status === 'finalisiert' ? (r.zahlungsstatus || 'offen') : r.status, '/abrechnung/rechnungen')).join('');
+    el.innerHTML = html || '<div class="panel-empty">Noch keine Angebote oder Rechnungen.</div>';
+  } catch (e) {
+    el.innerHTML = `<div class="panel-empty">${escHtml(e.message)}</div>`;
+  }
+}
 
 // ── ANRUFMODUS ───────────────────────────────────────────────
 async function startDialer(list = {}) {
