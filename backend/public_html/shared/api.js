@@ -524,53 +524,6 @@ function renderTemplateCard(t, a) {
   </div>`;
 }
 
-function renderWikiFiles(files, containerId, isAdmin) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
-  if (!files.length) {
-    container.innerHTML = `<div class="wiki-empty"><i class="fas fa-folder-open"></i>${isAdmin ? 'Noch keine Dateien hochgeladen. Nutze das Formular rechts.' : 'Noch keine Dateien vorhanden'}</div>`;
-    return;
-  }
-  const jsStr = s => String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
-  const cats = [...new Set(files.map(f => f.category))];
-  container.innerHTML = cats.map(cat => {
-    const catFiles = files.filter(f => f.category === cat);
-    const cards = catFiles.map(f => {
-      const fn = f.filename || '';
-      const isImage  = f.mimetype?.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(fn);
-      const isPdf    = f.mimetype === 'application/pdf' || /\.pdf$/i.test(fn);
-      const isOffice = /\.(docx?|xlsx?|pptx?|odt|ods|odp)$/i.test(fn);
-      const ext  = (fn.includes('.') ? fn.split('.').pop() : '').toUpperCase();
-      const size = f.size ? (f.size >= 1048576 ? (f.size / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(f.size / 1024)) + ' KB') : '';
-      const kind = isPdf ? 'pdf' : isImage ? 'img' : isOffice ? 'doc' : '';
-      const icon = isPdf ? 'file-pdf' : isImage ? 'file-image' : /\.xlsx?$/i.test(fn) ? 'file-excel' : /\.pptx?$/i.test(fn) ? 'file-powerpoint' : isOffice ? 'file-word' : 'file-alt';
-      const meta = [ext, size, fmtDateShort(f.created_at)].filter(Boolean).join(' · ');
-      const safeFile = escHtml(jsStr(fn));
-      const encName  = encodeURIComponent(f.name || '');
-      const actions = [
-        `<button class="btn btn-ghost btn-sm btn-icon" title="Vorschau" onclick="wikiFileOpen('${safeFile}','${encName}')"><i class="fas fa-eye"></i></button>`,
-        `<button class="btn btn-ghost btn-sm btn-icon" title="Download" onclick="wikiFileOpen('${safeFile}','${encName}',true)"><i class="fas fa-download"></i></button>`,
-        isAdmin ? `<button class="btn btn-ghost btn-sm btn-icon" title="Notiz bearbeiten" onclick="openWikiNoteModal(${f.id},'${escHtml(jsStr(f.note))}')"><i class="fas fa-pen"></i></button>` : '',
-        isAdmin ? `<button class="btn btn-ghost btn-sm btn-icon" title="Datei austauschen" onclick="openWikiReplaceModal(${f.id},'${escHtml(jsStr(f.name))}')"><i class="fas fa-retweet"></i></button>` : '',
-        isAdmin ? `<button class="btn btn-ghost btn-sm btn-icon" title="Löschen" style="color:var(--red)" onclick="deleteWikiFile(${f.id})"><i class="fas fa-trash"></i></button>` : '',
-      ].join('');
-      return `<div class="file-card">
-        <div class="file-icon ${kind}"><i class="fas fa-${icon}"></i></div>
-        <div class="file-main">
-          <div class="file-name" title="${escHtml(f.name)}">${escHtml(f.name)}</div>
-          <div class="file-meta">${meta}</div>
-          ${f.note ? `<div class="file-note"><i class="fas fa-info-circle"></i>${escHtml(f.note)}</div>` : ''}
-        </div>
-        <div class="file-actions">${actions}</div>
-      </div>`;
-    }).join('');
-    return `<div class="wiki-cat">
-      <div class="wiki-cat-head"><i class="fas fa-folder"></i><span class="wiki-cat-name">${escHtml(cat)}</span><span class="badge">${catFiles.length}</span></div>
-      <div class="file-grid">${cards}</div>
-    </div>`;
-  }).join('');
-}
-
 // ── Rücksprachen: gemeinsame Renderer ─────────────────────────
 function renderChatListItems(chats, emptyText) {
   if (!chats.length) return `<div class="wiki-empty"><i class="fas fa-comments"></i>${emptyText}</div>`;

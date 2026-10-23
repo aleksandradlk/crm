@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf22">
+<link rel="stylesheet" href="/shared/style.css?v=nf23">
 <style>
 .notif-panel{position:fixed;top:0;right:0;bottom:0;width:340px;background:var(--bg2);border-left:1px solid var(--border2);z-index:150;transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;padding:20px}
 .notif-panel.open{transform:translateX(0)}
@@ -292,32 +292,7 @@
     </div>
 
     <!-- WIKI -->
-    <div id="sec-wiki" style="display:none">
-      <div class="page-header">
-        <div><h1 data-eyebrow="Ressourcen">Wissensdatenbank</h1><p class="page-desc">Unterlagen und Vorlagen für deine Gespräche.</p></div>
-      </div>
-
-      <!-- Willkommen -->
-      <div class="wiki-hero">
-        <img class="wiki-hero-logo" src="/LogoOB.PNG" alt="">
-        <div>
-          <div class="wiki-hero-eyebrow">Willkommen</div>
-          <h2 class="wiki-hero-title">Willkommen bei NovaFlow!</h2>
-          <p class="wiki-hero-sub">Hier findest du alles, was du für Gespräche und Angebote brauchst.</p>
-        </div>
-        <div class="wiki-hero-tips">
-          <div class="wiki-tip"><i class="fas fa-book"></i><div><b>Wissensdatenbank</b><span>Preisliste, Angebotsleitfaden und weitere Unterlagen, immer in der aktuellen Version.</span></div></div>
-          <div class="wiki-tip"><i class="fas fa-envelope"></i><div><b>E-Mail-Vorlagen</b><span>Lead öffnen, auf <strong>E-Mail</strong> klicken, Vorlage wählen. Platzhalter werden automatisch ersetzt.</span></div></div>
-          <div class="wiki-tip"><i class="fas fa-comments"></i><div><b>Fragen? Kein Problem!</b><span>Melde dich jederzeit bei Aleksandra Dalak<span id="wikiAdminPhone"></span><span id="wikiAdminEmail"></span>, per WhatsApp oder Rücksprache.</span></div></div>
-        </div>
-      </div>
-
-      <div id="closerEmailTemplate"></div>
-      <section class="wiki-section">
-        <div class="wiki-section-head"><div class="wiki-section-title"><i class="fas fa-folder-open"></i> Unterlagen</div></div>
-        <div id="wikiFilesContainer"></div>
-      </section>
-    </div>
+    <div id="sec-wiki" style="display:none"></div>
 
     <!-- POSTEINGANG -->
     <div id="sec-inbox" style="display:none">
@@ -579,12 +554,13 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf22"></script>
-<script src="/shared/dialer.js?v=nf22"></script>
-<script src="/shared/deals.js?v=nf22"></script>
-<script src="/shared/calllists.js?v=nf22"></script>
-<script src="/shared/today.js?v=nf22"></script>
-<script src="/shared/duplicates.js?v=nf22"></script>
+<script src="/shared/api.js?v=nf23"></script>
+<script src="/shared/dialer.js?v=nf23"></script>
+<script src="/shared/deals.js?v=nf23"></script>
+<script src="/shared/calllists.js?v=nf23"></script>
+<script src="/shared/today.js?v=nf23"></script>
+<script src="/shared/duplicates.js?v=nf23"></script>
+<script src="/shared/wiki.js?v=nf23"></script>
 <script>
 const ME = Auth.getUser();
 const CAN = {
@@ -1930,53 +1906,29 @@ async function changePassword() {
 
 // ── WIKI ──────────────────────────────────────────────────────
 async function loadWiki() {
-  try {
-    const requests = [
-      api('GET', '/wiki/files'),
-      api('GET', '/wiki/template').catch(() => ({})),
-    ];
-    if (CAN.manageTemplates) requests.push(api('GET', '/email-templates').catch(() => []));
-    const [files, tmpl, emailTemplates] = await Promise.all(requests);
-
-    const tmplEl = document.getElementById('closerEmailTemplate');
-    if (tmplEl) {
-      if (CAN.manageTemplates) {
-        _clManagedTemplates = emailTemplates || [];
-        tmplEl.innerHTML = clRenderTemplateMgmtSection();
-      } else if (tmpl.subject || tmpl.body) {
-        tmplEl.innerHTML = `
-          <section class="wiki-section">
-            <div class="wiki-section-head">
-              <div class="wiki-section-title"><i class="fas fa-envelope"></i> E-Mail-Vorlage <span class="tpl-tag">Nur lesbar</span></div>
-              <div class="wiki-placeholders">Platzhalter <code>{company}</code> wird durch den Firmennamen ersetzt</div>
-            </div>
-            <div class="card"><div class="card-body" style="padding:16px 18px">
-              <div class="form-group" style="margin-bottom:10px"><label>Betreff</label><input class="form-control" value="${escHtml(tmpl.subject||'')}" readonly style="background:var(--bg3);color:var(--text2)"></div>
-              <div class="form-group" style="margin:0"><label>Nachricht</label><div class="form-control" style="background:var(--bg3);color:var(--text2);font-size:13px;line-height:1.6;min-height:120px;overflow-y:auto;pointer-events:none">${bodyToHtml(tmpl.body||'')}</div></div>
-            </div></div>
-          </section>`;
-      } else {
-        tmplEl.innerHTML = '';
-      }
-    }
-    renderWikiFiles(files, 'wikiFilesContainer', false);
-  } catch(e) { showToast(e.message, 'err'); }
+  Wiki.mount({
+    rootId: 'sec-wiki', isAdmin: false, help: true,
+    title: 'Alles für dein nächstes Gespräch',
+    sub: 'Preislisten, Leitfäden und E-Mail-Vorlagen von NovaFlow, immer in der aktuellen Version. Suchen, öffnen, loslegen.',
+    templates: CAN.manageTemplates
+      ? { mode: 'manage', slotHtml: '<div id="closerEmailTemplate" class="tpl-grid"></div>', onNew: 'clOpenTemplModal(null)', hint: WIKI_TPL_HINT }
+      : { mode: 'read', hint: WIKI_TPL_HINT },
+  });
+  if (CAN.manageTemplates) {
+    _clManagedTemplates = await api('GET', '/email-templates').catch(() => []);
+    document.getElementById('closerEmailTemplate').innerHTML = clRenderTemplateMgmtSection();
+  }
+  await Wiki.load();
 }
+const WIKI_TPL_HINT = 'Im Lead auf <b>E-Mail</b> klicken und eine Vorlage wählen. Name und Firma setzt das CRM automatisch ein.';
 
 let _clManagedTemplates = [];
 
 function clRenderTemplateMgmtSection() {
-  const cards = _clManagedTemplates.map(t => renderTemplateCard(t, {
+  return _clManagedTemplates.map(t => renderTemplateCard(t, {
     edit:   `clOpenTemplModal(${t.id})`,
     toggle: `clToggleTempl(${t.id},${t.is_active ? 0 : 1})`,
-  })).join('');
-  return `<section class="wiki-section">
-    <div class="wiki-section-head">
-      <div class="wiki-section-title"><i class="fas fa-envelope"></i> E-Mail-Vorlagen <span class="badge">${_clManagedTemplates.length}</span></div>
-      <button class="btn btn-primary btn-sm" onclick="clOpenTemplModal(null)"><i class="fas fa-plus"></i> Neue Vorlage</button>
-    </div>
-    <div class="tpl-grid">${cards || '<div class="wiki-empty" style="grid-column:1/-1"><i class="fas fa-envelope-open-text"></i>Noch keine Vorlagen vorhanden</div>'}</div>
-  </section>`;
+  })).join('') || '<div class="wiki-empty" style="grid-column:1/-1"><i class="fas fa-envelope-open-text"></i>Noch keine Vorlagen vorhanden</div>';
 }
 
 
@@ -2040,6 +1992,7 @@ async function clSaveTempl() {
     _clManagedTemplates = templates;
     const tmplEl = document.getElementById('closerEmailTemplate');
     if (tmplEl) tmplEl.innerHTML = clRenderTemplateMgmtSection();
+    Wiki.templatesChanged();
     await loadCloserEmailTemplates();
   } catch(e) { showToast(e.message, 'err'); }
   btn.disabled = false;
@@ -2051,102 +2004,10 @@ async function clToggleTempl(id, newActive) {
     _clManagedTemplates = templates;
     const tmplEl = document.getElementById('closerEmailTemplate');
     if (tmplEl) tmplEl.innerHTML = clRenderTemplateMgmtSection();
+    Wiki.templatesChanged();
     showToast(newActive ? 'Vorlage aktiviert' : 'Vorlage deaktiviert', 'ok');
   } catch(e) { showToast(e.message, 'err'); }
 }
-
-async function showWikiNoPreviewModal(filename, displayName) {
-  const existing = document.getElementById('wikiNoPreviewModal');
-  if (existing) existing.remove();
-  const ext = filename.split('.').pop().toLowerCase();
-  const isDocx = /^docx?$/.test(ext);
-  const label = displayName || filename;
-  const safeFile = filename.replace(/'/g, "\\'");
-  const safeEnc  = encodeURIComponent(label);
-
-  const overlay = document.createElement('div');
-  overlay.id = 'wikiNoPreviewModal';
-  overlay.className = 'modal-overlay';
-  overlay.style.cssText = 'display:flex;z-index:9999';
-
-  const dlBtn = `<button class="btn btn-primary" style="margin-top:16px" onclick="document.getElementById('wikiNoPreviewModal').remove();wikiFileOpen('${safeFile}','${safeEnc}',true)"><i class="fas fa-download" style="margin-right:6px"></i>Herunterladen</button>`;
-
-  if (isDocx) {
-    overlay.innerHTML = `
-      <div class="modal" style="max-width:780px;width:95vw;max-height:85vh;display:flex;flex-direction:column">
-        <button class="modal-close" onclick="document.getElementById('wikiNoPreviewModal').remove()"><i class="fas fa-times"></i></button>
-        <div class="modal-title" style="margin-bottom:12px;flex-shrink:0">${escHtml(label)}</div>
-        <div id="wikiDocxBody" style="flex:1;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:24px 28px;background:#fff;color:#111;font-family:Georgia,serif;font-size:14px;line-height:1.7">
-          <div style="color:var(--text3);text-align:center;padding:40px"><i class="fas fa-spinner fa-spin" style="font-size:24px"></i><br><br>Dokument wird geladen…</div>
-        </div>
-        <div style="flex-shrink:0;text-align:right">${dlBtn}</div>
-      </div>`;
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-    document.body.appendChild(overlay);
-
-    try {
-      const res = await fetch(`/api/wiki/files/${encodeURIComponent(filename)}`, {
-        headers: { 'Authorization': 'Bearer ' + Auth.getToken() }
-      });
-      if (!res.ok) throw new Error('Datei nicht verfügbar');
-      const arrayBuffer = await res.arrayBuffer();
-      const result = await mammoth.convertToHtml({ arrayBuffer });
-      document.getElementById('wikiDocxBody').innerHTML = result.value || '<p style="color:var(--text3)">Dokument ist leer oder konnte nicht gelesen werden.</p>';
-    } catch(e) {
-      const body = document.getElementById('wikiDocxBody');
-      if (body) body.innerHTML = `<p style="color:var(--red);text-align:center">${escHtml(e.message)}</p>`;
-    }
-  } else {
-    overlay.innerHTML = `
-      <div class="modal" style="max-width:420px;text-align:center">
-        <button class="modal-close" onclick="document.getElementById('wikiNoPreviewModal').remove()"><i class="fas fa-times"></i></button>
-        <div style="margin-bottom:16px"><i class="fas fa-file-alt" style="font-size:48px;color:var(--accent);opacity:.7"></i></div>
-        <div class="modal-title" style="margin-bottom:8px">${escHtml(label)}</div>
-        <p style="color:var(--text3);font-size:13px;margin-bottom:8px">${ext.toUpperCase()}-Dateien können nicht direkt im Browser angezeigt werden.<br>Bitte lade die Datei herunter, um sie zu öffnen.</p>
-        ${dlBtn}
-      </div>`;
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-    document.body.appendChild(overlay);
-  }
-}
-
-async function wikiFileOpen(filename, encodedName, forceDownload) {
-  if (!forceDownload) {
-    const ext = filename.split('.').pop().toLowerCase();
-    const isOffice = /^(docx?|xlsx?|pptx?|odt|ods|odp)$/.test(ext);
-    if (isOffice) {
-      showWikiNoPreviewModal(filename, encodedName ? decodeURIComponent(encodedName) : filename);
-      return;
-    }
-    try {
-      const _wr = await fetch(`/api/wiki/files/${encodeURIComponent(filename)}`, {
-        headers: { 'Authorization': 'Bearer ' + Auth.getToken() }
-      });
-      if (!_wr.ok) { showToast('Datei nicht verfügbar', 'err'); return; }
-      const _wb = await _wr.blob();
-      const _wu = URL.createObjectURL(_wb);
-      window.open(_wu, '_blank');
-      setTimeout(() => URL.revokeObjectURL(_wu), 30000);
-    } catch { showToast('Datei konnte nicht geöffnet werden', 'err'); }
-    return;
-  }
-  // Download: Blob-Weg damit der Dateiname korrekt gesetzt wird
-  try {
-    const res = await fetch(`/api/wiki/files/${encodeURIComponent(filename)}`, {
-      headers: { 'Authorization': 'Bearer ' + Auth.getToken() }
-    });
-    if (!res.ok) { showToast('Datei nicht verfügbar', 'err'); return; }
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = encodedName ? decodeURIComponent(encodedName) : filename;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-  } catch(e) { showToast('Fehler beim Laden', 'err'); }
-}
-
-
 
 // ── KOMMENTAR EDIT / DELETE ───────────────────────────────────
 function editComment(leadId, cid, currentText) {

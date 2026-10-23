@@ -169,6 +169,8 @@ migrate(`CREATE TABLE IF NOT EXISTS wiki_files (
   uploaded_by INT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )`).catch(() => {});
+// Kurzbeschreibung je Unterlage (wurde bisher nur in der Route benutzt, nie angelegt)
+migrate('ALTER TABLE wiki_files ADD COLUMN note TEXT NULL').catch(() => {});
 
 migrate(`CREATE TABLE IF NOT EXISTS email_template (
   id INT PRIMARY KEY,

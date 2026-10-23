@@ -49,14 +49,15 @@ router.post('/files', auth, adminOnly, (req, res, next) => {
     next();
   });
 }, async (req, res) => {
-  const { name, category, note } = req.body;
+  const { name, note } = req.body;
+  const category = String(req.body.category || '').trim().slice(0, 100);
   if (!req.file) return res.status(400).json({ error: 'Keine Datei hochgeladen' });
   if (!category) return res.status(400).json({ error: 'Kategorie fehlt' });
   try {
     const [r] = await db.query(
       `INSERT INTO wiki_files (name, category, filename, mimetype, size, uploaded_by, note)
        VALUES (?,?,?,?,?,?,?)`,
-      [name || req.file.originalname, category, req.file.filename,
+      [(name?.trim() || req.file.originalname.replace(/\.[^.]+$/, '')).slice(0, 255), category, req.file.filename,
        req.file.mimetype, req.file.size, req.user.id, note?.trim() || null]
     );
     await log(req.user.id, 'wiki_upload', 'wiki', r.insertId, { name, category }, req.ip);
@@ -64,13 +65,23 @@ router.post('/files', auth, adminOnly, (req, res, next) => {
   } catch(e) { console.error('Wiki error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
-// PATCH /api/wiki/files/:id — Notiz bearbeiten (admin)
+// PATCH /api/wiki/files/:id — Bezeichnung, Kategorie, Notiz bearbeiten (admin)
 router.patch('/files/:id', auth, adminOnly, async (req, res) => {
   try {
-    const { note } = req.body;
+    const { name, category, note } = req.body;
     const [[file]] = await db.query('SELECT id FROM wiki_files WHERE id=?', [req.params.id]);
     if (!file) return res.status(404).json({ error: 'Nicht gefunden' });
-    await db.query('UPDATE wiki_files SET note=? WHERE id=?', [note?.trim() || null, req.params.id]);
+    const sets = [], vals = [];
+    if (name !== undefined) {
+      if (!String(name).trim()) return res.status(400).json({ error: 'Bezeichnung fehlt' });
+      sets.push('name=?'); vals.push(String(name).trim().slice(0, 255));
+    }
+    if (category !== undefined) {
+      if (!String(category).trim()) return res.status(400).json({ error: 'Kategorie fehlt' });
+      sets.push('category=?'); vals.push(String(category).trim().slice(0, 100));
+    }
+    if (note !== undefined) { sets.push('note=?'); vals.push(note?.trim() || null); }
+    if (sets.length) await db.query(`UPDATE wiki_files SET ${sets.join(', ')} WHERE id=?`, [...vals, req.params.id]);
     res.json({ ok: true });
   } catch(e) { console.error('Wiki error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
