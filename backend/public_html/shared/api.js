@@ -552,6 +552,34 @@ function renderTemplateCard(t, a) {
   </div>`;
 }
 
+// ── Angebote & Rechnungen eines Leads (für den betreuenden Closer, nur lesen) ──
+const DOK_STATUS = { entwurf: 'In Arbeit', versendet: 'Versendet', angenommen: 'Angenommen', abgelehnt: 'Abgelehnt', abgelaufen: 'Abgelaufen',
+  offen: 'Offen', bezahlt: 'Bezahlt', ueberfaellig: 'Überfällig', finalisiert: 'Offen', storniert: 'Storniert', storno: 'Storno' };
+async function renderLeadDokumente(leadId, elId) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  try {
+    const d = await api('GET', `/lead-dokumente/${leadId}`);
+    const eur = v => Number(v || 0).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+    const zeile = (art, x, icon, nr, text, betrag, st) => `<button type="button" class="deal-mini" onclick="oeffneLeadPdf(${leadId}, '${art}', '${escHtml(x.id)}')" title="PDF öffnen">
+        <span class="deal-mini-main"><b><i class="fas ${icon}" style="color:var(--text3);margin-right:6px"></i>${escHtml(nr)}</b>
+        <span class="cell-sub">${escHtml(text || '')}</span><span class="abr-chip s-${escHtml(st)}">${escHtml(DOK_STATUS[st] || st)}</span></span>
+        <span class="deal-mini-val">${betrag} <i class="fas fa-file-pdf" style="color:var(--text3);margin-left:4px"></i></span></button>`;
+    el.innerHTML = d.angebote.map(a => zeile('angebote', a, 'fa-file-signature', a.nummer, a.betreff, eur(a.brutto) + (a.monatlich ? ` <small>+ ${eur(a.monatlich)}/Mon.</small>` : ''), a.status)).join('')
+      + d.rechnungen.map(r => zeile('rechnungen', r, 'fa-file-invoice', r.nummer, r.titel, eur(r.brutto), r.zahlungsstatus || 'offen')).join('')
+      || '<div class="panel-empty">Noch kein Angebot. Schieb den Deal auf „Angebot anfordern“, dann schreibt Aleksandra es.</div>';
+  } catch (e) { el.innerHTML = `<div class="panel-empty">${escHtml(e.message)}</div>`; }
+}
+async function oeffneLeadPdf(leadId, art, docId) {
+  try {
+    const r = await fetch(`/api/lead-dokumente/${leadId}/${art}/${encodeURIComponent(docId)}/pdf`, { headers: { Authorization: 'Bearer ' + Auth.getToken() } });
+    if (!r.ok) throw new Error('PDF nicht verfügbar');
+    const url = URL.createObjectURL(await r.blob());
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) { showToast(e.message, 'err'); }
+}
+
 // ── Rücksprachen: gemeinsame Renderer ─────────────────────────
 function renderChatListItems(chats, emptyText) {
   if (!chats.length) return `<div class="chat-welcome">

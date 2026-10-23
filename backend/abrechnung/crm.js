@@ -81,7 +81,7 @@ async function angebotStatusAnCrm(a) {
     await markLost(deal, deal.owner_id || deal.created_by, `Angebot ${a.nummer} abgelehnt`);
   } else if (a.status === 'versendet' && deal.status === 'open') {
     // In die Phase „Angebot gesendet“ schieben, falls es sie gibt und der Deal davor steht
-    const [[st]] = await db.query("SELECT id, sort_order FROM deal_stages WHERE is_active=1 AND name LIKE 'Angebot%' ORDER BY sort_order LIMIT 1");
+    const [[st]] = await db.query("SELECT id, sort_order FROM deal_stages WHERE is_active=1 AND name LIKE 'Angebot%' AND name NOT REGEXP 'anforder|anfrage' ORDER BY sort_order LIMIT 1");
     const [[cur]] = await db.query('SELECT sort_order FROM deal_stages WHERE id=?', [deal.stage_id]);
     if (st && (!cur || cur.sort_order < st.sort_order)) {
       await db.query('UPDATE deals SET stage_id=?, stage_changed_at=NOW(), value=IF(value=0, ?, value) WHERE id=?', [st.id, wert, deal.id]);
@@ -188,6 +188,8 @@ function registriere(app, { ki } = {}) {
         [[deal]] = await db.query('SELECT id, title, lead_id FROM deals WHERE id=? AND lead_id=?', [parseInt(req.body.dealId), lead.id]);
       }
       const angebot = mandant.crm.angebotEntwurf({ lead, deal });
+      // Offene Angebots-Anfrage des Closers ist damit in Arbeit
+      await db.query("UPDATE reminders SET done_at=NOW() WHERE lead_id=? AND kind='angebot' AND done_at IS NULL", [lead.id]);
       await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',
         [lead.id, req.user.id, `📄 Angebot ${angebot.nummer} angelegt (Entwurf)`]);
       await log(req.user.id, 'angebot_create', 'lead', lead.id, { nummer: angebot.nummer, deal_id: deal ? deal.id : null }, req.ip);
@@ -212,6 +214,37 @@ function registriere(app, { ki } = {}) {
       res.status(500).json({ success: false, error: e.message });
     }
   });
+  // ── Angebote & Rechnungen eines Leads für den betreuenden Closer (nur lesen) ──
+  // Auch ohne Berechtigung „Angebote & Rechnungen“: Wer den Lead betreut, sieht,
+  // was der Admin dem Kunden angeboten bzw. berechnet hat, und kann die PDFs öffnen.
+  const { auth } = require('../middleware/auth');
+  async function leadFuerBetreuer(req) {
+    const lead = await ladeLead(parseInt(req.params.id));
+    if (!lead) return null;
+    if (req.user.role === 'admin' || req.user.can_abrechnung || req.user.can_view_all_leads) return lead;
+    const [[l]] = await db.query('SELECT assigned_to FROM leads WHERE id=?', [lead.id]);
+    return l && l.assigned_to === req.user.id ? lead : false;
+  }
+  app.get('/api/lead-dokumente/:id', auth, async (req, res) => {
+    try {
+      const lead = await leadFuerBetreuer(req);
+      if (lead === null) return res.status(404).json({ error: 'Lead nicht gefunden' });
+      if (!lead) return res.status(403).json({ error: 'Kein Zugriff' });
+      const d = mandant.crm.dokumenteFuerLead(lead);
+      res.json({ angebote: d.angebote, rechnungen: d.rechnungen.filter(r => r.status === 'finalisiert') });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  app.get('/api/lead-dokumente/:id/:art(angebote|rechnungen)/:doc/pdf', auth, async (req, res, next) => {
+    try {
+      const lead = await leadFuerBetreuer(req);
+      if (!lead) return res.status(lead === null ? 404 : 403).json({ error: 'Kein Zugriff' });
+      const d = mandant.crm.dokumenteFuerLead(lead);
+      if (!d[req.params.art].some(x => x.id === req.params.doc)) return res.status(404).json({ error: 'Dokument nicht gefunden' });
+      req.url = `/api/abrechnung/${req.params.art}/${req.params.doc}/pdf`;
+      mandant.router(req, res, next);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
   // Kundenkonten aus dem Angebotstool (nur Admin)
   crmApi.get('/kundenkonten', async (req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ success: false, error: 'Nur für Admins.' });

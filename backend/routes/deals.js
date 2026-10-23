@@ -41,6 +41,9 @@ async function loadDeal(id) {
      FROM deals d JOIN leads l ON l.id = d.lead_id WHERE d.id = ?`, [id]);
   return d;
 }
+// Phase, in der der Closer dem Admin die Infos für ein Angebot übergibt
+const istAngebotAnfrage = name => /anfordern|anfrage/i.test(String(name || ''));
+
 async function note(leadId, userId, text) {
   await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)', [leadId, userId, text]);
 }
@@ -294,6 +297,18 @@ router.patch('/:id', auth, async (req, res) => {
   params.push(deal.id);
   await db.query(`UPDATE deals SET ${updates.join(',')} WHERE id=?`, params);
   if (newStage) await note(deal.lead_id, req.user.id, `➜ ${deal.title}: Phase „${newStage.name}“`);
+  if (newStage && istAngebotAnfrage(newStage.name)) {
+    const infos = String(req.body.angebot_infos || '').trim().slice(0, 3000);
+    await note(deal.lead_id, req.user.id, `📝 Angebot angefordert${infos ? `: ${infos}` : ''}`);
+    // Admins sehen die Anfrage in „Heute“ und bekommen den Reminder-Hinweis
+    if (req.user.role !== 'admin') {
+      const [admins] = await db.query("SELECT id FROM users WHERE role='admin' AND is_active=1");
+      for (const a of admins) {
+        await db.query("INSERT INTO reminders (lead_id, user_id, remind_at, note, kind) VALUES (?, ?, NOW(), ?, 'angebot')",
+          [deal.lead_id, a.id, `Angebot anfordern: ${deal.title} (${req.user.full_name})${infos ? ` – ${infos.slice(0, 200)}` : ''}`]);
+      }
+    }
+  }
   await log(req.user.id, newStage ? 'deal_stage_change' : 'deal_update', 'lead', deal.lead_id,
     { deal_id: deal.id, ...(newStage ? { stage: newStage.name } : {}) }, req.ip);
   res.json({ ok: true });
@@ -349,3 +364,4 @@ module.exports.createDeal = createDeal;
 module.exports.markWon = markWon;
 module.exports.markLost = markLost;
 module.exports.parseValue = parseValue;
+module.exports.istAngebotAnfrage = istAngebotAnfrage;

@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf27">
+<link rel="stylesheet" href="/shared/style.css?v=nf28">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -591,16 +591,16 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf27"></script>
-<script src="/shared/dialer.js?v=nf27"></script>
-<script src="/shared/deals.js?v=nf27"></script>
-<script src="/shared/calllists.js?v=nf27"></script>
-<script src="/shared/today.js?v=nf27"></script>
-<script src="/shared/duplicates.js?v=nf27"></script>
-<script src="/shared/wiki.js?v=nf27"></script>
-<script src="/shared/lines.js?v=nf27"></script>
-<script src="/shared/finder.js?v=nf27"></script>
-<script src="/shared/board.js?v=nf27"></script>
+<script src="/shared/api.js?v=nf28"></script>
+<script src="/shared/dialer.js?v=nf28"></script>
+<script src="/shared/deals.js?v=nf28"></script>
+<script src="/shared/calllists.js?v=nf28"></script>
+<script src="/shared/today.js?v=nf28"></script>
+<script src="/shared/duplicates.js?v=nf28"></script>
+<script src="/shared/wiki.js?v=nf28"></script>
+<script src="/shared/lines.js?v=nf28"></script>
+<script src="/shared/finder.js?v=nf28"></script>
+<script src="/shared/board.js?v=nf28"></script>
 <script>
 let allLeads = [], allUsers = [], editingUserId = null;
 let panelDirty = false;
@@ -2613,6 +2613,7 @@ Today.mount({
   openLead: id => openLeadPanel(id),
   call: (id, phone) => startCall(id, phone),
   startDialer: o => startDialer(o),
+  onAngebot: (leadId, dealId) => angebotErstellen(leadId, dealId),
 });
 Dupes.init({
   isAdmin: true,

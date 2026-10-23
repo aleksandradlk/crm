@@ -47,16 +47,32 @@ router.get('/', auth, async (req, res) => {
     const [[goalRow]] = await db.query("SELECT value FROM app_settings WHERE key_name='daily_call_goal'");
     const queue = await buildQueue(req.user, null);
 
+    // Admin: Deals, für die ein Closer ein Angebot angefordert hat (Phase „Angebot anfordern“)
+    let anfragen = [];
+    if (req.user.role === 'admin') {
+      [anfragen] = await db.query(
+        `SELECT d.id, d.lead_id, d.title, d.value, s.name AS stage_name, DATEDIFF(NOW(), d.stage_changed_at) AS days_in_stage,
+                l.company, l.phone, u.full_name AS owner_name,
+                (SELECT c.text FROM comments c WHERE c.lead_id = d.lead_id AND c.text LIKE '📝 Angebot angefordert%' ORDER BY c.id DESC LIMIT 1) AS infos
+         FROM deals d JOIN leads l ON l.id = d.lead_id AND l.archived_at IS NULL
+         JOIN deal_stages s ON s.id = d.stage_id
+         LEFT JOIN users u ON u.id = d.owner_id
+         WHERE d.status = 'open' AND s.name REGEXP 'anforder|anfrage'
+         ORDER BY d.stage_changed_at ASC LIMIT 50`);
+      anfragen = anfragen.map(a => ({ ...a, infos: a.infos ? a.infos.replace(/^📝 Angebot angefordert:?\s*/, '') : '' }));
+    }
+
     const startToday = new Date(); startToday.setHours(0, 0, 0, 0);
     res.json({
       calls_today,
       goal: parseInt(goalRow?.value) || 50,
       queue_count: queue.leads.length,
       missed_calls: reminders.filter(r => r.kind === 'missed_call'),
-      followups: reminders.filter(r => r.kind !== 'missed_call')
+      followups: reminders.filter(r => r.kind !== 'missed_call' && r.kind !== 'angebot')
         .map(r => ({ ...r, overdue: new Date(r.remind_at) < startToday })),
       replies,
       deals: dealsAttention,
+      angebot_anfragen: anfragen,
     });
   } catch (e) {
     console.error('Today error:', e);
