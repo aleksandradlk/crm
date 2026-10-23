@@ -34,7 +34,7 @@ Wichtige Werte in `.env`:
 - `JWT_SECRET` → beliebiger langer zufälliger String (min. 32 Zeichen)
 - `CLAUDE_API_KEY` → von console.anthropic.com
 - `SMTP_HOST` / `SMTP_PASS` → SMTP-Zugangsdaten für info@novaflowservices.de
-- `BASE_URL` → z.B. https://leads.novaflowservices.de
+- `BASE_URL` → z.B. https://crm.novaflowservices.de
 
 ---
 
@@ -66,13 +66,13 @@ pm2 startup
 
 ## Schritt 5 — Webserver / Subdomain konfigurieren
 
-In Plesk/Apache/Nginx: Subdomain `leads.novaflowservices.de` auf Port 3000 weiterleiten.
+In Plesk/Apache/Nginx: Subdomain `crm.novaflowservices.de` auf Port 3000 weiterleiten.
 
 **Nginx Beispiel:**
 ```nginx
 server {
     listen 443 ssl;
-    server_name leads.novaflowservices.de;
+    server_name crm.novaflowservices.de;
 
     location / {
         proxy_pass http://localhost:3000;
@@ -100,7 +100,7 @@ wird nur übernommen, wenn diese Prüfung grün ist.
 
 ## Schritt 6 — Ersten Admin anlegen
 
-1. Browser öffnen: `https://leads.novaflowservices.de/setup`
+1. Browser öffnen: `https://crm.novaflowservices.de/setup`
 2. Admin-Account ausfüllen und erstellen
 3. Mit `/login` anmelden
 
@@ -141,7 +141,7 @@ mit vorausgefülltem Ergebnis und Gesprächsdauer. Ohne Twilio-Konfiguration ble
 3. **API Key** anlegen (Console → Account → API keys & tokens → Create API key, Typ „Standard“):
    `TWILIO_API_KEY_SID` (beginnt mit `SK`) und `TWILIO_API_KEY_SECRET`.
 4. **TwiML App** anlegen (Console → Voice → TwiML Apps → Create):
-   - Voice Request URL: `https://leads.novaflowservices.de/api/voice/twiml` (HTTP POST)
+   - Voice Request URL: `https://crm.novaflowservices.de/api/voice/twiml` (HTTP POST)
    - die SID (beginnt mit `AP`) als `TWILIO_TWIML_APP_SID` eintragen.
 5. **Geo Permissions** (Console → Voice → Settings → Geo permissions): Deutschland aktivieren
    (ggf. Österreich/Schweiz).
@@ -158,7 +158,7 @@ Kunden rufen eine Twilio-Firmennummer an, und es klingelt direkt im CRM (Browser
 1. In Twilio eine deutsche Nummer kaufen (Console → Phone Numbers → Buy a number; für deutsche
    Nummern verlangt Twilio einmalig einen Adress-/Firmennachweis, „Regulatory Bundle“).
 2. Bei der Nummer unter „Voice Configuration“ → „A call comes in“: Webhook
-   `https://leads.novaflowservices.de/api/voice/incoming` (HTTP POST) eintragen.
+   `https://crm.novaflowservices.de/api/voice/incoming` (HTTP POST) eintragen.
 3. Dieselbe Nummer als `TWILIO_CALLER_ID` in `.env` eintragen – dann sehen Kunden bei
    ausgehenden Anrufen diese Nummer und landen beim Rückruf wieder im CRM.
 
