@@ -41,6 +41,8 @@ router.post('/login', async (req, res) => {
       can_create_users:              !!user.can_create_users,
       can_generate_leads:            !!user.can_generate_leads,
       can_manage_email_templates:    !!user.can_manage_email_templates,
+      can_abrechnung:                !!user.can_abrechnung,
+      theme:                         user.theme || null,
     }
   });
 });
@@ -132,12 +134,21 @@ const { auth } = require('../middleware/auth');
 router.get('/me', auth, async (req, res) => {
   try {
     const [[user]] = await db.query(
-      'SELECT id, username, full_name, email, role, notify_email, notify_sms, phone, can_edit_contacts, can_archive_leads, can_reassign_leads, can_view_all_leads, can_create_users, can_generate_leads, can_manage_email_templates FROM users WHERE id=?',
+      'SELECT id, username, full_name, email, role, notify_email, notify_sms, phone, can_edit_contacts, can_archive_leads, can_reassign_leads, can_view_all_leads, can_create_users, can_generate_leads, can_manage_email_templates, can_abrechnung, theme FROM users WHERE id=?',
       [req.user.id]
     );
     if (!user) return res.status(404).json({ error: 'Nicht gefunden' });
     res.json(user);
   } catch(e) { console.error('Auth /me error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
+});
+
+// PATCH /api/auth/theme — Hell/Dunkel speichern
+router.patch('/theme', auth, async (req, res) => {
+  const theme = req.body.theme === 'dark' ? 'dark' : 'light';
+  try {
+    await db.query('UPDATE users SET theme=? WHERE id=?', [theme, req.user.id]);
+    res.json({ ok: true, theme });
+  } catch(e) { console.error('Auth /theme error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 module.exports = router;

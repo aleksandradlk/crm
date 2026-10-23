@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf23">
+<link rel="stylesheet" href="/shared/style.css?v=nf24">
 <style>
 .notif-panel{position:fixed;top:0;right:0;bottom:0;width:340px;background:var(--bg2);border-left:1px solid var(--border2);z-index:150;transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;padding:20px}
 .notif-panel.open{transform:translateX(0)}
@@ -55,6 +55,7 @@
       <div class="nav-item" data-sec="allLeads" onclick="showSection('allLeads')"><i class="fas fa-list"></i> Alle Leads</div>
       <div class="nav-item" data-sec="myLeads" onclick="showSection('myLeads')"><i class="fas fa-user-check"></i> Meine Leads <span id="rueckrufBadge" style="display:none;margin-left:auto" class="badge" title="Rückrufe offen">0</span></div>
       <div class="nav-item" data-sec="deals" onclick="showSection('deals')"><i class="fas fa-handshake"></i> Deals</div>
+      <div class="nav-item" data-sec="abrechnung" id="navAbrechnung" onclick="showSection('abrechnung')" style="display:none"><i class="fas fa-file-invoice-dollar"></i> Angebote &amp; Rechnungen</div>
       <div class="nav-item" data-sec="inbox" onclick="showSection('inbox')"><i class="fas fa-inbox"></i> Posteingang <span id="inboxBadge" style="display:none;margin-left:auto" class="badge" title="Ungelesene Kunden-E-Mails">0</span></div>
       <div class="nav-item" data-sec="reminders" onclick="showSection('reminders')"><i class="fas fa-bell"></i> Reminder <span id="reminderBadge" style="display:none" class="badge">0</span></div>
       <div class="nav-sep"></div>
@@ -289,6 +290,15 @@
       <div id="allLeadsPipelineView" style="display:none">
         <div class="pipeline-board" id="allPipelineBoard"></div>
       </div>
+    </div>
+
+    <!-- ANGEBOTE & RECHNUNGEN (nur mit Berechtigung) -->
+    <div id="sec-abrechnung" style="display:none">
+      <div class="page-header">
+        <div><h1 data-eyebrow="Vertrieb">Angebote &amp; Rechnungen</h1><p class="page-desc">Angebote schreiben und versenden, Rechnungen und Kunden im Blick – verknüpft mit deinen Leads und Deals.</p></div>
+        <div class="page-actions"><a class="btn btn-ghost btn-sm" href="/abrechnung" target="_blank" rel="noopener"><i class="fas fa-external-link-alt"></i> Eigenes Fenster</a></div>
+      </div>
+      <iframe id="abrechnungFrame" class="abr-frame" title="Angebote & Rechnungen"></iframe>
     </div>
 
     <!-- WIKI -->
@@ -554,13 +564,13 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf23"></script>
-<script src="/shared/dialer.js?v=nf23"></script>
-<script src="/shared/deals.js?v=nf23"></script>
-<script src="/shared/calllists.js?v=nf23"></script>
-<script src="/shared/today.js?v=nf23"></script>
-<script src="/shared/duplicates.js?v=nf23"></script>
-<script src="/shared/wiki.js?v=nf23"></script>
+<script src="/shared/api.js?v=nf24"></script>
+<script src="/shared/dialer.js?v=nf24"></script>
+<script src="/shared/deals.js?v=nf24"></script>
+<script src="/shared/calllists.js?v=nf24"></script>
+<script src="/shared/today.js?v=nf24"></script>
+<script src="/shared/duplicates.js?v=nf24"></script>
+<script src="/shared/wiki.js?v=nf24"></script>
 <script>
 const ME = Auth.getUser();
 const CAN = {
@@ -571,6 +581,7 @@ const CAN = {
   createUsers:         Auth.can('can_create_users'),
   generateLeads:       Auth.can('can_generate_leads'),
   manageTemplates:     Auth.can('can_manage_email_templates'),
+  abrechnung:          Auth.can('can_abrechnung'),
 };
 
 function copyPhone(phone) {
@@ -631,6 +642,7 @@ startActivityTracking();
 // Benutzer anlegen / Leads generieren: nur anzeigen wenn Berechtigung vorhanden
 if (ME?.can_create_users)   { const n = document.getElementById('navCreateUser');   if (n) n.style.display = ''; }
 if (ME?.can_generate_leads) { const n = document.getElementById('navGenerateLeads'); if (n) n.style.display = ''; }
+if (ME?.can_abrechnung)     { const n = document.getElementById('navAbrechnung');    if (n) n.style.display = ''; }
 
 // Tools: dynamisch aus /api/tools laden und nur closer_visible anzeigen
 (async () => {
@@ -666,7 +678,11 @@ if (ME?.can_generate_leads) { const n = document.getElementById('navGenerateLead
       createUsers:   !!fresh.can_create_users,
       generateLeads:   !!fresh.can_generate_leads,
       manageTemplates: !!fresh.can_manage_email_templates,
+      abrechnung:      !!fresh.can_abrechnung,
     });
+    const n3 = document.getElementById('navAbrechnung');
+    if (n3) n3.style.display = fresh.can_abrechnung ? '' : 'none';
+    if (typeof Deals !== 'undefined' && Deals.opts) Deals.opts.onAngebot = fresh.can_abrechnung ? (deal => angebotErstellen(deal.lead_id, deal.id)) : null;
     const n1 = document.getElementById('navCreateUser');
     if (n1) n1.style.display = fresh.can_create_users   ? '' : 'none';
     const n2 = document.getElementById('navGenerateLeads');
@@ -746,7 +762,7 @@ function closeMobileNav() {
 
 function showSection(name) {
   closeMobileNav();
-  ['today','myLeads','allLeads','deals','inbox','wiki','reminders','chat','feedback','createUser','generateLeads'].forEach(s => {
+  ['today','myLeads','allLeads','deals','abrechnung','inbox','wiki','reminders','chat','feedback','createUser','generateLeads'].forEach(s => {
     document.getElementById('sec-' + s).style.display = s === name ? '' : 'none';
   });
   document.querySelectorAll('.nav-item[data-sec]').forEach(el => {
@@ -758,6 +774,7 @@ function showSection(name) {
   if (name === 'today')     Today.load();
   if (name === 'inbox')     loadInbox();
   if (name === 'wiki')      loadWiki();
+  if (name === 'abrechnung') { const f = document.getElementById('abrechnungFrame'); if (!f.getAttribute('src')) f.src = '/abrechnung'; }
   if (name === 'chat')      loadChats();
   if (name === 'feedback')  loadMyFeedback();
   if (name === 'myLeads') { const f = document.getElementById('mySearch'); if (f) f.value = ''; if (allLeads.length) filterMyLeads(); }
@@ -1904,6 +1921,21 @@ async function changePassword() {
   } catch(e) { err.textContent = e.message; }
 }
 
+// ── ANGEBOTE & RECHNUNGEN (mit Berechtigung) ───────────────────
+function oeffneAbrechnung(pfad) {
+  closePanel();
+  if (typeof Deals !== 'undefined') Deals.close();
+  showSection('abrechnung');
+  document.getElementById('abrechnungFrame').src = pfad || '/abrechnung';
+}
+async function angebotErstellen(leadId, dealId) {
+  try {
+    const r = await api('POST', '/abrechnung-crm/angebot', { leadId, dealId: dealId || null });
+    showToast(`Angebot ${r.angebot.nummer} angelegt`);
+    oeffneAbrechnung('/abrechnung/angebote?angebot=' + encodeURIComponent(r.angebot.id));
+  } catch (e) { showToast(e.message, 'err'); }
+}
+
 // ── WIKI ──────────────────────────────────────────────────────
 async function loadWiki() {
   Wiki.mount({
@@ -2421,6 +2453,7 @@ Deals.mount({
   isAdmin: false,
   canViewAll: CAN.viewAll,
   openLead: id => openPanel(id),
+  onAngebot: CAN.abrechnung ? (deal => angebotErstellen(deal.lead_id, deal.id)) : null,
   onChange: () => {
     loadCloserDashboard();
     if (_panelLead && document.getElementById('leadPanel').classList.contains('open')) { panelDirty = true; openPanel(_panelLead.id); }

@@ -454,14 +454,35 @@ async function logout() {
   window.location.href = '/login';
 }
 
-function initTheme() {
-  if (localStorage.getItem('lh_theme') === 'dark') document.body.classList.add('dark');
+// Hell/Dunkel wird je Benutzer auf dem Server gespeichert und gilt damit auf
+// jedem Gerät und nach jeder Anmeldung, bis der Benutzer es wieder umstellt.
+function applyTheme(theme) {
+  document.body.classList.toggle('dark', theme === 'dark');
+  localStorage.setItem('lh_theme', theme === 'dark' ? 'dark' : 'light');
   updateThemeBtn();
 }
+function initTheme() {
+  applyTheme(Auth.getUser()?.theme || localStorage.getItem('lh_theme') || 'light');
+  if (!Auth.getToken()) return;
+  api('GET', '/auth/me').then(me => {
+    if (!me) return;
+    const u = Auth.getUser() || {};
+    if (me.theme) {
+      u.theme = me.theme;
+      localStorage.setItem('lh_user', JSON.stringify(u));
+      applyTheme(me.theme);
+    } else {
+      // Noch nichts gespeichert: bisherige Wahl dieses Geräts übernehmen
+      api('PATCH', '/auth/theme', { theme: localStorage.getItem('lh_theme') || 'light' }).catch(() => {});
+    }
+  }).catch(() => {});
+}
 function toggleTheme() {
-  const isDark = document.body.classList.toggle('dark');
-  localStorage.setItem('lh_theme', isDark ? 'dark' : 'light');
-  updateThemeBtn();
+  const theme = document.body.classList.contains('dark') ? 'light' : 'dark';
+  applyTheme(theme);
+  const u = Auth.getUser();
+  if (u) { u.theme = theme; localStorage.setItem('lh_user', JSON.stringify(u)); }
+  api('PATCH', '/auth/theme', { theme }).catch(() => {});
 }
 function updateThemeBtn() {
   const btn = document.getElementById('themeBtn');

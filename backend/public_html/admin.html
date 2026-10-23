@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf23">
+<link rel="stylesheet" href="/shared/style.css?v=nf24">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -354,9 +354,9 @@
       <div class="toolbar">
         <div class="search-bar"><i class="fas fa-search search-bar-icon"></i><input type="text" id="userSearch" class="form-control" placeholder="Name, Benutzername oder E-Mail …" oninput="filterUsers()"></div>
         <div class="chip-row" id="userRoleChips">
-          <button class="qf-btn active" data-role="" onclick="setUserRoleFilter(this)">Alle<span class="qf-count">0</span></button>
+          <button class="qf-btn active" data-role="closer" onclick="setUserRoleFilter(this)">Closer<span class="qf-count">0</span></button>
           <button class="qf-btn" data-role="admin" onclick="setUserRoleFilter(this)">Admins<span class="qf-count">0</span></button>
-          <button class="qf-btn" data-role="closer" onclick="setUserRoleFilter(this)">Closer<span class="qf-count">0</span></button>
+          <button class="qf-btn" data-role="" onclick="setUserRoleFilter(this)">Alle<span class="qf-count">0</span></button>
           <button class="qf-btn" data-role="locked" onclick="setUserRoleFilter(this)">Gesperrt<span class="qf-count">0</span></button>
         </div>
       </div>
@@ -667,6 +667,10 @@
           <input type="checkbox" id="u-can-manage-email-templates" style="width:15px;height:15px;accent-color:var(--accent)">
           <span>E-Mail-Vorlagen verwalten <span style="color:var(--text3);font-size:11px;font-weight:400">— erstellen, bearbeiten, archivieren (kein Datei-Upload, kein endgültiges Löschen)</span></span>
         </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;font-size:13px">
+          <input type="checkbox" id="u-can-abrechnung" style="width:15px;height:15px;accent-color:var(--accent)">
+          <span>Angebote &amp; Rechnungen <span style="color:var(--text3);font-size:11px;font-weight:400">— sieht und bearbeitet alle Angebote, Rechnungen und Kunden der Abrechnung</span></span>
+        </label>
       </div>
     </div>
     <div style="display:flex;gap:8px;margin-top:16px">
@@ -677,13 +681,13 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf23"></script>
-<script src="/shared/dialer.js?v=nf23"></script>
-<script src="/shared/deals.js?v=nf23"></script>
-<script src="/shared/calllists.js?v=nf23"></script>
-<script src="/shared/today.js?v=nf23"></script>
-<script src="/shared/duplicates.js?v=nf23"></script>
-<script src="/shared/wiki.js?v=nf23"></script>
+<script src="/shared/api.js?v=nf24"></script>
+<script src="/shared/dialer.js?v=nf24"></script>
+<script src="/shared/deals.js?v=nf24"></script>
+<script src="/shared/calllists.js?v=nf24"></script>
+<script src="/shared/today.js?v=nf24"></script>
+<script src="/shared/duplicates.js?v=nf24"></script>
+<script src="/shared/wiki.js?v=nf24"></script>
 <script>
 let allLeads = [], allUsers = [], generatedLeads = [], editingUserId = null;
 let panelDirty = false;
@@ -783,7 +787,7 @@ function showTab(name) {
   }
   if (name === 'myLeads')  renderMyLeads();
   if (name === 'deals')    Deals.show();
-  if (name === 'abrechnung') { const f = document.getElementById('abrechnungFrame'); if (!f.getAttribute('src')) f.src = '/abrechnung'; ladeAbrUebernahme(); }
+  if (name === 'abrechnung') { const f = document.getElementById('abrechnungFrame'); if (!f.getAttribute('src')) f.src = '/abrechnung'; ladeAbrAbgleich(); }
   if (name === 'today')    Today.load();
   if (name === 'users')    { loadUsers(); loadAppSettings(); }
   if (name === 'tracking') loadTracking();
@@ -1683,7 +1687,8 @@ async function loadUsers() {
   } catch (e) { showToast(e.message, 'err'); }
 }
 
-let _userRoleFilter = '';
+// Benutzer-Seite startet mit der Closer-Übersicht
+let _userRoleFilter = 'closer';
 const USER_PERMS = [
   ['can_edit_contacts', 'Kontaktdaten bearbeiten', 'Kontakte', 'fa-address-card'],
   ['can_archive_leads', 'Leads archivieren', 'Archiv', 'fa-archive'],
@@ -1692,6 +1697,7 @@ const USER_PERMS = [
   ['can_create_users', 'User anlegen', 'User anlegen', 'fa-user-plus'],
   ['can_generate_leads', 'Leads generieren', 'Generieren', 'fa-robot'],
   ['can_manage_email_templates', 'E-Mail-Vorlagen verwalten', 'E-Mail-Vorlagen', 'fa-envelope'],
+  ['can_abrechnung', 'Angebote & Rechnungen', 'Angebote', 'fa-file-invoice'],
 ];
 
 function userPresence(u) {
@@ -1839,8 +1845,8 @@ function updatePermSection() {
   document.getElementById('permSection').style.display = isCloser ? 'block' : 'none';
 }
 
-const PERM_IDS  = ['u-can-edit-contacts','u-can-archive-leads','u-can-reassign-leads','u-can-view-all-leads','u-can-create-users','u-can-generate-leads','u-can-manage-email-templates'];
-const PERM_KEYS = ['can_edit_contacts','can_archive_leads','can_reassign_leads','can_view_all_leads','can_create_users','can_generate_leads','can_manage_email_templates'];
+const PERM_IDS  = ['u-can-edit-contacts','u-can-archive-leads','u-can-reassign-leads','u-can-view-all-leads','u-can-create-users','u-can-generate-leads','u-can-manage-email-templates','u-can-abrechnung'];
+const PERM_KEYS = ['can_edit_contacts','can_archive_leads','can_reassign_leads','can_view_all_leads','can_create_users','can_generate_leads','can_manage_email_templates','can_abrechnung'];
 
 function openUserModal(id) {
   editingUserId = id || null;
@@ -2623,27 +2629,39 @@ function oeffneAbrechnung(pfad) {
   showTab('abrechnung');
   document.getElementById('abrechnungFrame').src = pfad || '/abrechnung';
 }
-// Hinweis auf die Übernahme aus dem Angebotstool (mit „Erneut übernehmen“)
-async function ladeAbrUebernahme() {
+// Abgleich mit dem Angebotstool: Stand je Bereich anzeigen, „Jetzt abgleichen“
+async function ladeAbrAbgleich() {
   const el = document.getElementById('abrUebernahme');
   try {
-    const d = await api('GET', '/abrechnung-crm/uebernahme');
-    const u = d.uebernahme;
-    if (!u) { el.hidden = true; return; }
+    const d = await api('GET', '/abrechnung-crm/abgleich');
+    const e = d.abgleich;
+    if (!e && !d.quelleVorhanden) { el.hidden = true; return; }
     el.hidden = false;
-    el.innerHTML = `<i class="fas fa-truck-moving"></i><span>Aus dem Angebotstool übernommen am <b>${fmtDate(u.am)}</b>: ${u.kunden} Kunden, ${u.angebote} Angebote, ${u.rechnungen} Rechnungen, ${u.abos} Abos.</span>`
-      + (d.erneutMoeglich && d.quelleVorhanden ? `<button class="btn btn-ghost btn-sm" onclick="abrErneutUebernehmen()"><i class="fas fa-sync"></i> Erneut übernehmen</button>` : '');
+    if (!e) {
+      el.innerHTML = `<i class="fas fa-truck-moving"></i><span>Das Angebotstool wurde gefunden, aber noch nicht abgeglichen.</span>
+        <button class="btn btn-ghost btn-sm" onclick="abrAbgleichen()"><i class="fas fa-sync"></i> Jetzt abgleichen</button>`;
+      return;
+    }
+    const namen = { kunden: 'Kunden', artikel: 'Artikel', angebote: 'Angebote', rechnungen: 'Rechnungen', abos: 'Abos' };
+    const chips = Object.keys(namen).map(k => {
+      const t = e.toolAnzahl[k] || 0, c = e.crmAnzahl[k] || 0;
+      return `<span class="abr-zahl ${c >= t ? 'ok' : 'fehlt'}" title="Angebotstool: ${t} · CRM: ${c}">${c >= t ? '<i class="fas fa-check"></i>' : '<i class="fas fa-exclamation"></i>'}${namen[k]} <b>${c}</b>${c < t ? `<small>von ${t}</small>` : ''}</span>`;
+    }).join('');
+    el.innerHTML = `<div class="abr-umzug-text"><i class="fas fa-truck-moving"></i><span>Alles aus dem Angebotstool ist im CRM gesichert.
+        Zuletzt abgeglichen <b>${fmtDate(e.am)}</b>${e.betriebe ? ` · Archiv mit ${e.betriebe} Betrieben und allen Sicherungen` : ' · inkl. aller Sicherungen'}</span>
+        ${d.quelleVorhanden ? '<button class="btn btn-ghost btn-sm" onclick="abrAbgleichen(this)"><i class="fas fa-sync"></i> Jetzt abgleichen</button>' : ''}</div>
+      <div class="abr-zahlen">${chips}</div>`;
   } catch (e) { el.hidden = true; }
 }
-async function abrErneutUebernehmen() {
-  const ok = await customConfirm('Holt den aktuellen Stand aus dem Angebotstool noch einmal ins CRM (ersetzt die bisherige Übernahme). Im CRM wurde noch nichts an der Abrechnung geändert, es geht also nichts verloren.', { title: 'Erneut übernehmen', okLabel: 'Übernehmen' });
-  if (!ok) return;
+async function abrAbgleichen(btn) {
+  if (btn) btn.disabled = true;
   try {
-    const r = await api('POST', '/abrechnung-crm/uebernahme');
-    showToast(`Übernommen: ${r.uebernahme.angebote} Angebote, ${r.uebernahme.rechnungen} Rechnungen`);
-    ladeAbrUebernahme();
+    const r = await api('POST', '/abrechnung-crm/abgleich');
+    const a = r.abgleich;
+    showToast(a.neu + a.aktualisiert ? `Abgeglichen: ${a.neu} neu, ${a.aktualisiert} aktualisiert` : 'Abgeglichen – alles war schon da');
+    ladeAbrAbgleich();
     document.getElementById('abrechnungFrame').src = '/abrechnung';
-  } catch (e) { showToast(e.message, 'err'); }
+  } catch (e) { showToast(e.message, 'err'); if (btn) btn.disabled = false; }
 }
 // Neuen Angebotsentwurf für Lead (und optional Deal) anlegen und direkt öffnen
 async function angebotErstellen(leadId, dealId) {
