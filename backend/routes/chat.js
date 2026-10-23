@@ -2,6 +2,10 @@ const router = require('express').Router();
 const db     = require('../db');
 const { auth } = require('../middleware/auth');
 
+// Vorschau der letzten Nachricht für die Liste
+const LAST_MSG = `(SELECT LEFT(m2.text, 140) FROM chat_messages m2 WHERE m2.chat_id = r.id ORDER BY m2.id DESC LIMIT 1) AS last_msg,
+                  (SELECT u2.full_name FROM chat_messages m3 JOIN users u2 ON u2.id = m3.user_id WHERE m3.chat_id = r.id ORDER BY m3.id DESC LIMIT 1) AS last_msg_by`;
+
 // ── GET /api/chats — eigene Chats (Admin sieht alle) ─────────
 router.get('/', auth, async (req, res) => {
   try {
@@ -11,7 +15,8 @@ router.get('/', auth, async (req, res) => {
                   u.full_name AS created_by_name,
                   COUNT(DISTINCT m.id) AS msg_count,
                   MAX(m.created_at) AS last_msg_at,
-                  GROUP_CONCAT(DISTINCT up.full_name ORDER BY up.full_name SEPARATOR ', ') AS participants
+                  GROUP_CONCAT(DISTINCT up.full_name ORDER BY up.full_name SEPARATOR ', ') AS participants,
+                  ${LAST_MSG}
            FROM chat_rooms r
            JOIN users u ON u.id = r.created_by
            LEFT JOIN chat_messages m ON m.chat_id = r.id
@@ -26,7 +31,8 @@ router.get('/', auth, async (req, res) => {
                 u.full_name AS created_by_name,
                 COUNT(DISTINCT m.id) AS msg_count,
                 MAX(m.created_at) AS last_msg_at,
-                GROUP_CONCAT(DISTINCT up.full_name ORDER BY up.full_name SEPARATOR ', ') AS participants
+                GROUP_CONCAT(DISTINCT up.full_name ORDER BY up.full_name SEPARATOR ', ') AS participants,
+                ${LAST_MSG}
          FROM chat_rooms r
          JOIN users u ON u.id = r.created_by
          JOIN chat_participants cp2 ON cp2.chat_id = r.id AND cp2.user_id = ?

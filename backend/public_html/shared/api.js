@@ -554,19 +554,39 @@ function renderTemplateCard(t, a) {
 
 // ── Rücksprachen: gemeinsame Renderer ─────────────────────────
 function renderChatListItems(chats, emptyText) {
-  if (!chats.length) return `<div class="wiki-empty"><i class="fas fa-comments"></i>${emptyText}</div>`;
+  if (!chats.length) return `<div class="chat-welcome">
+      <div class="chat-welcome-art"><span><i class="fas fa-comment"></i></span><span><i class="fas fa-comment-dots"></i></span></div>
+      <h3>Noch keine Rücksprachen</h3>
+      <p>${escHtml(emptyText)}</p>
+      <button class="btn btn-primary" onclick="openCreateChat()"><i class="fas fa-plus"></i> Neues Gespräch</button>
+    </div>`;
+  const rel = d => {
+    if (!d) return '';
+    const min = Math.round((Date.now() - new Date(d)) / 60000);
+    if (min < 1) return 'gerade eben';
+    if (min < 60) return `vor ${min} Min.`;
+    if (min < 1440 && new Date(d).toDateString() === new Date().toDateString()) return new Date(d).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    if (min < 2880) return 'gestern';
+    return fmtDateShort(d);
+  };
+  const avatars = names => names.slice(0, 3).map((n, i) =>
+    `<span class="chat-av c${i}" title="${escHtml(n)}">${escHtml(n.split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase())}</span>`).join('')
+    + (names.length > 3 ? `<span class="chat-av more">+${names.length - 3}</span>` : '');
   return '<div class="chat-list">' + chats.map(c => {
-    const initial = escHtml((c.title || '?').trim().charAt(0).toUpperCase() || '?');
+    const names = String(c.participants || c.created_by_name || '').split(', ').filter(Boolean);
     const n = Number(c.msg_count || 0);
+    const preview = c.last_msg
+      ? `<b>${escHtml((c.last_msg_by || '').split(' ')[0])}:</b> ${escHtml(String(c.last_msg).replace(/\s+/g, ' '))}`
+      : '<i>Noch keine Nachricht</i>';
     return `<div class="chat-item ${c.is_closed ? 'closed' : ''}" onclick="openChat(${c.id})">
-      <div class="chat-avatar">${initial}</div>
+      <div class="chat-avs">${avatars(names.length ? names : ['?'])}</div>
       <div class="chat-main">
-        <div class="chat-title"><span class="t">${escHtml(c.title)}</span>${c.is_closed ? '<span class="chat-closed-tag">Geschlossen</span>' : ''}</div>
-        <div class="chat-meta">${c.participants ? `<span class="t"><i class="fas fa-users" style="margin-right:5px"></i>${escHtml(c.participants)}</span>` : (c.created_by_name ? `<span>von ${escHtml(c.created_by_name)}</span>` : '')}</div>
+        <div class="chat-title"><span class="t">${escHtml(c.title)}</span>${c.is_closed ? '<span class="chat-closed-tag">Beendet</span>' : ''}</div>
+        <div class="chat-preview">${preview}</div>
       </div>
       <div class="chat-side-meta">
-        <span class="chat-count"><i class="fas fa-comment"></i> ${n}</span>
-        <span class="chat-when">${fmtDate(c.last_msg_at || c.created_at)}</span>
+        <span class="chat-when">${rel(c.last_msg_at || c.created_at)}</span>
+        <span class="chat-count" title="${n} Nachrichten"><i class="fas fa-comment"></i> ${n}</span>
       </div>
       <i class="fas fa-chevron-right chat-chevron"></i>
     </div>`;
@@ -619,41 +639,6 @@ function setChipCounts(containerId, counts) {
 }
 
 // ── Feedback-Board: gemeinsamer Renderer ──────────────────────
-const FB_TAGS = {
-  offen:          { label: 'Offen',         cls: 'fb-offen' },
-  in_planung:     { label: 'In Planung',    cls: 'fb-planung' },
-  erledigt:       { label: 'Erledigt',      cls: 'fb-erledigt' },
-  nicht_moeglich: { label: 'Nicht möglich', cls: 'fb-nein' },
-};
-function renderFeedbackCard(f, o = {}) {
-  const tag = FB_TAGS[f.tag] || { label: f.tag || '—', cls: '' };
-  const isBug = f.type === 'bug';
-  let side = '';
-  if (o.admin) {
-    side = `<div class="fb-admin">
-      <select class="form-control" onchange="updateFeedbackTag(${f.id},this.value)">${Object.entries(FB_TAGS).map(([v, t]) => `<option value="${v}"${f.tag === v ? ' selected' : ''}>${t.label}</option>`).join('')}</select>
-      <input type="text" class="form-control" placeholder="Antwort / Admin-Notiz …" value="${escHtml(f.admin_note || '')}" onblur="updateFeedbackNote(${f.id},this.value)" onkeydown="if(event.key==='Enter')this.blur()">
-      <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteFeedback(${f.id})"><i class="fas fa-trash"></i> Löschen</button>
-    </div>`;
-  } else if (o.deleteFn) {
-    side = `<div class="fb-admin" style="width:auto"><button class="btn btn-ghost btn-sm btn-icon" title="Löschen" style="color:var(--red)" onclick="${o.deleteFn}(${f.id})"><i class="fas fa-trash"></i></button></div>`;
-  }
-  return `<div class="fb-card ${tag.cls}">
-    <div class="fb-type ${isBug ? 'bug' : 'wunsch'}"><i class="fas fa-${isBug ? 'bug' : 'lightbulb'}"></i></div>
-    <div class="fb-main">
-      <div class="fb-head">
-        <span class="fb-tag ${tag.cls}">${escHtml(tag.label)}</span>
-        <span class="fb-kind">${isBug ? 'Bug' : 'Wunsch'}</span>
-        <span class="fb-meta">${f.author_name ? escHtml(f.author_name) + ' · ' : ''}${fmtDateShort(f.created_at)}</span>
-      </div>
-      <div class="fb-title">${escHtml(f.title)}</div>
-      ${f.description ? `<div class="fb-desc">${escHtml(f.description)}</div>` : ''}
-      ${f.admin_note ? `<div class="fb-note"><i class="fas fa-reply"></i><b>Antwort:</b> ${escHtml(f.admin_note)}</div>` : ''}
-    </div>
-    ${side}
-  </div>`;
-}
-
 // ── E-Mail: Verlauf + Posteingang (Admin + Closer) ───────────
 // Trennt den zitierten Verlauf ("Am … schrieb …", "> …") von der eigentlichen Antwort
 function splitQuotedEmail(text) {
