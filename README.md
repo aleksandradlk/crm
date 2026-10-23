@@ -167,10 +167,24 @@ Ablauf: Der Anrufer wird über die Telefonnummer dem Lead zugeordnet (unbekannte
 Wer annimmt, sieht sofort den Lead; danach öffnet sich die Anruf-Dokumentation. Nimmt niemand ab,
 hört der Anrufer eine Ansage und im CRM entsteht unter **Heute → Verpasste Anrufe** eine Rückruf-Aufgabe.
 
-**Pro Mitarbeiter (einmalig, ca. 30 Sekunden):** Einstellungen → „Telefonie im Browser“ → eigene
-Nummer eintragen → „Übernehmen“. Das CRM zeigt einen 6-stelligen Code, das Telefon klingelt kurz,
-Code eintippen – fertig. Diese einmalige Bestätigung ist Pflicht: Telefonanbieter dürfen nur Nummern
-als Absender anzeigen, deren Besitz nachgewiesen ist (Schutz gegen Rufnummern-Fälschung).
+### Eigene Nummer je Vertriebler (empfohlen)
+
+Der Admin teilt jedem Mitarbeiter eine Nummer aus dem Twilio-Konto zu: **Benutzer → Bearbeiten →
+„Nummer fürs Telefonieren im CRM“**. Dort stehen alle Nummern des Kontos (frei / bei wem); mit
+„Neue Nummer holen“ sucht man nach Vorwahl (z. B. 030) und kauft die Nummer direkt.
+- Der Mitarbeiter muss nichts bestätigen: Die Nummer gehört NovaFlow. Sie wird bei seinen Anrufen
+  (auch im Anrufmodus) angezeigt.
+- Anrufe auf diese Nummer klingeln nur bei ihm im CRM (Browser oder Handy, Seite muss offen sein).
+  Nimmt er nicht ab, entsteht bei ihm eine Rückruf-Aufgabe unter **Heute → Verpasste Anrufe**. Unbekannte
+  Anrufer werden als Lead angelegt und ihm zugewiesen.
+- Den Webhook der Nummer setzt das CRM beim Zuteilen selbst.
+- Einmalige Voraussetzung für deutsche Nummern: der bestätigte Nachweis (Firmenadresse + Ausweis) in
+  Twilio unter Phone Numbers → Regulatory Compliance. Das CRM nutzt ihn beim Kauf automatisch.
+
+**Ohne zugeteilte Nummer:** Einstellungen → „Telefonie im Browser“ → eigene Handynummer eintragen →
+„Übernehmen“. Das CRM zeigt einen 6-stelligen Code, das Telefon klingelt kurz, Code eintippen – fertig.
+Diese einmalige Bestätigung ist Pflicht: Telefonanbieter dürfen nur Nummern als Absender anzeigen, deren
+Besitz nachgewiesen ist (Schutz gegen Rufnummern-Fälschung).
 
 ---
 

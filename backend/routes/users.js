@@ -13,7 +13,7 @@ router.get('/', auth, adminOnly, async (req, res) => {
             u.last_login, u.created_at,
             u.can_edit_contacts, u.can_archive_leads, u.can_reassign_leads,
             u.can_view_all_leads, u.can_create_users, u.can_generate_leads,
-            u.can_manage_email_templates, u.can_abrechnung,
+            u.can_manage_email_templates, u.can_abrechnung, u.phone_line,
             s.last_active, s.click_count, s.login_at AS session_start,
             c.full_name AS creator_name, c.email AS creator_email
      FROM users u

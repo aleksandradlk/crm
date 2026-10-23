@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf24">
+<link rel="stylesheet" href="/shared/style.css?v=nf25">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -632,6 +632,7 @@
     <div class="form-group"><label>Benutzername *</label><input type="text" id="u-username" class="form-control"></div>
     <div class="form-group"><label>E-Mail <span style="color:var(--text3);font-weight:400">(optional)</span></label><input type="email" id="u-email" class="form-control" placeholder="z.B. name@firma.de"></div>
     <div class="form-group"><label>Telefon *</label><input type="text" id="u-phone" class="form-control" placeholder="z.B. +49 152 123456"></div>
+    <div class="form-group"><label>Nummer fürs Telefonieren im CRM</label><div id="u-line"></div></div>
     <div class="form-group"><label>Passwort <span id="pwHint" style="color:var(--text3)">(leer = nicht ändern)</span></label><input type="password" id="u-password" class="form-control"></div>
     <div class="form-group"><label>Rolle</label>
       <select id="u-role" class="form-control" onchange="updatePermSection()">
@@ -681,13 +682,14 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf24"></script>
-<script src="/shared/dialer.js?v=nf24"></script>
-<script src="/shared/deals.js?v=nf24"></script>
-<script src="/shared/calllists.js?v=nf24"></script>
-<script src="/shared/today.js?v=nf24"></script>
-<script src="/shared/duplicates.js?v=nf24"></script>
-<script src="/shared/wiki.js?v=nf24"></script>
+<script src="/shared/api.js?v=nf25"></script>
+<script src="/shared/dialer.js?v=nf25"></script>
+<script src="/shared/deals.js?v=nf25"></script>
+<script src="/shared/calllists.js?v=nf25"></script>
+<script src="/shared/today.js?v=nf25"></script>
+<script src="/shared/duplicates.js?v=nf25"></script>
+<script src="/shared/wiki.js?v=nf25"></script>
+<script src="/shared/lines.js?v=nf25"></script>
 <script>
 let allLeads = [], allUsers = [], generatedLeads = [], editingUserId = null;
 let panelDirty = false;
@@ -1765,7 +1767,8 @@ function renderUsersTable(list) {
       : perms.length ? `<div class="user-perms">${perms.map(p => `<span class="perm-chip" title="${p[1]}"><i class="fas ${p[3]}"></i>${p[2]}</span>`).join('')}</div>`
       : '<div class="cell-sub" style="margin-top:5px;color:var(--text3)">Basisrechte</div>';
     const contact = (u.email ? `<div class="cell-sub"><a href="mailto:${escHtml(u.email)}">${escHtml(u.email)}</a></div>` : '')
-      + (u.phone ? `<div class="cell-sub mono">${escHtml(u.phone)}</div>` : '');
+      + (u.phone ? `<div class="cell-sub mono">${escHtml(u.phone)}</div>` : '')
+      + (u.phone_line ? `<div class="cell-sub mono line-tag" title="Nummer fürs Telefonieren im CRM"><i class="fas fa-phone-volume"></i> ${escHtml(Lines.fmt(u.phone_line))}</div>` : '');
     const creator = u.creator_name
       ? `<div class="cell-sub">${escHtml(u.creator_name)}</div>${u.creator_email ? `<div class="cell-sub" style="color:var(--text3);font-size:11px">${escHtml(u.creator_email)}</div>` : ''}`
       : muted;
@@ -1872,6 +1875,11 @@ function openUserModal(id) {
     PERM_IDS.forEach(elId => document.getElementById(elId).checked = false);
   }
   updatePermSection();
+  const lineChanged = async () => {
+    await loadUsers();
+    Lines.renderField(document.getElementById('u-line'), allUsers.find(x => x.id === editingUserId), lineChanged);
+  };
+  Lines.renderField(document.getElementById('u-line'), id ? allUsers.find(x => x.id === id) : null, lineChanged);
   document.getElementById('userModal').classList.add('open');
 }
 function closeUserModal() { document.getElementById('userModal').classList.remove('open'); }

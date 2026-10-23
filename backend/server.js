@@ -374,6 +374,9 @@ migrate('ALTER TABLE users ADD COLUMN can_manage_email_templates TINYINT(1) NOT 
 migrate('ALTER TABLE users ADD COLUMN can_abrechnung TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
 // Hell/Dunkel je Benutzer (gilt auf allen Geräten, bis der Benutzer es ändert)
 migrate("ALTER TABLE users ADD COLUMN theme VARCHAR(10) NULL").catch(() => {});
+// Eigene Telefonnummer je Mitarbeiter (vom Admin aus dem Twilio-Konto zugeteilt)
+migrate('ALTER TABLE users ADD COLUMN phone_line VARCHAR(30) NULL').catch(() => {});
+migrate('ALTER TABLE users ADD COLUMN phone_line_sid VARCHAR(40) NULL').catch(() => {});
 migrate('ALTER TABLE leads ADD COLUMN archived_at DATETIME NULL').catch(() => {});
 migrate('ALTER TABLE leads ADD COLUMN archived_by INT NULL').catch(() => {});
 migrate('ALTER TABLE leads ADD COLUMN archive_reason VARCHAR(500) NULL').catch(() => {});

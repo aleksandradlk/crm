@@ -7,7 +7,7 @@
 const router = require('express').Router();
 const express = require('express');
 const db     = require('../db');
-const { auth } = require('../middleware/auth');
+const { auth, adminOnly } = require('../middleware/auth');
 const { log } = require('../helpers/logger');
 const { toE164 } = require('../helpers/phone');
 const { findLeadByPhone, refreshNorm } = require('../helpers/dedupe');
@@ -69,18 +69,25 @@ function sayAndHangup(res, text) {
   res.type('text/xml').send(vr.toString());
 }
 
+// Absendernummer eines Mitarbeiters: zugeteilte NovaFlow-Nummer, sonst eigene
+// bestätigte Nummer, sonst Firmennummer
+function absender(u) {
+  return (u && u.phone_line) || (u && u.caller_id_verified && u.caller_id) || env().companyCallerId || null;
+}
+
 // ── GET /api/voice/config — Ist Telefonie aktiv, welche Nummer nutze ich? ──
 router.get('/config', auth, async (req, res) => {
   try {
-    const [[u]] = await db.query('SELECT caller_id, caller_id_verified FROM users WHERE id=?', [req.user.id]);
+    const [[u]] = await db.query('SELECT caller_id, caller_id_verified, phone_line FROM users WHERE id=?', [req.user.id]);
     const e = env();
     res.json({
       enabled: isConfigured(),
+      phone_line: u?.phone_line || null,
       caller_id: u?.caller_id || null,
       caller_id_verified: !!u?.caller_id_verified,
       company_caller_id: e.companyCallerId || null,
       // Nummer, die beim Angerufenen tatsächlich angezeigt wird
-      effective_caller_id: (u?.caller_id_verified && u.caller_id) || e.companyCallerId || null,
+      effective_caller_id: absender(u),
     });
   } catch (e) {
     console.error('Voice config error:', e);
@@ -160,7 +167,7 @@ router.post('/twiml', express.urlencoded({ extended: false }), twilioWebhook, as
     if (!userId || !callLogId) return sayAndHangup(res, 'Der Anruf konnte nicht zugeordnet werden.');
 
     const [[user]] = await db.query(
-      'SELECT id, is_active, caller_id, caller_id_verified FROM users WHERE id=?', [userId]
+      'SELECT id, is_active, caller_id, caller_id_verified, phone_line FROM users WHERE id=?', [userId]
     );
     if (!user || !user.is_active) return sayAndHangup(res, 'Benutzer nicht gefunden.');
 
@@ -177,8 +184,8 @@ router.post('/twiml', express.urlencoded({ extended: false }), twilioWebhook, as
     const to = toE164(call.phone_number);
     if (!to) return sayAndHangup(res, 'Die Telefonnummer des Leads ist ungültig.');
 
-    const callerId = (user.caller_id_verified && user.caller_id) || env().companyCallerId;
-    if (!callerId) return sayAndHangup(res, 'Es ist keine Absendernummer hinterlegt. Bitte in den Einstellungen eine Nummer eintragen.');
+    const callerId = absender(user);
+    if (!callerId) return sayAndHangup(res, 'Es ist keine Absendernummer hinterlegt. Bitte den Admin um eine Nummer bitten.');
 
     await db.query('UPDATE call_logs SET twilio_call_sid=? WHERE id=?', [req.body.CallSid || null, call.id]);
 
@@ -231,8 +238,11 @@ router.post('/dial-status', express.urlencoded({ extended: false }), twilioWebho
 //      (unbekannte Nummer → neuer Lead „Anrufer +49 …“)
 //   2. Es klingelt zuerst beim betreuenden Vertriebler (20 s), dann beim ganzen Team (25 s)
 //   3. Nimmt niemand ab: Ansage + automatische Rückruf-Aufgabe („Verpasster Anruf“)
+// Ruft jemand die persönliche Nummer eines Mitarbeiters an, klingelt es nur bei ihm (30 s);
+// verpasste Anrufe landen als Rückruf-Aufgabe bei ihm.
 const RING_OWNER_SEC = 20;
 const RING_TEAM_SEC  = 25;
+const RING_LINE_SEC  = 30;
 
 async function firstAdminId() {
   const [[a]] = await db.query("SELECT id FROM users WHERE role='admin' AND is_active=1 ORDER BY id LIMIT 1");
@@ -265,23 +275,31 @@ router.post('/incoming', express.urlencoded({ extended: false }), twilioWebhook,
   const vr = new twilio.twiml.VoiceResponse();
   try {
     const from = toE164(req.body.From) || String(req.body.From || '').slice(0, 30);
+    const to = toE164(req.body.To || req.body.Called);
+    const [[lineOwner]] = to
+      ? await db.query('SELECT id FROM users WHERE phone_line=? AND is_active=1 LIMIT 1', [to]) : [[null]];
     let lead = await findLeadByPhone(from);
     if (!lead) {
-      // Unbekannte Nummer: als neuen Lead anlegen, damit Rückruf und Verlauf nicht verloren gehen
-      const adminId = await firstAdminId();
+      // Unbekannte Nummer: als neuen Lead anlegen, damit Rückruf und Verlauf nicht verloren gehen.
+      // Auf einer persönlichen Nummer gehört er gleich dem Mitarbeiter, der angerufen wurde.
+      const createdBy = lineOwner ? lineOwner.id : await firstAdminId();
       const [r] = await db.query(
-        `INSERT INTO leads (company, phone, status, created_by, source, confidence)
-         VALUES (?, ?, 'neu', ?, 'eingehender-anruf', 50)`, [`Anrufer ${from}`, from, adminId]);
+        `INSERT INTO leads (company, phone, status, created_by, assigned_to, source, confidence)
+         VALUES (?, ?, 'neu', ?, ?, 'eingehender-anruf', 50)`, [`Anrufer ${from}`, from, createdBy, lineOwner ? lineOwner.id : null]);
       await refreshNorm(r.insertId);
-      lead = { id: r.insertId, company: `Anrufer ${from}`, assigned_to: null };
+      lead = { id: r.insertId, company: `Anrufer ${from}`, assigned_to: lineOwner ? lineOwner.id : null };
     }
-    const ownerId = lead.assigned_to || null;
+    const ownerId = lineOwner ? lineOwner.id : (lead.assigned_to || null);
     const [c] = await db.query(
       `INSERT INTO call_logs (lead_id, user_id, phone_number, direction, started_at, status, twilio_call_sid)
        VALUES (?, ?, ?, 'inbound', NOW(), 'started', ?)`,
       [lead.id, ownerId || await firstAdminId(), from, req.body.CallSid || null]);
     const callLogId = c.insertId;
 
+    if (lineOwner) {
+      dialClients(vr, req, [lineOwner], { callLogId, lead, stage: 3, timeout: RING_LINE_SEC });
+      return res.type('text/xml').send(vr.toString());
+    }
     const [[owner]] = ownerId
       ? await db.query('SELECT id FROM users WHERE id=? AND is_active=1', [ownerId]) : [[null]];
     if (owner) dialClients(vr, req, [owner], { callLogId, lead, stage: 1, timeout: RING_OWNER_SEC });
@@ -319,9 +337,9 @@ router.post('/incoming-next', express.urlencoded({ extended: false }), twilioWeb
         return res.type('text/xml').send(vr.toString());
       }
     }
-    // Niemand erreichbar → Rückruf-Aufgabe für den Betreuer (sonst Admin)
+    // Niemand erreichbar → Rückruf-Aufgabe für den Betreuer (persönliche Nummer: ihr Inhaber, sonst Admin)
     await db.query("UPDATE call_logs SET status='no-answer', ended_at=NOW() WHERE id=? AND status='started'", [callLogId]);
-    const userId = call.assigned_to || await firstAdminId();
+    const userId = (stage === 3 ? call.user_id : call.assigned_to) || await firstAdminId();
     if (userId) {
       await db.query(
         `INSERT INTO reminders (lead_id, user_id, remind_at, note, kind, sent) VALUES (?, ?, NOW(), ?, 'missed_call', 1)`,
@@ -354,6 +372,112 @@ router.post('/incoming/accept', auth, async (req, res) => {
   } catch (e) {
     console.error('Voice accept error:', e);
     res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
+  }
+});
+
+// ── Telefonnummern verwalten (Admin) ─────────────────────────
+// Der Admin teilt jedem Mitarbeiter eine Nummer aus dem Twilio-Konto zu (oder holt
+// direkt eine neue). Der Mitarbeiter muss nichts bestätigen: Die Nummer gehört
+// NovaFlow, Kunden sehen sie bei Anrufen, und Anrufe darauf klingeln bei ihm im CRM.
+function twilioFehler(e) {
+  const m = String(e && e.message || e);
+  if (/bundle|regulat|address/i.test(m))
+    return 'Für deutsche Nummern verlangt die Bundesnetzagentur einmalig einen Nachweis (Firmenadresse und Ausweis). '
+      + 'Das geht in Twilio unter Phone Numbers → Regulatory Compliance. Sobald er bestätigt ist, kannst du hier Nummern holen.';
+  return m;
+}
+
+// GET /api/voice/numbers — alle Nummern des Kontos mit Zuteilung
+router.get('/numbers', auth, adminOnly, async (req, res) => {
+  if (!isConfigured()) return res.json({ enabled: false, numbers: [] });
+  try {
+    const [liste, [users]] = await Promise.all([
+      client().incomingPhoneNumbers.list({ limit: 200 }),
+      db.query('SELECT id, full_name, phone_line FROM users WHERE phone_line IS NOT NULL'),
+    ]);
+    const firma = env().companyCallerId;
+    res.json({
+      enabled: true,
+      numbers: liste.map(n => {
+        const u = users.find(x => x.phone_line === n.phoneNumber);
+        return { sid: n.sid, number: n.phoneNumber, name: n.friendlyName,
+          user: u ? { id: u.id, name: u.full_name } : null, company: n.phoneNumber === firma };
+      }),
+    });
+  } catch (e) {
+    console.error('Voice numbers error:', e.message);
+    res.status(500).json({ error: twilioFehler(e) });
+  }
+});
+
+// GET /api/voice/numbers/search?vorwahl=030 — freie deutsche Nummern zum Holen
+router.get('/numbers/search', auth, adminOnly, async (req, res) => {
+  if (!isConfigured()) return res.status(503).json({ error: 'Telefonie ist nicht eingerichtet' });
+  const vorwahl = String(req.query.vorwahl || '').replace(/\D/g, '').replace(/^0/, '');
+  try {
+    const opts = { voiceEnabled: true, limit: 12 };
+    if (vorwahl) opts.contains = '+49' + vorwahl + '*';
+    let liste = await client().availablePhoneNumbers('DE').local.list(opts);
+    if (!liste.length && vorwahl) liste = await client().availablePhoneNumbers('DE').local.list({ voiceEnabled: true, limit: 12 });
+    res.json({ numbers: liste.map(n => ({ number: n.phoneNumber, ort: n.locality || n.region || '' })) });
+  } catch (e) {
+    console.error('Voice numbers search error:', e.message);
+    res.status(400).json({ error: twilioFehler(e) });
+  }
+});
+
+async function zuteilen(req, sid, number, userId) {
+  // Nummer dem Mitarbeiter geben (und einem eventuellen Vorgänger wegnehmen)
+  await db.query('UPDATE users SET phone_line=NULL, phone_line_sid=NULL WHERE phone_line=? OR phone_line_sid=?', [number, sid]);
+  let name = 'NovaFlow CRM';
+  if (userId) {
+    const [[u]] = await db.query('SELECT id, full_name FROM users WHERE id=? AND is_active=1', [userId]);
+    if (!u) throw new Error('Benutzer nicht gefunden');
+    await db.query('UPDATE users SET phone_line=?, phone_line_sid=? WHERE id=?', [number, sid, u.id]);
+    name = `NovaFlow – ${u.full_name}`.slice(0, 64);
+  }
+  // Eingehende Anrufe auf dieser Nummer ins CRM leiten
+  await client().incomingPhoneNumbers(sid).update({
+    voiceUrl: `${baseUrl(req)}/api/voice/incoming`, voiceMethod: 'POST', friendlyName: name,
+  });
+}
+
+// POST /api/voice/numbers/buy { number, userId } — neue Nummer holen und gleich zuteilen
+router.post('/numbers/buy', auth, adminOnly, async (req, res) => {
+  if (!isConfigured()) return res.status(503).json({ error: 'Telefonie ist nicht eingerichtet' });
+  const number = toE164(req.body.number);
+  if (!number) return res.status(400).json({ error: 'Ungültige Nummer' });
+  try {
+    const c = client();
+    const opts = { phoneNumber: number, voiceUrl: `${baseUrl(req)}/api/voice/incoming`, voiceMethod: 'POST' };
+    // Deutsche Nummern brauchen den bestätigten Nachweis (Bundle) und eine Adresse aus dem Konto
+    const [bundles, adressen] = await Promise.all([
+      c.numbers.v2.regulatoryCompliance.bundles.list({ status: 'twilio-approved', isoCountry: 'DE', numberType: 'local', limit: 1 }).catch(() => []),
+      c.addresses.list({ isoCountry: 'DE', limit: 1 }).catch(() => []),
+    ]);
+    if (bundles[0]) opts.bundleSid = bundles[0].sid;
+    if (adressen[0]) opts.addressSid = adressen[0].sid;
+    const n = await c.incomingPhoneNumbers.create(opts);
+    if (req.body.userId) await zuteilen(req, n.sid, n.phoneNumber, parseInt(req.body.userId));
+    await log(req.user.id, 'phone_number_buy', 'user', req.body.userId || null, { number: n.phoneNumber }, req.ip);
+    res.json({ ok: true, sid: n.sid, number: n.phoneNumber });
+  } catch (e) {
+    console.error('Voice numbers buy error:', e.message);
+    res.status(400).json({ error: twilioFehler(e) });
+  }
+});
+
+// PUT /api/voice/numbers/:sid { userId | null } — Nummer zuteilen oder freigeben
+router.put('/numbers/:sid', auth, adminOnly, async (req, res) => {
+  if (!isConfigured()) return res.status(503).json({ error: 'Telefonie ist nicht eingerichtet' });
+  try {
+    const n = await client().incomingPhoneNumbers(req.params.sid).fetch();
+    await zuteilen(req, n.sid, n.phoneNumber, req.body.userId ? parseInt(req.body.userId) : null);
+    await log(req.user.id, 'phone_number_assign', 'user', req.body.userId || null, { number: n.phoneNumber }, req.ip);
+    res.json({ ok: true, number: n.phoneNumber });
+  } catch (e) {
+    console.error('Voice numbers assign error:', e.message);
+    res.status(e.message === 'Benutzer nicht gefunden' ? 404 : 400).json({ error: twilioFehler(e) });
   }
 });
 
