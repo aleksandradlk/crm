@@ -118,6 +118,10 @@ app.use('/api/voice',           voiceRoutes);
 app.use('/api/deals',           dealRoutes);
 app.use('/api/call-lists',      callListRoutes);
 app.use('/api/today',           todayRoutes);
+// Eigene Schnittstelle des CRM (API-Schlüssel) und deren Verwaltung
+const apiV1 = require('./routes/api-v1');
+app.use('/api/api-keys',        apiV1.keys);
+app.use('/api/v1',              rateLimit({ windowMs: 60*1000, max: 300 }), apiV1.v1);
 
 // ── Abrechnung (Angebote, Rechnungen, Abos – nur Admin) ───────
 const abrechnung = require('./abrechnung/crm').registriere(app, {
@@ -377,6 +381,37 @@ migrate("ALTER TABLE users ADD COLUMN theme VARCHAR(10) NULL").catch(() => {});
 // Eigene Telefonnummer je Mitarbeiter (vom Admin aus dem Twilio-Konto zugeteilt)
 migrate('ALTER TABLE users ADD COLUMN phone_line VARCHAR(30) NULL').catch(() => {});
 migrate('ALTER TABLE users ADD COLUMN phone_line_sid VARCHAR(40) NULL').catch(() => {});
+// Zusammengeführte Dubletten – genug, um es rückgängig zu machen
+migrate(`CREATE TABLE IF NOT EXISTS lead_merges (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  target_id  INT NOT NULL,
+  from_id    INT NOT NULL,
+  moved      MEDIUMTEXT NOT NULL,
+  filled     TEXT NOT NULL,
+  merged_by  INT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  undone_at  DATETIME NULL,
+  undone_by  INT NULL,
+  INDEX (target_id)
+)`).catch(() => {});
+// API-Schlüssel für die eigene Schnittstelle (/api/v1); gespeichert wird nur der SHA-256-Hash
+migrate(`CREATE TABLE IF NOT EXISTS api_keys (
+  id           INT AUTO_INCREMENT PRIMARY KEY,
+  name         VARCHAR(100) NOT NULL,
+  prefix       VARCHAR(12) NOT NULL,
+  key_hash     CHAR(64) NOT NULL UNIQUE,
+  created_by   INT NOT NULL,
+  created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_used_at DATETIME NULL,
+  revoked_at   DATETIME NULL
+)`).catch(() => {});
+// Zugangsdaten für Anbieter (Twilio …) – getrennt von app_settings, die alle Benutzer lesen dürfen
+migrate(`CREATE TABLE IF NOT EXISTS integrations (
+  name       VARCHAR(40) PRIMARY KEY,
+  config     TEXT NOT NULL,
+  updated_by INT NULL,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+)`).then(() => require('./routes/voice').ladeKonfiguration()).catch(() => {});
 migrate('ALTER TABLE leads ADD COLUMN archived_at DATETIME NULL').catch(() => {});
 migrate('ALTER TABLE leads ADD COLUMN archived_by INT NULL').catch(() => {});
 migrate('ALTER TABLE leads ADD COLUMN archive_reason VARCHAR(500) NULL').catch(() => {});

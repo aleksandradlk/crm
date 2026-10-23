@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf28">
+<link rel="stylesheet" href="/shared/style.css?v=nf29">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -55,6 +55,7 @@
       <div class="nav-item" data-tab="users" onclick="showTab('users')"><i class="fas fa-users"></i> Benutzer</div>
       <div class="nav-item" data-tab="tracking" onclick="showTab('tracking')"><i class="fas fa-chart-line"></i> Tracking</div>
       <div class="nav-item" data-tab="tools" onclick="showTab('tools')"><i class="fas fa-toolbox"></i> Tools</div>
+      <div class="nav-item" data-tab="integrationen" onclick="showTab('integrationen')"><i class="fas fa-plug"></i> Integrationen</div>
       <div class="nav-sep"></div>
       <span class="nav-group-label">Ressourcen</span>
       <div class="nav-item" data-tab="wiki" onclick="showTab('wiki')"><i class="fas fa-book"></i> Wissensdatenbank</div>
@@ -428,6 +429,8 @@
       <div id="archiveList"></div>
     </div>
 
+    <div id="tab-integrationen" class="tab-panel"></div>
+
     <div id="tab-tools" class="tab-panel">
       <div class="page-header">
         <div><h1 data-eyebrow="Administration">Tools verwalten</h1><p class="page-desc">Externe Tools, die als Links in der Sidebar erscheinen. Auf Wunsch auch für Closer.</p></div>
@@ -591,16 +594,17 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf28"></script>
-<script src="/shared/dialer.js?v=nf28"></script>
-<script src="/shared/deals.js?v=nf28"></script>
-<script src="/shared/calllists.js?v=nf28"></script>
-<script src="/shared/today.js?v=nf28"></script>
-<script src="/shared/duplicates.js?v=nf28"></script>
-<script src="/shared/wiki.js?v=nf28"></script>
-<script src="/shared/lines.js?v=nf28"></script>
-<script src="/shared/finder.js?v=nf28"></script>
-<script src="/shared/board.js?v=nf28"></script>
+<script src="/shared/api.js?v=nf29"></script>
+<script src="/shared/dialer.js?v=nf29"></script>
+<script src="/shared/deals.js?v=nf29"></script>
+<script src="/shared/calllists.js?v=nf29"></script>
+<script src="/shared/today.js?v=nf29"></script>
+<script src="/shared/duplicates.js?v=nf29"></script>
+<script src="/shared/wiki.js?v=nf29"></script>
+<script src="/shared/lines.js?v=nf29"></script>
+<script src="/shared/finder.js?v=nf29"></script>
+<script src="/shared/board.js?v=nf29"></script>
+<script src="/shared/integrations.js?v=nf29"></script>
 <script>
 let allLeads = [], allUsers = [], editingUserId = null;
 let panelDirty = false;
@@ -713,6 +717,7 @@ function showTab(name) {
   if (name === 'feedback') { Board.mount({ rootId: 'tab-feedback', isAdmin: true }); Board.load(); }
   if (name === 'archive')  loadArchive();
   if (name === 'tools')    loadToolsTab();
+  if (name === 'integrationen') { Integrationen.mount('tab-integrationen'); Integrationen.load(); }
 }
 
 // ── PIPELINE (geteilt für Alle Leads + Meine Leads) ──────────
