@@ -15,14 +15,24 @@ const { findLeadByPhone, refreshNorm } = require('../helpers/dedupe');
 let twilio = null;
 try { twilio = require('twilio'); } catch (_) { /* Paket nicht installiert → Telefonie aus */ }
 
+// Zugangsdaten: aus .env (TWILIO_…) oder – ohne .env – aus der Einrichtung im CRM
+// (Integrationen → Telefonie, Tabelle integrations). .env hat Vorrang.
+let gespeichert = {};
+async function ladeKonfiguration() {
+  try {
+    const [[row]] = await db.query("SELECT config FROM integrations WHERE name='twilio'");
+    gespeichert = row ? JSON.parse(row.config) : {};
+  } catch (_) { gespeichert = {}; }
+}
 const env = () => ({
-  accountSid: process.env.TWILIO_ACCOUNT_SID,
-  authToken:  process.env.TWILIO_AUTH_TOKEN,
-  apiKey:     process.env.TWILIO_API_KEY_SID,
-  apiSecret:  process.env.TWILIO_API_KEY_SECRET,
-  appSid:     process.env.TWILIO_TWIML_APP_SID,
+  accountSid: process.env.TWILIO_ACCOUNT_SID || gespeichert.accountSid,
+  authToken:  process.env.TWILIO_AUTH_TOKEN || gespeichert.authToken,
+  apiKey:     process.env.TWILIO_API_KEY_SID || gespeichert.apiKey,
+  apiSecret:  process.env.TWILIO_API_KEY_SECRET || gespeichert.apiSecret,
+  appSid:     process.env.TWILIO_TWIML_APP_SID || gespeichert.appSid,
   // Optionale Firmennummer: wird genutzt, wenn ein Mitarbeiter keine eigene Nummer hinterlegt hat
-  companyCallerId: toE164(process.env.TWILIO_CALLER_ID),
+  companyCallerId: toE164(process.env.TWILIO_CALLER_ID || gespeichert.callerId),
+  ausEnv: !!process.env.TWILIO_ACCOUNT_SID,
 });
 
 function isConfigured() {
@@ -481,5 +491,92 @@ router.put('/numbers/:sid', auth, adminOnly, async (req, res) => {
   }
 });
 
+// ── Einrichtung im CRM (Admin): Twilio verbinden ─────────────
+// Der Admin gibt nur Account SID und Auth Token ein; API-Key und TwiML-App legt
+// das CRM selbst im Twilio-Konto an.
+router.get('/setup', auth, adminOnly, async (req, res) => {
+  const e = env();
+  const out = { verbunden: isConfigured(), ausEnv: e.ausEnv, accountSid: e.accountSid ? e.accountSid.slice(0, 6) + '…' + e.accountSid.slice(-4) : null,
+    firmennummer: e.companyCallerId || null, webhook: `${baseUrl(req)}/api/voice/incoming`, paketFehlt: !twilio };
+  if (out.verbunden) {
+    try {
+      const acc = await client().api.v2010.accounts(e.accountSid).fetch();
+      out.konto = { name: acc.friendlyName, status: acc.status, typ: acc.type };
+      out.nummern = (await client().incomingPhoneNumbers.list({ limit: 200 })).length;
+    } catch (err) { out.fehler = err.message; }
+  }
+  res.json(out);
+});
+
+router.post('/setup', auth, adminOnly, async (req, res) => {
+  if (!twilio) return res.status(503).json({ error: 'Das Twilio-Paket ist auf dem Server nicht installiert.' });
+  if (env().ausEnv) return res.status(409).json({ error: 'Die Zugangsdaten stehen in der .env-Datei des Servers und werden dort verwaltet.' });
+  const accountSid = String(req.body.accountSid || '').trim();
+  const authToken = String(req.body.authToken || '').trim();
+  if (!/^AC[0-9a-f]{32}$/i.test(accountSid)) return res.status(400).json({ error: 'Die Account SID beginnt mit „AC“ und hat 34 Zeichen.' });
+  if (authToken.length < 20) return res.status(400).json({ error: 'Bitte den Auth Token aus der Twilio-Konsole einfügen.' });
+  try {
+    const c = twilio(accountSid, authToken);
+    const acc = await c.api.v2010.accounts(accountSid).fetch();   // prüft die Zugangsdaten
+    const key = await c.newKeys.create({ friendlyName: 'NovaFlow CRM' });
+    const voiceUrl = `${baseUrl(req)}/api/voice/twiml`;
+    const apps = await c.applications.list({ friendlyName: 'NovaFlow CRM', limit: 1 });
+    const app = apps[0]
+      ? await c.applications(apps[0].sid).update({ voiceUrl, voiceMethod: 'POST' })
+      : await c.applications.create({ friendlyName: 'NovaFlow CRM', voiceUrl, voiceMethod: 'POST' });
+    const callerId = toE164(req.body.callerId) || gespeichert.callerId || null;
+    const config = { accountSid, authToken, apiKey: key.sid, apiSecret: key.secret, appSid: app.sid, callerId };
+    await db.query('INSERT INTO integrations (name, config, updated_by) VALUES (?,?,?) ON DUPLICATE KEY UPDATE config=VALUES(config), updated_by=VALUES(updated_by)',
+      ['twilio', JSON.stringify(config), req.user.id]);
+    gespeichert = config;
+    await log(req.user.id, 'twilio_connect', 'system', null, { konto: acc.friendlyName }, req.ip);
+    res.json({ ok: true, konto: acc.friendlyName });
+  } catch (err) {
+    console.error('Twilio setup error:', err.message);
+    res.status(400).json({ error: /authenticate|20003/i.test(err.message) ? 'Account SID oder Auth Token stimmen nicht.' : err.message });
+  }
+});
+
+// Firmennummer (für Mitarbeiter ohne eigene Nummer und als Absender der Firma)
+router.put('/setup/firmennummer', auth, adminOnly, async (req, res) => {
+  if (env().ausEnv) return res.status(409).json({ error: 'Die Firmennummer steht in der .env-Datei (TWILIO_CALLER_ID).' });
+  gespeichert = { ...gespeichert, callerId: toE164(req.body.number) || null };
+  await db.query('UPDATE integrations SET config=? WHERE name=?', [JSON.stringify(gespeichert), 'twilio']);
+  res.json({ ok: true, firmennummer: gespeichert.callerId });
+});
+
+router.delete('/setup', auth, adminOnly, async (req, res) => {
+  if (env().ausEnv) return res.status(409).json({ error: 'Die Zugangsdaten stehen in der .env-Datei des Servers.' });
+  await db.query("DELETE FROM integrations WHERE name='twilio'");
+  gespeichert = {};
+  await log(req.user.id, 'twilio_disconnect', 'system', null, null, req.ip);
+  res.json({ ok: true });
+});
+
+// Nummer von Hand eintragen: muss zum Twilio-Konto gehören (oder dort als Absender bestätigt sein)
+router.put('/numbers-manual', auth, adminOnly, async (req, res) => {
+  if (!isConfigured()) return res.status(503).json({ error: 'Telefonie ist nicht eingerichtet' });
+  const number = toE164(req.body.number);
+  const userId = parseInt(req.body.userId);
+  if (!number) return res.status(400).json({ error: 'Bitte eine gültige Nummer eingeben, z. B. +49 30 1234567' });
+  try {
+    const [eigen] = await client().incomingPhoneNumbers.list({ phoneNumber: number, limit: 1 });
+    if (eigen) {
+      await zuteilen(req, eigen.sid, eigen.phoneNumber, userId);
+    } else {
+      const [bestaetigt] = await client().outgoingCallerIds.list({ phoneNumber: number, limit: 1 });
+      if (!bestaetigt) return res.status(400).json({ error: 'Diese Nummer gehört nicht zu deinem Twilio-Konto. Kauf sie dort oder bestätige sie als Absender.' });
+      // Bestätigte Fremdnummer: wird als Absender angezeigt, eingehende Anrufe laufen aber nicht über Twilio
+      await db.query('UPDATE users SET phone_line=NULL, phone_line_sid=NULL WHERE phone_line=?', [number]);
+      await db.query('UPDATE users SET phone_line=?, phone_line_sid=NULL WHERE id=?', [number, userId]);
+    }
+    await log(req.user.id, 'phone_number_manual', 'user', userId, { number }, req.ip);
+    res.json({ ok: true, number, eingehend: !!eigen });
+  } catch (err) {
+    res.status(400).json({ error: twilioFehler(err) });
+  }
+});
+
 module.exports = router;
 module.exports.isConfigured = isConfigured;
+module.exports.ladeKonfiguration = ladeKonfiguration;

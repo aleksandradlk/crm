@@ -22,7 +22,7 @@ const Lines = {
     if (!user) { el.innerHTML = '<div class="line-hint">Nach dem Anlegen kannst du hier eine Nummer zuteilen.</div>'; return; }
     const d = await this.load();
     if (!d.enabled) {
-      el.innerHTML = '<div class="line-hint"><i class="fas fa-info-circle"></i> Telefonie ist noch nicht eingerichtet (Twilio-Zugangsdaten fehlen).</div>';
+      el.innerHTML = '<div class="line-hint"><i class="fas fa-info-circle"></i> Telefonie ist noch nicht verbunden. <a href="#" onclick="closeUserModal();showTab(\'integrationen\');return false">Unter Integrationen Twilio verbinden</a>.</div>';
       return;
     }
     const n = user.phone_line;
@@ -67,6 +67,11 @@ const Lines = {
       <div class="modal-section-label">Nummern in deinem Konto</div>
       <div class="line-grid">${eigene || '<div class="line-hint">Noch keine Nummern im Konto – hol dir unten eine.</div>'}</div>
       ${u.phone_line ? `<button type="button" class="btn btn-ghost btn-sm line-free" onclick="Lines.release()"><i class="fas fa-unlink"></i> Nummer von ${escHtml(u.full_name.split(' ')[0])} freigeben</button>` : ''}
+      <div class="modal-section-label" style="margin-top:6px">Nummer von Hand eintragen</div>
+      <form class="line-search" onsubmit="event.preventDefault();Lines.manuell()">
+        <div class="kb-search line-search-box"><i class="fas fa-hashtag"></i><input id="linesManuell" inputmode="tel" placeholder="Nummer aus deinem Twilio-Konto, z. B. +49 30 1234567"></div>
+        <button class="btn btn-ghost" type="submit">Zuteilen</button>
+      </form>
       <div class="modal-section-label" style="margin-top:6px">Neue Nummer holen</div>
       <form class="line-search" onsubmit="event.preventDefault();Lines.search()">
         <div class="kb-search line-search-box"><i class="fas fa-search"></i><input id="linesVorwahl" inputmode="numeric" placeholder="Vorwahl, z. B. 030 für Berlin oder 089 für München"></div>
@@ -92,6 +97,16 @@ const Lines = {
     if (!await customConfirm(`${this.fmt(number)} wird in deinem Twilio-Konto gekauft (monatliche Gebühr bei Twilio) und ${u.full_name} zugeteilt.`, { title: 'Nummer holen?', okLabel: 'Holen & zuteilen' })) return;
     try {
       const r = await api('POST', '/voice/numbers/buy', { number, userId: u.id });
+      this.done(r.number);
+    } catch (e) { showToast(e.message, 'err'); }
+  },
+
+  async manuell() {
+    const number = document.getElementById('linesManuell').value.trim();
+    if (!number) return;
+    try {
+      const r = await api('PUT', '/voice/numbers-manual', { userId: this.user.id, number });
+      if (!r.eingehend) showToast('Zugeteilt – als Absender. Eingehende Anrufe laufen über diese Nummer nicht ins CRM.');
       this.done(r.number);
     } catch (e) { showToast(e.message, 'err'); }
   },

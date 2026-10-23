@@ -167,6 +167,13 @@ Ablauf: Der Anrufer wird über die Telefonnummer dem Lead zugeordnet (unbekannte
 Wer annimmt, sieht sofort den Lead; danach öffnet sich die Anruf-Dokumentation. Nimmt niemand ab,
 hört der Anrufer eine Ansage und im CRM entsteht unter **Heute → Verpasste Anrufe** eine Rückruf-Aufgabe.
 
+### Telefonie ohne .env einrichten (empfohlen)
+
+**Integrationen → Telefonie über Twilio:** Account SID und Auth Token aus der Twilio-Konsole einfügen,
+„Twilio verbinden“ – API-Key und TwiML-App legt das CRM selbst an, die Zugangsdaten liegen in der Datenbank
+(Tabelle `integrations`, nicht in den für alle lesbaren Einstellungen). Dort auch: Firmennummer, Links zum
+Nummernkauf und zum Nachweis für deutsche Nummern. Stehen `TWILIO_…` in der `.env`, haben die Vorrang.
+
 ### Eigene Nummer je Vertriebler (empfohlen)
 
 Der Admin teilt jedem Mitarbeiter eine Nummer aus dem Twilio-Konto zu: **Benutzer → Bearbeiten →
@@ -180,6 +187,8 @@ Der Admin teilt jedem Mitarbeiter eine Nummer aus dem Twilio-Konto zu: **Benutze
 - Den Webhook der Nummer setzt das CRM beim Zuteilen selbst.
 - Einmalige Voraussetzung für deutsche Nummern: der bestätigte Nachweis (Firmenadresse + Ausweis) in
   Twilio unter Phone Numbers → Regulatory Compliance. Das CRM nutzt ihn beim Kauf automatisch.
+
+Unter „Nummer von Hand eintragen“ lässt sich auch eine Nummer zuteilen, die du direkt in Twilio gebucht hast.
 
 **Ohne zugeteilte Nummer:** Einstellungen → „Telefonie im Browser“ → eigene Handynummer eintragen →
 „Übernehmen“. Das CRM zeigt einen 6-stelligen Code, das Telefon klingelt kurz, Code eintippen – fertig.
@@ -278,6 +287,13 @@ leadhunter/
 - Der betreuende Closer sieht Angebote und Rechnungen im Lead (mit PDF) – auch ohne Berechtigung für die Abrechnung.
 - Deals: „Meine Deals“ / „Alle“ als Umschalter (Admin zusätzlich nach Person).
 
+### Schnittstelle (API) für andere Programme
+**Integrationen → Schnittstelle (API):** Schlüssel je Programm anlegen (wird nur einmal angezeigt, gespeichert
+wird nur der Hash) und jederzeit widerrufen. Adresse `https://crm.novaflowservices.de/api/v1`, Anmeldung mit
+`Authorization: Bearer nf_…`, höchstens 120 Anfragen pro Minute und Schlüssel:
+`GET/POST /leads`, `GET/PATCH /leads/:id`, `POST /leads/:id/notes`, `GET/POST /deals`, `GET /stages`, `/users`, `/calls`.
+Neue Leads werden auf Dubletten geprüft (409 mit `duplicate_id`, außer `allow_duplicate: true`).
+
 ### Heute, Wähllisten, Dubletten:
 - **Heute** (Startseite der Vertriebler): verpasste Anrufe, fällige Rückrufe, neue Kundenantworten,
   Deals ohne nächsten Schritt / mit erreichtem Abschlussdatum – jeweils mit Anrufen-Knopf.
@@ -285,8 +301,10 @@ leadhunter/
   max. Versuche, mit/ohne Deal, Quelle, inkl. freier Leads) – „Anrufen“ startet den Anrufmodus nur mit diesen Leads.
   Freie Leads werden beim Speichern des Ergebnisses automatisch übernommen. Admins können Listen fürs Team teilen.
 - **Dubletten-Check**: gleiche Telefonnummer (egal wie geschrieben), E-Mail oder Website-Domain wird beim
-  Anlegen, CSV-Import und der KI-Generierung erkannt. Im Lead erscheint ein Hinweis; Admins führen Dubletten
-  unter Alle Leads → **Dubletten** zusammen (Verlauf, Anrufe, Deals wandern mit, die Kopie wird archiviert).
+  Anlegen, CSV-Import und der KI-Generierung erkannt. Im Lead erscheint ein Hinweis mit „Hierher zusammenführen“
+  (Verlauf, Anrufe, Deals wandern mit, die Kopie wird archiviert). Closer dürfen das bei eigenen oder freien
+  Leads, Admins immer – auch gesammelt unter Alle Leads → **Dubletten**. „Rückgängig“ (direkt danach oder später
+  im Lead) stellt den vorherigen Stand wieder her.
 
 ### Deals (wie bei Pipedrive):
 - Ein Lead (Firma/Ansprechpartner) kann mehrere **Deals** haben: Titel, Wert (netto, €), Phase,

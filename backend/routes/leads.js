@@ -254,10 +254,14 @@ router.get('/duplicates', auth, adminOnly, async (req, res) => {
   }
 });
 
-// ── POST /api/leads/:id/merge — Dublette in diesen Lead übernehmen (Admin) ──
+// ── POST /api/leads/:id/merge — Dublette in diesen Lead übernehmen ──
 // Verlauf, Anrufe, Wiedervorlagen, Mails und Deals wandern zum Ziel-Lead, leere
-// Felder werden ergänzt, die Dublette wird archiviert (wiederherstellbar).
-router.post('/:id/merge', auth, adminOnly, async (req, res) => {
+// Felder werden ergänzt, die Dublette wird archiviert. Was bewegt und ergänzt wurde,
+// steht in lead_merges – damit lässt sich die Zusammenführung rückgängig machen.
+// Admins dürfen immer; Closer, wenn beide Leads ihnen gehören oder frei sind.
+const MERGE_TABELLEN = ['comments', 'reminders', 'call_logs', 'lead_emails', 'deals', 'chat_rooms'];
+const darfZusammenfuehren = (u, l) => u.role === 'admin' || !l.assigned_to || l.assigned_to === u.id;
+router.post('/:id/merge', auth, async (req, res) => {
   const targetId = parseInt(req.params.id);
   const fromId = parseInt(req.body.from_id);
   if (!fromId || fromId === targetId) return res.status(400).json({ error: 'Ungültige Dublette' });
@@ -265,30 +269,71 @@ router.post('/:id/merge', auth, adminOnly, async (req, res) => {
     const [[a]] = await db.query('SELECT * FROM leads WHERE id=? AND archived_at IS NULL', [targetId]);
     const [[b]] = await db.query('SELECT * FROM leads WHERE id=? AND archived_at IS NULL', [fromId]);
     if (!a || !b) return res.status(404).json({ error: 'Lead nicht gefunden' });
-    for (const t of ['comments', 'reminders', 'call_logs', 'lead_emails', 'deals']) {
-      await db.query(`UPDATE ${t} SET lead_id=? WHERE lead_id=?`, [targetId, fromId]);
+    if (!darfZusammenfuehren(req.user, a) || !darfZusammenfuehren(req.user, b))
+      return res.status(403).json({ error: 'Zusammenführen geht nur mit eigenen oder freien Leads. Frag sonst einen Admin.' });
+    const moved = {};
+    for (const t of MERGE_TABELLEN) {
+      const [rows] = await db.query(`SELECT id FROM ${t} WHERE lead_id=?`, [fromId]).catch(() => [[]]);
+      moved[t] = rows.map(r => r.id);
+      if (moved[t].length) await db.query(`UPDATE ${t} SET lead_id=? WHERE id IN (?)`, [targetId, moved[t]]);
     }
-    await db.query('UPDATE chat_rooms SET lead_id=? WHERE lead_id=?', [targetId, fromId]).catch(() => {});
-    const fill = {};
+    const fill = {}, vorher = {};
     for (const f of ['ceo', 'email', 'phone', 'location', 'website', 'linkedin_url', 'industry', 'employees', 'revenue']) {
       if (!a[f] && b[f]) fill[f] = b[f];
     }
     if (b.notes && b.notes !== a.notes) fill.notes = [a.notes, b.notes].filter(Boolean).join('\n\n');
     if (!a.assigned_to && b.assigned_to) fill.assigned_to = b.assigned_to;
     if (a.status === 'neu' && b.status !== 'neu') fill.status = b.status;
+    Object.keys(fill).forEach(k => { vorher[k] = { alt: a[k] ?? null, neu: fill[k] }; });
     if (Object.keys(fill).length) {
       await db.query(`UPDATE leads SET ${Object.keys(fill).map(k => k + '=?').join(',')} WHERE id=?`,
         [...Object.values(fill), targetId]);
     }
     await db.query('UPDATE leads SET archived_at=NOW(), archived_by=?, archive_reason=? WHERE id=?',
       [req.user.id, `Dublette – zusammengeführt mit #${targetId} ${a.company || ''}`.slice(0, 500), fromId]);
+    const [m] = await db.query('INSERT INTO lead_merges (target_id, from_id, moved, filled, merged_by) VALUES (?,?,?,?,?)',
+      [targetId, fromId, JSON.stringify(moved), JSON.stringify(vorher), req.user.id]);
     await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',
       [targetId, req.user.id, `🔗 Dublette zusammengeführt: ${b.company || '#' + fromId}`]);
     await refreshNorm(targetId);
-    await log(req.user.id, 'lead_merge', 'lead', targetId, { from_id: fromId, company: b.company }, req.ip);
-    res.json({ ok: true });
+    await log(req.user.id, 'lead_merge', 'lead', targetId, { from_id: fromId, company: b.company, merge_id: m.insertId }, req.ip);
+    res.json({ ok: true, merge_id: m.insertId });
   } catch (e) {
     console.error('Merge error:', e);
+    res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
+  }
+});
+
+// ── POST /api/leads/merges/:id/undo — Zusammenführung rückgängig machen ──
+router.post('/merges/:id/undo', auth, async (req, res) => {
+  try {
+    const [[m]] = await db.query('SELECT * FROM lead_merges WHERE id=?', [parseInt(req.params.id)]);
+    if (!m || m.undone_at) return res.status(404).json({ error: 'Nichts rückgängig zu machen' });
+    if (req.user.role !== 'admin' && m.merged_by !== req.user.id)
+      return res.status(403).json({ error: 'Rückgängig machen kann nur, wer zusammengeführt hat, oder ein Admin.' });
+    const moved = JSON.parse(m.moved || '{}'), vorher = JSON.parse(m.filled || '{}');
+    // Nur, was noch am Ziel-Lead hängt, wandert zurück (später Angelegtes bleibt)
+    for (const t of MERGE_TABELLEN) {
+      const ids = moved[t] || [];
+      if (ids.length) await db.query(`UPDATE ${t} SET lead_id=? WHERE id IN (?) AND lead_id=?`, [m.from_id, ids, m.target_id]).catch(() => {});
+    }
+    // Ergänzte Felder zurücksetzen, sofern sie seitdem niemand geändert hat
+    const [[ziel]] = await db.query('SELECT * FROM leads WHERE id=?', [m.target_id]);
+    const sets = [], p = [];
+    for (const [k, v] of Object.entries(vorher)) {
+      if (ziel && String(ziel[k] ?? '') === String(v.neu ?? '')) { sets.push(`${k}=?`); p.push(v.alt); }
+    }
+    if (sets.length) await db.query(`UPDATE leads SET ${sets.join(', ')} WHERE id=?`, [...p, m.target_id]);
+    await db.query('UPDATE leads SET archived_at=NULL, archived_by=NULL, archive_reason=NULL WHERE id=?', [m.from_id]);
+    await db.query('UPDATE lead_merges SET undone_at=NOW(), undone_by=? WHERE id=?', [req.user.id, m.id]);
+    const [[from]] = await db.query('SELECT company FROM leads WHERE id=?', [m.from_id]);
+    await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',
+      [m.target_id, req.user.id, `↩️ Zusammenführung mit ${from?.company || '#' + m.from_id} rückgängig gemacht`]);
+    await refreshNorm(m.target_id); await refreshNorm(m.from_id);
+    await log(req.user.id, 'lead_merge_undo', 'lead', m.target_id, { from_id: m.from_id, merge_id: m.id }, req.ip);
+    res.json({ ok: true, from_id: m.from_id });
+  } catch (e) {
+    console.error('Merge undo error:', e);
     res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
   }
 });
@@ -644,7 +689,11 @@ router.get('/:id', auth, async (req, res) => {
      WHERE d.lead_id = ? ORDER BY d.status = 'open' DESC, d.created_at DESC`, [id]
   ).catch(() => [[]]);
   const duplicates = await findDuplicates(lead, lead.id).catch(() => []);
-  res.json({ ...lead, comments, reminders, call_logs, email_thread, deals, duplicates });
+  const [merges] = await db.query(
+    `SELECT m.id, m.from_id, m.merged_by, m.created_at, l.company AS from_company, u.full_name AS merged_by_name
+     FROM lead_merges m LEFT JOIN leads l ON l.id = m.from_id LEFT JOIN users u ON u.id = m.merged_by
+     WHERE m.target_id = ? AND m.undone_at IS NULL ORDER BY m.id DESC`, [id]).catch(() => [[]]);
+  res.json({ ...lead, comments, reminders, call_logs, email_thread, deals, duplicates, merges });
 });
 
 // ── PATCH /api/leads/:id/status ──────────────────────────────
