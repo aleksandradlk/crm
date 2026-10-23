@@ -33,6 +33,9 @@ und CentralStationCRM (Bewertungen von Vertrieblern auf G2, Capterra, OMR, Trust
 - [x] Automatische Prüfung jedes Pull Requests (Test-Datenbank, CRM testweise starten) vor dem Live-Gang über Hostinger
 - [x] Angebote & Rechnungen (Abrechnung aus dem Angebotstool) direkt im CRM, nur für Admins
 - [x] Wissensdatenbank neu: Suche, Kategorien, Vorschaubilder, Hochladen per Drag & Drop, Vorlagen-Vorschau für Closer
+- [x] Abgleich mit dem Angebotstool (alles inkl. Sicherungen und Betriebe-Archiv), Recht „Angebote & Rechnungen“ für Closer
+- [x] Eigene Telefonnummer je Vertriebler, vom Admin zugeteilt (ohne Bestätigung), Anrufe darauf klingeln nur bei ihm
+- [x] Neue Oberflächen: Leads generieren (Suche wie eine Suchmaschine, Treffer abwählbar), Feedback-Board als Spalten, Rücksprachen mit Vorschau, Tools als Karten
 
 ## Später
 | Feature | Nutzen | Aufwand |

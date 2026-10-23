@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf25">
+<link rel="stylesheet" href="/shared/style.css?v=nf26">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -240,90 +240,7 @@
     </div>
 
     <!-- ── TAB: GENERATE ──────────────────────────────── -->
-    <div id="tab-generate" class="tab-panel">
-      <div class="page-header">
-        <div><h1 data-eyebrow="Leads">Leads generieren</h1><p class="page-desc">KI-Recherche mit Web-Suche. Nur Treffer mit mindestens 80 % Konfidenz landen in der Vorschau.</p></div>
-      </div>
-      <div class="gen-layout">
-
-        <div class="card gen-form">
-          <div class="card-header"><div class="card-title"><i class="fas fa-sliders-h"></i> Suchparameter</div></div>
-          <div class="card-body">
-            <div class="form-group"><label>Branche / Suchbegriff *</label><input type="text" id="gen-query" class="form-control" placeholder="z.B. Maschinenbau"></div>
-            <div class="form-group"><label>Standort</label><input type="text" id="gen-location" class="form-control" placeholder="z.B. NRW, Düsseldorf"></div>
-            <div class="auth-grid-2">
-              <div class="form-group"><label>Unternehmensgröße</label>
-                <select id="gen-size" class="form-control">
-                  <option value="small">Klein (10–49)</option>
-                  <option value="medium" selected>Mittelstand (50–250)</option>
-                </select>
-              </div>
-              <div class="form-group"><label>Max. Leads</label>
-                <select id="gen-max" class="form-control">
-                  <option value="5">5</option><option value="10" selected>10</option><option value="20">20</option><option value="50">50</option><option value="100">100</option>
-                </select>
-              </div>
-            </div>
-            <div class="form-group"><label>Zuweisen an</label>
-              <select id="gen-assign" class="form-control"><option value="">— Nicht zuweisen —</option></select>
-            </div>
-
-            <div class="section-label" style="margin-top:4px">Quellen</div>
-            <div class="sources-grid">
-              <div class="source-btn active" data-src="google" onclick="this.classList.toggle('active')"><i class="fab fa-google"></i> Google</div>
-              <div class="source-btn active" data-src="web" onclick="this.classList.toggle('active')"><i class="fas fa-globe"></i> Web</div>
-              <div class="source-btn active" data-src="maps" onclick="this.classList.toggle('active')"><i class="fas fa-map-marker-alt"></i> Maps</div>
-            </div>
-
-            <div class="section-label">Felder</div>
-            <div class="fields-check">
-              <label class="check-item"><input type="checkbox" id="ff-company" checked><span>Unternehmen</span></label>
-              <label class="check-item"><input type="checkbox" id="ff-ceo" checked><span>Geschäftsführer</span></label>
-              <label class="check-item"><input type="checkbox" id="ff-email" checked><span>E-Mail</span></label>
-              <label class="check-item"><input type="checkbox" id="ff-phone" checked><span>Telefon</span></label>
-              <label class="check-item"><input type="checkbox" id="ff-location" checked><span>Standort</span></label>
-              <label class="check-item"><input type="checkbox" id="ff-linkedin"><span>LinkedIn URL</span></label>
-              <label class="check-item"><input type="checkbox" id="ff-revenue"><span>Umsatz</span></label>
-              <label class="check-item"><input type="checkbox" id="ff-employees"><span>Mitarbeiter</span></label>
-            </div>
-
-            <div class="form-group" style="margin-top:14px"><label>Zusätzliche Anweisung</label>
-              <textarea id="gen-extra" class="form-control" rows="2" placeholder="z.B. nur B2B, Familienunternehmen …"></textarea>
-            </div>
-            <button class="btn btn-primary" style="width:100%;height:44px" id="genBtn" onclick="generateLeads()">
-              <i class="fas fa-search"></i> Leads generieren
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <div class="card" style="margin-bottom:14px">
-            <div class="card-header">
-              <div class="card-title"><i class="fas fa-terminal"></i> Protokoll</div>
-              <div class="gen-progress">
-                <span class="gen-status" id="gen-status">Bereit</span>
-                <div id="gen-progress-label" style="font-size:11px;color:var(--text3)"></div>
-                <div id="gen-progress-wrap" style="display:none"><div class="progress-bg"><div class="progress-fill" id="gen-progress" style="width:0%"></div></div></div>
-              </div>
-            </div>
-            <div class="card-body" style="padding:14px"><div class="gen-console" id="genLog"></div></div>
-          </div>
-
-          <div class="card" id="genResultsCard" style="display:none">
-            <div class="card-header">
-              <div class="card-title"><i class="fas fa-list"></i> Vorschau <span class="badge" id="genResultCount">0</span></div>
-              <button class="btn btn-primary btn-sm" id="saveLeadsBtn" onclick="saveGeneratedLeads()">
-                <i class="fas fa-save"></i> Alle speichern
-              </button>
-            </div>
-            <div class="table-wrap">
-              <table class="keep-first"><thead><tr><th>Unternehmen</th><th>GF</th><th>E-Mail</th><th>Telefon</th><th>Standort</th><th>Konfidenz</th></tr></thead>
-              <tbody id="genResultsBody"></tbody></table>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <div id="tab-generate" class="tab-panel"></div>
 
     <!-- ── TAB: USERS ─────────────────────────────────── -->
     <div id="tab-users" class="tab-panel">
@@ -469,32 +386,7 @@
     </div>
 
     <!-- ── TAB: FEEDBACK-BOARD ───────────────────────── -->
-    <div id="tab-feedback" class="tab-panel">
-      <div class="page-header">
-        <div><h1 data-eyebrow="Ressourcen">Feedback-Board</h1><p class="page-desc">Wünsche und Fehlermeldungen aus dem Team, mit Status und deiner Antwort.</p></div>
-        <div class="page-actions">
-          <button class="btn btn-ghost btn-sm btn-icon" onclick="loadFeedback()" title="Aktualisieren"><i class="fas fa-sync"></i></button>
-          <button class="btn btn-primary btn-sm" onclick="openAdminFeedbackModal()"><i class="fas fa-plus"></i> Neu eintragen</button>
-        </div>
-      </div>
-      <div class="toolbar">
-        <div class="chip-row" id="fbFilters">
-          <button class="qf-btn active" data-value="" onclick="chipFilter(this,'fbTagFilter',renderFeedbackList)">Alle <span class="qf-count">0</span></button>
-          <button class="qf-btn" data-value="offen" onclick="chipFilter(this,'fbTagFilter',renderFeedbackList)">Offen <span class="qf-count">0</span></button>
-          <button class="qf-btn" data-value="in_planung" onclick="chipFilter(this,'fbTagFilter',renderFeedbackList)">In Planung <span class="qf-count">0</span></button>
-          <button class="qf-btn" data-value="erledigt" onclick="chipFilter(this,'fbTagFilter',renderFeedbackList)">Erledigt <span class="qf-count">0</span></button>
-          <button class="qf-btn" data-value="nicht_moeglich" onclick="chipFilter(this,'fbTagFilter',renderFeedbackList)">Nicht möglich <span class="qf-count">0</span></button>
-        </div>
-        <select id="fbTagFilter" class="form-control" hidden onchange="renderFeedbackList()">
-          <option value="">Alle Tags</option>
-          <option value="offen">Offen</option>
-          <option value="in_planung">In Planung</option>
-          <option value="erledigt">Erledigt</option>
-          <option value="nicht_moeglich">Nicht möglich</option>
-        </select>
-      </div>
-      <div id="feedbackList" class="fb-list"></div>
-    </div>
+    <div id="tab-feedback" class="tab-panel"></div>
 
     <!-- ── TAB: ARCHIV ──────────────────────────────── -->
     <div id="tab-archive" class="tab-panel">
@@ -682,16 +574,18 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf25"></script>
-<script src="/shared/dialer.js?v=nf25"></script>
-<script src="/shared/deals.js?v=nf25"></script>
-<script src="/shared/calllists.js?v=nf25"></script>
-<script src="/shared/today.js?v=nf25"></script>
-<script src="/shared/duplicates.js?v=nf25"></script>
-<script src="/shared/wiki.js?v=nf25"></script>
-<script src="/shared/lines.js?v=nf25"></script>
+<script src="/shared/api.js?v=nf26"></script>
+<script src="/shared/dialer.js?v=nf26"></script>
+<script src="/shared/deals.js?v=nf26"></script>
+<script src="/shared/calllists.js?v=nf26"></script>
+<script src="/shared/today.js?v=nf26"></script>
+<script src="/shared/duplicates.js?v=nf26"></script>
+<script src="/shared/wiki.js?v=nf26"></script>
+<script src="/shared/lines.js?v=nf26"></script>
+<script src="/shared/finder.js?v=nf26"></script>
+<script src="/shared/board.js?v=nf26"></script>
 <script>
-let allLeads = [], allUsers = [], generatedLeads = [], editingUserId = null;
+let allLeads = [], allUsers = [], editingUserId = null;
 let panelDirty = false;
 let _panelLead = null;
 const ME = Auth.getUser();
@@ -781,6 +675,7 @@ function showTab(name) {
   const navEl = document.querySelector(`.nav-item[data-tab="${name}"]`);
   if (navEl) navEl.classList.add('active');
   if (name === 'dashboard') loadDashboard();
+  if (name === 'generate') Finder.mount({ rootId: 'tab-generate', isAdmin: true, users: _allUsers.filter(u => u.is_active), onSaved: () => loadLeads() });
   if (name === 'leads')    {
     const _s = document.getElementById('searchInput'); if (_s) _s.value = '';
     const _sf = document.getElementById('statusFilter'); if (_sf) _sf.value = '';
@@ -796,7 +691,7 @@ function showTab(name) {
   if (name === 'inbox')    { loadInbox(); loadMailStatus(); }
   if (name === 'wiki')     { loadWiki(); loadEmailTemplatesForAdmin(); }
   if (name === 'chat')     loadChats();
-  if (name === 'feedback') loadFeedback();
+  if (name === 'feedback') { Board.mount({ rootId: 'tab-feedback', isAdmin: true }); Board.load(); }
   if (name === 'archive')  loadArchive();
   if (name === 'tools')    loadToolsTab();
 }
@@ -1556,9 +1451,7 @@ async function loadClosersForSelect() {
     _allUsers = await api('GET', '/users');
     const active = _allUsers.filter(u => u.is_active);
 
-    const sel = document.getElementById('gen-assign');
-    sel.innerHTML = '<option value="">— Nicht zuweisen —</option>' +
-      active.map(u => `<option value="${u.id}">${escHtml(u.full_name)} (${u.role})</option>`).join('');
+    Finder.setUsers(active);
 
     const cf = document.getElementById('closerFilter');
     if (cf) cf.innerHTML = '<option value="">Alle Closer</option>' +
@@ -1589,95 +1482,6 @@ async function setQuickReminder(offsetHours) {
     showToast('Reminder gesetzt ✓');
   } catch(e) { showToast(e.message, 'err'); }
   closeRueckrufPopup();
-}
-
-function genLog(msg, type='info') {
-  const body = document.getElementById('genLog');
-  const now = new Date().toLocaleTimeString('de', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-  const el = document.createElement('div');
-  el.className = 'log-line';
-  el.innerHTML = `<span class="log-t">${now}</span><span class="log-${type}">${escHtml(msg)}</span>`;
-  body.appendChild(el); body.scrollTop = body.scrollHeight;
-}
-
-async function generateLeads() {
-  const query = document.getElementById('gen-query').value.trim();
-  if (!query) { showToast('Suchbegriff eingeben', 'err'); return; }
-  const btn = document.getElementById('genBtn');
-  const setStatus = (t, c) => { const s = document.getElementById('gen-status'); if (s) { s.textContent = t; s.className = 'gen-status ' + (c || ''); } };
-  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Läuft …';
-  document.getElementById('genResultsCard').style.display = 'none';
-  document.getElementById('genLog').innerHTML = '';
-  document.getElementById('gen-progress-wrap').style.display = 'block';
-  setStatus('Läuft …', 'run');
-
-  const sources = [...document.querySelectorAll('.source-btn.active')].map(b => b.dataset.src);
-  const fields  = ['company','ceo','email','phone','location','linkedin','revenue','employees']
-    .filter(k => document.getElementById('ff-'+k)?.checked);
-
-  genLog(`Suche: "${query}"`, 'info');
-  genLog(`Quellen: ${sources.join(', ')}`, 'info');
-  document.getElementById('gen-progress').style.width = '30%';
-
-  try {
-    const data = await api('POST', '/generate', {
-      query, location: document.getElementById('gen-location').value.trim(),
-      size: document.getElementById('gen-size').value,
-      max_leads: document.getElementById('gen-max').value,
-      sources, fields, extra: document.getElementById('gen-extra').value.trim(),
-    });
-    generatedLeads = data.leads || [];
-    document.getElementById('gen-progress').style.width = '100%';
-    genLog(`${generatedLeads.length} Leads gefunden${data.real_data ? ' — per Web-Suche verifiziert' : ' — Web-Suche ohne Treffer, nur KI-Wissen'}`, 'ok');
-    if (data.dropped_low_confidence > 0) genLog(`${data.dropped_low_confidence} Kandidat(en) wegen Konfidenz < 80% verworfen`, 'warn');
-    generatedLeads.forEach(l => genLog(`✓ ${l.company} (${l.location||'?'}) Konfidenz: ${l.confidence}%`, 'ok'));
-    renderGenResults(generatedLeads, data.real_data);
-    document.getElementById('genResultsCard').style.display = 'block';
-    setStatus(`${generatedLeads.length} Treffer`, 'ok');
-  } catch (e) {
-    genLog(`Fehler: ${e.message}`, 'err');
-    showToast(e.message, 'err');
-    setStatus('Fehler', 'err');
-  }
-  btn.disabled = false; btn.innerHTML = '<i class="fas fa-search"></i> Leads generieren';
-}
-
-
-function renderGenResults(leads, realData) {
-  const cardTitle = document.querySelector('#genResultsCard .card-title');
-  if (cardTitle) {
-    const badge = realData
-      ? '<span class="data-badge live">Live-Daten</span>'
-      : '<span class="data-badge ai">KI-Wissen</span>';
-    cardTitle.innerHTML = `<i class="fas fa-list"></i> Vorschau <span class="badge" id="genResultCount">${leads.length}</span>${badge}`;
-  } else {
-    document.getElementById('genResultCount').textContent = leads.length;
-  }
-  document.getElementById('genResultsBody').innerHTML = leads.map(l => `
-    <tr>
-      <td class="cell-title">${escHtml(l.company||'—')}</td>
-      <td class="cell-sub">${escHtml(l.ceo||'—')}</td>
-      <td class="cell-sub">${l.email ? `<a href="mailto:${escHtml(l.email)}">${escHtml(l.email)}</a>` : '—'}</td>
-      <td class="cell-sub mono">${escHtml(l.phone||'—')}</td>
-      <td class="cell-sub">${escHtml(l.location||'—')}</td>
-      <td>${confBar(l.confidence)}</td>
-    </tr>`).join('');
-}
-
-
-async function saveGeneratedLeads() {
-  if (!generatedLeads.length) return;
-  const assignTo = document.getElementById('gen-assign').value || null;
-  const btn = document.getElementById('saveLeadsBtn');
-  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Speichere...';
-  try {
-    const r = await api('POST', '/leads/bulk', { leads: generatedLeads, assigned_to: assignTo });
-    const dupCount = (r.skipped_duplicates || []).length;
-    showToast(`${r.ids.length} Leads gespeichert ✓${dupCount ? ` · ${dupCount} Dubletten übersprungen` : ''}`);
-    document.getElementById('genResultsCard').style.display = 'none';
-    generatedLeads = [];
-  } catch (e) { showToast(e.message, 'err'); }
-  btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Alle speichern';
 }
 
 // ── USERS ─────────────────────────────────────────────────────
@@ -3114,32 +2918,32 @@ function renderToolsTable(tools) {
   const el = document.getElementById('toolsTableContainer');
   if (!el) return;
   if (!tools.length) {
-    el.innerHTML = '<div class="wiki-empty"><i class="fas fa-toolbox"></i>Noch keine Tools. Lege externe Links an, die dein Team in der Sidebar sieht.</div>';
+    el.innerHTML = '<div class="tool-grid"><button class="tool-add" onclick="openToolModal()"><i class="fas fa-plus"></i><b>Erstes Tool hinzufügen</b><span>Links zu Programmen, die dein Team oft braucht – erscheinen in der Seitenleiste</span></button></div>';
     return;
   }
+  const TONES = ['navy', 'copper', 'green', 'ink'];
   el.innerHTML = `<div class="tool-grid">${tools.map(t => {
     let host = ''; try { host = new URL(t.url).hostname.replace(/^www\./, ''); } catch {}
+    const tone = TONES[[...String(t.name)].reduce((a, c) => a + c.charCodeAt(0), 0) % TONES.length];
     return `<div class="tool-card">
-      <div class="tool-head">
-        <div class="tool-icon"><i class="fas fa-external-link-alt"></i></div>
-        <div style="min-width:0;flex:1">
-          <div class="tool-name">${escHtml(t.name)}</div>
-          <span class="tool-url" title="${escHtml(t.url)}"><a href="${escHtml(t.url)}" target="_blank" rel="noopener noreferrer">${escHtml(host || t.url)}</a></span>
-        </div>
+      <a class="tool-cover tone-${tone}" href="${escHtml(t.url)}" target="_blank" rel="noopener noreferrer" title="${escHtml(t.url)}">
+        <span class="tool-letter">${escHtml((t.name || '?').trim().charAt(0).toUpperCase())}</span>
+        <span class="tool-open">Öffnen <i class="fas fa-arrow-right"></i></span>
+      </a>
+      <div class="tool-body">
+        <div class="tool-name">${escHtml(t.name)}</div>
+        <div class="tool-url">${escHtml(host || t.url)}</div>
       </div>
-      <label class="tool-vis">
-        <input type="checkbox" ${t.closer_visible ? 'checked' : ''} onchange="toggleToolCloserVisible(${t.id}, this.checked)">
-        Für Closer sichtbar
-        <span class="tag ${t.closer_visible ? 'on' : ''}">${t.closer_visible ? 'Sichtbar' : 'Nur Admin'}</span>
-      </label>
-      <div class="tool-actions">
-        <a class="btn btn-ghost btn-sm" href="${escHtml(t.url)}" target="_blank" rel="noopener noreferrer"><i class="fas fa-external-link-alt"></i> Öffnen</a>
+      <div class="tool-foot">
+        <label class="switch" title="Für Closer sichtbar"><input type="checkbox" ${t.closer_visible ? 'checked' : ''} onchange="toggleToolCloserVisible(${t.id}, this.checked)"><i></i></label>
+        <span class="tool-vis-text">${t.closer_visible ? 'Closer sehen es' : 'Nur für dich'}</span>
         <span class="spacer"></span>
-        <button class="btn btn-ghost btn-sm btn-icon" onclick="openToolModal(${t.id})" title="Bearbeiten"><i class="fas fa-edit"></i></button>
-        <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteTool(${t.id})" title="Löschen" style="color:var(--red)"><i class="fas fa-trash"></i></button>
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="openToolModal(${t.id})" title="Bearbeiten"><i class="fas fa-pen"></i></button>
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteTool(${t.id})" title="Löschen"><i class="fas fa-trash"></i></button>
       </div>
     </div>`;
-  }).join('')}</div>`;
+  }).join('')}
+  <button class="tool-add" onclick="openToolModal()"><i class="fas fa-plus"></i><b>Tool hinzufügen</b><span>Link zu einem Programm, das dein Team oft braucht</span></button></div>`;
 }
 
 
@@ -3296,76 +3100,6 @@ async function permanentDeleteLead(id, name) {
   } catch(e) { showToast(e.message, 'err'); }
 }
 
-// ── FEEDBACK-BOARD ────────────────────────────────────────────
-let allFeedback = [];
-const FB_TAG_LABELS = { offen:'Offen', in_planung:'In Planung', erledigt:'Erledigt', nicht_moeglich:'Nicht möglich' };
-const FB_TAG_COLORS = { offen:'var(--accent)', in_planung:'var(--amber)', erledigt:'var(--green)', nicht_moeglich:'var(--red)' };
-const FB_TYPE_LABELS = { bug:'Bug', wunsch:'Wunsch' };
-
-async function loadFeedback() {
-  try {
-    allFeedback = await api('GET', '/feedback');
-    renderFeedbackList();
-  } catch(e) { showToast(e.message, 'err'); }
-}
-
-function renderFeedbackList() {
-  const filter = document.getElementById('fbTagFilter')?.value || '';
-  const counts = { _all: allFeedback.length };
-  allFeedback.forEach(f => { counts[f.tag] = (counts[f.tag] || 0) + 1; });
-  setChipCounts('fbFilters', counts);
-  const list = filter ? allFeedback.filter(f => f.tag === filter) : allFeedback;
-  const el = document.getElementById('feedbackList');
-  if (!list.length) { el.innerHTML = '<div class="wiki-empty"><i class="fas fa-flag"></i>Keine Einträge' + (filter ? ' mit diesem Status' : '') + '</div>'; return; }
-  el.innerHTML = list.map(f => renderFeedbackCard(f, { admin: true })).join('');
-}
-
-
-async function updateFeedbackTag(id, tag) {
-  try { await api('PATCH', `/feedback/${id}`, { tag }); const f = allFeedback.find(x=>x.id===id); if(f) f.tag=tag; renderFeedbackList(); }
-  catch(e) { showToast(e.message,'err'); }
-}
-async function updateFeedbackNote(id, note) {
-  try { await api('PATCH', `/feedback/${id}`, { admin_note: note }); const f = allFeedback.find(x=>x.id===id); if(f) f.admin_note=note; }
-  catch(e) { showToast(e.message,'err'); }
-}
-async function deleteFeedback(id) {
-  if (!confirm('Eintrag löschen?')) return;
-  try { await api('DELETE', `/feedback/${id}`); allFeedback = allFeedback.filter(x=>x.id!==id); renderFeedbackList(); }
-  catch(e) { showToast(e.message,'err'); }
-}
-
-function openAdminFeedbackModal() {
-  document.getElementById('afb-title').value = '';
-  document.getElementById('afb-desc').value = '';
-  document.getElementById('afbModalErr').textContent = '';
-  selectAdminFbType('wunsch');
-  document.getElementById('adminFeedbackModal').classList.add('open');
-}
-function closeAdminFeedbackModal() { document.getElementById('adminFeedbackModal').classList.remove('open'); }
-
-function selectAdminFbType(type) {
-  document.getElementById('afb-type').value = type;
-  document.getElementById('afb-type-wunsch').className = type === 'wunsch' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
-  document.getElementById('afb-type-bug').className    = type === 'bug'    ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
-  document.getElementById('afb-type-wunsch').style.flex = '1';
-  document.getElementById('afb-type-bug').style.flex    = '1';
-}
-
-async function submitAdminFeedback() {
-  const title = document.getElementById('afb-title').value.trim();
-  if (!title) { document.getElementById('afbModalErr').textContent = 'Titel ist erforderlich'; return; }
-  try {
-    await api('POST', '/feedback', {
-      title,
-      description: document.getElementById('afb-desc').value.trim() || null,
-      type: document.getElementById('afb-type').value,
-    });
-    showToast('Feedback eingetragen');
-    closeAdminFeedbackModal();
-    loadFeedback();
-  } catch(e) { document.getElementById('afbModalErr').textContent = e.message; }
-}
 </script>
 
 <!-- POPUP: Rückruf-Reminder -->
@@ -3600,36 +3334,6 @@ document.getElementById('editContactInput')?.addEventListener('keydown', functio
     </div>
   </div>
 </div>
-
-<!-- MODAL: Feedback eintragen (Admin) -->
-<div class="modal-overlay" id="adminFeedbackModal" onclick="if(event.target===this)closeAdminFeedbackModal()">
-  <div class="modal" style="max-width:480px">
-    <button class="modal-close" onclick="closeAdminFeedbackModal()"><i class="fas fa-times"></i></button>
-    <div class="modal-title">Feedback / Idee eintragen</div>
-    <div class="form-group">
-      <label>Typ</label>
-      <div style="display:flex;gap:8px;margin-top:4px">
-        <button id="afb-type-wunsch" class="btn btn-primary btn-sm" style="flex:1" onclick="selectAdminFbType('wunsch')"><i class="fas fa-lightbulb"></i> Wunsch / Idee</button>
-        <button id="afb-type-bug" class="btn btn-ghost btn-sm" style="flex:1" onclick="selectAdminFbType('bug')"><i class="fas fa-bug"></i> Bug / Problem</button>
-      </div>
-      <input type="hidden" id="afb-type" value="wunsch">
-    </div>
-    <div class="form-group">
-      <label>Titel *</label>
-      <input type="text" id="afb-title" class="form-control" placeholder="Kurze Beschreibung">
-    </div>
-    <div class="form-group">
-      <label>Details <span style="color:var(--text3);font-weight:400">(optional)</span></label>
-      <textarea id="afb-desc" class="form-control" rows="4" placeholder="Was genau fehlt / was funktioniert nicht?"></textarea>
-    </div>
-    <div style="display:flex;gap:8px;margin-top:4px">
-      <button class="btn btn-primary" style="flex:1" onclick="submitAdminFeedback()"><i class="fas fa-check"></i> Absenden</button>
-      <button class="btn btn-ghost" onclick="closeAdminFeedbackModal()">Abbrechen</button>
-    </div>
-    <div id="afbModalErr" style="color:var(--red);font-size:12px;margin-top:6px;text-align:center"></div>
-  </div>
-</div>
-
 
 <!-- Feature 6: Drag & Drop Closer-Zuweisung Overlay -->
 <div id="dragAssignOverlay" style="display:none;position:fixed;bottom:24px;right:24px;z-index:8000;background:var(--bg2);border:1px solid var(--border2);border-radius:12px;box-shadow:var(--shadow-lg);padding:16px;min-width:200px">

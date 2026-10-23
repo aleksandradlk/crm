@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf25">
+<link rel="stylesheet" href="/shared/style.css?v=nf26">
 <style>
 .notif-panel{position:fixed;top:0;right:0;bottom:0;width:340px;background:var(--bg2);border-left:1px solid var(--border2);z-index:150;transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;padding:20px}
 .notif-panel.open{transform:translateX(0)}
@@ -363,32 +363,7 @@
     </div>
 
     <!-- FEEDBACK -->
-    <div id="sec-feedback" style="display:none">
-      <div class="page-header">
-        <div><h1 data-eyebrow="Ressourcen">Feedback-Board</h1><p class="page-desc">Wünsche und Fehler melden. Aleksandra antwortet direkt am Eintrag.</p></div>
-        <div class="page-actions">
-          <button class="btn btn-ghost btn-sm btn-icon" onclick="loadMyFeedback()" title="Aktualisieren"><i class="fas fa-sync"></i></button>
-          <button class="btn btn-primary btn-sm" onclick="openFeedbackModal()"><i class="fas fa-plus"></i> Neu eintragen</button>
-        </div>
-      </div>
-      <div class="toolbar">
-        <div class="chip-row" id="myFbFilters">
-          <button class="qf-btn active" data-value="" onclick="chipFilter(this,'myFbFilter',loadMyFeedback)">Alle <span class="qf-count">0</span></button>
-          <button class="qf-btn" data-value="offen" onclick="chipFilter(this,'myFbFilter',loadMyFeedback)">Offen <span class="qf-count">0</span></button>
-          <button class="qf-btn" data-value="in_planung" onclick="chipFilter(this,'myFbFilter',loadMyFeedback)">In Planung <span class="qf-count">0</span></button>
-          <button class="qf-btn" data-value="erledigt" onclick="chipFilter(this,'myFbFilter',loadMyFeedback)">Erledigt <span class="qf-count">0</span></button>
-          <button class="qf-btn" data-value="nicht_moeglich" onclick="chipFilter(this,'myFbFilter',loadMyFeedback)">Nicht möglich <span class="qf-count">0</span></button>
-        </div>
-        <select id="myFbFilter" class="form-control" hidden onchange="loadMyFeedback()">
-          <option value="">Alle Tags</option>
-          <option value="offen">Offen</option>
-          <option value="in_planung">In Planung</option>
-          <option value="erledigt">Erledigt</option>
-          <option value="nicht_moeglich">Nicht möglich</option>
-        </select>
-      </div>
-      <div id="myFeedbackList" class="fb-list"></div>
-    </div>
+    <div id="sec-feedback" style="display:none"></div>
 
     <!-- BENUTZER ANLEGEN (nur bei can_create_users) -->
     <div id="sec-createUser" style="display:none;max-width:480px">
@@ -422,90 +397,9 @@
     </div>
 
     <!-- LEADS GENERIEREN (nur bei can_generate_leads) -->
-    <div id="sec-generateLeads" style="display:none">
-      <div class="page-header">
-        <div><h1 data-eyebrow="Leads">Leads generieren</h1><p class="page-desc">KI-Recherche mit Web-Suche. Gefundene Leads werden dir direkt zugewiesen.</p></div>
-      </div>
-      <div class="gen-layout">
-        <div class="card gen-form">
-          <div class="card-header"><div class="card-title"><i class="fas fa-sliders-h"></i> Suchparameter</div></div>
-          <div class="card-body">
-            <div class="form-group"><label>Branche / Suchbegriff *</label><input type="text" id="clgen-query" class="form-control" placeholder="z.B. Maschinenbau"></div>
-            <div class="form-group"><label>Standort</label><input type="text" id="clgen-location" class="form-control" placeholder="z.B. NRW, Düsseldorf"></div>
-            <div class="auth-grid-2">
-              <div class="form-group"><label>Unternehmensgröße</label>
-                <select id="clgen-size" class="form-control">
-                  <option value="small">Klein (10–54)</option>
-                  <option value="medium" selected>Mittelstand (55–200)</option>
-                </select>
-              </div>
-              <div class="form-group"><label>Max. Leads</label>
-                <select id="clgen-max" class="form-control">
-                  <option value="5">5</option><option value="10" selected>10</option><option value="20">20</option><option value="50">50</option>
-                </select>
-              </div>
-            </div>
-            <div class="form-group"><label>Zusätzliche Anweisung</label>
-              <textarea id="clgen-extra" class="form-control" rows="2" placeholder="z.B. nur B2B, Familienunternehmen …"></textarea>
-            </div>
-            <button class="btn btn-primary" style="width:100%;height:44px" id="clGenBtn" onclick="clGenerateLeads()">
-              <i class="fas fa-search"></i> Leads generieren
-            </button>
-          </div>
-        </div>
-        <div>
-          <div class="card" style="margin-bottom:14px">
-            <div class="card-header">
-              <div class="card-title"><i class="fas fa-terminal"></i> Protokoll</div>
-              <span class="gen-status" id="clgen-status">Bereit</span>
-            </div>
-            <div class="card-body" style="padding:14px"><div class="gen-console" id="clGenLog"></div></div>
-          </div>
-          <div class="card" id="clGenResultsCard" style="display:none">
-            <div class="card-header">
-              <div class="card-title"><i class="fas fa-list"></i> Vorschau <span class="badge" id="clGenResultCount">0</span></div>
-              <button class="btn btn-primary btn-sm" id="clSaveLeadsBtn" onclick="clSaveGeneratedLeads()"><i class="fas fa-save"></i> Alle speichern</button>
-            </div>
-            <div class="table-wrap">
-              <table class="keep-first">
-                <thead><tr><th>Unternehmen</th><th>Ansprechpartner</th><th>E-Mail</th><th>Telefon</th><th>Standort</th></tr></thead>
-                <tbody id="clGenResultsBody"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <div id="sec-generateLeads" style="display:none"></div>
 
   </main>
-</div>
-
-<!-- FEEDBACK MODAL -->
-<div class="modal-overlay" id="feedbackModal" onclick="if(event.target===this)closeFeedbackModal()">
-  <div class="modal" style="max-width:520px">
-    <h2><i class="fas fa-flag" style="color:var(--accent);margin-right:8px"></i> Feedback / Wunsch eintragen</h2>
-    <div class="form-group">
-      <label>Typ</label>
-      <div style="display:flex;gap:8px;margin-top:4px">
-        <button id="fb-type-wunsch" class="btn btn-primary btn-sm" style="flex:1" onclick="selectFbType('wunsch')"><i class="fas fa-lightbulb"></i> Wunsch / Idee</button>
-        <button id="fb-type-bug" class="btn btn-ghost btn-sm" style="flex:1" onclick="selectFbType('bug')"><i class="fas fa-bug"></i> Bug / Problem</button>
-      </div>
-      <input type="hidden" id="fb-type" value="wunsch">
-    </div>
-    <div class="form-group">
-      <label>Titel *</label>
-      <input type="text" id="fb-title" class="form-control" placeholder="Kurze Beschreibung">
-    </div>
-    <div class="form-group">
-      <label>Details <span style="color:var(--text3);font-weight:400">(optional)</span></label>
-      <textarea id="fb-desc" class="form-control" rows="4" placeholder="Was genau soll verbessert werden / was funktioniert nicht?"></textarea>
-    </div>
-    <div style="display:flex;gap:8px;margin-top:4px">
-      <button class="btn btn-primary" style="flex:1" onclick="submitFeedback()"><i class="fas fa-check"></i> Absenden</button>
-      <button class="btn btn-ghost" onclick="closeFeedbackModal()">Abbrechen</button>
-    </div>
-    <div id="fbModalErr" style="color:var(--red);font-size:12px;margin-top:6px;text-align:center"></div>
-  </div>
 </div>
 
 <!-- LEAD DETAIL PANEL -->
@@ -564,13 +458,15 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf25"></script>
-<script src="/shared/dialer.js?v=nf25"></script>
-<script src="/shared/deals.js?v=nf25"></script>
-<script src="/shared/calllists.js?v=nf25"></script>
-<script src="/shared/today.js?v=nf25"></script>
-<script src="/shared/duplicates.js?v=nf25"></script>
-<script src="/shared/wiki.js?v=nf25"></script>
+<script src="/shared/api.js?v=nf26"></script>
+<script src="/shared/dialer.js?v=nf26"></script>
+<script src="/shared/deals.js?v=nf26"></script>
+<script src="/shared/calllists.js?v=nf26"></script>
+<script src="/shared/today.js?v=nf26"></script>
+<script src="/shared/duplicates.js?v=nf26"></script>
+<script src="/shared/wiki.js?v=nf26"></script>
+<script src="/shared/finder.js?v=nf26"></script>
+<script src="/shared/board.js?v=nf26"></script>
 <script>
 const ME = Auth.getUser();
 const CAN = {
@@ -599,7 +495,6 @@ function copyPhone(phone) {
     });
 }
 let allLeads = [];
-let generatedLeadsCl = [];
 let panelDirty = false;
 let _panelLead = null;
 let _visibleMyLeads  = [];
@@ -774,9 +669,10 @@ function showSection(name) {
   if (name === 'today')     Today.load();
   if (name === 'inbox')     loadInbox();
   if (name === 'wiki')      loadWiki();
+  if (name === 'generateLeads') Finder.mount({ rootId: 'sec-generateLeads', isAdmin: false, assignTo: ME?.id, onSaved: () => loadLeads() });
   if (name === 'abrechnung') { const f = document.getElementById('abrechnungFrame'); if (!f.getAttribute('src')) f.src = '/abrechnung'; }
   if (name === 'chat')      loadChats();
-  if (name === 'feedback')  loadMyFeedback();
+  if (name === 'feedback')  { Board.mount({ rootId: 'sec-feedback', isAdmin: false }); Board.load(); }
   if (name === 'myLeads') { const f = document.getElementById('mySearch'); if (f) f.value = ''; if (allLeads.length) filterMyLeads(); }
   if (name === 'allLeads')  { const f = document.getElementById('allSearch'); if (f) f.value = ''; const sf = document.getElementById('allStatusFilter'); if (sf) sf.value = ''; const af = document.getElementById('allAssignFilter'); if (af) af.value = ''; if (allLeads.length) renderAllLeads(allLeads); }
 }
@@ -2508,63 +2404,6 @@ setInterval(loadReminders, 5 * 60 * 1000);
 checkReminderNotifications();
 setInterval(checkReminderNotifications, 2 * 60 * 1000);
 
-// ── FEEDBACK ──────────────────────────────────────────────────
-const FB_TAG_LABELS_C = { offen:'Offen', in_planung:'In Planung', erledigt:'Erledigt', nicht_moeglich:'Nicht möglich' };
-const FB_TAG_COLORS_C = { offen:'var(--accent)', in_planung:'var(--amber)', erledigt:'var(--green)', nicht_moeglich:'var(--red)' };
-
-async function loadMyFeedback() {
-  try {
-    const filter = document.getElementById('myFbFilter')?.value || '';
-    const all = await api('GET', '/feedback');
-    const counts = { _all: all.length };
-    all.forEach(f => { counts[f.tag] = (counts[f.tag] || 0) + 1; });
-    setChipCounts('myFbFilters', counts);
-    const list = filter ? all.filter(f => f.tag === filter) : all;
-    const el = document.getElementById('myFeedbackList');
-    if (!list.length) { el.innerHTML = '<div class="wiki-empty"><i class="fas fa-flag"></i>' + (filter ? 'Keine Einträge mit diesem Status.' : 'Noch keine Einträge. Hast du einen Wunsch oder ist dir ein Fehler aufgefallen? Trag ihn ein.') + '</div>'; return; }
-    el.innerHTML = list.map(f => renderFeedbackCard(f, { deleteFn: 'deleteMyFeedback' })).join('');
-  } catch(e) { showToast(e.message, 'err'); }
-}
-
-
-function selectFbType(type) {
-  document.getElementById('fb-type').value = type;
-  document.getElementById('fb-type-wunsch').className = type === 'wunsch' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
-  document.getElementById('fb-type-bug').className    = type === 'bug'    ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
-  document.getElementById('fb-type-wunsch').style.flex = '1';
-  document.getElementById('fb-type-bug').style.flex    = '1';
-}
-
-function openFeedbackModal() {
-  document.getElementById('fb-title').value = '';
-  document.getElementById('fb-desc').value = '';
-  document.getElementById('fbModalErr').textContent = '';
-  selectFbType('wunsch');
-  document.getElementById('feedbackModal').classList.add('open');
-}
-function closeFeedbackModal() { document.getElementById('feedbackModal').classList.remove('open'); }
-
-async function submitFeedback() {
-  const title = document.getElementById('fb-title').value.trim();
-  if (!title) { document.getElementById('fbModalErr').textContent = 'Titel ist erforderlich'; return; }
-  try {
-    await api('POST', '/feedback', {
-      title,
-      description: document.getElementById('fb-desc').value.trim() || null,
-      type: document.getElementById('fb-type').value,
-    });
-    showToast('Feedback gesendet');
-    closeFeedbackModal();
-    loadMyFeedback();
-  } catch(e) { document.getElementById('fbModalErr').textContent = e.message; }
-}
-
-async function deleteMyFeedback(id) {
-  if (!confirm('Eintrag löschen?')) return;
-  try { await api('DELETE', `/feedback/${id}`); loadMyFeedback(); }
-  catch(e) { showToast(e.message,'err'); }
-}
-
 // ── BENUTZER ANLEGEN (Closer mit can_create_users) ────────────
 async function submitCreateUser() {
   const name     = document.getElementById('cu-name')?.value.trim();
@@ -2592,86 +2431,6 @@ async function submitCreateUser() {
 }
 
 // ── Leads generieren ──────────────────────────────────────────
-function clGenLog(msg, type='info') {
-  const body = document.getElementById('clGenLog');
-  if (!body) return;
-  const now = new Date().toLocaleTimeString('de', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-  const el = document.createElement('div');
-  el.className = 'log-line';
-  el.innerHTML = `<span class="log-t">${now}</span><span class="log-${type}">${escHtml(msg)}</span>`;
-  body.appendChild(el); body.scrollTop = body.scrollHeight;
-}
-
-
-async function clGenerateLeads() {
-  const query = document.getElementById('clgen-query').value.trim();
-  if (!query) { showToast('Suchbegriff eingeben', 'err'); return; }
-  const btn = document.getElementById('clGenBtn');
-  const setStatus = (t, cls) => { const s = document.getElementById('clgen-status'); if (s) { s.textContent = t; s.className = 'gen-status ' + (cls || ''); } };
-  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Läuft …';
-  document.getElementById('clGenResultsCard').style.display = 'none';
-  document.getElementById('clGenLog').innerHTML = '';
-  setStatus('Läuft …', 'run');
-  clGenLog(`Suche: "${query}"`, 'info');
-  try {
-    const data = await api('POST', '/generate', {
-      query,
-      location: document.getElementById('clgen-location').value.trim(),
-      size:     document.getElementById('clgen-size').value,
-      max_leads: document.getElementById('clgen-max').value,
-      sources: ['google','web'],
-      fields:  ['company','ceo','email','phone','location'],
-      extra:   document.getElementById('clgen-extra').value.trim(),
-    });
-    generatedLeadsCl = data.leads || [];
-    clGenLog(`${generatedLeadsCl.length} Leads gefunden${data.real_data ? ' — per Web-Suche verifiziert' : ' — Web-Suche ohne Treffer, nur KI-Wissen'}`, 'ok');
-    if (data.dropped_low_confidence > 0) clGenLog(`${data.dropped_low_confidence} Kandidat(en) wegen Konfidenz < 80% verworfen`, 'warn');
-    generatedLeadsCl.forEach(l => clGenLog(`✓ ${l.company} (${l.location||'?'})`, 'ok'));
-    clRenderGenResults(generatedLeadsCl, data.real_data);
-    document.getElementById('clGenResultsCard').style.display = 'block';
-    setStatus(`${generatedLeadsCl.length} Treffer`, 'ok');
-  } catch(e) {
-    clGenLog(`Fehler: ${e.message}`, 'err');
-    showToast(e.message, 'err');
-    setStatus('Fehler', 'err');
-  }
-  btn.disabled = false; btn.innerHTML = '<i class="fas fa-search"></i> Leads generieren';
-}
-
-
-function clRenderGenResults(leads, realData) {
-  const cardTitle = document.querySelector('#clGenResultsCard .card-title');
-  if (cardTitle) {
-    const badge = realData ? '<span class="data-badge live">Live-Daten</span>' : '<span class="data-badge ai">KI-Wissen</span>';
-    cardTitle.innerHTML = `<i class="fas fa-list"></i> Vorschau <span class="badge" id="clGenResultCount">${leads.length}</span>${badge}`;
-  } else {
-    document.getElementById('clGenResultCount').textContent = leads.length;
-  }
-  document.getElementById('clGenResultsBody').innerHTML = leads.map(l => `
-    <tr>
-      <td class="cell-title">${escHtml(l.company||'—')}</td>
-      <td class="cell-sub">${escHtml(l.ceo||'—')}</td>
-      <td class="cell-sub">${l.email ? `<a href="mailto:${escHtml(l.email)}">${escHtml(l.email)}</a>` : '—'}</td>
-      <td class="cell-sub mono">${escHtml(l.phone||'—')}</td>
-      <td class="cell-sub">${escHtml(l.location||'—')}</td>
-    </tr>`).join('');
-}
-
-
-async function clSaveGeneratedLeads() {
-  if (!generatedLeadsCl.length) return;
-  const btn = document.getElementById('clSaveLeadsBtn');
-  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Speichere...';
-  try {
-    const r = await api('POST', '/leads/bulk', { leads: generatedLeadsCl, assigned_to: ME?.id || null });
-    const dupCount = (r.skipped_duplicates || []).length;
-    showToast(`${r.ids.length} Leads gespeichert ✓${dupCount ? ` · ${dupCount} Dubletten übersprungen` : ''}`);
-    document.getElementById('clGenResultsCard').style.display = 'none';
-    generatedLeadsCl = [];
-    loadLeads();
-  } catch(e) { showToast(e.message, 'err'); }
-  btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Alle speichern';
-}
 </script>
 
 <!-- POPUP: Rückruf-Reminder -->
