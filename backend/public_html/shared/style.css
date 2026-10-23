@@ -2041,3 +2041,31 @@ body.dark .bd-type.bug { color: var(--navy-light); }
   .bd-cols { grid-template-columns: repeat(4, 82vw); scroll-snap-type: x mandatory; }
   .bd-col { scroll-snap-align: start; }
 }
+
+/* ── Kundenkonten aus dem Angebotstool ──────────────────────── */
+.abr-switch { margin-bottom: 14px; }
+.abr-switch button { display: inline-flex; align-items: center; gap: 7px; }
+.abr-switch .badge { margin-left: 2px; }
+.abr-konto-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.abr-konto-head b { font-size: 15px; }
+.konto-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.konto-kpis > div { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; box-shadow: var(--shadow); }
+.konto-kpis b { display: block; font-size: 20px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.konto-kpis span { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text3); }
+.konto-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.konto-card { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 16px; background: var(--bg2); border: 1px solid var(--border); box-shadow: var(--shadow); cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+.konto-card:hover { transform: translateY(-2px); box-shadow: 0 14px 30px rgba(26,35,48,0.1); }
+.konto-top { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.konto-logo { width: 44px; height: 44px; border-radius: 12px; object-fit: contain; background: #fff; border: 1px solid var(--border); flex-shrink: 0; }
+.konto-logo.letter { display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; color: #fff; border: 0; background: linear-gradient(135deg, var(--copper-light), var(--copper)); }
+.konto-titel { min-width: 0; }
+.konto-titel b { display: block; font-size: 14.5px; overflow-wrap: anywhere; }
+.konto-titel span { font-size: 12px; color: var(--text3); }
+.konto-zahlen { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 12.5px; color: var(--text2); }
+.konto-zahlen b { color: var(--text); font-variant-numeric: tabular-nums; }
+.konto-zahlen small { color: var(--green-deep); }
+.konto-zahlen small.offen { color: var(--copper-deep); }
+.konto-foot { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--border); padding-top: 10px; cursor: default; }
+.konto-foot .spacer { flex: 1; }
+.konto-hinweis { font-size: 12px; color: var(--text3); margin-top: 14px; }
+.konto-hinweis i { margin-right: 6px; }

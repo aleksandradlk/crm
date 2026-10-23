@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf26">
+<link rel="stylesheet" href="/shared/style.css?v=nf27">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -95,8 +95,25 @@
         <div><h1 data-eyebrow="Vertrieb">Angebote &amp; Rechnungen</h1><p class="page-desc">Angebote, Rechnungen, Mahnungen und Abos von NovaFlow – verknüpft mit deinen Leads und Deals.</p></div>
         <div class="page-actions"><a class="btn btn-ghost btn-sm" href="/abrechnung" target="_blank" rel="noopener"><i class="fas fa-external-link-alt"></i> Eigenes Fenster</a></div>
       </div>
-      <div id="abrUebernahme" class="abr-umzug" hidden></div>
-      <iframe id="abrechnungFrame" class="abr-frame" title="Angebote & Rechnungen"></iframe>
+      <div class="view-toggle abr-switch">
+        <button id="abrSwNova" class="active" onclick="abrAnsicht('nova')"><i class="fas fa-building"></i> NovaFlow</button>
+        <button id="abrSwKonten" onclick="abrAnsicht('konten')"><i class="fas fa-store"></i> Kundenkonten aus dem Angebotstool <span class="badge" id="abrKontenCount" hidden></span></button>
+      </div>
+      <div id="abrNova">
+        <div id="abrUebernahme" class="abr-umzug" hidden></div>
+        <iframe id="abrechnungFrame" class="abr-frame" title="Angebote & Rechnungen"></iframe>
+      </div>
+      <div id="abrKonten" hidden>
+        <div id="abrKontenListe"></div>
+        <div id="abrKontoDetail" hidden>
+          <div class="abr-konto-head">
+            <button class="btn btn-ghost btn-sm" onclick="abrKontoZurueck()"><i class="fas fa-arrow-left"></i> Alle Kundenkonten</button>
+            <b id="abrKontoName"></b>
+            <span class="abr-chip">Nur Ansicht</span>
+          </div>
+          <iframe id="abrKontoFrame" class="abr-frame" title="Kundenkonto"></iframe>
+        </div>
+      </div>
     </div>
 
     <!-- ── TAB: LEADS ─────────────────────────────────── -->
@@ -574,16 +591,16 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf26"></script>
-<script src="/shared/dialer.js?v=nf26"></script>
-<script src="/shared/deals.js?v=nf26"></script>
-<script src="/shared/calllists.js?v=nf26"></script>
-<script src="/shared/today.js?v=nf26"></script>
-<script src="/shared/duplicates.js?v=nf26"></script>
-<script src="/shared/wiki.js?v=nf26"></script>
-<script src="/shared/lines.js?v=nf26"></script>
-<script src="/shared/finder.js?v=nf26"></script>
-<script src="/shared/board.js?v=nf26"></script>
+<script src="/shared/api.js?v=nf27"></script>
+<script src="/shared/dialer.js?v=nf27"></script>
+<script src="/shared/deals.js?v=nf27"></script>
+<script src="/shared/calllists.js?v=nf27"></script>
+<script src="/shared/today.js?v=nf27"></script>
+<script src="/shared/duplicates.js?v=nf27"></script>
+<script src="/shared/wiki.js?v=nf27"></script>
+<script src="/shared/lines.js?v=nf27"></script>
+<script src="/shared/finder.js?v=nf27"></script>
+<script src="/shared/board.js?v=nf27"></script>
 <script>
 let allLeads = [], allUsers = [], editingUserId = null;
 let panelDirty = false;
@@ -591,6 +608,8 @@ let _panelLead = null;
 const ME = Auth.getUser();
 
 Auth.requireAdmin();
+// Rolle beim Server prüfen (lokal gespeicherte Angaben lassen sich im Browser verändern)
+api('GET', '/auth/me').then(me => { if (me && me.role !== 'admin') { Auth.clear(); location.href = '/login'; } }).catch(() => {});
 initTheme();
 renderSidebarUser();
 startActivityTracking();
@@ -2474,6 +2493,76 @@ async function abrAbgleichen(btn) {
     ladeAbrAbgleich();
     document.getElementById('abrechnungFrame').src = '/abrechnung';
   } catch (e) { showToast(e.message, 'err'); if (btn) btn.disabled = false; }
+}
+// ── Kundenkonten aus dem Angebotstool (Betriebe, nur Ansicht) ──
+let _abrKonten = [];
+function abrAnsicht(welche) {
+  document.getElementById('abrSwNova').classList.toggle('active', welche === 'nova');
+  document.getElementById('abrSwKonten').classList.toggle('active', welche === 'konten');
+  document.getElementById('abrNova').hidden = welche !== 'nova';
+  document.getElementById('abrKonten').hidden = welche !== 'konten';
+  if (welche === 'konten') ladeAbrKonten();
+}
+async function ladeAbrKonten() {
+  const el = document.getElementById('abrKontenListe');
+  abrKontoZurueck();
+  el.innerHTML = '<div class="wiki-empty"><i class="fas fa-spinner fa-spin"></i>Kundenkonten werden geladen …</div>';
+  try {
+    const d = await api('GET', '/abrechnung-crm/kundenkonten');
+    _abrKonten = d.konten;
+    const cnt = document.getElementById('abrKontenCount');
+    cnt.textContent = d.konten.length; cnt.hidden = !d.konten.length;
+    if (!d.konten.length) {
+      el.innerHTML = `<div class="wiki-empty"><i class="fas fa-store-slash"></i>${d.gefunden
+        ? 'Im Angebotstool gibt es noch keine Kundenkonten.'
+        : `Das Angebotstool wurde auf dem Server nicht gefunden (gesucht: <span class="mono">${escHtml(d.ordner)}</span>). Läuft es auf einem anderen Hosting-Paket, sag Bescheid.`}</div>`;
+      return;
+    }
+    const eur = v => Number(v || 0).toLocaleString('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+    const sum = (k) => d.konten.reduce((a, x) => a + ((x.statistik && x.statistik[k]) || 0), 0);
+    el.innerHTML = `
+      <div class="konto-kpis">
+        <div><b>${d.konten.length}</b><span>Kundenkonten</span></div>
+        <div><b>${sum('kunden')}</b><span>Kunden der Betriebe</span></div>
+        <div><b>${sum('angebote')}</b><span>Angebote</span></div>
+        <div><b>${sum('rechnungen')}</b><span>Rechnungen</span></div>
+        <div><b>${eur(sum('umsatz'))}</b><span>Umsatz der Betriebe</span></div>
+      </div>
+      <div class="konto-grid">${d.konten.map(k => {
+        const st = k.statistik || { kunden: 0, angebote: 0, rechnungen: 0, umsatz: 0, offen: 0, angeboteStatus: {} };
+        return `<article class="konto-card" onclick="abrKontoOeffnen('${escHtml(k.slug)}')">
+          <div class="konto-top">
+            ${k.logo ? `<img class="konto-logo" src="${escHtml(k.logo)}" alt="">` : `<span class="konto-logo letter">${escHtml(k.name.charAt(0).toUpperCase())}</span>`}
+            <div class="konto-titel"><b>${escHtml(k.name)}</b><span>${escHtml([k.inhaber, k.ort, k.branche].filter(Boolean).join(' · ') || '—')}</span></div>
+          </div>
+          <div class="konto-zahlen">
+            <span><b>${st.kunden}</b> Kunden</span>
+            <span><b>${st.angebote}</b> Angebote${st.angeboteStatus && st.angeboteStatus.angenommen ? ` <small>· ${st.angeboteStatus.angenommen} angenommen</small>` : ''}</span>
+            <span><b>${st.rechnungen}</b> Rechnungen</span>
+            <span><b>${eur(st.umsatz)}</b> Umsatz${st.offen ? ` <small class="offen">· ${eur(st.offen)} offen</small>` : ''}</span>
+          </div>
+          <div class="konto-foot" onclick="event.stopPropagation()">
+            <span class="cell-sub">${k.benutzername ? `Login <span class="mono">${escHtml(k.benutzername)}</span>` : ''}${k.letzterLogin ? ` · zuletzt ${fmtDateShort(k.letzterLogin)}` : ''}</span>
+            <span class="spacer"></span>
+            ${k.leadId ? `<button class="btn btn-ghost btn-sm" onclick="openLeadPanel(${k.leadId})"><i class="fas fa-user"></i> Lead</button>` : ''}
+            <button class="btn btn-primary btn-sm" onclick="abrKontoOeffnen('${escHtml(k.slug)}')">Ansehen</button>
+          </div>
+        </article>`;
+      }).join('')}</div>
+      <p class="konto-hinweis"><i class="fas fa-sync"></i> Stand vom ${d.abgleich ? fmtDate(d.abgleich.am) : '—'} – das CRM gleicht alle 3 Stunden mit dem Angebotstool ab. Bearbeitet wird weiterhin dort.</p>`;
+  } catch (e) { el.innerHTML = `<div class="wiki-empty" style="color:var(--red)">${escHtml(e.message)}</div>`; }
+}
+function abrKontoOeffnen(slug) {
+  const k = _abrKonten.find(x => x.slug === slug);
+  document.getElementById('abrKontoName').textContent = k ? k.name : slug;
+  document.getElementById('abrKontenListe').hidden = true;
+  document.getElementById('abrKontoDetail').hidden = false;
+  document.getElementById('abrKontoFrame').src = '/abrechnung/konten/' + encodeURIComponent(slug);
+}
+function abrKontoZurueck() {
+  document.getElementById('abrKontenListe').hidden = false;
+  document.getElementById('abrKontoDetail').hidden = true;
+  document.getElementById('abrKontoFrame').removeAttribute('src');
 }
 // Neuen Angebotsentwurf für Lead (und optional Deal) anlegen und direkt öffnen
 async function angebotErstellen(leadId, dealId) {

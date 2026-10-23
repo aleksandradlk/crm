@@ -94,6 +94,8 @@
     .status-text.ok { color: var(--gruen); }
     .status-text.fehler { color: var(--rot); }
     .mono { font-family: ui-monospace, monospace; font-size: 0.82rem; color: var(--muted); }
+    /* Kundenkonto aus dem Angebotstool: nur ansehen, keine Aktionen */
+    html.nur-lesen .container button, html.nur-lesen .container a[onclick] { display: none !important; }
     .hinweis { background: var(--paper-card); border-left: 3px solid var(--copper); border-radius: 10px; padding: 12px 16px; font-size: 0.83rem; color: var(--muted); margin-bottom: 18px; }
     .untertitel { font-size: 0.95rem; font-weight: 600; color: var(--navy); margin: 18px 0 10px; }
 
@@ -330,6 +332,10 @@ function toast(text, fehler) {
 // Mit dem CRM-Token wird ein Sitzungs-Cookie für /api/abrechnung gesetzt –
 // damit funktionieren auch PDF-, ZIP- und CSV-Links direkt.
 const EINGEBETTET = window.self !== window.top;
+// Kundenkonto aus dem Angebotstool (nur Ansicht): /abrechnung/konten/<slug>
+const KONTO = (location.pathname.match(/^\/abrechnung\/konten\/([a-z0-9-]+)/) || [])[1] || null;
+const API = KONTO ? '/api/abrechnung/konten/' + KONTO : '/api/abrechnung';
+const SEITE_BASIS = KONTO ? '/abrechnung/konten/' + KONTO : '/abrechnung';
 if (EINGEBETTET) document.documentElement.classList.add('eingebettet');
 function zumLogin() { (EINGEBETTET ? window.top : window).location.href = '/login'; }
 async function anmelden() {
@@ -348,7 +354,7 @@ async function anmelden() {
   return d;
 }
 async function api(pfad, methode = 'GET', body) {
-  const res = await fetch('/api/abrechnung' + pfad, { method: methode, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(API + pfad, { method: methode, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
   if (res.status === 401) { zumLogin(); throw new Error('Bitte im CRM anmelden.'); }
   const data = await res.json().catch(() => ({ success: false, error: 'Unerwartete Antwort.' }));
   if (!data.success) throw new Error(data.error || 'Fehler');
@@ -373,6 +379,17 @@ let KONTEXT = { admin: false, emailMoeglich: false, emailErlaubt: false, inhaber
 async function ladeBasis() {
   const [kx, st, ar, ku] = await Promise.all([api('/kontext'), api('/stammdaten'), api('/artikel'), api('/kunden')]);
   KONTEXT = kx; S.stammdaten = st.stammdaten; S.artikel = ar.artikel; S.kunden = ku.kunden;
+  if (KONTO) {
+    document.querySelectorAll('a[href^="/api/abrechnung/"]').forEach(x => x.setAttribute('href', API + x.getAttribute('href').slice('/api/abrechnung'.length)));
+    if (KONTEXT.nurLesen) document.documentElement.classList.add('nur-lesen');
+    if (KONTEXT.nurLesen && !document.getElementById('nur-lesen')) {
+      const b = document.createElement('div');
+      b.id = 'nur-lesen'; b.className = 'hinweis';
+      b.style.cssText = 'margin-bottom:16px';
+      b.textContent = `Kundenkonto ${KONTEXT.firma} aus dem Angebotstool – nur zur Ansicht. Änderungen macht der Betrieb im Angebotstool; das CRM gleicht regelmäßig ab.`;
+      document.querySelector('.container').prepend(b);
+    }
+  }
   // Oberfläche an Konto anpassen: Betriebe sehen keine Admin-Links und keine E-Mail-/Sicherungsfunktionen
   document.querySelectorAll('.nur-admin').forEach(el => { el.style.display = KONTEXT.admin ? '' : 'none'; });
   document.querySelectorAll('.nur-email').forEach(el => { el.style.display = KONTEXT.emailErlaubt ? '' : 'none'; });
@@ -390,14 +407,14 @@ const LADER = { uebersicht: zeigeUebersicht, angebote: zeigeAngebote, rechnungen
 // Adresse: /abrechnung/<bereich> (sauber) – alte Form abrechnung.html#bereich funktioniert weiter
 const SAUBERE_PFADE = location.pathname.startsWith('/abrechnung') && !location.pathname.endsWith('.html');
 function bereichAusAdresse() {
-  const ausPfad = SAUBERE_PFADE ? location.pathname.replace(/^\/abrechnung\/?/, '').replace(/\/$/, '') : '';
+  const ausPfad = SAUBERE_PFADE ? location.pathname.slice(SEITE_BASIS.length).replace(/^\//, '').replace(/\/$/, '') : '';
   return ausPfad || location.hash.replace('#', '') || 'uebersicht';
 }
 function wechsle(view, ohneVerlauf) {
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('aktiv', b.dataset.view === view));
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('aktiv', v.id === 'view-' + view));
   if (!ohneVerlauf) {
-    if (SAUBERE_PFADE) history.pushState({ view }, '', view === 'uebersicht' ? '/abrechnung' : '/abrechnung/' + view);
+    if (SAUBERE_PFADE) history.pushState({ view }, '', view === 'uebersicht' ? SEITE_BASIS : SEITE_BASIS + '/' + view);
     else location.hash = view;
   }
   LADER[view]().catch(e => toast(e.message, true));
@@ -481,7 +498,7 @@ async function zeigeAngebote() {
     <td class="zahl">${euro(a.summen.brutto)}${a.monatlichSumme ? `<div class="sub">+ ${euro(a.monatlichSumme)}/Monat</div>` : ''}<div class="sub">${a.zahlung.art === 'raten' ? a.zahlung.anzahl + ' Raten' : a.zahlung.art === 'anzahlung' ? a.zahlung.anzahlungProzent + ' % Anzahlung' : 'Einmalzahlung'}</div></td>
     <td>${chip(a.statusEffektiv)}${a.umgewandelt ? '<div class="sub">umgewandelt</div>' : ''}${(a.versand || []).length ? `<div class="sub">gemailt ${datumDe((a.versand[a.versand.length - 1].am))}</div>` : ''}</td>
     <td class="aktionen">
-      <a class="btn klein sekundaer" href="/api/abrechnung/angebote/${a.id}/pdf" target="_blank" style="text-decoration:none">PDF</a>
+      <a class="btn klein sekundaer" href="${API}/angebote/${a.id}/pdf" target="_blank" style="text-decoration:none">PDF</a>
       ${KONTEXT.emailErlaubt && a.status !== 'abgelehnt' ? `<button class="btn klein sekundaer" onclick="emailDialog('/angebote/${a.id}/email', 'Angebot ${esc(a.nummer)} per E-Mail senden', zeigeAngebote)">E-Mail</button>` : ''}
       ${!a.umgewandelt ? `<button class="btn klein sekundaer" onclick="angebotBearbeiten('${a.id}')">Bearbeiten</button>` : ''}
       ${a.status === 'entwurf' ? `<button class="btn klein" onclick="angebotStatus('${a.id}','versendet')">Versendet</button>` : ''}
@@ -535,7 +552,7 @@ function angebotEditor(a) {
   $('angebot-editor').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function anhaengeHtml(a) {
-  const liste = (a.anhaenge || []).map(n => `<div class="sub" style="margin-bottom:6px">📎 <a href="/api/abrechnung/angebote/${a.id}/anhang/${encodeURIComponent(n)}" target="_blank">${esc(n)}</a> · <a href="#" onclick="anhangLoeschen('${a.id}','${esc(n)}');return false" style="color:var(--rot)">entfernen</a></div>`).join('');
+  const liste = (a.anhaenge || []).map(n => `<div class="sub" style="margin-bottom:6px">📎 <a href="${API}/angebote/${a.id}/anhang/${encodeURIComponent(n)}" target="_blank">${esc(n)}</a> · <a href="#" onclick="anhangLoeschen('${a.id}','${esc(n)}');return false" style="color:var(--rot)">entfernen</a></div>`).join('');
   return `${liste || '<div class="sub" style="margin-bottom:6px">Noch kein Anhang.</div>'}
     <div class="btn-zeile" style="margin:4px 0 12px"><input type="file" id="ag-anhang-datei" accept="application/pdf,.pdf" style="font-size:0.85rem"><button class="btn klein sekundaer" onclick="anhangHochladen('${a.id}')">PDF anhängen</button><span class="status-text" id="ag-anhang-status"></span></div>`;
 }
@@ -626,9 +643,9 @@ function rechnungsTabelle(liste, leerText) {
     <td class="sub">${r.leistungVon === r.leistungBis ? datumDe(r.leistungVon) : datumDe(r.leistungVon) + ' – ' + datumDe(r.leistungBis)}</td>
     <td class="zahl">${euro(r.summen.brutto)}</td>
     <td>${r.status === 'entwurf' ? chip('entwurf') : chip(r.zahlungsstatus)}${r.zahlung.bezahltAm ? '<div class="sub">am ' + datumDe(r.zahlung.bezahltAm) + '</div>' : ''}${r.storniertDurch ? '<div class="sub">durch ' + esc(r.storniertDurch.nummer) + '</div>' : ''}${(r.versand || []).length ? `<div class="sub">gemailt ${datumDe(r.versand[r.versand.length - 1].am)}</div>` : ''}
-      ${(r.mahnungen || []).map(m => `<div class="sub">${esc(m.titel)} ${datumDe(m.datum)} · <a href="/api/abrechnung/rechnungen/${r.id}/mahnung/${m.stufe}/pdf" target="_blank">PDF</a>${KONTEXT.emailErlaubt ? ` · <a href="#" onclick="emailDialog('/rechnungen/${r.id}/mahnung/${m.stufe}/email', '${esc(m.titel)} zu ${esc(r.nummer)} senden', zeigeRechnungen);return false">E-Mail</a>${(m.versand || []).length ? ' ✓' : ''}` : ''}</div>`).join('')}</td>
+      ${(r.mahnungen || []).map(m => `<div class="sub">${esc(m.titel)} ${datumDe(m.datum)} · <a href="${API}/rechnungen/${r.id}/mahnung/${m.stufe}/pdf" target="_blank">PDF</a>${KONTEXT.emailErlaubt ? ` · <a href="#" onclick="emailDialog('/rechnungen/${r.id}/mahnung/${m.stufe}/email', '${esc(m.titel)} zu ${esc(r.nummer)} senden', zeigeRechnungen);return false">E-Mail</a>${(m.versand || []).length ? ' ✓' : ''}` : ''}</div>`).join('')}</td>
     <td class="aktionen">
-      <a class="btn klein sekundaer" href="/api/abrechnung/rechnungen/${r.id}/pdf" target="_blank" style="text-decoration:none">PDF</a>
+      <a class="btn klein sekundaer" href="${API}/rechnungen/${r.id}/pdf" target="_blank" style="text-decoration:none">PDF</a>
       ${r.status === 'entwurf' ? `<button class="btn klein sekundaer" onclick="rechnungBearbeiten('${r.id}')">Bearbeiten</button><button class="btn klein" onclick="rechnungFinalisieren('${r.id}')">Finalisieren</button><button class="btn klein gefahr" onclick="rechnungLoeschen('${r.id}')">Löschen</button>` : ''}
       ${KONTEXT.emailErlaubt && r.status === 'finalisiert' ? `<button class="btn klein sekundaer" onclick="emailDialog('/rechnungen/${r.id}/email', '${r.typ === 'storno' ? 'Stornorechnung' : 'Rechnung'} ${esc(r.nummer)} per E-Mail senden', zeigeRechnungen)">E-Mail</button>` : ''}
       ${r.zahlungsstatus === 'ueberfaellig' && r.naechsteMahnung ? `<button class="btn klein gefahr" onclick="rechnungMahnen('${r.id}')">${esc(r.naechsteMahnung)}</button>` : ''}
@@ -900,11 +917,11 @@ async function stammdatenSpeichern() {
 
 // ── Export ────────────────────────────────────────────────
 async function zeigeExport() {
-  $('btn-jahr-export').href = '/api/abrechnung/export/gesamt?jahr=' + heute().slice(0, 4);
+  $('btn-jahr-export').href = API + '/export/gesamt?jahr=' + heute().slice(0, 4);
   $('btn-jahr-export').textContent = 'Nur ' + heute().slice(0, 4);
   const d = await api('/export/monate');
   const rows = d.monate.map(m => `<tr><td><span class="name">${m.monat.slice(5)}/${m.monat.slice(0, 4)}</span></td><td class="zahl">${m.anzahl} Rechnungen</td><td class="zahl">${euro(m.summe)}</td>
-    <td class="aktionen"><a class="btn klein sekundaer" href="/api/abrechnung/export/csv?monat=${m.monat}" style="text-decoration:none">CSV</a> <a class="btn klein" href="/api/abrechnung/export/zip?monat=${m.monat}" style="text-decoration:none">ZIP (PDFs + CSV)</a></td></tr>`).join('');
+    <td class="aktionen"><a class="btn klein sekundaer" href="${API}/export/csv?monat=${m.monat}" style="text-decoration:none">CSV</a> <a class="btn klein" href="${API}/export/zip?monat=${m.monat}" style="text-decoration:none">ZIP (PDFs + CSV)</a></td></tr>`).join('');
   $('export-liste').innerHTML = rows ? `<table><thead><tr><th>Monat</th><th class="zahl">Anzahl</th><th class="zahl">Summe</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="leer">Noch keine finalisierten Rechnungen.</div>';
 }
 

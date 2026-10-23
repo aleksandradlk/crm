@@ -110,7 +110,8 @@ function nurAdmin(istAdmin) {
 
 // Ein Mandant = ein eigener Datenbestand (NovaFlow selbst oder ein Betrieb).
 // ctx: { id, istAdmin, email, DATA_DIR, basis, buchhaltung, stammdatenStandard,
-//        artikelStandard, live() → Felder, die bei jedem Laden aus dem Betrieb kommen (Logo) }
+//        artikelStandard, live() → Felder, die bei jedem Laden aus dem Betrieb kommen (Logo),
+//        nurLesen → keine Abo-Läufe, Sicherungen oder Sicherungs-Mails (reine Ansicht) }
 function bauMandant(app, ctx) {
   const { DATA_DIR, backupHandwerker } = ctx;
   const BASIS = ctx.basis;
@@ -695,7 +696,7 @@ function bauMandant(app, ctx) {
   // ── E-Mail ────────────────────────────────────────────────
   app.get('/api/abrechnung/kontext', (req, res) => {
     const stamm = ladeStammdaten();
-    ok(res, { admin: !!ctx.istAdmin, mandant: ctx.id, firma: stamm.firma, inhaberLabel: stamm.inhaberLabel || 'Inhaberin', emailMoeglich: !!ctx.email && mail.konfiguration().konfiguriert, emailErlaubt: !!ctx.email, kiVerfuegbar: !!(ctx.ki && ctx.ki.client), logoErlaubt: !!ctx.speichereFirma });
+    ok(res, { admin: !!ctx.istAdmin, nurLesen: !!ctx.nurLesen, mandant: ctx.id, firma: stamm.firma, inhaberLabel: stamm.inhaberLabel || 'Inhaberin', emailMoeglich: !!ctx.email && mail.konfiguration().konfiguriert, emailErlaubt: !!ctx.email, kiVerfuegbar: !!(ctx.ki && ctx.ki.client), logoErlaubt: !!ctx.speichereFirma });
   });
   app.get('/api/abrechnung/email/status', (req, res) => {
     const k = mail.konfiguration();
@@ -1437,9 +1438,12 @@ Antworte NUR mit gültigem JSON, kein Text davor oder danach:
     const e = await sicherungsMailSenden(true);
     ok(res, e);
   }));
-  // Beim Start (verzögert) und danach stündlich prüfen, ob eine Sicherung fällig ist
-  setTimeout(() => sicherungsMailSenden(false).catch(e => console.error('Sicherungs-Mail:', e.message)), 60 * 1000).unref();
-  setInterval(() => sicherungsMailSenden(false).catch(e => console.error('Sicherungs-Mail:', e.message)), 60 * 60 * 1000).unref();
+  // Beim Start (verzögert) und danach stündlich prüfen, ob eine Sicherung fällig ist.
+  // ctx.nurLesen (CRM-Ansicht der Kundenkonten aus dem Angebotstool): keine Hintergrundläufe
+  if (!ctx.nurLesen) {
+    setTimeout(() => sicherungsMailSenden(false).catch(e => console.error('Sicherungs-Mail:', e.message)), 60 * 1000).unref();
+    setInterval(() => sicherungsMailSenden(false).catch(e => console.error('Sicherungs-Mail:', e.message)), 60 * 60 * 1000).unref();
+  }
 
   // Tägliche Sicherungskopie der Datenbank (letzte 30 bleiben erhalten)
   const SICHERUNG_DIR = path.join(BASIS, 'sicherungen');
@@ -1452,12 +1456,13 @@ Antworte NUR mit gültigem JSON, kein Text davor oder danach:
       alle.slice(0, Math.max(0, alle.length - 30)).forEach(f => fs.unlinkSync(path.join(SICHERUNG_DIR, f)));
     }).catch(e => console.error('DB-Sicherung:', e.message));
   }
-  sichereDatenbank();
-  setInterval(sichereDatenbank, 24 * 60 * 60 * 1000).unref();
-
-  // Abo-Lauf beim Start und danach alle 6 Stunden
-  try { ladeStammdaten(); ladeArtikel(); aboLauf(); } catch (e) { console.error('Abrechnung Start:', e.message); }
-  setInterval(() => { try { aboLauf(); } catch (e) { console.error('Abo-Lauf:', e.message); } }, 6 * 60 * 60 * 1000).unref();
+  if (!ctx.nurLesen) {
+    sichereDatenbank();
+    setInterval(sichereDatenbank, 24 * 60 * 60 * 1000).unref();
+    // Abo-Lauf beim Start und danach alle 6 Stunden
+    try { ladeStammdaten(); ladeArtikel(); aboLauf(); } catch (e) { console.error('Abrechnung Start:', e.message); }
+    setInterval(() => { try { aboLauf(); } catch (e) { console.error('Abo-Lauf:', e.message); } }, 6 * 60 * 60 * 1000).unref();
+  }
 
   // ── Übernahme der Altdaten aus dem früheren KI-Angebotsgenerator ──
   // Alte Angebote und Rechnungen eines Betriebs werden einmalig in die
