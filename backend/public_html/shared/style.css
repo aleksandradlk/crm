@@ -2069,3 +2069,6 @@ body.dark .bd-type.bug { color: var(--navy-light); }
 .konto-foot .spacer { flex: 1; }
 .konto-hinweis { font-size: 12px; color: var(--text3); margin-top: 14px; }
 .konto-hinweis i { margin-right: 6px; }
+.deal-owner-sel { width: auto; min-width: 140px; height: 34px; font-size: 12.5px; }
+.today-card.is-anfrage .card-title > i { color: var(--copper); }
+.today-card.is-anfrage { border-color: color-mix(in srgb, var(--copper) 35%, var(--border)); }

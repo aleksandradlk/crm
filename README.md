@@ -269,6 +269,15 @@ leadhunter/
 - Voraussetzung: Node.js 22.13 oder neuer. E-Mails gehen als „NovaFlow Services <SMTP_USER>“ raus
   (anders: `ABRECHNUNG_SMTP_FROM`), KI-Entwürfe nutzen `CLAUDE_API_KEY`.
 
+### Angebote anfordern (Closer → Admin):
+- Deal-Phase **„Angebot anfordern“** (vor „Angebot gesendet“, wird einmalig in bestehende Pipelines eingefügt):
+  Schiebt ein Closer einen Deal dorthin, fragt das CRM nach den Infos fürs Angebot (Leistung, Preis, Start …).
+- Die Admins bekommen einen Hinweis und sehen die Anfrage unter **Heute → Angebote anfordern** mit
+  „Angebot erstellen“ (legt den Entwurf am Deal an). Wird das Angebot versendet, rückt der Deal auf
+  „Angebot gesendet“; angenommen → gewonnen.
+- Der betreuende Closer sieht Angebote und Rechnungen im Lead (mit PDF) – auch ohne Berechtigung für die Abrechnung.
+- Deals: „Meine Deals“ / „Alle“ als Umschalter (Admin zusätzlich nach Person).
+
 ### Heute, Wähllisten, Dubletten:
 - **Heute** (Startseite der Vertriebler): verpasste Anrufe, fällige Rückrufe, neue Kundenantworten,
   Deals ohne nächsten Schritt / mit erreichtem Abschlussdatum – jeweils mit Anrufen-Knopf.

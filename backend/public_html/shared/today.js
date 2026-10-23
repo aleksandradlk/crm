@@ -22,6 +22,10 @@ const Today = {
       <div class="today-goal" id="todayGoal"></div>
       <div class="today-grid">
         <div class="today-col">
+          <section class="card today-card is-anfrage" id="todayAnfrageCard" hidden>
+            <div class="card-header"><div class="card-title"><i class="fas fa-file-signature"></i> Angebote anfordern <span class="badge" id="todayAnfrageCount">0</span></div></div>
+            <div class="today-list" id="todayAnfragen"></div>
+          </section>
           <section class="card today-card is-missed" id="todayMissedCard" hidden>
             <div class="card-header"><div class="card-title"><i class="fas fa-phone-slash"></i> Verpasste Anrufe <span class="badge" id="todayMissedCount">0</span></div></div>
             <div class="today-list" id="todayMissed"></div>
@@ -96,6 +100,17 @@ const Today = {
     document.getElementById('todayQueueCount').textContent = d.queue_count ? d.queue_count : '';
     const time = t => new Date(t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
     const done = r => `<button class="btn btn-ghost btn-sm btn-icon" onclick="Today.done(${r.lead_id}, ${r.reminder_id})" title="Erledigt"><i class="fas fa-check"></i></button>`;
+
+    const anfr = d.angebot_anfragen || [];
+    document.getElementById('todayAnfrageCard').hidden = !anfr.length;
+    document.getElementById('todayAnfrageCount').textContent = anfr.length;
+    document.getElementById('todayAnfragen').innerHTML = anfr.map(a => this._row({
+      title: `${escHtml(a.company || '—')} <span class="today-deal-val">${typeof Deals !== 'undefined' ? Deals.fmt(a.value) : a.value}</span>`,
+      sub: `<b>${escHtml(a.owner_name || '')}:</b> ${escHtml((a.infos || 'ohne Infos').replace(/\s+/g, ' ').slice(0, 160))}`,
+      meta: a.days_in_stage ? `seit ${a.days_in_stage} ${a.days_in_stage === 1 ? 'Tag' : 'Tagen'}` : 'heute',
+      leadId: a.lead_id, phone: a.phone,
+      extra: this.opts.onAngebot ? `<button class="btn btn-primary btn-sm" onclick="Today.opts.onAngebot(${a.lead_id}, ${a.id})"><i class="fas fa-file-signature"></i> Angebot erstellen</button>` : '',
+    })).join('');
 
     document.getElementById('todayMissedCard').hidden = !d.missed_calls.length;
     document.getElementById('todayMissedCount').textContent = d.missed_calls.length;

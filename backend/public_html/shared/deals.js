@@ -41,7 +41,11 @@ const Deals = {
       <div class="dash-kpis" id="dealKpis"></div>
       <div class="toolbar">
         <div class="search-bar"><i class="fas fa-search search-bar-icon"></i><input type="text" id="dealSearch" class="form-control" placeholder="Deals durchsuchen …" autocomplete="off" oninput="Deals.search=this.value.toLowerCase();Deals.render()"></div>
-        ${this.canSeeAll() ? `<select id="dealOwner" class="form-control" onchange="Deals.owner=this.value;Deals.load()"><option value="me">Meine Deals</option><option value="all">Alle Deals</option></select>` : ''}
+        ${this.canSeeAll() ? `<div class="chip-row" id="dealOwnerChips">
+          <button class="qf-btn" data-ow="me" onclick="Deals.setOwner('me')"><i class="fas fa-user"></i> Meine Deals</button>
+          <button class="qf-btn" data-ow="all" onclick="Deals.setOwner('all')"><i class="fas fa-users"></i> Alle</button>
+        </div>
+        ${opts.isAdmin ? `<select id="dealOwner" class="form-control deal-owner-sel" onchange="Deals.setOwner(this.value || 'all')"><option value="">Person …</option></select>` : ''}` : ''}
         <div class="chip-row" id="dealStatusChips" style="display:none">
           ${[['open', 'Offen'], ['won', 'Gewonnen'], ['lost', 'Verloren'], ['all', 'Alle']].map(([k, l]) =>
             `<button class="qf-btn${k === 'open' ? ' active' : ''}" data-st="${k}" onclick="Deals.setStatus('${k}')">${l}</button>`).join('')}
@@ -55,9 +59,51 @@ const Deals = {
       </div>
       <div id="dealBoard" class="deal-board"></div>
       <div id="dealList" style="display:none"></div>`;
-    const ownerSel = document.getElementById('dealOwner');
-    if (ownerSel) ownerSel.value = this.owner;
+    this._syncOwner();
     this._ensureModals();
+  },
+
+  setOwner(o) { this.owner = String(o); this._syncOwner(); this.load(); },
+  _syncOwner() {
+    document.querySelectorAll('#dealOwnerChips .qf-btn').forEach(b => b.classList.toggle('active', b.dataset.ow === this.owner));
+    const sel = document.getElementById('dealOwner');
+    if (sel) sel.value = /^\d+$/.test(this.owner) ? this.owner : '';
+  },
+
+  // Phase „Angebot anfordern“: Der Closer gibt dem Admin die Infos fürs Angebot mit
+  istAnfrage(stageId) { const s = this.stages.find(x => x.id === stageId); return !!s && /anfordern|anfrage/i.test(s.name); },
+  async _anfrageInfos(stageId, deal) {
+    if (!this.istAnfrage(stageId) || this.opts.isAdmin) return '';
+    if (!this._adminName) {
+      try { this._adminName = ((await api('GET', '/users/admin-contact')).full_name || 'Admin').split(' ')[0]; } catch (_) { this._adminName = 'Admin'; }
+    }
+    return new Promise(resolve => {
+      document.getElementById('anfrageModal')?.remove();
+      const o = document.createElement('div');
+      o.id = 'anfrageModal'; o.className = 'modal-overlay open'; o.style.zIndex = 960;
+      o.innerHTML = `<div class="modal modal-flex" style="max-width:520px">
+        <div class="modal-header"><div class="modal-heading"><span class="modal-icon copper"><i class="fas fa-file-signature"></i></span>
+          <div style="min-width:0"><div class="modal-title">Infos für das Angebot an ${escHtml(this._adminName)}</div>
+          <div class="modal-subtitle">${escHtml(deal ? (deal.company || deal.title) : '')}</div></div></div>
+          <button class="modal-x" data-x><i class="fas fa-times"></i></button></div>
+        <div class="modal-body">
+          <textarea id="anfrageText" class="form-control" rows="6" placeholder="Was soll ins Angebot?\n• Leistung / Paket\n• Besprochener Preis oder Budget\n• Gewünschter Start\n• Besonderheiten, Ansprechpartner, E-Mail für das Angebot"></textarea>
+          <div class="modal-note"><i class="fas fa-info-circle" style="color:var(--copper);margin-right:6px"></i>${escHtml(this._adminName)} bekommt einen Hinweis, schreibt das Angebot und schickt es raus. Du siehst es danach am Lead.</div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" data-x>Abbrechen</button>
+          <button class="btn btn-primary" data-ok><i class="fas fa-paper-plane"></i> An ${escHtml(this._adminName)} schicken</button>
+        </div></div>`;
+      const fertig = v => { o.remove(); resolve(v); };
+      o.querySelectorAll('[data-x]').forEach(b => b.onclick = () => fertig(null));
+      o.querySelector('[data-ok]').onclick = () => {
+        const t = o.querySelector('#anfrageText').value.trim();
+        if (!t) { showToast('Bitte kurz aufschreiben, was ins Angebot soll', 'err'); return; }
+        fertig(t);
+      };
+      document.body.appendChild(o);
+      o.querySelector('#anfrageText').focus();
+    });
   },
 
   async show() {
@@ -65,7 +111,7 @@ const Deals = {
       try {
         this.users = await api('GET', '/users/list');
         const sel = document.getElementById('dealOwner');
-        if (sel) sel.insertAdjacentHTML('beforeend', this.users.map(u => `<option value="${u.id}">${escHtml(u.full_name)}</option>`).join(''));
+        if (sel) { sel.insertAdjacentHTML('beforeend', this.users.map(u => `<option value="${u.id}">${escHtml(u.full_name)}</option>`).join('')); this._syncOwner(); }
       } catch (_) {}
     }
     this._loaded = true;
@@ -195,11 +241,14 @@ const Deals = {
     const d = this.deals.find(x => x.id === this._drag);
     this._drag = null;
     if (!d || d.stage_id === stageId) return;
+    const infos = await this._anfrageInfos(stageId, d);
+    if (infos === null) return;
     const prev = d.stage_id;
     d.stage_id = stageId; d.days_in_stage = 0;
     this.renderBoard();
     try {
-      await api('PATCH', `/deals/${d.id}`, { stage_id: stageId });
+      await api('PATCH', `/deals/${d.id}`, { stage_id: stageId, angebot_infos: infos || undefined });
+      if (infos) showToast('Angebot angefordert ✓');
       this._refreshSummary();
     } catch (err) {
       d.stage_id = prev; this.renderBoard(); showToast(err.message, 'err');
@@ -427,6 +476,11 @@ const Deals = {
     if (!body.title) { err.textContent = 'Bitte einen Titel angeben.'; return; }
     try {
       if (this._current) {
+        if (body.stage_id && body.stage_id !== this._current.stage_id) {
+          const infos = await this._anfrageInfos(body.stage_id, this._current);
+          if (infos === null) return;
+          if (infos) body.angebot_infos = infos;
+        }
         await api('PATCH', `/deals/${this._current.id}`, body);
         showToast('Deal gespeichert');
       } else {
@@ -441,8 +495,11 @@ const Deals = {
 
   async moveTo(stageId) {
     if (!this._current) return;
+    const infos = await this._anfrageInfos(stageId, this._current);
+    if (infos === null) return;
     try {
-      await api('PATCH', `/deals/${this._current.id}`, { stage_id: stageId });
+      await api('PATCH', `/deals/${this._current.id}`, { stage_id: stageId, angebot_infos: infos || undefined });
+      if (infos) showToast('Angebot angefordert ✓');
       this._current.stage_id = stageId;
       const local = this.deals.find(x => x.id === this._current.id);
       if (local) { local.stage_id = stageId; local.days_in_stage = 0; }

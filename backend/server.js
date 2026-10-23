@@ -453,11 +453,25 @@ migrate(`CREATE TABLE IF NOT EXISTS deal_stages (
   if (cnt > 0) return;
   // Standard-Pipeline, im CRM unter Deals → „Phasen bearbeiten“ anpassbar
   const stages = [
-    ['Qualifiziert', 10, 1], ['Termin vereinbart', 30, 2], ['Angebot gesendet', 60, 3], ['Verhandlung', 80, 4],
+    ['Qualifiziert', 10, 1], ['Termin vereinbart', 30, 2], ['Angebot anfordern', 45, 3], ['Angebot gesendet', 60, 4], ['Verhandlung', 80, 5],
   ];
   return Promise.all(stages.map(([name, prob, sort]) =>
     migrate('INSERT INTO deal_stages (name, probability, sort_order) VALUES (?,?,?)', [name, prob, sort])));
 }).catch(() => {});
+// Bestehende Pipelines bekommen einmalig die Phase „Angebot anfordern“ vor „Angebot gesendet“:
+// Der Closer übergibt dort die Infos, der Admin schreibt und versendet das Angebot.
+migrate("SELECT value FROM app_settings WHERE key_name='stage_angebot_anfordern'").then(async ([[done]]) => {
+  if (done) return;
+  const [stages] = await migrate('SELECT id, name, sort_order FROM deal_stages ORDER BY sort_order');
+  if (!stages.length) return;   // frische Datenbank: Standard-Phasen enthalten sie schon
+  if (!stages.some(s => /anfordern|anfrage/i.test(s.name))) {
+    const gesendet = stages.find(s => /^angebot/i.test(s.name));
+    const sort = gesendet ? gesendet.sort_order : stages[stages.length - 1].sort_order + 1;
+    await migrate('UPDATE deal_stages SET sort_order = sort_order + 1 WHERE sort_order >= ?', [sort]);
+    await migrate('INSERT INTO deal_stages (name, probability, sort_order) VALUES (?,?,?)', ['Angebot anfordern', 45, sort]);
+  }
+  await migrate("INSERT INTO app_settings (key_name, value) VALUES ('stage_angebot_anfordern', '1') ON DUPLICATE KEY UPDATE value='1'");
+}).catch(e => console.error('Migration Phase Angebot anfordern:', e.message));
 migrate(`CREATE TABLE IF NOT EXISTS deals (
   id                  INT AUTO_INCREMENT PRIMARY KEY,
   lead_id             INT NOT NULL,
