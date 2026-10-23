@@ -4,3 +4,5 @@ backend/node_modules/
 *.log
 .DS_Store
 Thumbs.db
+# Stand der automatischen Auslieferung (Server)
+.deployed-sha

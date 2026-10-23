@@ -85,6 +85,56 @@ server {
 
 ---
 
+## Automatische Auslieferung (GitHub Actions)
+
+Jeder Stand, der auf `main` landet, wird automatisch geprüft und auf den Server gespielt
+(`.github/workflows/deploy.yml`):
+
+1. **Prüfen:** Syntax aller Dateien, Test-Datenbank anlegen, Server testweise starten und ansprechen.
+   Schlägt das fehl, wird nichts ausgeliefert. (Läuft auch bei jedem Pull Request.)
+2. **Ausliefern:** per SSH auf den Server, neuen Stand einspielen, `npm install`, `pm2 restart`.
+3. **Gesundheits-Check** (`/api/health`): Startet der neue Stand nicht, wird automatisch der vorherige
+   wiederhergestellt – der Durchlauf wird rot und GitHub schickt eine E-Mail.
+
+Unangetastet bleiben `backend/.env`, `node_modules`, hochgeladene Dateien (`~/uploads`) und alles
+andere, was nicht im Git liegt. Ist der Server-Ordner ein Git-Klon mit Zugriff auf GitHub, wird per Git
+aktualisiert; sonst wird der Stand als Archiv hochgeladen (der Server braucht dann keinen GitHub-Zugang).
+Lokale Änderungen an Projektdateien auf dem Server werden nie überschrieben – die Auslieferung bricht dann ab.
+
+### Einmalig einrichten (ca. 5 Minuten)
+
+**1. Auf dem Server** (per SSH angemeldet) einen eigenen Schlüssel für GitHub anlegen:
+```bash
+ssh-keygen -t ed25519 -N "" -f ~/.ssh/github_deploy -C github-actions
+cat ~/.ssh/github_deploy.pub >> ~/.ssh/authorized_keys
+cat ~/.ssh/github_deploy          # privater Schlüssel → Secret DEPLOY_SSH_KEY
+```
+
+**2. Fingerabdruck des Servers** (auf deinem eigenen Rechner, Port ggf. anpassen):
+```bash
+ssh-keyscan -p 22 DEIN-SERVER        # Ausgabe → Secret DEPLOY_KNOWN_HOSTS
+```
+
+**3. In GitHub:** Repository → Settings → Secrets and variables → Actions → „New repository secret“:
+
+| Secret | Inhalt | Beispiel |
+|---|---|---|
+| `DEPLOY_HOST` | Adresse des Servers | `leads.novaflowservices.de` oder IP |
+| `DEPLOY_USER` | SSH-Benutzername | `u123456789` |
+| `DEPLOY_PATH` | Ordner des CRM auf dem Server (enthält `backend/`) | `~/leadhunter` |
+| `DEPLOY_SSH_KEY` | kompletter privater Schlüssel aus Schritt 1 (inkl. `-----BEGIN…`/`-----END…`) | |
+| `DEPLOY_PORT` | nur wenn nicht 22 (Hostinger: meist `65002`) | `65002` |
+| `DEPLOY_KNOWN_HOSTS` | Ausgabe aus Schritt 2 (empfohlen, schützt vor gefälschtem Server) | |
+
+Heißt der pm2-Prozess nicht `leadhunter`, zusätzlich unter „Variables“ `DEPLOY_PM2_NAME` anlegen.
+
+**4. Testen:** Repository → Actions → „Auslieferung“ → „Run workflow“. Danach läuft es bei jedem Merge
+in `main` automatisch. Solange die Secrets fehlen, wird nur geprüft und nicht ausgeliefert.
+
+Voraussetzungen auf dem Server: Node.js 20+, pm2, `backend/.env` ist eingerichtet.
+
+---
+
 ## Schritt 6 — Ersten Admin anlegen
 
 1. Browser öffnen: `https://leads.novaflowservices.de/setup`
