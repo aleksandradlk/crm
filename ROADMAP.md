@@ -30,6 +30,7 @@ und CentralStationCRM (Bewertungen von Vertrieblern auf G2, Capterra, OMR, Trust
 - [x] Dubletten-Check (Telefon, E-Mail, Website) bei Anlegen, Import, KI-Generierung + Zusammenführen
 - [x] Wähllisten: gespeicherte Filter direkt im Anrufmodus abtelefonieren
 - [x] Eingehende Anrufe: Anrufer erkennen, im Browser annehmen, verpasste Anrufe als Rückruf-Aufgabe
+- [x] Automatische Auslieferung auf den Server (GitHub Actions, mit Test vorher und Rollback)
 
 ## Später
 | Feature | Nutzen | Aufwand |
@@ -46,4 +47,3 @@ und CentralStationCRM (Bewertungen von Vertrieblern auf G2, Capterra, OMR, Trust
 | Inline-Bearbeitung in Listen | Felder direkt in der Tabelle ändern, weniger Klicks | klein |
 | Server-seitige Suche und Seiten | Admin-Listen auch bei vielen tausend Leads schnell und vollständig | mittel |
 | Sichtbarkeit einstellbar | Festlegen, ob Vertriebler alle Leads oder nur eigene + freie sehen | klein |
-| Automatische Auslieferung | Nach dem Mergen automatisch auf den Server (GitHub Action mit SSH) | klein |

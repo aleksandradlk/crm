@@ -115,6 +115,16 @@ app.use('/api/deals',           dealRoutes);
 app.use('/api/call-lists',      callListRoutes);
 app.use('/api/today',           todayRoutes);
 
+// ── Gesundheits-Check (für die automatische Auslieferung) ─────
+app.get('/api/health', async (req, res) => {
+  try {
+    await require('./db').query('SELECT 1');
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(503).json({ ok: false, error: 'Datenbank nicht erreichbar' });
+  }
+});
+
 // ── SPA Fallback ──────────────────────────────────────────────
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not found' });
