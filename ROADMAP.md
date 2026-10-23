@@ -30,7 +30,7 @@ und CentralStationCRM (Bewertungen von Vertrieblern auf G2, Capterra, OMR, Trust
 - [x] Dubletten-Check (Telefon, E-Mail, Website) bei Anlegen, Import, KI-Generierung + Zusammenführen
 - [x] Wähllisten: gespeicherte Filter direkt im Anrufmodus abtelefonieren
 - [x] Eingehende Anrufe: Anrufer erkennen, im Browser annehmen, verpasste Anrufe als Rückruf-Aufgabe
-- [x] Automatische Auslieferung auf den Server (GitHub Actions, mit Test vorher und Rollback)
+- [x] Automatische Prüfung jedes Pull Requests (Test-Datenbank, CRM testweise starten) vor dem Live-Gang über Hostinger
 
 ## Später
 | Feature | Nutzen | Aufwand |
