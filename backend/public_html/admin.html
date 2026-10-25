@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf30">
+<link rel="stylesheet" href="/shared/style.css?v=nf31">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -601,18 +601,18 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf30"></script>
-<script src="/shared/dialer.js?v=nf30"></script>
-<script src="/shared/deals.js?v=nf30"></script>
-<script src="/shared/calllists.js?v=nf30"></script>
-<script src="/shared/today.js?v=nf30"></script>
-<script src="/shared/duplicates.js?v=nf30"></script>
-<script src="/shared/wiki.js?v=nf30"></script>
-<script src="/shared/lines.js?v=nf30"></script>
-<script src="/shared/finder.js?v=nf30"></script>
-<script src="/shared/board.js?v=nf30"></script>
-<script src="/shared/integrations.js?v=nf30"></script>
-<script src="/shared/startklar.js?v=nf30"></script>
+<script src="/shared/api.js?v=nf31"></script>
+<script src="/shared/dialer.js?v=nf31"></script>
+<script src="/shared/deals.js?v=nf31"></script>
+<script src="/shared/calllists.js?v=nf31"></script>
+<script src="/shared/today.js?v=nf31"></script>
+<script src="/shared/duplicates.js?v=nf31"></script>
+<script src="/shared/wiki.js?v=nf31"></script>
+<script src="/shared/lines.js?v=nf31"></script>
+<script src="/shared/finder.js?v=nf31"></script>
+<script src="/shared/board.js?v=nf31"></script>
+<script src="/shared/integrations.js?v=nf31"></script>
+<script src="/shared/startklar.js?v=nf31"></script>
 <script>
 let allLeads = [], allUsers = [], editingUserId = null;
 let panelDirty = false;
@@ -1193,7 +1193,7 @@ let _autoDurSec = null, _autoDurMin = '';
 
 async function startCall(leadId, phone) {
   // Telefonie im Browser aktiv → direkt aus dem CRM anrufen
-  if (Softphone.isEnabled()) {
+  if (Softphone.canDial()) {
     const label = (_panelLead && _panelLead.id === leadId ? _panelLead.company : null)
       || (allLeads.find(x => x.id === leadId) || {}).company || '';
     Softphone.dial({
@@ -1203,8 +1203,11 @@ async function startCall(leadId, phone) {
     return;
   }
   try {
+    Softphone.hinweisOhneNummer();
     const r = await api('POST', `/leads/${leadId}/calls/start`);
     openCallDoc(leadId, phone, r.id, null);
+    // Über die Telefon-App wählen (Handy direkt, PC z. B. über Smartphone-Link)
+    window.location.href = 'tel:' + String(phone).replace(/[^\d+]/g, '');
   } catch(e) {
     showToast(e.message, 'err');
   }

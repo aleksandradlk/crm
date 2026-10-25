@@ -189,7 +189,7 @@ const Dialer = {
   async call() {
     const l = this.lead;
     if (!l) return;
-    if (Softphone.isEnabled()) {
+    if (Softphone.canDial()) {
       Softphone.dial({
         leadId: l.id, phone: l.phone, label: l.company,
         onEnd: ({ callLogId, answered, durationSec }) => {
@@ -205,6 +205,7 @@ const Dialer = {
       return;
     }
     // Ohne Browser-Telefonie: Nummer über die Telefon-App des Rechners wählen
+    Softphone.hinweisOhneNummer();
     try {
       const r = await api('POST', `/leads/${l.id}/calls/start`);
       this.callLogId = r.id;
