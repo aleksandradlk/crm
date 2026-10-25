@@ -320,11 +320,22 @@ Neue Leads werden auf Dubletten geprüft (409 mit `duplicate_id`, außer `allow_
   „Kein Interesse“ schließt offene Deals als verloren.
 
 ### Closer kann:
-- Nur eigene (zugewiesene) Leads sehen
+- Nur eigene (zugewiesene) Leads sehen – mit ihren Deals und Summen; Leads der Kollegen liefert der Server gar nicht aus
+- Freie Leads (ohne Zuständigen) sehen und übernehmen – abschaltbar unter Einstellungen → „Was Closer sehen“; einzelnen Closern gibt „Alle Leads sehen“ (Benutzer) den vollen Blick
+- Selbst generierte Leads gehören automatisch dem, der sie generiert hat
+- Weist der Admin Leads einem anderen Closer zu (z. B. wenn jemand aufhört), sieht der neue den kompletten Verlauf; offene Deals und Wiedervorlagen gehen mit
 - Status setzen: Neu / Kontaktiert / Nicht erreicht / Kein Interesse / Rückruf / Kunde
 - Kommentare pro Lead schreiben
 - Reminder setzen (In-App + E-Mail)
 - Keine Lead-Generierung, keine anderen User sehen
+
+### Startklar-Check (Admin):
+- Administration → Startklar-Check: prüft live Twilio (Testkonto? Deutschland freigegeben? Unterlagen für deutsche Nummern?), Absendernummer, BASE_URL, E-Mail-Versand (SMTP-Anmeldung), Node-Version, Angebote & Rechnungen, Daten aus dem Angebotstool, Closer (Nummer, Leads, erste Anmeldung), Wissensdatenbank, Leitfaden, Vorlagen
+- Rot = fehlt, gelb = Hinweis, grün = erledigt; jeder Punkt mit Knopf zum Beheben. Offene Punkte stehen auch oben auf dem Dashboard
+
+### Sicherungen aus dem Angebotstool einspielen:
+- Liegt das Angebotstool auf einem anderen Hosting-Paket, kann das CRM nicht direkt abgleichen. Dann unter Angebote & Rechnungen → „Sicherung einspielen“ die beiden Dateien aus der Sicherungs-Mail wählen (`NovaFlow-Abrechnung-Daten_….json` und `Angebotstool-Kundenkonten_….json`, auch beide auf einmal)
+- Es wird nur ergänzt, nie überschrieben. Alte Angebote/Rechnungen aus dem früheren KI-Generator erscheinen in den Kundenkonten wie im Tool
 
 ### Sicherheit:
 - Auto-Logout nach 15 Min. Inaktivität (konfigurierbar in .env)

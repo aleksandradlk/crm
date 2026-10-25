@@ -30,11 +30,8 @@ function parseCsv(text, delim) {
   return rows;
 }
 
-function canView(user, lead) {
-  if (user.role === 'admin') return true;
-  if (user.can_view_all_leads) return true;
-  return lead.assigned_to === user.id || lead.assigned_to === null;
-}
+const sicht = require('../helpers/sichtbarkeit');
+const canView = sicht.darfSehen;
 
 // ── GET /api/leads ──────────────────────────────────────────
 router.get('/', auth, async (req, res) => {
@@ -50,8 +47,9 @@ router.get('/', auth, async (req, res) => {
            FROM leads l
            LEFT JOIN users u1 ON u1.id = l.assigned_to
            LEFT JOIN users u2 ON u2.id = l.created_by`;
-  const params = [];
-  const where  = ['l.archived_at IS NULL'];
+  const scope = sicht.leadFilter(req.user);
+  const params = [...scope.params];
+  const where  = ['l.archived_at IS NULL', scope.sql];
 
   if (status && VALID_STATUSES.includes(status)) {
     where.push('l.status = ?');
@@ -384,7 +382,7 @@ router.post('/:id/outcome', auth, async (req, res) => {
     const [[lead]] = await db.query('SELECT id, status, phone, assigned_to FROM leads WHERE id=? AND archived_at IS NULL', [leadId]);
     if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
     // Freier Lead (z.B. aus einer Wählliste): wer ihn anruft, übernimmt ihn
-    if (lead.assigned_to === null) {
+    if (lead.assigned_to === null && sicht.darfSehen(req.user, lead)) {
       const [r] = await db.query('UPDATE leads SET assigned_to=? WHERE id=? AND assigned_to IS NULL', [req.user.id, leadId]);
       if (r.affectedRows) {
         lead.assigned_to = req.user.id;
@@ -544,7 +542,9 @@ router.post('/import', auth, adminOnly, multerMem.single('csv'), async (req, res
 router.post('/bulk', auth, async (req, res) => {
   if (req.user.role !== 'admin' && !req.user.can_generate_leads)
     return res.status(403).json({ error: 'Keine Berechtigung' });
-  const { leads, assigned_to } = req.body;
+  const { leads } = req.body;
+  // Selbst generierte Leads gehören dem Vertriebler, der sie generiert hat
+  const assigned_to = req.user.role === 'admin' ? (parseInt(req.body.assigned_to) || null) : req.user.id;
   if (!Array.isArray(leads) || !leads.length)
     return res.status(400).json({ error: 'Keine Leads übergeben' });
 
@@ -657,6 +657,7 @@ router.get('/:id', auth, async (req, res) => {
      WHERE l.id = ? AND l.archived_at IS NULL`, [id]
   );
   if (!lead) return res.status(404).json({ error: 'Nicht gefunden' });
+  if (!canView(req.user, lead)) return res.status(403).json({ error: 'Dieser Lead wird von einem Kollegen betreut.' });
 
   const [comments] = await db.query(
     `SELECT c.*, u.full_name, u.username FROM comments c
@@ -744,6 +745,8 @@ router.patch('/:id', auth, async (req, res) => {
   if (!updates.length) return res.status(400).json({ error: 'Nichts zu aktualisieren' });
   params.push(id);
   await db.query(`UPDATE leads SET ${updates.join(',')} WHERE id=?`, params);
+  if (allowed.includes('assigned_to') && req.body.assigned_to !== undefined)
+    await sicht.uebergeben(id, lead.assigned_to, parseInt(req.body.assigned_to) || null);
   if (['phone', 'email', 'website'].some(k => req.body[k] !== undefined)) await refreshNorm(id);
   await log(req.user.id, 'lead_update', 'lead', id, req.body, req.ip);
   res.json({ ok: true });
@@ -855,7 +858,9 @@ router.patch('/:id/assign', auth, async (req, res) => {
     const [[lead]] = await db.query('SELECT id, assigned_to FROM leads WHERE id=?', [id]);
     if (!lead) return res.status(404).json({ error: 'Nicht gefunden' });
 
+    let neu = req.user.id;
     if (req.user.role !== 'admin') {
+      if (!sicht.darfSehen(req.user, lead)) return res.status(403).json({ error: 'Freie Leads sind gerade nicht freigegeben.' });
       const [result] = await db.query(
         'UPDATE leads SET assigned_to=? WHERE id=? AND assigned_to IS NULL',
         [req.user.id, id]
@@ -863,9 +868,12 @@ router.patch('/:id/assign', auth, async (req, res) => {
       if (result.affectedRows === 0)
         return res.status(409).json({ error: 'Dieser Lead wurde bereits übernommen.' });
     } else {
-      await db.query('UPDATE leads SET assigned_to=? WHERE id=?', [req.user.id, id]);
+      // Admin: an die gewünschte Person (z. B. per Ziehen auf einen Vertriebler), sonst an sich selbst
+      if (req.body.assigned_to !== undefined) neu = parseInt(req.body.assigned_to) || null;
+      await db.query('UPDATE leads SET assigned_to=? WHERE id=?', [neu, id]);
+      await sicht.uebergeben(id, lead.assigned_to, neu);
     }
-    await log(req.user.id, 'lead_assign', 'lead', id, { assigned_to: req.user.id }, req.ip);
+    await log(req.user.id, 'lead_assign', 'lead', id, { assigned_to: neu }, req.ip);
     res.json({ ok: true });
   } catch(e) { console.error('Lead assign error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });

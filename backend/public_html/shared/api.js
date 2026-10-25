@@ -127,6 +127,7 @@ function customConfirm(message, { title = 'Bitte bestätigen', okLabel = 'Bestä
     const cancelBtn = document.getElementById('_customConfirmCancel');
     okBtn.textContent     = okLabel;
     cancelBtn.textContent = cancelLabel;
+    cancelBtn.style.display = cancelLabel ? '' : 'none';
     okBtn.className = danger ? 'btn btn-sm' : 'btn btn-primary btn-sm';
     okBtn.style.background    = danger ? 'var(--red)'  : '';
     okBtn.style.borderColor   = danger ? 'var(--red)'  : '';
@@ -1119,3 +1120,55 @@ async function saveCallerId(containerId) {
     if (btn) btn.disabled = false;
   }
 }
+
+// ── Suchfelder vor dem Ausfüllen durch den Browser schützen ──────────────
+// Passwort-Manager (Chrome, Safari, iPhone) tragen den gespeicherten
+// Benutzernamen gern ins erste Textfeld ein – bei uns das Suchfeld. Deshalb:
+// Suchfelder als Suche kennzeichnen, für Passwort-Manager sperren, bis zur
+// ersten Berührung schreibgeschützt halten und den eigenen Benutzernamen
+// wieder herausnehmen, falls der Browser ihn trotzdem einsetzt.
+(function suchfelderSchuetzen() {
+  const istSuche = el => el.tagName === 'INPUT' && (el.matches('.search-bar input, .kb-search input, input[type=search]') || /search|suche/i.test(el.id || ''));
+  const eigeneNamen = () => {
+    try {
+      const u = JSON.parse(localStorage.getItem('lh_user') || '{}');
+      return [u.username, u.email, u.full_name].filter(Boolean).map(s => String(s).trim().toLowerCase());
+    } catch (_) { return []; }
+  };
+  function schuetze(el) {
+    if (el.hasAttribute('data-af-schutz')) return;
+    el.setAttribute('data-af-schutz', '');
+    if (el.type === 'text') el.type = 'search';
+    el.setAttribute('autocomplete', 'off');
+    el.setAttribute('name', 'suche-' + Math.random().toString(36).slice(2, 8));
+    ['data-lpignore', 'data-1p-ignore', 'data-bwignore', 'data-form-type'].forEach(a => el.setAttribute(a, a === 'data-form-type' ? 'other' : 'true'));
+    el.setAttribute('autocorrect', 'off');
+    el.setAttribute('autocapitalize', 'off');
+    el.spellcheck = false;
+    if (!el.readOnly && document.activeElement !== el) {
+      el.readOnly = true;
+      const frei = () => { el.readOnly = false; };
+      ['touchstart', 'mousedown', 'focus', 'keydown'].forEach(ev => el.addEventListener(ev, frei, { once: true, passive: true }));
+    }
+  }
+  function leeren() {
+    const namen = eigeneNamen();
+    document.querySelectorAll('[data-af-schutz]').forEach(el => {
+      if (el.value && document.activeElement !== el && namen.includes(el.value.trim().toLowerCase())) {
+        el.value = '';
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+  }
+  function alle(root) { (root.querySelectorAll ? root.querySelectorAll('input') : []).forEach(el => { if (istSuche(el)) schuetze(el); }); }
+  function start() {
+    alle(document);
+    new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => {
+      if (n.nodeType !== 1) return;
+      if (n.tagName === 'INPUT' && istSuche(n)) schuetze(n); else alle(n);
+    }))).observe(document.body, { childList: true, subtree: true });
+    [300, 1000, 2500, 5000].forEach(ms => setTimeout(leeren, ms));
+    window.addEventListener('pageshow', () => setTimeout(leeren, 300));
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+})();

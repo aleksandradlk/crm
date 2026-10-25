@@ -121,6 +121,7 @@ app.use('/api/today',           todayRoutes);
 // Eigene Schnittstelle des CRM (API-Schlüssel) und deren Verwaltung
 const apiV1 = require('./routes/api-v1');
 app.use('/api/api-keys',        apiV1.keys);
+app.use('/api/startklar',       require('./routes/startklar'));
 app.use('/api/v1',              rateLimit({ windowMs: 60*1000, max: 300 }), apiV1.v1);
 
 // ── Abrechnung (Angebote, Rechnungen, Abos – nur Admin) ───────

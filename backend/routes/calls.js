@@ -59,7 +59,7 @@ router.get('/lead/:leadId', auth, async (req, res) => {
         'SELECT assigned_to FROM leads WHERE id=?', [leadId]
       );
       if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
-      if (lead.assigned_to !== null && lead.assigned_to !== req.user.id)
+      if (!require('../helpers/sichtbarkeit').darfSehen(req.user, lead))
         return res.status(403).json({ error: 'Kein Zugriff auf diesen Lead' });
     }
     const [rows] = await db.query(

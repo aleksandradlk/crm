@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf29">
+<link rel="stylesheet" href="/shared/style.css?v=nf30">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -52,6 +52,7 @@
       <div class="nav-item" data-tab="generate" onclick="showTab('generate')"><i class="fas fa-search"></i> Generieren</div>
       <div class="nav-sep"></div>
       <span class="nav-group-label">Administration</span>
+      <div class="nav-item" data-tab="startklar" onclick="showTab('startklar')"><i class="fas fa-rocket"></i> Startklar-Check <span id="startklarBadge" style="display:none;margin-left:auto" class="badge" title="Offene Punkte">0</span></div>
       <div class="nav-item" data-tab="users" onclick="showTab('users')"><i class="fas fa-users"></i> Benutzer</div>
       <div class="nav-item" data-tab="tracking" onclick="showTab('tracking')"><i class="fas fa-chart-line"></i> Tracking</div>
       <div class="nav-item" data-tab="tools" onclick="showTab('tools')"><i class="fas fa-toolbox"></i> Tools</div>
@@ -81,6 +82,7 @@
           <button class="btn btn-ghost btn-sm" onclick="loadDashboard()"><i class="fas fa-sync"></i> Aktualisieren</button>
         </div>
       </div>
+      <div id="dashStartklar"></div>
       <div id="dashboardContent"><div class="wiki-empty">Kennzahlen werden geladen …</div></div>
     </div>
 
@@ -94,7 +96,11 @@
     <div id="tab-abrechnung" class="tab-panel">
       <div class="page-header">
         <div><h1 data-eyebrow="Vertrieb">Angebote &amp; Rechnungen</h1><p class="page-desc">Angebote, Rechnungen, Mahnungen und Abos von NovaFlow – verknüpft mit deinen Leads und Deals.</p></div>
-        <div class="page-actions"><a class="btn btn-ghost btn-sm" href="/abrechnung" target="_blank" rel="noopener"><i class="fas fa-external-link-alt"></i> Eigenes Fenster</a></div>
+        <div class="page-actions">
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('abrSicherungDatei').click()" title="Sicherungsdateien aus dem Angebotstool (kommen per Mail) ins CRM übernehmen"><i class="fas fa-file-import"></i> Sicherung einspielen</button>
+          <input type="file" id="abrSicherungDatei" accept="application/json,.json" multiple hidden onchange="abrSicherungEinspielen(this)">
+          <a class="btn btn-ghost btn-sm" href="/abrechnung" target="_blank" rel="noopener"><i class="fas fa-external-link-alt"></i> Eigenes Fenster</a>
+        </div>
       </div>
       <div class="view-toggle abr-switch">
         <button id="abrSwNova" class="active" onclick="abrAnsicht('nova')"><i class="fas fa-building"></i> NovaFlow</button>
@@ -430,6 +436,7 @@
     </div>
 
     <div id="tab-integrationen" class="tab-panel"></div>
+    <div id="tab-startklar" class="tab-panel"></div>
 
     <div id="tab-tools" class="tab-panel">
       <div class="page-header">
@@ -541,11 +548,11 @@
     <button class="modal-close" onclick="closeUserModal()"><i class="fas fa-times"></i></button>
     <div class="modal-title" id="userModalTitle">Neuer Benutzer</div>
     <div class="form-group"><label>Vollständiger Name *</label><input type="text" id="u-name" class="form-control"></div>
-    <div class="form-group"><label>Benutzername *</label><input type="text" id="u-username" class="form-control"></div>
+    <div class="form-group"><label>Benutzername *</label><input type="text" id="u-username" class="form-control" autocomplete="off" autocapitalize="off" data-lpignore="true" data-1p-ignore></div>
     <div class="form-group"><label>E-Mail <span style="color:var(--text3);font-weight:400">(optional)</span></label><input type="email" id="u-email" class="form-control" placeholder="z.B. name@firma.de"></div>
     <div class="form-group"><label>Telefon *</label><input type="text" id="u-phone" class="form-control" placeholder="z.B. +49 152 123456"></div>
     <div class="form-group"><label>Nummer fürs Telefonieren im CRM</label><div id="u-line"></div></div>
-    <div class="form-group"><label>Passwort <span id="pwHint" style="color:var(--text3)">(leer = nicht ändern)</span></label><input type="password" id="u-password" class="form-control"></div>
+    <div class="form-group"><label>Passwort <span id="pwHint" style="color:var(--text3)">(leer = nicht ändern)</span></label><input type="password" id="u-password" class="form-control" autocomplete="new-password"></div>
     <div class="form-group"><label>Rolle</label>
       <select id="u-role" class="form-control" onchange="updatePermSection()">
         <option value="closer">Closer</option>
@@ -594,17 +601,18 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf29"></script>
-<script src="/shared/dialer.js?v=nf29"></script>
-<script src="/shared/deals.js?v=nf29"></script>
-<script src="/shared/calllists.js?v=nf29"></script>
-<script src="/shared/today.js?v=nf29"></script>
-<script src="/shared/duplicates.js?v=nf29"></script>
-<script src="/shared/wiki.js?v=nf29"></script>
-<script src="/shared/lines.js?v=nf29"></script>
-<script src="/shared/finder.js?v=nf29"></script>
-<script src="/shared/board.js?v=nf29"></script>
-<script src="/shared/integrations.js?v=nf29"></script>
+<script src="/shared/api.js?v=nf30"></script>
+<script src="/shared/dialer.js?v=nf30"></script>
+<script src="/shared/deals.js?v=nf30"></script>
+<script src="/shared/calllists.js?v=nf30"></script>
+<script src="/shared/today.js?v=nf30"></script>
+<script src="/shared/duplicates.js?v=nf30"></script>
+<script src="/shared/wiki.js?v=nf30"></script>
+<script src="/shared/lines.js?v=nf30"></script>
+<script src="/shared/finder.js?v=nf30"></script>
+<script src="/shared/board.js?v=nf30"></script>
+<script src="/shared/integrations.js?v=nf30"></script>
+<script src="/shared/startklar.js?v=nf30"></script>
 <script>
 let allLeads = [], allUsers = [], editingUserId = null;
 let panelDirty = false;
@@ -718,6 +726,7 @@ function showTab(name) {
   if (name === 'archive')  loadArchive();
   if (name === 'tools')    loadToolsTab();
   if (name === 'integrationen') { Integrationen.mount('tab-integrationen'); Integrationen.load(); }
+  if (name === 'startklar') { Startklar.mount('tab-startklar'); Startklar.load(); }
 }
 
 // ── PIPELINE (geteilt für Alle Leads + Meine Leads) ──────────
@@ -2065,7 +2074,7 @@ async function dropAssignLead(userId) {
   if (!_dragLeadId) return;
   hideDragAssignOverlay();
   try {
-    await api('PATCH', `/leads/${_dragLeadId}/assign`, { assigned_to: userId });
+    await api('PATCH', `/leads/${_dragLeadId}`, { assigned_to: userId });
     showToast(userId ? 'Lead zugewiesen ✓' : 'Zuweisung aufgehoben');
     loadLeads();
   } catch(e) { showToast('Fehler: ' + e.message, 'err'); }
@@ -2414,6 +2423,8 @@ async function openSettingsModal() {
     const elScript = document.getElementById('settingCallScript');
     if (elGoal)   elGoal.value   = settings.daily_call_goal || '50';
     if (elScript) elScript.value = settings.call_script || '';
+    const elFrei = document.getElementById('settingFreieLeads');
+    if (elFrei) elFrei.checked = settings.closer_freie_leads !== '0';
     const elMaint = document.getElementById('settingMaintenanceMode');
     const elMaintUntil = document.getElementById('settingMaintenanceUntil');
     if (elMaint) elMaint.checked = settings.maintenance_mode === 'true';
@@ -2436,6 +2447,7 @@ async function saveNotifSettings() {
     await api('PATCH', `/users/${me.id}/notify`, { notify_email, phone, email });
     await api('PATCH', '/settings/daily_call_goal', { value: goal });
     await api('PATCH', '/settings/call_script',     { value: script });
+    await api('PATCH', '/settings/closer_freie_leads', { value: document.getElementById('settingFreieLeads')?.checked ? '1' : '0' });
     const maintMode  = document.getElementById('settingMaintenanceMode')?.checked ? 'true' : 'false';
     const maintUntil = document.getElementById('settingMaintenanceUntil')?.value || '';
     await api('PATCH', '/settings/maintenance_mode',  { value: maintMode });
@@ -2520,7 +2532,7 @@ async function ladeAbrKonten() {
     if (!d.konten.length) {
       el.innerHTML = `<div class="wiki-empty"><i class="fas fa-store-slash"></i>${d.gefunden
         ? 'Im Angebotstool gibt es noch keine Kundenkonten.'
-        : `Das Angebotstool wurde auf dem Server nicht gefunden (gesucht: <span class="mono">${escHtml(d.ordner)}</span>). Läuft es auf einem anderen Hosting-Paket, sag Bescheid.`}</div>`;
+        : `Das Angebotstool liegt nicht auf diesem Server, deshalb kann das CRM nicht direkt abgleichen.<br>Spiel einfach die Datei <span class="mono">Angebotstool-Kundenkonten_….json</span> aus der Sicherungs-Mail ein.<br><button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="document.getElementById('abrSicherungDatei').click()"><i class="fas fa-file-import"></i> Sicherung einspielen</button>`}</div>`;
       return;
     }
     const eur = v => Number(v || 0).toLocaleString('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
@@ -2554,8 +2566,34 @@ async function ladeAbrKonten() {
           </div>
         </article>`;
       }).join('')}</div>
-      <p class="konto-hinweis"><i class="fas fa-sync"></i> Stand vom ${d.abgleich ? fmtDate(d.abgleich.am) : '—'} – das CRM gleicht alle 3 Stunden mit dem Angebotstool ab. Bearbeitet wird weiterhin dort.</p>`;
+      <p class="konto-hinweis">${d.gefunden
+        ? `<i class="fas fa-sync"></i> Stand vom ${d.abgleich ? fmtDate(d.abgleich.am) : '—'} – das CRM gleicht alle 3 Stunden mit dem Angebotstool ab. Bearbeitet wird weiterhin dort.`
+        : `<i class="fas fa-file-import"></i> Stand aus der zuletzt eingespielten Sicherung. Neuere Daten: die nächste Sicherungs-Mail des Angebotstools oben über „Sicherung einspielen“ übernehmen. Bearbeitet wird weiterhin im Tool.`}</p>`;
   } catch (e) { el.innerHTML = `<div class="wiki-empty" style="color:var(--red)">${escHtml(e.message)}</div>`; }
+}
+// Sicherungsdateien des Angebotstools einspielen (beide Dateien aus der Sicherungs-Mail):
+// NovaFlow-Abrechnung-Daten_….json → Angebote & Rechnungen von NovaFlow,
+// Angebotstool-Kundenkonten_….json → Kundenkonten. Es wird nur ergänzt, nie überschrieben.
+async function abrSicherungEinspielen(input) {
+  const dateien = [...input.files];
+  input.value = '';
+  if (!dateien.length) return;
+  const zeilen = [];
+  for (const f of dateien) {
+    let daten;
+    try { daten = JSON.parse(await f.text()); } catch (_) { zeilen.push(`✖ ${f.name}: keine gültige Sicherungsdatei`); continue; }
+    if (!['abrechnung', 'angebot-tool'].includes(daten.tool)) { zeilen.push(`✖ ${f.name}: keine Sicherung aus dem Angebotstool`); continue; }
+    try {
+      const r = await api('POST', '/abrechnung/wiederherstellen', { daten });
+      zeilen.push(r.art === 'kundenkonten'
+        ? `✓ Kundenkonten: ${r.kundenkonten} Konten, ${r.angebote} Angebote, ${r.rechnungen} Rechnungen neu${r.vorhanden ? ` · ${r.vorhanden} schon da` : ''}`
+        : `✓ NovaFlow: ${r.eingespielt} Datensätze neu${r.uebersprungen ? ` · ${r.uebersprungen} schon da` : ''}`);
+    } catch (e) { zeilen.push(`✖ ${f.name}: ${e.message}`); }
+  }
+  await customConfirm(zeilen.join('\n'), { title: 'Sicherung eingespielt', okLabel: 'OK', cancelLabel: '' });
+  const frame = document.getElementById('abrechnungFrame');
+  if (frame && frame.src) frame.contentWindow.location.reload();
+  if (!document.getElementById('abrKonten').hidden) ladeAbrKonten();
 }
 function abrKontoOeffnen(slug) {
   const k = _abrKonten.find(x => x.slug === slug);
@@ -2969,6 +3007,7 @@ Softphone.loadConfig().then(() => Softphone.initIncoming({
 checkReminderNotifications();
 setInterval(checkReminderNotifications, 2 * 60 * 1000);
 setInterval(loadDashboard, 60000);
+Startklar.vorab();
 
 // ── EINSTELLUNGEN ─────────────────────────────────────────────
 async function loadAppSettings() {
@@ -3274,6 +3313,13 @@ document.getElementById('addLeadModal').addEventListener('click', function(e){ i
       <label>Leitfaden-Text <span style="font-size:11px;color:var(--text3);font-weight:400">(wird im Panel der Closer angezeigt)</span></label>
       <textarea id="settingCallScript" class="form-control" rows="6" placeholder="1. Hallo, mein Name ist...&#10;2. Ich rufe an wegen...&#10;3. Haben Sie kurz Zeit?" style="resize:vertical;font-size:12px;line-height:1.6"></textarea>
     </div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+    <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:var(--text2)"><i class="fas fa-user-shield" style="color:var(--accent);margin-right:6px"></i>Was Closer sehen</div>
+    <div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:6px">Jeder Closer sieht nur seine eigenen Leads, Deals und Summen. Selbst generierte Leads gehören automatisch dem, der sie generiert hat. Weist du Leads einem anderen Closer zu, sieht er den kompletten Verlauf, offene Deals und Wiedervorlagen gehen mit. Einzelnen Closern kannst du unter Benutzer „Alle Leads sehen“ geben.</div>
+    <label style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer;font-size:13px">
+      <input type="checkbox" id="settingFreieLeads" style="accent-color:var(--accent)">
+      Freie Leads (ohne Zuständigen) für Closer sichtbar <span style="font-size:11px;color:var(--text3);font-weight:400">(dann können sie sich welche nehmen)</span>
+    </label>
     <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
     <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)"><i class="fas fa-tools" style="color:var(--amber);margin-right:6px"></i>System-Wartung</div>
     <label style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer;font-size:13px">

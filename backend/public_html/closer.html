@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf29">
+<link rel="stylesheet" href="/shared/style.css?v=nf30">
 <style>
 .notif-panel{position:fixed;top:0;right:0;bottom:0;width:340px;background:var(--bg2);border-left:1px solid var(--border2);z-index:150;transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;padding:20px}
 .notif-panel.open{transform:translateX(0)}
@@ -271,7 +271,7 @@
       <div id="allLeadsTableView">
       <div class="card" id="clAllLeadsTableCard">
         <div class="card-header">
-          <div class="card-title"><i class="fas fa-list"></i> Alle Leads <span class="badge" id="allLeadCount">0</span></div>
+          <div class="card-title"><i class="fas fa-list"></i> <span id="allLeadTitle">Alle Leads</span> <span class="badge" id="allLeadCount">0</span></div>
           <span class="select-hint" id="clAllSelectHint" style="display:none"><i class="fas fa-mouse-pointer"></i> Klick wählt einen Lead aus, <kbd>Umschalt</kbd> + Klick einen ganzen Bereich.</span>
         </div>
         <div class="table-wrap">
@@ -458,15 +458,15 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf29"></script>
-<script src="/shared/dialer.js?v=nf29"></script>
-<script src="/shared/deals.js?v=nf29"></script>
-<script src="/shared/calllists.js?v=nf29"></script>
-<script src="/shared/today.js?v=nf29"></script>
-<script src="/shared/duplicates.js?v=nf29"></script>
-<script src="/shared/wiki.js?v=nf29"></script>
-<script src="/shared/finder.js?v=nf29"></script>
-<script src="/shared/board.js?v=nf29"></script>
+<script src="/shared/api.js?v=nf30"></script>
+<script src="/shared/dialer.js?v=nf30"></script>
+<script src="/shared/deals.js?v=nf30"></script>
+<script src="/shared/calllists.js?v=nf30"></script>
+<script src="/shared/today.js?v=nf30"></script>
+<script src="/shared/duplicates.js?v=nf30"></script>
+<script src="/shared/wiki.js?v=nf30"></script>
+<script src="/shared/finder.js?v=nf30"></script>
+<script src="/shared/board.js?v=nf30"></script>
 <script>
 const ME = Auth.getUser();
 const CAN = {
@@ -479,6 +479,7 @@ const CAN = {
   manageTemplates:     Auth.can('can_manage_email_templates'),
   abrechnung:          Auth.can('can_abrechnung'),
 };
+leadSichtAnwenden(ME?.freie_leads !== false);
 
 function copyPhone(phone) {
   navigator.clipboard.writeText(phone)
@@ -575,6 +576,8 @@ if (ME?.can_abrechnung)     { const n = document.getElementById('navAbrechnung')
       manageTemplates: !!fresh.can_manage_email_templates,
       abrechnung:      !!fresh.can_abrechnung,
     });
+    leadSichtAnwenden(fresh.freie_leads !== false);
+    if (allLeads.length) { renderAllLeads(teamLeads()); updateAllStats(teamLeads()); }
     const n3 = document.getElementById('navAbrechnung');
     if (n3) n3.style.display = fresh.can_abrechnung ? '' : 'none';
     if (typeof Deals !== 'undefined' && Deals.opts) Deals.opts.onAngebot = fresh.can_abrechnung ? (deal => angebotErstellen(deal.lead_id, deal.id)) : null;
@@ -674,7 +677,7 @@ function showSection(name) {
   if (name === 'chat')      loadChats();
   if (name === 'feedback')  { Board.mount({ rootId: 'sec-feedback', isAdmin: false }); Board.load(); }
   if (name === 'myLeads') { const f = document.getElementById('mySearch'); if (f) f.value = ''; if (allLeads.length) filterMyLeads(); }
-  if (name === 'allLeads')  { const f = document.getElementById('allSearch'); if (f) f.value = ''; const sf = document.getElementById('allStatusFilter'); if (sf) sf.value = ''; const af = document.getElementById('allAssignFilter'); if (af) af.value = ''; if (allLeads.length) renderAllLeads(allLeads); }
+  if (name === 'allLeads')  { const f = document.getElementById('allSearch'); if (f) f.value = ''; const sf = document.getElementById('allStatusFilter'); if (sf) sf.value = ''; const af = document.getElementById('allAssignFilter'); if (af) af.value = ''; if (allLeads.length) renderAllLeads(teamLeads()); }
 }
 
 // ── LOADS ─────────────────────────────────────────────────────
@@ -687,7 +690,7 @@ function setAllLeadsView(mode) {
   document.getElementById('allLeadsPipelineView').style.display = mode === 'pipeline' ? '' : 'none';
   document.getElementById('allViewTableBtn').classList.toggle('active', mode === 'table');
   document.getElementById('allViewPipelineBtn').classList.toggle('active', mode === 'pipeline');
-  if (mode === 'pipeline') renderPipeline(_visibleAllLeads.length ? _visibleAllLeads : allLeads, 'allPipelineBoard');
+  if (mode === 'pipeline') renderPipeline(_visibleAllLeads.length ? _visibleAllLeads : teamLeads(), 'allPipelineBoard');
 }
 
 function setMyLeadsView(mode) {
@@ -732,9 +735,9 @@ async function loadLeads() {
     allLeads = all.concat(mine.filter(l => !seen.has(l.id)));
     populateAssignFilter();
     filterMyLeads();
-    renderAllLeads(allLeads);
+    renderAllLeads(teamLeads());
     updateMyStats(myLeads());
-    updateAllStats(allLeads);
+    updateAllStats(teamLeads());
     updateReminderBadge();
   } catch (e) {
     ['myLeadsBody','allLeadsBody'].forEach(id => {
@@ -747,6 +750,26 @@ async function loadLeads() {
     });
     showToast(e.message, 'err');
   }
+}
+
+// Ohne „Alle Leads sehen“ zeigt der zweite Bereich nur freie Leads (die Leads
+// der Kollegen liefert der Server gar nicht erst aus)
+function teamLeads() { return CAN.viewAll ? allLeads : allLeads.filter(l => !l.assigned_to); }
+function leadSichtAnwenden(freie) {
+  const nav = document.querySelector('.nav-item[data-sec="allLeads"]');
+  const h1 = document.querySelector('#sec-allLeads h1'), desc = document.querySelector('#sec-allLeads .page-desc');
+  const nur = !CAN.viewAll;
+  if (nav) {
+    nav.innerHTML = nur ? '<i class="fas fa-hand-pointer"></i> Freie Leads' : '<i class="fas fa-list"></i> Alle Leads';
+    nav.style.display = nur && !freie ? 'none' : '';
+  }
+  if (h1) h1.textContent = nur ? 'Freie Leads' : 'Alle Leads';
+  if (desc) desc.textContent = nur ? 'Leads ohne Zuständigen. Wenn du einen übernimmst, gehört er dir.' : 'Alle Leads im System. Freie Leads kannst du direkt übernehmen.';
+  document.getElementById('allAssignFilter').style.display = nur ? 'none' : '';
+  document.querySelectorAll('#allQuickFilters .qf-btn')[2].style.display = nur ? 'none' : '';
+  const kpis = document.querySelector('#sec-allLeads .dash-kpis');
+  if (kpis) kpis.style.display = nur ? 'none' : '';
+  document.getElementById('allLeadTitle').textContent = nur ? 'Freie Leads' : 'Alle Leads';
 }
 
 const STATUS_PRIORITY = { rueckruf:0, nicht_erreicht:1, kontaktiert:2, neu:3, kunde:4, kein_interesse:5 };
@@ -887,7 +910,7 @@ async function onColDrop(e, status, boardId = 'pipelineBoard') {
   const skipped = wanted.filter(id => { const l = allLeads.find(x => x.id === id); return l && !canDragLead(l); }).length;
   if (!ids.length) { if (skipped) showToast('Nur eigene Leads lassen sich verschieben', 'err'); return; }
   ids.forEach(id => { const l = allLeads.find(x => x.id === id); if (l) l.status = status; });
-  const rerender = () => isAll ? renderPipeline(_visibleAllLeads.length ? _visibleAllLeads : allLeads, 'allPipelineBoard') : renderPipeline(myLeads());
+  const rerender = () => isAll ? renderPipeline(_visibleAllLeads.length ? _visibleAllLeads : teamLeads(), 'allPipelineBoard') : renderPipeline(myLeads());
   rerender();
   if (ids.length === 1 && !skipped) { await quickStatus(ids[0], status); rerender(); return; }
   const results = await Promise.allSettled(ids.map(id => api('PATCH', `/leads/${id}/status`, { status })));
@@ -902,7 +925,7 @@ function filterAllLeads() {
   const search = document.getElementById('allSearch').value.toLowerCase();
   const status = document.getElementById('allStatusFilter').value;
   const assign = document.getElementById('allAssignFilter').value;
-  let f = allLeads;
+  let f = teamLeads();
   if (search) f = f.filter(l => (l.company||'').toLowerCase().includes(search) || (l.phone||'').includes(search));
   if (status) f = f.filter(l => l.status === status);
   if (assign === 'none') f = f.filter(l => !l.assigned_to);
@@ -1013,9 +1036,9 @@ async function quickStatus(id, status) {
     const lead = allLeads.find(l => l.id === id);
     if (lead) { lead.status = status; lead.updated_at = new Date().toISOString(); }
     filterMyLeads();
-    renderAllLeads(allLeads);
+    renderAllLeads(teamLeads());
     updateMyStats(myLeads());
-    updateAllStats(allLeads);
+    updateAllStats(teamLeads());
     updateReminderBadge();
     showToast('Status aktualisiert ✓');
     if (status === 'rueckruf') showRueckrufPopupCl(id);
@@ -2341,11 +2364,11 @@ async function quickFilter(scope, type, btn) {
     else if (type === 'neu_woche') leads = leads.filter(l => l.status === 'neu' && new Date(l.created_at) >= weekAgo);
     renderMyLeads(leads);
   } else {
-    let leads = _visibleAllLeads.length ? _visibleAllLeads : allLeads;
-    if (type === 'rueckruf_heute') leads = allLeads.filter(l => l.status === 'rueckruf' && dueLeadIds.has(l.id));
-    else if (type === 'nicht_zugewiesen') leads = allLeads.filter(l => !l.assigned_to);
-    else if (type === 'neu_woche') leads = allLeads.filter(l => l.status === 'neu' && new Date(l.created_at) >= weekAgo);
-    else leads = allLeads;
+    let leads = _visibleAllLeads.length ? _visibleAllLeads : teamLeads();
+    if (type === 'rueckruf_heute') leads = teamLeads().filter(l => l.status === 'rueckruf' && dueLeadIds.has(l.id));
+    else if (type === 'nicht_zugewiesen') leads = teamLeads().filter(l => !l.assigned_to);
+    else if (type === 'neu_woche') leads = teamLeads().filter(l => l.status === 'neu' && new Date(l.created_at) >= weekAgo);
+    else leads = teamLeads();
     renderAllLeads(leads);
   }
 }
@@ -2493,9 +2516,9 @@ async function submitCreateUser() {
     </div>
 
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:10px">Passwort ändern</div>
-    <div class="form-group"><label>Aktuelles Passwort</label><input type="password" id="pw-current" class="form-control"></div>
-    <div class="form-group"><label>Neues Passwort</label><input type="password" id="pw-new" class="form-control"></div>
-    <div class="form-group" style="margin-bottom:4px"><label>Neues Passwort wiederholen</label><input type="password" id="pw-new2" class="form-control"></div>
+    <div class="form-group"><label>Aktuelles Passwort</label><input type="password" id="pw-current" class="form-control" autocomplete="current-password"></div>
+    <div class="form-group"><label>Neues Passwort</label><input type="password" id="pw-new" class="form-control" autocomplete="new-password"></div>
+    <div class="form-group" style="margin-bottom:4px"><label>Neues Passwort wiederholen</label><input type="password" id="pw-new2" class="form-control" autocomplete="new-password"></div>
     <div style="color:var(--red);font-size:12px;min-height:16px;margin-bottom:12px" id="pwErr"></div>
     <button class="btn btn-ghost btn-sm" style="margin-bottom:20px" onclick="changePassword()"><i class="fas fa-key"></i> Passwort speichern</button>
 

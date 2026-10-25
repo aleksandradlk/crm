@@ -138,6 +138,7 @@ router.get('/me', auth, async (req, res) => {
       [req.user.id]
     );
     if (!user) return res.status(404).json({ error: 'Nicht gefunden' });
+    user.freie_leads = require('../helpers/sichtbarkeit').freieLeadsSichtbar();
     res.json(user);
   } catch(e) { console.error('Auth /me error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });

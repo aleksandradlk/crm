@@ -36,6 +36,9 @@ und CentralStationCRM (Bewertungen von Vertrieblern auf G2, Capterra, OMR, Trust
 - [x] Abgleich mit dem Angebotstool (alles inkl. Sicherungen und Betriebe-Archiv), Recht „Angebote & Rechnungen“ für Closer
 - [x] Eigene Telefonnummer je Vertriebler, vom Admin zugeteilt (ohne Bestätigung), Anrufe darauf klingeln nur bei ihm
 - [x] Neue Oberflächen: Leads generieren (Suche wie eine Suchmaschine, Treffer abwählbar), Feedback-Board als Spalten, Rücksprachen mit Vorschau, Tools als Karten
+- [x] Closer sehen nur eigene Leads, Deals und Summen (freie Leads abschaltbar), Übergabe mit Verlauf beim Neuzuweisen
+- [x] Startklar-Check für den Admin, Sicherungen aus dem Angebotstool per Datei einspielen, Angebote & Rechnungen im Dark Mode
+- [x] Suchfelder vor Browser-Autofill geschützt (kein Benutzername mehr in der Suche)
 
 ## Später
 | Feature | Nutzen | Aufwand |
@@ -51,4 +54,3 @@ und CentralStationCRM (Bewertungen von Vertrieblern auf G2, Capterra, OMR, Trust
 | Mehrere Rufnummern und Spam-Schutz | Anrufe auf mehrere Nummern verteilen, damit keine Nummer als Spam markiert wird | klein–mittel |
 | Inline-Bearbeitung in Listen | Felder direkt in der Tabelle ändern, weniger Klicks | klein |
 | Server-seitige Suche und Seiten | Admin-Listen auch bei vielen tausend Leads schnell und vollständig | mittel |
-| Sichtbarkeit einstellbar | Festlegen, ob Vertriebler alle Leads oder nur eigene + freie sehen | klein |
