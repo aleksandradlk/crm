@@ -801,6 +801,14 @@ const Softphone = {
   },
   isEnabled() { return !!(this.config && this.config.enabled); },
   hasCallerId() { return !!(this.config && this.config.effective_caller_id); },
+  // Aus dem Browser anrufen geht erst mit Absendernummer. Solange Twilio die
+  // Nummern noch prüft, wählen alle über ihr Telefon – der Anruf wird trotzdem erfasst.
+  canDial() { return this.isEnabled() && this.hasCallerId(); },
+  hinweisOhneNummer() {
+    if (!this.isEnabled() || this.hasCallerId() || this._hinweisGezeigt) return;
+    this._hinweisGezeigt = true;
+    showToast('Noch keine Nummer im CRM – der Anruf läuft über dein Telefon und wird trotzdem erfasst.');
+  },
 
   _loadSdk() {
     if (window.Twilio && window.Twilio.Device) return Promise.resolve();

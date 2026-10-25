@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf30">
+<link rel="stylesheet" href="/shared/style.css?v=nf31">
 <style>
 .notif-panel{position:fixed;top:0;right:0;bottom:0;width:340px;background:var(--bg2);border-left:1px solid var(--border2);z-index:150;transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;padding:20px}
 .notif-panel.open{transform:translateX(0)}
@@ -458,15 +458,15 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf30"></script>
-<script src="/shared/dialer.js?v=nf30"></script>
-<script src="/shared/deals.js?v=nf30"></script>
-<script src="/shared/calllists.js?v=nf30"></script>
-<script src="/shared/today.js?v=nf30"></script>
-<script src="/shared/duplicates.js?v=nf30"></script>
-<script src="/shared/wiki.js?v=nf30"></script>
-<script src="/shared/finder.js?v=nf30"></script>
-<script src="/shared/board.js?v=nf30"></script>
+<script src="/shared/api.js?v=nf31"></script>
+<script src="/shared/dialer.js?v=nf31"></script>
+<script src="/shared/deals.js?v=nf31"></script>
+<script src="/shared/calllists.js?v=nf31"></script>
+<script src="/shared/today.js?v=nf31"></script>
+<script src="/shared/duplicates.js?v=nf31"></script>
+<script src="/shared/wiki.js?v=nf31"></script>
+<script src="/shared/finder.js?v=nf31"></script>
+<script src="/shared/board.js?v=nf31"></script>
 <script>
 const ME = Auth.getUser();
 const CAN = {
@@ -1168,7 +1168,7 @@ let _autoDurSecCl = null, _autoDurMinCl = '';
 
 async function startCallCl(leadId, phone) {
   // Telefonie im Browser aktiv → direkt aus dem CRM anrufen
-  if (Softphone.isEnabled()) {
+  if (Softphone.canDial()) {
     const label = (_panelLead && _panelLead.id === leadId ? _panelLead.company : null)
       || (allLeads.find(x => x.id === leadId) || {}).company || '';
     Softphone.dial({
@@ -1178,8 +1178,11 @@ async function startCallCl(leadId, phone) {
     return;
   }
   try {
+    Softphone.hinweisOhneNummer();
     const r = await api('POST', `/leads/${leadId}/calls/start`);
     openCallDocCl(leadId, phone, r.id, null);
+    // Über die Telefon-App wählen (Handy direkt, PC z. B. über Smartphone-Link)
+    window.location.href = 'tel:' + String(phone).replace(/[^\d+]/g, '');
   } catch(e) {
     showToast(e.message, 'err');
   }
