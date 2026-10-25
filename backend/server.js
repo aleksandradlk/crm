@@ -27,6 +27,7 @@ const dealRoutes           = require('./routes/deals');
 const callListRoutes       = require('./routes/calllists');
 const todayRoutes          = require('./routes/today');
 const termineRoutes        = require('./routes/termine');
+const zieleRoutes          = require('./routes/ziele');
 const { startReminderCron } = require('./cron/reminders');
 const { pollIncomingEmails } = require('./cron/emailPoller');
 const cron           = require('node-cron');
@@ -120,6 +121,7 @@ app.use('/api/deals',           dealRoutes);
 app.use('/api/call-lists',      callListRoutes);
 app.use('/api/today',           todayRoutes);
 app.use('/api/termine',        termineRoutes);
+app.use('/api/ziele',          zieleRoutes);
 // Eigene Schnittstelle des CRM (API-Schlüssel) und deren Verwaltung
 const apiV1 = require('./routes/api-v1');
 app.use('/api/api-keys',        apiV1.keys);
@@ -585,6 +587,14 @@ migrate(`CREATE TABLE IF NOT EXISTS appointments (
 )`).catch(() => {});
 migrate('ALTER TABLE reminders ADD COLUMN appointment_id INT NULL').catch(() => {});
 cron.schedule('* * * * *', () => termineRoutes.erinnern());
+
+// ── Ziele pro Closer (leer = Standard aus den Einstellungen) ──
+migrate("ALTER TABLE users ADD COLUMN goal_period VARCHAR(10) NULL").catch(() => {});
+migrate('ALTER TABLE users ADD COLUMN goal_calls INT NULL').catch(() => {});
+migrate('ALTER TABLE users ADD COLUMN goal_talks INT NULL').catch(() => {});
+migrate('ALTER TABLE users ADD COLUMN goal_results INT NULL').catch(() => {});
+migrate("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('ziel_gespraeche','10')").catch(() => {});
+migrate("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('ziel_ergebnisse','2')").catch(() => {});
 
 // ── Cron: Activity Log nach 7 Tagen bereinigen ───────────────
 cron.schedule('0 3 * * *', async () => {

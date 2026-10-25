@@ -2258,3 +2258,51 @@ body.dark .tr-status.s-warte { color: var(--accent2); }
   .tr-grid2, .tr-grid3 { grid-template-columns: 1fr; }
   .tr-cards { grid-template-columns: 1fr; padding: 12px; }
 }
+
+/* ── Ziele ─────────────────────────────────────────────────── */
+.zl-head { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text3); margin-bottom: 8px; }
+.zl-yay { text-transform: none; letter-spacing: 0; color: var(--green); font-size: 12px; }
+.zl-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.zl-item { min-width: 0; }
+.zl-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 12px; color: var(--text2); margin-bottom: 5px; }
+.zl-top i { margin-right: 6px; color: var(--text3); font-size: 11px; }
+.zl-top > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.zl-num { font-size: 12px; color: var(--text3); white-space: nowrap; }
+.zl-num b { font-size: 14px; color: var(--text); }
+.zl-bar { background: var(--bg3); border-radius: 99px; height: 8px; overflow: hidden; }
+.zl-bar > div { height: 100%; background: var(--accent); border-radius: 99px; transition: width .4s ease; }
+body.dark .zl-bar > div { background: var(--accent2); }
+.zl-bar > div.is-done { background: var(--green); }
+.zl-sub { font-size: 11px; color: var(--text3); margin-top: 4px; }
+.today-goal .zl-grid { margin-top: 2px; }
+.zl-nav { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 13px; color: var(--text2); }
+.zl-nav b { color: var(--text); }
+.zl-team-wrap { overflow-x: auto; padding: 0; }
+.zl-team { width: 100%; border-collapse: collapse; font-size: 13px; }
+.zl-team th { text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text3); padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.zl-team td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.zl-team tr:last-child td { border-bottom: none; }
+.zl-name b { display: block; color: var(--text); }
+.zl-name span { font-size: 11.5px; color: var(--text3); }
+.zl-cell { min-width: 120px; }
+.zl-cell .zl-num { margin-bottom: 4px; }
+.zl-team .zl-day { text-align: center; min-width: 54px; }
+.zl-team th.zl-day span { display: block; font-weight: 500; letter-spacing: 0; text-transform: none; }
+.zl-team th.zl-day.is-today { color: var(--accent); }
+body.dark .zl-team th.zl-day.is-today { color: var(--accent2); }
+.zl-team td.zl-day b { display: block; font-size: 14px; color: var(--text); }
+.zl-team td.zl-day span { font-size: 11px; color: var(--text3); }
+.zl-team td.zl-day.is-ok { background: color-mix(in srgb, var(--green) 9%, transparent); }
+.zl-team td.zl-day.is-ok b { color: var(--green); }
+.zl-team td.zl-day.is-low b { color: var(--copper); }
+.zl-team td.zl-day.is-future { color: var(--text3); }
+.zl-team td.zl-day.is-today { box-shadow: inset 0 2px 0 var(--accent); }
+.zl-legend { font-size: 11.5px; color: var(--text3); padding: 8px 12px 12px; }
+.zl-edit { display: grid; grid-template-columns: auto 1fr; gap: 10px 14px; align-items: center; }
+.zl-edit label { font-size: 13px; font-weight: 600; color: var(--text2); white-space: nowrap; }
+.zl-edit label i { width: 18px; color: var(--text3); margin-right: 6px; }
+.zl-hint { font-size: 12px; color: var(--text3); line-height: 1.5; }
+@media (max-width: 720px) {
+  .zl-grid { grid-template-columns: 1fr; gap: 10px; }
+}
+.today-goal:has(.zl-grid) { display: block; }
