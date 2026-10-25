@@ -20,7 +20,7 @@ const db      = require('../db');
 const { log } = require('../helpers/logger');
 
 const COOKIE = 'crm_abr';
-const status = { aktiv: false, grund: null, datenordner: null, abgleich: null };
+const status = { aktiv: false, grund: null, datenordner: null, abgleich: null, eingespielt: null };
 
 function datenordner() {
   return path.resolve(process.env.ABRECHNUNG_DATA_DIR || path.join(os.homedir(), 'crm-abrechnung'));
@@ -137,6 +137,7 @@ function registriere(app, { ki } = {}) {
   if (!status.abgleich) {
     try { status.abgleich = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'abrechnung', '_abgleich-ergebnis.json'), 'utf8')); } catch (_) {}
   }
+  try { status.eingespielt = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'abrechnung', '_eingespielt.json'), 'utf8')); } catch (_) {}
   // Solange das Tool noch parallel benutzt wird: alle 3 Stunden nachziehen
   setInterval(() => { try { abgleichen('regelmäßig'); } catch (_) {} }, 3 * 60 * 60 * 1000).unref();
 
@@ -160,6 +161,24 @@ function registriere(app, { ki } = {}) {
   app.use((req, res, next) => {
     const p = req.path;
     if (p.startsWith('/api/abrechnung/konten/')) return konten.api(req, res, next);
+    // Sicherung des Angebotstools (Kundenkonten) landet im Archiv der Kundenkonten,
+    // die Abrechnungs-Sicherung (NovaFlow) spielt die Abrechnung selbst ein
+    if (p === '/api/abrechnung/wiederherstellen' && req.method === 'POST') {
+      const d = (req.body && (req.body.daten || req.body)) || {};
+      // Zeitpunkt merken (Startklar-Check: Daten aus dem Tool vorhanden?)
+      res.on('finish', () => {
+        if (res.statusCode !== 200) return;
+        status.eingespielt = { ...(status.eingespielt || {}), [d.tool === 'angebot-tool' ? 'kundenkonten' : 'novaflow']: new Date().toISOString() };
+        try { fs.writeFileSync(path.join(DATA_DIR, 'abrechnung', '_eingespielt.json'), JSON.stringify(status.eingespielt)); } catch (_) {}
+      });
+      if (d.tool === 'angebot-tool') {
+        try {
+          const z = konten.einspielen(d);
+          log(req.user.id, 'abrechnung_einspielen', null, null, { art: 'kundenkonten', ...z }, req.ip).catch(() => {});
+          return res.json({ success: true, art: 'kundenkonten', eingespielt: z.kundenkonten + z.angebote + z.rechnungen, uebersprungen: z.vorhanden, ...z });
+        } catch (e) { return res.status(500).json({ success: false, error: 'Einspielen fehlgeschlagen: ' + e.message }); }
+      }
+    }
     if (p.startsWith('/api/abrechnung/') || p === '/abrechnung' || p.startsWith('/abrechnung/')) return mandant.router(req, res, next);
     next();
   });

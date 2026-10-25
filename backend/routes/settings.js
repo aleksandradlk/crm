@@ -36,6 +36,7 @@ router.patch('/:key', auth, adminOnly, async (req, res) => {
     if (key === 'maintenance_mode' || key === 'maintenance_until') {
       invalidateMaintenanceCache();
     }
+    if (key === 'closer_freie_leads') await require('../helpers/sichtbarkeit').neuLaden();
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: 'Fehler beim Speichern' }); }
 });

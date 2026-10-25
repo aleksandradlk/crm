@@ -7,6 +7,7 @@
 // Leads mit einer Wiedervorlage in der Zukunft tauchen erst zum Termin wieder auf.
 // Eine Wählliste (gespeicherter Filter) schränkt die Leads zusätzlich ein.
 const db = require('../db');
+const { siehtAlles, freieLeadsSichtbar } = require('./sichtbarkeit');
 
 const STATUSES = ['neu', 'kontaktiert', 'nicht_erreicht', 'kein_interesse', 'rueckruf', 'kunde'];
 
@@ -35,7 +36,7 @@ async function buildQueue(user, rawFilters) {
   const where = ['l.archived_at IS NULL'];
   const params = [uid, uid];
 
-  if (f && f.include_unassigned) { where.push('(l.assigned_to = ? OR l.assigned_to IS NULL)'); params.push(uid); }
+  if (f && f.include_unassigned && (siehtAlles(user) || freieLeadsSichtbar())) { where.push('(l.assigned_to = ? OR l.assigned_to IS NULL)'); params.push(uid); }
   else { where.push('l.assigned_to = ?'); params.push(uid); }
 
   if (f && f.statuses.length) { where.push(`l.status IN (${f.statuses.map(() => '?').join(',')})`); params.push(...f.statuses); }

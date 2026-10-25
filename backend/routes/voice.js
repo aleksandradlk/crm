@@ -577,6 +577,22 @@ router.put('/numbers-manual', auth, adminOnly, async (req, res) => {
   }
 });
 
+// Zustand des Twilio-Kontos für den Startklar-Check (Testkonto? Deutschland frei? Unterlagen geprüft?)
+async function twilioStatus() {
+  if (!isConfigured()) return { verbunden: false };
+  const e = env(), c = client();
+  const mitFrist = p => Promise.race([p, new Promise((_, nein) => setTimeout(() => nein(new Error('Zeitüberschreitung')), 6000))]);
+  const st = { verbunden: true, firmennummer: e.companyCallerId || null };
+  await Promise.all([
+    mitFrist(c.api.v2010.accounts(e.accountSid).fetch()).then(a => { st.kontoTyp = a.type; st.kontoStatus = a.status; }).catch(err => { st.fehler = err.message; }),
+    mitFrist(c.voice.v1.dialingPermissions.countries('DE').fetch()).then(d => { st.deutschland = !!d.lowRiskNumbersEnabled; }).catch(() => {}),
+    mitFrist(c.incomingPhoneNumbers.list({ limit: 100 })).then(n => { st.nummern = n.length; }).catch(() => {}),
+    mitFrist(c.numbers.v2.regulatoryCompliance.bundles.list({ isoCountry: 'DE', limit: 20 })).then(b => { st.unterlagen = b.map(x => x.status); }).catch(() => {}),
+  ]);
+  return st;
+}
+
 module.exports = router;
 module.exports.isConfigured = isConfigured;
+module.exports.twilioStatus = twilioStatus;
 module.exports.ladeKonfiguration = ladeKonfiguration;

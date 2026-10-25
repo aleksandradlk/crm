@@ -120,7 +120,42 @@
     .modal h3 { font-size: 1.05rem; margin-bottom: 8px; color: var(--navy); }
     .modal p { font-size: 0.88rem; color: var(--muted); margin-bottom: 16px; }
     @media (max-width: 700px) { .row { flex-direction: column; gap: 0; } .field.klein { flex: 1; } header .titel { display: none; } }
+
+    /* Dunkles Design – folgt der Einstellung im CRM (Hell/Dunkel je Benutzer) */
+    html.dunkel {
+      --navy: #A9BFE6; --ink: #0B111A; --text: #D3DBE7; --text-dark: #EEF2F8; --muted: #8E99AB;
+      --border: #263244; --paper-card: #1A2332; --bg: #0E141D; --flaeche: #141C28;
+      --gruen: #4CC38A; --rot: #F07A70; --gelb: #E2B84B; color-scheme: dark;
+    }
+    html.dunkel nav.tabs, html.dunkel .card, html.dunkel .stat-tile, html.dunkel .modal,
+    html.dunkel .field input, html.dunkel .field select, html.dunkel .field textarea,
+    html.dunkel .pos-tabelle input, html.dunkel .pos-tabelle select, html.dunkel .pos-tabelle textarea,
+    html.dunkel .btn.sekundaer, html.dunkel .btn.gefahr { background: var(--flaeche); }
+    html.dunkel .card, html.dunkel .stat-tile { box-shadow: none; border: 1px solid var(--border); }
+    html.dunkel .btn.sekundaer { color: var(--text-dark); }
+    html.dunkel .btn.sekundaer:hover, html.dunkel .btn.gefahr:hover { background: var(--paper-card); }
+    html.dunkel .btn.gefahr { border-color: color-mix(in srgb, var(--rot) 45%, transparent); }
+    html.dunkel .btn:disabled { color: var(--muted); }
+    html.dunkel .chip.versendet, html.dunkel .chip.offen { background: color-mix(in srgb, var(--navy) 16%, transparent); }
+    html.dunkel .chip.angenommen, html.dunkel .chip.bezahlt, html.dunkel .chip.aktiv { background: color-mix(in srgb, var(--gruen) 16%, transparent); }
+    html.dunkel .chip.abgelehnt, html.dunkel .chip.ueberfaellig, html.dunkel .chip.storniert { background: color-mix(in srgb, var(--rot) 16%, transparent); }
+    html.dunkel .chip.abgelaufen, html.dunkel .chip.storno, html.dunkel .chip.beendet { background: color-mix(in srgb, var(--gelb) 16%, transparent); }
+    html.dunkel .modal-hg { background: rgba(0,0,0,.6); }
+    html.dunkel .toast { background: #26324A; }
+    html.dunkel a { color: var(--navy); }
   </style>
+  <script>
+    // Hell/Dunkel aus dem CRM übernehmen (gleiche Speicherstelle wie dort) und live mitwechseln
+    (function () {
+      const setze = () => {
+        let t = null;
+        try { t = (JSON.parse(localStorage.getItem('lh_user') || '{}').theme) || localStorage.getItem('lh_theme'); } catch (_) {}
+        document.documentElement.classList.toggle('dunkel', t === 'dark');
+      };
+      setze();
+      window.addEventListener('storage', e => { if (e.key === 'lh_theme' || e.key === 'lh_user') setze(); });
+    })();
+  </script>
 </head>
 <body>
 
@@ -236,7 +271,7 @@
       <div class="untertitel">Logo</div>
       <div class="hint" style="margin:-6px 0 10px">Erscheint oben links auf allen Angeboten, Rechnungen und Mahnungen. PNG oder JPG, max. ca. 500 KB.</div>
       <div class="btn-zeile" style="margin:0 0 16px;align-items:center">
-        <img id="st-logo-vorschau" alt="" style="display:none;max-height:56px;max-width:180px;border:1px solid var(--border);border-radius:10px;padding:6px;background:#fff">
+        <img id="st-logo-vorschau" alt="" style="display:none;max-height:56px;max-width:180px;border:1px solid var(--border);border-radius:10px;padding:6px;background:#fff;color-scheme:light">
         <input type="file" id="st-logo-datei" accept="image/png,image/jpeg" style="font-size:0.85rem">
         <button class="btn klein sekundaer" onclick="logoHochladen()">Logo speichern</button>
         <button class="btn klein gefahr" id="st-logo-entfernen" style="display:none" onclick="logoEntfernen()">Logo entfernen</button>
@@ -301,8 +336,8 @@
     </div>
     <div class="kopfzeile"><span class="section-label">Sicherung wieder einspielen</span></div>
     <div class="card form-card">
-      <p style="font-size:0.88rem;color:var(--muted);margin-bottom:14px">Falls Daten verloren gehen: die Datei <span class="mono">NovaFlow-Abrechnung-Daten….json</span> aus dem Gesamtarchiv (Ordner „Datensicherung“) oder aus „Nur Daten (JSON)“ auswählen. Fehlende Kunden, Artikel, Angebote, Rechnungen und Abos werden ergänzt, vorhandene bleiben unverändert. Rechnungsnummern werden dabei nie zurückgesetzt.</p>
-      <div class="row"><div class="field"><label>Sicherungsdatei</label><input type="file" id="wh-datei" accept="application/json,.json"></div></div>
+      <p style="font-size:0.88rem;color:var(--muted);margin-bottom:14px">Die Dateien aus der Sicherungs-Mail des Angebotstools oder aus dem Gesamtarchiv (Ordner „Datensicherung“) auswählen, auch beide auf einmal: <span class="mono">NovaFlow-Abrechnung-Daten….json</span> ergänzt Kunden, Artikel, Angebote, Rechnungen und Abos, <span class="mono">Angebotstool-Kundenkonten….json</span> ergänzt die Kundenkonten. Vorhandenes bleibt unverändert, Rechnungsnummern werden nie zurückgesetzt.</p>
+      <div class="row"><div class="field"><label>Sicherungsdateien</label><input type="file" id="wh-datei" accept="application/json,.json" multiple></div></div>
       <label class="check"><input type="checkbox" id="wh-ueberschreiben"> Vorhandene Datensätze mit der Sicherung überschreiben</label>
       <div class="btn-zeile"><button class="btn" onclick="wiederherstellen()">Sicherung einspielen</button><span class="status-text" id="wh-status"></span></div>
     </div>
@@ -927,15 +962,21 @@ async function zeigeExport() {
 
 async function wiederherstellen() {
   const el = $('wh-status'); el.className = 'status-text'; el.textContent = '';
-  const datei = $('wh-datei').files[0];
-  if (!datei) { el.textContent = 'Bitte zuerst eine Datei auswählen.'; el.className = 'status-text fehler'; return; }
-  let daten;
-  try { daten = JSON.parse(await datei.text()); } catch (e) { el.textContent = 'Die Datei ist keine gültige JSON-Sicherung.'; el.className = 'status-text fehler'; return; }
+  const dateien = [...$('wh-datei').files];
+  if (!dateien.length) { el.textContent = 'Bitte zuerst eine Datei auswählen.'; el.className = 'status-text fehler'; return; }
+  const alle = [];
+  for (const datei of dateien) {
+    try { alle.push(JSON.parse(await datei.text())); } catch (e) { el.textContent = `${datei.name} ist keine gültige JSON-Sicherung.`; el.className = 'status-text fehler'; return; }
+  }
   const ueber = $('wh-ueberschreiben').checked;
   if (!await modal('Sicherung einspielen', ueber ? 'Vorhandene Datensätze werden mit der Sicherung überschrieben. Fortfahren?' : 'Fehlende Datensätze werden ergänzt, vorhandene bleiben unverändert. Fortfahren?')) return;
   try {
-    const d = await api('/wiederherstellen', 'POST', { daten, ueberschreiben: ueber });
-    el.textContent = `${d.eingespielt} Datensätze eingespielt, ${d.uebersprungen} bereits vorhanden.`; el.className = 'status-text ok';
+    let neu = 0, da = 0;
+    for (const daten of alle) {
+      const d = await api('/wiederherstellen', 'POST', { daten, ueberschreiben: ueber });
+      neu += d.eingespielt; da += d.uebersprungen;
+    }
+    el.textContent = `${neu} Datensätze eingespielt, ${da} bereits vorhanden.`; el.className = 'status-text ok';
     await ladeBasis();
   } catch (e) { el.textContent = e.message; el.className = 'status-text fehler'; }
 }
@@ -944,7 +985,7 @@ async function wiederherstellen() {
 (async () => {
   try { await anmelden(); await ladeBasis(); } catch (e) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('aktiv'));
-    document.body.insertAdjacentHTML('beforeend', `<div style="max-width:560px;margin:60px auto;padding:24px 28px;background:#fff;border:1px solid var(--border);border-radius:16px;text-align:center;color:var(--muted)">${esc(e.message)}</div>`);
+    document.body.insertAdjacentHTML('beforeend', `<div style="max-width:560px;margin:60px auto;padding:24px 28px;background:var(--flaeche, #fff);border:1px solid var(--border);border-radius:16px;text-align:center;color:var(--muted)">${esc(e.message)}</div>`);
     toast(e.message, true); return;
   }
   // Direkt ein Angebot öffnen (z. B. aus dem CRM: „Angebot erstellen“ am Deal)

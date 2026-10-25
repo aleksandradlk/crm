@@ -123,8 +123,10 @@ v1.patch('/leads/:id', async (req, res) => {
     if (b.status !== undefined) { if (!LEAD_STATUS.includes(b.status)) return res.status(400).json({ error: 'Ungültiger Status', erlaubt: LEAD_STATUS }); sets.push('status=?'); p.push(b.status); }
     if (b.assigned_to !== undefined) { sets.push('assigned_to=?'); p.push(parseInt(b.assigned_to) || null); }
     if (!sets.length) return res.status(400).json({ error: 'Nichts zu ändern' });
+    const [[vorher]] = await db.query('SELECT assigned_to FROM leads WHERE id=?', [id]);
     const [r] = await db.query(`UPDATE leads SET ${sets.join(', ')} WHERE id=?`, [...p, id]);
     if (!r.affectedRows) return res.status(404).json({ error: 'Lead nicht gefunden' });
+    if (b.assigned_to !== undefined) await require('../helpers/sichtbarkeit').uebergeben(id, vorher && vorher.assigned_to, parseInt(b.assigned_to) || null);
     await refreshNorm(id);
     await log(req.user.id, 'lead_update_api', 'lead', id, { felder: Object.keys(b), key: req.apiKeyId }, req.ip);
     res.json({ ok: true });
