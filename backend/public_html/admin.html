@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf33">
+<link rel="stylesheet" href="/shared/style.css?v=nf34">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -341,6 +341,11 @@
       </div>
 
       <section class="wiki-section">
+        <div class="wiki-section-head"><div class="wiki-section-title"><i class="fas fa-bullseye"></i> Ziele &amp; Woche</div></div>
+        <div id="zieleTeam"></div>
+      </section>
+
+      <section class="wiki-section">
         <div class="wiki-section-head"><div class="wiki-section-title"><i class="fas fa-users"></i> Team heute</div></div>
         <div id="trackingOverview" class="track-grid"></div>
         <div id="trackingList"></div>
@@ -608,20 +613,21 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf33"></script>
-<script src="/shared/mailvorschlag.js?v=nf33"></script>
-<script src="/shared/dialer.js?v=nf33"></script>
-<script src="/shared/deals.js?v=nf33"></script>
-<script src="/shared/calllists.js?v=nf33"></script>
-<script src="/shared/today.js?v=nf33"></script>
-<script src="/shared/termine.js?v=nf33"></script>
-<script src="/shared/duplicates.js?v=nf33"></script>
-<script src="/shared/wiki.js?v=nf33"></script>
-<script src="/shared/lines.js?v=nf33"></script>
-<script src="/shared/finder.js?v=nf33"></script>
-<script src="/shared/board.js?v=nf33"></script>
-<script src="/shared/integrations.js?v=nf33"></script>
-<script src="/shared/startklar.js?v=nf33"></script>
+<script src="/shared/api.js?v=nf34"></script>
+<script src="/shared/mailvorschlag.js?v=nf34"></script>
+<script src="/shared/dialer.js?v=nf34"></script>
+<script src="/shared/deals.js?v=nf34"></script>
+<script src="/shared/calllists.js?v=nf34"></script>
+<script src="/shared/today.js?v=nf34"></script>
+<script src="/shared/ziele.js?v=nf34"></script>
+<script src="/shared/termine.js?v=nf34"></script>
+<script src="/shared/duplicates.js?v=nf34"></script>
+<script src="/shared/wiki.js?v=nf34"></script>
+<script src="/shared/lines.js?v=nf34"></script>
+<script src="/shared/finder.js?v=nf34"></script>
+<script src="/shared/board.js?v=nf34"></script>
+<script src="/shared/integrations.js?v=nf34"></script>
+<script src="/shared/startklar.js?v=nf34"></script>
 <script>
 let allLeads = [], allUsers = [], editingUserId = null;
 let panelDirty = false;
@@ -728,7 +734,7 @@ function showTab(name) {
   if (name === 'today')    Today.load();
   if (name === 'termine')  Termine.load();
   if (name === 'users')    { loadUsers(); loadAppSettings(); }
-  if (name === 'tracking') loadTracking();
+  if (name === 'tracking') { loadTracking(); Ziele.renderTeam('zieleTeam'); }
   if (name === 'inbox')    { loadInbox(); loadMailStatus(); }
   if (name === 'wiki')     { loadWiki(); loadEmailTemplatesForAdmin(); }
   if (name === 'chat')     loadChats();
@@ -2442,6 +2448,8 @@ async function openSettingsModal() {
     const elGoal = document.getElementById('settingDailyGoal');
     const elScript = document.getElementById('settingCallScript');
     if (elGoal)   elGoal.value   = settings.daily_call_goal || '50';
+    document.getElementById('settingZielGespraeche').value = settings.ziel_gespraeche || '10';
+    document.getElementById('settingZielErgebnisse').value = settings.ziel_ergebnisse || '2';
     if (elScript) elScript.value = settings.call_script || '';
     const elFrei = document.getElementById('settingFreieLeads');
     if (elFrei) elFrei.checked = settings.closer_freie_leads !== '0';
@@ -2466,6 +2474,8 @@ async function saveNotifSettings() {
     const me = Auth.getUser();
     await api('PATCH', `/users/${me.id}/notify`, { notify_email, phone, email });
     await api('PATCH', '/settings/daily_call_goal', { value: goal });
+    await api('PATCH', '/settings/ziel_gespraeche', { value: document.getElementById('settingZielGespraeche')?.value.trim() || '10' });
+    await api('PATCH', '/settings/ziel_ergebnisse', { value: document.getElementById('settingZielErgebnisse')?.value.trim() || '2' });
     await api('PATCH', '/settings/call_script',     { value: script });
     await api('PATCH', '/settings/closer_freie_leads', { value: document.getElementById('settingFreieLeads')?.checked ? '1' : '0' });
     const maintMode  = document.getElementById('settingMaintenanceMode')?.checked ? 'true' : 'false';
@@ -2660,6 +2670,7 @@ async function ladeLeadAbrechnung(leadId) {
 async function startDialer(list = {}) {
   let script = '', goal = 50;
   try { const st = await api('GET', '/settings'); script = st.call_script || ''; goal = parseInt(st.daily_call_goal) || 50; } catch(e) {}
+  try { goal = (await Ziele.mein()).tag.anwahlen; } catch(e) {}
   Dialer.open({
     script, goal,
     listId: list.listId, listName: list.listName,
@@ -3332,10 +3343,15 @@ document.getElementById('addLeadModal').addEventListener('click', function(e){ i
     <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)"><i class="fas fa-headset" style="color:var(--accent);margin-right:6px"></i>Telefonie im Browser</div>
     <div id="callerIdSettings"></div>
     <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
-    <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)"><i class="fas fa-scroll" style="color:var(--accent);margin-right:6px"></i>Gesprächsleitfaden (für Closer)</div>
+    <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)"><i class="fas fa-scroll" style="color:var(--accent);margin-right:6px"></i>Ziele &amp; Gesprächsleitfaden (für Closer)</div>
     <div class="form-group">
-      <label>Tagesziel <span style="font-size:11px;color:var(--text3);font-weight:400">(Anrufe pro Tag)</span></label>
-      <input id="settingDailyGoal" class="form-control" type="number" min="1" max="999" placeholder="50">
+      <label>Standard-Tagesziel je Closer <span style="font-size:11px;color:var(--text3);font-weight:400">(einzeln anpassbar unter Tracking → Ziele &amp; Woche)</span></label>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        <div><div style="font-size:11px;color:var(--text3);margin-bottom:3px">Anwahlen</div><input id="settingDailyGoal" class="form-control" type="number" min="1" max="999" placeholder="50"></div>
+        <div><div style="font-size:11px;color:var(--text3);margin-bottom:3px">Gespräche</div><input id="settingZielGespraeche" class="form-control" type="number" min="1" max="999" placeholder="10"></div>
+        <div><div style="font-size:11px;color:var(--text3);margin-bottom:3px">Anfragen &amp; Termine</div><input id="settingZielErgebnisse" class="form-control" type="number" min="1" max="99" placeholder="2"></div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:5px;line-height:1.5">Richtwerte pro Tag: 60–80 Anwahlen, 10–15 Gespräche, 2–3 Angebotsanfragen oder Termine. In der Einarbeitung 50–70 % davon.</div>
     </div>
     <div class="form-group" style="margin-top:8px">
       <label>Leitfaden-Text <span style="font-size:11px;color:var(--text3);font-weight:400">(wird im Panel der Closer angezeigt)</span></label>

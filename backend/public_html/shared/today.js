@@ -94,7 +94,8 @@ const Today = {
     const pct = d.goal ? Math.min(100, Math.round(d.calls_today / d.goal * 100)) : 0;
     // Closer haben Tagesziel und Kennzahlen schon in ihrer Tagesleiste
     document.getElementById('todayGoal').hidden = !this.opts.showGoal;
-    document.getElementById('todayGoal').innerHTML = `
+    if (typeof Ziele !== 'undefined' && this.opts.showGoal) Ziele.renderInto('todayGoal');
+    else document.getElementById('todayGoal').innerHTML = `
       <div class="today-goal-text"><b>${d.calls_today}</b> von ${d.goal} Anrufen heute${pct >= 100 ? ' – Tagesziel erreicht 🎉' : ''}</div>
       <div class="today-goal-bar"><div style="width:${pct}%"></div></div>`;
     document.getElementById('todayQueueCount').textContent = d.queue_count ? d.queue_count : '';
