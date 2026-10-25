@@ -2,7 +2,8 @@
 // Anrufmodus (Power-Dialer)
 // Ein Lead nach dem anderen: anrufen → Ergebnis wählen → Wiedervorlage
 // → „Speichern & weiter“. Reihenfolge kommt vom Server (/leads/queue).
-// Tasten: 1–8 Ergebnis · Strg+Enter speichern & weiter · Esc schließen
+// Passt eine Mail zum Ergebnis, schlägt das CRM sie vor (mitsenden per Klick).
+// Tasten: 1–9 Ergebnis · M Mail an/aus · Strg+Enter speichern & weiter · Esc schließen
 // ============================================================
 const Dialer = {
   OUTCOMES: [
@@ -11,6 +12,7 @@ const Dialer = {
     { key: 'mailbox',        label: 'Mailbox',            icon: 'fa-voicemail',       tone: 'muted',  followUp: 'tomorrow10' },
     { key: 'rueckruf',       label: 'Rückruf vereinbart', icon: 'fa-phone-volume',    tone: 'copper', followUp: 'required' },
     { key: 'interesse',      label: 'Interesse',          icon: 'fa-fire',            tone: 'accent', followUp: '+3d' },
+    { key: 'termin',         label: 'Termin vereinbart',  icon: 'fa-calendar-check',  tone: 'green',  followUp: 'required' },
     { key: 'kein_interesse', label: 'Kein Interesse',     icon: 'fa-thumbs-down',     tone: 'red',    followUp: null },
     { key: 'kunde',          label: 'Abschluss',          icon: 'fa-trophy',          tone: 'green',  followUp: null },
     { key: 'falsche_nummer', label: 'Falsche Nummer',     icon: 'fa-triangle-exclamation', tone: 'red', followUp: null },
@@ -21,7 +23,7 @@ const Dialer = {
   ],
 
   queue: [], idx: 0, lead: null, opts: {},
-  outcome: null, followUp: null, callLogId: null, durationSec: null,
+  outcome: null, followUp: null, callLogId: null, durationSec: null, mail: null,
   callsToday: 0, saving: false, _keyHandler: null,
 
   async open(opts = {}) {
@@ -35,9 +37,11 @@ const Dialer = {
     document.addEventListener('keydown', this._keyHandler);
     this._body('<div class="dl-empty"><i class="fas fa-spinner fa-spin"></i></div>');
     try {
+      MailVorschlag.reset();
       const [q, dash] = await Promise.all([
         api('GET', '/leads/queue' + (opts.listId ? `?list=${opts.listId}` : '')),
         api('GET', '/leads/dashboard/closer').catch(() => ({})),
+        MailVorschlag.vorlagen(),
       ]);
       this.queue = q.leads || [];
       this.meta = q;
@@ -90,7 +94,7 @@ const Dialer = {
 
   _show() {
     this._header();
-    this.outcome = null; this.followUp = null; this.callLogId = null; this.durationSec = null;
+    this.outcome = null; this.followUp = null; this.callLogId = null; this.durationSec = null; this.mail = null;
     if (this.idx >= this.queue.length) {
       const noPhone = this.meta?.without_phone ? `<p>${this.meta.without_phone} Lead(s) ohne Telefonnummer sind nicht in der Liste.</p>` : '';
       this._body(`<div class="dl-empty dl-done">
@@ -138,7 +142,7 @@ const Dialer = {
         </div>
 
         <div class="dl-card dl-result">
-          <div class="dl-label">Ergebnis <span class="dl-hint">Taste 1–8</span></div>
+          <div class="dl-label">Ergebnis <span class="dl-hint">Taste 1–9</span></div>
           <div class="dl-outcomes">
             ${this.OUTCOMES.map((o, i) => `
               <button class="dl-outcome t-${o.tone}" data-outcome="${o.key}" onclick="Dialer.pick('${o.key}')">
@@ -159,10 +163,11 @@ const Dialer = {
           </div>
 
           <div id="dlDeal" class="dl-deal" hidden></div>
+          <div id="dlMail" class="dl-mail" hidden></div>
 
           <div class="dl-error" id="dlError"></div>
           <button class="btn btn-primary dl-save" id="dlSaveBtn" onclick="Dialer.save()" disabled>
-            <i class="fas fa-check"></i> Speichern &amp; nächster Lead <kbd>Strg</kbd>+<kbd>Enter</kbd>
+            <i class="fas fa-check"></i> <span id="dlSaveLabel">Speichern &amp; nächster Lead</span> <kbd>Strg</kbd>+<kbd>Enter</kbd>
           </button>
         </div>
       </div>
@@ -227,8 +232,78 @@ const Dialer = {
     if (o.followUp && o.followUp !== 'required') this.setFollowUp(o.followUp);
     else this.setFollowUp(o.followUp === 'required' ? null : 'none');
     if (o.followUp === 'required' && !auto) document.getElementById('dlFollowUpAt').focus();
+    document.querySelector('#dlFollowUp .dl-label').textContent = key === 'termin' ? 'Termin am' : 'Wiedervorlage';
+    document.querySelector('#dlFollowUp [data-fu="none"]').style.display = o.followUp === 'required' ? 'none' : '';
     this._renderDeal(key);
+    this._renderMail(key);
     this._validate();
+  },
+
+  // ── Passende Mail ───────────────────────────────────────────
+  // Ob mitgesendet wird, merkt sich das CRM je Ergebnis (pro Gerät)
+  _mailMerken(key, an) { try { localStorage.setItem('nf_mail_' + key, an ? '1' : '0'); } catch (_) {} },
+  _mailGemerkt(key) { try { return localStorage.getItem('nf_mail_' + key) === '1'; } catch (_) { return false; } },
+
+  async _renderMail(key) {
+    const el = document.getElementById('dlMail');
+    const l = this.lead;
+    const tpl = await MailVorschlag.fuer(key);
+    if (!el || this.outcome !== key || this.lead !== l) return;
+    if (!tpl) { this.mail = null; el.hidden = true; el.innerHTML = ''; this._saveLabel(); return; }
+    const vorher = this.mail;
+    this.mail = {
+      tpl, an: this._mailGemerkt(key), angepasst: false,
+      to: vorher?.to ?? l.email ?? '',
+    };
+    el.innerHTML = `
+      <label class="dl-mail-toggle">
+        <input type="checkbox" id="dlMailOn" ${this.mail.an ? 'checked' : ''} onchange="Dialer.toggleMail(this.checked)">
+        <span class="dl-mail-title"><i class="fas fa-envelope"></i>Passende Mail mitsenden: <b>${escHtml(tpl.name)}</b></span>
+        <kbd>M</kbd>
+      </label>
+      <div class="dl-mail-detail" id="dlMailDetail" ${this.mail.an ? '' : 'hidden'}>
+        <div class="dl-mail-row">
+          <label for="dlMailTo">An</label>
+          <input type="email" id="dlMailTo" class="form-control" value="${escHtml(this.mail.to)}" placeholder="E-Mail-Adresse am Telefon erfragen" oninput="Dialer.mail.to=this.value.trim();Dialer._validate()">
+        </div>
+        <div class="dl-mail-row">
+          <label for="dlMailSubject">Betreff</label>
+          <input type="text" id="dlMailSubject" class="form-control" oninput="Dialer.mail.angepasst=true">
+        </div>
+        <div id="dlMailBody" class="form-control dl-mail-body" contenteditable="true" oninput="Dialer.mail.angepasst=true"></div>
+      </div>`;
+    el.hidden = false;
+    this._fillMail();
+    this._saveLabel();
+    this._validate();
+  },
+
+  // Betreff und Text mit Kundendaten und Termin füllen (solange nicht von Hand geändert)
+  _fillMail() {
+    if (!this.mail || this.mail.angepasst) return;
+    const subj = document.getElementById('dlMailSubject');
+    const body = document.getElementById('dlMailBody');
+    if (!subj || !body) return;
+    const opts = { termin: this.followUp || null };
+    subj.value = MailVorschlag.fuellen(this.mail.tpl.subject, this.lead, opts);
+    body.innerHTML = MailVorschlag.alsHtml(MailVorschlag.fuellen(this.mail.tpl.body, this.lead, opts));
+  },
+
+  toggleMail(an) {
+    if (!this.mail) return;
+    this.mail.an = an;
+    this._mailMerken(this.outcome, an);
+    const cb = document.getElementById('dlMailOn');
+    if (cb) cb.checked = an;
+    document.getElementById('dlMailDetail').hidden = !an;
+    if (an && !this.mail.to) document.getElementById('dlMailTo')?.focus();
+    this._saveLabel();
+    this._validate();
+  },
+
+  _saveLabel() {
+    const el = document.getElementById('dlSaveLabel');
+    if (el) el.textContent = this.mail?.an ? 'Speichern, Mail senden & weiter' : 'Speichern & nächster Lead';
   },
 
   // Deal direkt aus dem Gespräch: anlegen, Wert anpassen oder als gewonnen buchen
@@ -249,12 +324,12 @@ const Dialer = {
     if (key === 'kunde') {
       html = `<div class="dl-label">Deal</div>${dealInfo}
         ${valueInput(hasDeal ? 'Auftragswert – Deal wird als gewonnen gebucht' : 'Auftragswert – wird als gewonnener Deal gebucht', existingVal)}`;
-    } else if (key === 'interesse' || key === 'rueckruf') {
+    } else if (key === 'interesse' || key === 'rueckruf' || key === 'termin') {
       html = hasDeal
         ? `<div class="dl-label">Deal</div>${dealInfo}${valueInput('Wert anpassen', existingVal)}`
         : `<div class="dl-label">Deal</div>
-           <label class="dl-deal-check"><input type="checkbox" id="dlDealCreate" ${key === 'interesse' ? 'checked' : ''} onchange="document.getElementById('dlDealValueWrap').hidden=!this.checked"> Deal in der Pipeline anlegen</label>
-           <div id="dlDealValueWrap" ${key === 'interesse' ? '' : 'hidden'}>${valueInput('Geschätzter Wert', '')}</div>`;
+           <label class="dl-deal-check"><input type="checkbox" id="dlDealCreate" ${key !== 'rueckruf' ? 'checked' : ''} onchange="document.getElementById('dlDealValueWrap').hidden=!this.checked"> Deal in der Pipeline anlegen</label>
+           <div id="dlDealValueWrap" ${key !== 'rueckruf' ? '' : 'hidden'}>${valueInput('Geschätzter Wert', '')}</div>`;
     } else if (key === 'kein_interesse' && hasDeal) {
       html = `<div class="dl-label">Deal</div>${dealInfo}<div class="dl-deal-hint">Der offene Deal wird als verloren markiert („Kein Bedarf“).</div>`;
     }
@@ -275,6 +350,7 @@ const Dialer = {
     }
     this._followUpKey = key;
     document.querySelectorAll('#dlFollowUp [data-fu]').forEach(b => b.classList.toggle('active', b.dataset.fu === key));
+    this._fillMail();
     this._validate();
   },
 
@@ -313,8 +389,9 @@ const Dialer = {
     const o = this.OUTCOMES.find(x => x.key === this.outcome);
     let msg = '';
     if (!o) msg = '';
-    else if (o.followUp === 'required' && !this.followUp) msg = 'Wann soll zurückgerufen werden?';
+    else if (o.followUp === 'required' && !this.followUp) msg = o.key === 'termin' ? 'Wann ist der Termin?' : 'Wann soll zurückgerufen werden?';
     else if (this.followUp && this.followUp.getTime() < Date.now() - 60000) msg = 'Die Wiedervorlage liegt in der Vergangenheit.';
+    else if (this.mail?.an && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.mail.to || '')) msg = 'Für die Mail fehlt eine gültige E-Mail-Adresse.';
     err.textContent = msg;
     const ok = !!o && !msg;
     btn.disabled = !ok || this.saving;
@@ -339,10 +416,22 @@ const Dialer = {
         call_log_id: this.callLogId,
         duration_seconds: this.durationSec,
         follow_up_at: this.followUp ? this._toSql(this.followUp) : null,
+        follow_up_note: this.outcome === 'termin' ? 'Termin' : undefined,
       });
       if (!this.callLogId) { this.callsToday++; }
       const o = this.OUTCOMES.find(x => x.key === this.outcome);
-      showToast(o.key === 'kunde' ? 'Abschluss gespeichert 🎉' : `${o.label} gespeichert`);
+      let mailInfo = '';
+      if (this.mail?.an) {
+        const subject = document.getElementById('dlMailSubject').value.trim();
+        const body = document.getElementById('dlMailBody').innerHTML.trim();
+        try {
+          await api('POST', `/leads/${l.id}/email`, { to: this.mail.to, subject, body });
+          mailInfo = ' · Mail gesendet ✓';
+        } catch (e) {
+          showToast(`Mail an ${l.company || 'den Kunden'} ging nicht raus: ${e.message} – bitte im Lead nachholen`, 'err');
+        }
+      }
+      showToast((o.key === 'kunde' ? 'Abschluss gespeichert 🎉' : `${o.label} gespeichert`) + mailInfo);
       this.idx++;
       this._show();
     } catch (e) {
@@ -372,7 +461,8 @@ const Dialer = {
     }
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); this.save(); return; }
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
-    if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (typing || e.ctrlKey || e.metaKey || e.altKey || e.target.isContentEditable) return;
+    if ((e.key === 'm' || e.key === 'M') && this.mail) { e.preventDefault(); this.toggleMail(!this.mail.an); return; }
     const n = parseInt(e.key);
     if (n >= 1 && n <= this.OUTCOMES.length) { e.preventDefault(); this.pick(this.OUTCOMES[n - 1].key); }
   },

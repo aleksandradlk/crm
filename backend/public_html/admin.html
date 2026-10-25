@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf31">
+<link rel="stylesheet" href="/shared/style.css?v=nf32">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -525,6 +525,11 @@
         </label>
       </div>
     </div>
+    <div class="form-group" style="margin-top:14px">
+      <label>Nach dem Anruf vorschlagen bei <span style="font-size:11px;color:var(--text3)">(optional)</span></label>
+      <select id="tmpl-trigger" class="form-control"></select>
+      <div style="font-size:11px;color:var(--text3);margin-top:5px">Wählt der Closer dieses Ergebnis, bietet das CRM die Mail gleich fertig ausgefüllt an.</div>
+    </div>
     <div class="form-group">
       <label>Betreff <span style="color:var(--red)">*</span></label>
       <input type="text" id="tmpl-subject" class="form-control" placeholder="z.B. Weitere Informationen zu {{firma}}">
@@ -533,7 +538,7 @@
       <label>Text <span style="color:var(--red)">*</span></label>
       <textarea id="tmpl-body" class="form-control" rows="8" style="font-size:13px;line-height:1.6;resize:vertical" placeholder="Hallo {{kunde}},&#10;&#10;...&#10;&#10;Viele Grüße&#10;{{closer}}"></textarea>
     </div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:14px">Platzhalter: <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">{{kunde}}</code> <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">{{firma}}</code> <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">{{closer}}</code> <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">{{telefon}}</code> <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">{{email}}</code></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:14px">Platzhalter: <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">{{kunde}}</code> <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">{{firma}}</code> <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">{{closer}}</code> <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">{{telefon}}</code> <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">{{email}}</code> <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">{{termin}}</code> <span>(Rückruf- bzw. Termin-Zeit)</span></div>
     <div id="tmplMgmtErr" style="color:var(--red);font-size:12px;min-height:16px;margin-bottom:8px"></div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-primary" style="flex:1" onclick="saveEmailTemplate()"><i class="fas fa-save"></i> Speichern</button>
@@ -601,18 +606,19 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf31"></script>
-<script src="/shared/dialer.js?v=nf31"></script>
-<script src="/shared/deals.js?v=nf31"></script>
-<script src="/shared/calllists.js?v=nf31"></script>
-<script src="/shared/today.js?v=nf31"></script>
-<script src="/shared/duplicates.js?v=nf31"></script>
-<script src="/shared/wiki.js?v=nf31"></script>
-<script src="/shared/lines.js?v=nf31"></script>
-<script src="/shared/finder.js?v=nf31"></script>
-<script src="/shared/board.js?v=nf31"></script>
-<script src="/shared/integrations.js?v=nf31"></script>
-<script src="/shared/startklar.js?v=nf31"></script>
+<script src="/shared/api.js?v=nf32"></script>
+<script src="/shared/mailvorschlag.js?v=nf32"></script>
+<script src="/shared/dialer.js?v=nf32"></script>
+<script src="/shared/deals.js?v=nf32"></script>
+<script src="/shared/calllists.js?v=nf32"></script>
+<script src="/shared/today.js?v=nf32"></script>
+<script src="/shared/duplicates.js?v=nf32"></script>
+<script src="/shared/wiki.js?v=nf32"></script>
+<script src="/shared/lines.js?v=nf32"></script>
+<script src="/shared/finder.js?v=nf32"></script>
+<script src="/shared/board.js?v=nf32"></script>
+<script src="/shared/integrations.js?v=nf32"></script>
+<script src="/shared/startklar.js?v=nf32"></script>
 <script>
 let allLeads = [], allUsers = [], editingUserId = null;
 let panelDirty = false;
@@ -1263,6 +1269,7 @@ async function saveCallDoc() {
         full_name: ME?.full_name || ''
       });
       document.getElementById('callLogSection').innerHTML = renderCallLogs(_panelLead.call_logs);
+      MailVorschlag.panelBox(_panelLead, 'mvBox', 'mailMitVorlage');
     }
     closeCallDocModal();
   } catch(e) {
@@ -1298,7 +1305,7 @@ function renderCallLogs(logs) {
   return `<div style="margin-top:12px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:6px">Anrufe</div>` +
     logs.map(c => `<div style="display:flex;gap:8px;align-items:flex-start;padding:7px 10px;background:var(--bg3);border-radius:6px;border-left:2px solid ${COLORS[c.status]||'var(--text3)'};margin-bottom:5px;font-size:12px">
       <div style="flex:1">
-        <span style="font-weight:600;color:${COLORS[c.status]||'var(--text)'}">${LABELS[c.status]||c.status}</span>
+        <span style="font-weight:600;color:${COLORS[c.status]||'var(--text)'}">${(c.outcome && MailVorschlag.label(c.outcome))||LABELS[c.status]||c.status}</span>
         ${c.duration_seconds ? `<span style="color:var(--text3);margin-left:8px">${fmtCallDuration(c.duration_seconds)}</span>` : ''}
         <span style="color:var(--text3);float:right">${fmtDate(c.started_at)}</span>
         ${c.note ? `<div style="color:var(--text2);margin-top:3px">${escHtml(c.note)}</div>` : ''}
@@ -1321,6 +1328,7 @@ function renderPanelKeyInfo(l) {
   if (avatar) avatar.textContent = (l.company||'').trim().charAt(0).toUpperCase() || '?';
   const sub = document.getElementById('panelSubtitle');
   if (sub) sub.textContent = [l.location, l.industry].filter(Boolean).join(' · ');
+  MailVorschlag.panelBox(l, 'mvBox', 'mailMitVorlage');  // füllt #mvBox, sobald das Panel steht
   return `
     <div class="panel-meta">
       ${statusBadge(l.status)}
@@ -1334,6 +1342,7 @@ function renderPanelKeyInfo(l) {
       <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteLead(${l.id})" title="Lead löschen" style="color:var(--red);margin-left:auto"><i class="fas fa-trash"></i></button>
     </div>
     ${lastNote ? `<div class="panel-note"><div class="panel-note-label">Letzte Notiz</div><div class="panel-note-text">${escHtml(lastNote.text)}</div></div>` : ''}
+    <div id="mvBox"></div>
     <div id="callLogSection">${renderCallLogs(l.call_logs||[])}</div>
   `;
 }
@@ -2143,6 +2152,13 @@ async function openEmailModal(reply) {
     const sel2 = window.getSelection(); sel2.removeAllRanges(); sel2.addRange(r);
   }
 }
+// Vorlage aus dem Mail-Vorschlag im Panel: E-Mail-Fenster öffnen, fertig ausgefüllt
+async function mailMitVorlage(id) {
+  await openEmailModal();
+  const sel = document.getElementById('emailTemplateSelect');
+  if (sel) sel.value = id;
+  applyAdminEmailTemplate();
+}
 function replyToEmail(emailId) {
   const mail = (_panelLead?.email_thread || []).find(m => m.id === emailId);
   if (mail) openEmailModal(mail);
@@ -2165,18 +2181,9 @@ async function sendEmail() {
 // ── E-MAIL VORLAGEN (Admin-Verwaltung) ────────────────────────
 let _emailTemplates = [];
 
+// Platzhalter füllen – gemeinsam mit dem Mail-Vorschlag ({{termin}} = nächste Wiedervorlage)
 function replacePlaceholders(text, lead) {
-  if (!text) return text;
-  const r = {
-    '{{kunde}}':  lead.ceo      || '',
-    '{{firma}}':  lead.company  || '',
-    '{{closer}}': ME?.full_name || '',
-    '{{telefon}}':lead.phone    || '',
-    '{{email}}':  lead.email    || '',
-    '{company}':  lead.company  || '',
-  };
-  Object.entries(r).forEach(([k, v]) => { text = text.split(k).join(v); });
-  return text;
+  return MailVorschlag.fuellen(text, lead);
 }
 
 async function loadEmailTemplatesForAdmin() {
@@ -2258,6 +2265,7 @@ function openTemplateMgmtModal(id) {
   document.getElementById('tmpl-subject').value      = tmpl?.subject || '';
   document.getElementById('tmpl-body').value         = tmpl?.body    || '';
   document.getElementById('tmpl-active').checked     = tmpl ? !!tmpl.is_active : true;
+  document.getElementById('tmpl-trigger').innerHTML  = MailVorschlag.optionen(tmpl?.trigger_outcome || '');
   document.getElementById('tmplMgmtErr').textContent = '';
   adminBuildCategorySelect(tmpl?.category || '');
   document.getElementById('templateMgmtModal').classList.add('open');
@@ -2275,14 +2283,16 @@ async function saveEmailTemplate() {
     ? document.getElementById('tmpl-category-new').value.trim()
     : catSel.trim()) || null;
   const active  = document.getElementById('tmpl-active').checked ? 1 : 0;
+  const trigger_outcome = document.getElementById('tmpl-trigger').value || null;
   const errEl   = document.getElementById('tmplMgmtErr');
   if (!name || !subject || !body) { errEl.textContent = 'Name, Betreff und Text sind erforderlich'; return; }
   try {
     if (id) {
-      await api('PATCH', `/email-templates/${id}`, { name, subject, body, category, is_active: active });
+      await api('PATCH', `/email-templates/${id}`, { name, subject, body, category, is_active: active, trigger_outcome });
     } else {
-      await api('POST', '/email-templates', { name, subject, body, category });
+      await api('POST', '/email-templates', { name, subject, body, category, trigger_outcome });
     }
+    MailVorschlag.reset();
     showToast(id ? 'Vorlage aktualisiert ✓' : 'Vorlage erstellt ✓');
     closeTemplateMgmtModal();
     loadEmailTemplatesForAdmin();
@@ -2294,6 +2304,7 @@ async function toggleTemplateActive(id, newVal) {
     await api('PATCH', `/email-templates/${id}`, { is_active: newVal });
     const t = _emailTemplates.find(x => x.id === id);
     if (t) t.is_active = newVal;
+    MailVorschlag.reset();
     renderAdminTemplateList();
     populateAdminTemplateDropdown();
   } catch(e) { showToast(e.message, 'err'); }
@@ -2303,6 +2314,7 @@ async function deleteEmailTemplate(id, name) {
   if (!confirm(`Vorlage "${name}" löschen?`)) return;
   try {
     await api('DELETE', `/email-templates/${id}`);
+    MailVorschlag.reset();
     showToast('Vorlage gelöscht');
     loadEmailTemplatesForAdmin();
   } catch(e) { showToast(e.message, 'err'); }

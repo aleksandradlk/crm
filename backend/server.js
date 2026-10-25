@@ -532,6 +532,33 @@ migrate(`CREATE TABLE IF NOT EXISTS deals (
   INDEX idx_deals_won (status, won_at)
 )`).catch(() => {});
 
+// ── Passende Mail nach dem Gespräch ──────────────────────────
+// Eine Vorlage kann einem Anrufergebnis zugeordnet werden; das CRM schlägt sie
+// dann nach dem Gespräch vor. Das Ergebnis selbst steht am Anruf.
+migrate('ALTER TABLE email_templates ADD COLUMN trigger_outcome VARCHAR(30) NULL').catch(() => {});
+migrate('ALTER TABLE call_logs ADD COLUMN outcome VARCHAR(30) NULL').catch(() => {});
+// Drei fertige Vorlagen, einmalig (wer sie löscht, bekommt sie nicht wieder)
+migrate("SELECT value FROM app_settings WHERE key_name='mail_vorschlaege_v1'").then(async ([[done]]) => {
+  if (done) return;
+  const vorlagen = [
+    ['interesse', 'Infos nach dem Telefonat', 'Unser Telefonat – Informationen für {{firma}}',
+     'Guten Tag {{kunde}},\n\nvielen Dank für das nette Gespräch eben. Wie besprochen schicke ich Ihnen hier die wichtigsten Informationen.\n\nIm nächsten Schritt erstelle ich Ihnen gerne ein unverbindliches Angebot, das genau zu {{firma}} passt. Bei Fragen antworten Sie einfach auf diese E-Mail.\n\nViele Grüße\n{{closer}}'],
+    ['rueckruf', 'Rückruf wie besprochen', 'Unser Rückruf am {{termin}}',
+     'Guten Tag {{kunde}},\n\nvielen Dank für Ihre Zeit am Telefon. Wie besprochen rufe ich Sie am {{termin}} noch einmal an.\n\nFalls Ihnen der Zeitpunkt doch nicht passt, antworten Sie einfach kurz auf diese E-Mail, dann finden wir einen anderen.\n\nViele Grüße\n{{closer}}'],
+    ['termin', 'Terminbestätigung', 'Terminbestätigung: {{termin}}',
+     'Guten Tag {{kunde}},\n\nhiermit bestätige ich unseren Termin am {{termin}}.\n\nIch freue mich auf das Gespräch. Sollte etwas dazwischenkommen, geben Sie mir bitte kurz Bescheid.\n\nViele Grüße\n{{closer}}'],
+  ];
+  for (const [outcome, name, subject, body] of vorlagen) {
+    const [[belegt]] = await migrate('SELECT id FROM email_templates WHERE trigger_outcome=? LIMIT 1', [outcome]);
+    if (belegt) continue;
+    const [[gleich]] = await migrate('SELECT id FROM email_templates WHERE name=? LIMIT 1', [name]);
+    if (gleich) await migrate('UPDATE email_templates SET trigger_outcome=? WHERE id=?', [outcome, gleich.id]);
+    else await migrate('INSERT INTO email_templates (name, subject, body, category, trigger_outcome) VALUES (?,?,?,?,?)',
+      [name, subject, body, 'Nach dem Gespräch', outcome]);
+  }
+  await migrate("INSERT INTO app_settings (key_name, value) VALUES ('mail_vorschlaege_v1', '1') ON DUPLICATE KEY UPDATE value='1'");
+}).catch(e => console.error('Mail-Vorschläge:', e.message));
+
 // ── Cron: Activity Log nach 7 Tagen bereinigen ───────────────
 cron.schedule('0 3 * * *', async () => {
   try {

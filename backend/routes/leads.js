@@ -362,6 +362,7 @@ const OUTCOMES = {
   mailbox:        { call: 'no-answer',    status: 'nicht_erreicht', label: 'Mailbox' },
   rueckruf:       { call: 'reached',      status: 'rueckruf',       label: 'Rückruf vereinbart' },
   interesse:      { call: 'reached',      status: 'kontaktiert',    label: 'Interesse, nachfassen' },
+  termin:         { call: 'reached',      status: 'kontaktiert',    label: 'Termin vereinbart' },
   kein_interesse: { call: 'reached',      status: 'kein_interesse', label: 'Kein Interesse' },
   kunde:          { call: 'reached',      status: 'kunde',          label: 'Abschluss' },
   falsche_nummer: { call: 'wrong_number', status: null,             label: 'Falsche Nummer' },
@@ -401,18 +402,18 @@ router.post('/:id/outcome', auth, async (req, res) => {
     let callId = parseInt(call_log_id) || null;
     if (callId) {
       const [r] = await db.query(
-        `UPDATE call_logs SET status=?, ended_at=COALESCE(ended_at, NOW()),
+        `UPDATE call_logs SET status=?, outcome=?, ended_at=COALESCE(ended_at, NOW()),
                 duration_seconds=COALESCE(?, duration_seconds), note=?
          WHERE id=? AND lead_id=? AND user_id=?`,
-        [o.call, dur, noteClean.slice(0, 1000) || null, callId, leadId, req.user.id]
+        [o.call, outcome, dur, noteClean.slice(0, 1000) || null, callId, leadId, req.user.id]
       );
       if (!r.affectedRows) callId = null;
     }
     if (!callId) {
       const [r] = await db.query(
-        `INSERT INTO call_logs (lead_id, user_id, phone_number, direction, started_at, ended_at, duration_seconds, status, note)
-         VALUES (?, ?, ?, 'outbound', NOW(), NOW(), ?, ?, ?)`,
-        [leadId, req.user.id, lead.phone, dur, o.call, noteClean.slice(0, 1000) || null]
+        `INSERT INTO call_logs (lead_id, user_id, phone_number, direction, started_at, ended_at, duration_seconds, status, outcome, note)
+         VALUES (?, ?, ?, 'outbound', NOW(), NOW(), ?, ?, ?, ?)`,
+        [leadId, req.user.id, lead.phone, dur, o.call, outcome, noteClean.slice(0, 1000) || null]
       );
       callId = r.insertId;
     }
@@ -455,7 +456,7 @@ router.post('/:id/outcome', auth, async (req, res) => {
     } else if (outcome === 'kein_interesse' && openDeal) {
       await markLost(openDeal, req.user.id, 'Kein Bedarf');
       dealId = openDeal.id;
-    } else if (deal && ['interesse', 'rueckruf'].includes(outcome)) {
+    } else if (deal && ['interesse', 'rueckruf', 'termin'].includes(outcome)) {
       if (openDeal) {
         if (dealValue !== undefined) await db.query('UPDATE deals SET value=? WHERE id=?', [dealValue, openDeal.id]);
         dealId = openDeal.id;
@@ -904,6 +905,12 @@ router.post('/:id/email', auth, async (req, res) => {
        WHERE lead_id=? AND message_id IS NOT NULL AND message_id<>''
        ORDER BY COALESCE(received_at, created_at) ASC LIMIT 20`, [id]
     ).catch(() => [[]]);
+
+    // Adresse am Telefon erfragt: beim Lead nachtragen, wenn dort noch keine steht
+    if (!lead.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(to).trim())) {
+      await db.query('UPDATE leads SET email=? WHERE id=? AND (email IS NULL OR email=\'\')', [String(to).trim(), id]);
+      await refreshNorm(id).catch(() => {});
+    }
 
     const realMessageId = await sendLeadEmail({
       to, subject, body, leadId: id, senderName: user?.full_name,
