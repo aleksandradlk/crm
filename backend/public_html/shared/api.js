@@ -539,7 +539,7 @@ function renderTemplateCard(t, a) {
       <div class="tpl-icon"><i class="fas fa-envelope-open-text"></i></div>
       <div class="tpl-meta">
         <div class="tpl-name">${escHtml(t.name)}</div>
-        <div class="tpl-tags">${t.category ? `<span class="tpl-tag cat">${escHtml(t.category)}</span>` : ''}${inactive ? '<span class="tpl-tag off">Inaktiv</span>' : ''}</div>
+        <div class="tpl-tags">${t.category ? `<span class="tpl-tag cat">${escHtml(t.category)}</span>` : ''}${t.trigger_outcome && typeof MailVorschlag !== 'undefined' ? `<span class="tpl-tag trigger" title="Wird nach diesem Anrufergebnis vorgeschlagen"><i class="fas fa-bolt"></i> ${escHtml(MailVorschlag.label(t.trigger_outcome))}</span>` : ''}${inactive ? '<span class="tpl-tag off">Inaktiv</span>' : ''}</div>
       </div>
     </div>
     <div class="tpl-subject" title="${escHtml(t.subject || '')}">${escHtml(t.subject || '—')}</div>

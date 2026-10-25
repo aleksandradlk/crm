@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf31">
+<link rel="stylesheet" href="/shared/style.css?v=nf32">
 <style>
 .notif-panel{position:fixed;top:0;right:0;bottom:0;width:340px;background:var(--bg2);border-left:1px solid var(--border2);z-index:150;transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;padding:20px}
 .notif-panel.open{transform:translateX(0)}
@@ -458,15 +458,16 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf31"></script>
-<script src="/shared/dialer.js?v=nf31"></script>
-<script src="/shared/deals.js?v=nf31"></script>
-<script src="/shared/calllists.js?v=nf31"></script>
-<script src="/shared/today.js?v=nf31"></script>
-<script src="/shared/duplicates.js?v=nf31"></script>
-<script src="/shared/wiki.js?v=nf31"></script>
-<script src="/shared/finder.js?v=nf31"></script>
-<script src="/shared/board.js?v=nf31"></script>
+<script src="/shared/api.js?v=nf32"></script>
+<script src="/shared/mailvorschlag.js?v=nf32"></script>
+<script src="/shared/dialer.js?v=nf32"></script>
+<script src="/shared/deals.js?v=nf32"></script>
+<script src="/shared/calllists.js?v=nf32"></script>
+<script src="/shared/today.js?v=nf32"></script>
+<script src="/shared/duplicates.js?v=nf32"></script>
+<script src="/shared/wiki.js?v=nf32"></script>
+<script src="/shared/finder.js?v=nf32"></script>
+<script src="/shared/board.js?v=nf32"></script>
 <script>
 const ME = Auth.getUser();
 const CAN = {
@@ -1237,6 +1238,7 @@ async function saveCallDocCl(goNext = false) {
         full_name: ME?.full_name || ''
       });
       document.getElementById('callLogSectionCl').innerHTML = renderCallLogsCl(_panelLead.call_logs);
+      MailVorschlag.panelBox(_panelLead, 'mvBox', 'mailMitVorlage');
     }
     closeCallDocModalCl();
     if (goNext) nextLead();
@@ -1273,7 +1275,7 @@ function renderCallLogsCl(logs) {
   return `<div style="margin-top:12px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:6px">Anrufe</div>` +
     logs.map(c => `<div style="display:flex;gap:8px;align-items:flex-start;padding:7px 10px;background:var(--bg3);border-radius:6px;border-left:2px solid ${COLORS[c.status]||'var(--text3)'};margin-bottom:5px;font-size:12px">
       <div style="flex:1">
-        <span style="font-weight:600;color:${COLORS[c.status]||'var(--text)'}">${LABELS[c.status]||c.status}</span>
+        <span style="font-weight:600;color:${COLORS[c.status]||'var(--text)'}">${(c.outcome && MailVorschlag.label(c.outcome))||LABELS[c.status]||c.status}</span>
         ${c.duration_seconds ? `<span style="color:var(--text3);margin-left:8px">${fmtCallDuration(c.duration_seconds)}</span>` : ''}
         <span style="color:var(--text3);float:right">${fmtDate(c.started_at)}</span>
         ${c.note ? `<div style="color:var(--text2);margin-top:3px">${escHtml(c.note)}</div>` : ''}
@@ -1297,6 +1299,7 @@ function renderPanelKeyInfo(l) {
   if (avatar) avatar.textContent = (l.company||'').trim().charAt(0).toUpperCase() || '?';
   const sub = document.getElementById('panelSubtitle');
   if (sub) sub.textContent = [l.location, l.industry].filter(Boolean).join(' · ');
+  MailVorschlag.panelBox(l, 'mvBox', 'mailMitVorlage');  // füllt #mvBox, sobald das Panel steht
   return `
     <div class="panel-meta">
       ${statusBadge(l.status)}
@@ -1308,6 +1311,7 @@ function renderPanelKeyInfo(l) {
       <button class="btn btn-ghost btn-sm" onclick="openEmailModal()"><i class="fas fa-envelope"></i> E-Mail</button>
     </div>
     ${lastNote ? `<div class="panel-note"><div class="panel-note-label">Letzte Notiz</div><div class="panel-note-text">${escHtml(lastNote.text)}</div></div>` : ''}
+    <div id="mvBox"></div>
     <div id="callLogSectionCl">${renderCallLogsCl(l.call_logs||[])}</div>
   `;
 }
@@ -1565,18 +1569,9 @@ function bodyToHtml(text) {
   return text.split('\n').map(l => `<div>${escHtml(l) || '<br>'}</div>`).join('');
 }
 
+// Platzhalter füllen – gemeinsam mit dem Mail-Vorschlag ({{termin}} = nächste Wiedervorlage)
 function replacePlaceholders(text, lead) {
-  if (!text) return text;
-  const r = {
-    '{{kunde}}':  lead.ceo      || '',
-    '{{firma}}':  lead.company  || '',
-    '{{closer}}': ME?.full_name || '',
-    '{{telefon}}':lead.phone    || '',
-    '{{email}}':  lead.email    || '',
-    '{company}':  lead.company  || '',
-  };
-  Object.entries(r).forEach(([k, v]) => { text = text.split(k).join(v); });
-  return text;
+  return MailVorschlag.fuellen(text, lead);
 }
 
 let _clEmailTemplates = [];
@@ -1625,6 +1620,13 @@ async function openEmailModal(reply) {
   }
 }
 
+// Vorlage aus dem Mail-Vorschlag im Panel: E-Mail-Fenster öffnen, fertig ausgefüllt
+async function mailMitVorlage(id) {
+  await openEmailModal();
+  const sel = document.getElementById('clEmailTemplateSelect');
+  if (sel) sel.value = id;
+  applyCloserEmailTemplate();
+}
 function replyToEmail(emailId) {
   const mail = (_panelLead?.email_thread || []).find(m => m.id === emailId);
   if (mail) openEmailModal(mail);
@@ -1924,6 +1926,7 @@ function clOpenTemplModal(id) {
   document.getElementById('clTemplSubject').value = t ? (t.subject || '') : '';
   document.getElementById('clTemplBody').value    = t ? (t.body    || '') : '';
   clBuildCategorySelect(t?.category || '');
+  document.getElementById('clTemplTrigger').innerHTML = MailVorschlag.optionen(t?.trigger_outcome || '');
   document.getElementById('clTemplModal').style.display = 'flex';
 }
 function clCloseTemplModal() {
@@ -1938,15 +1941,17 @@ async function clSaveTempl() {
   const category= (catSel === '__new__'
     ? document.getElementById('clTemplCategoryNew').value.trim()
     : catSel.trim()) || null;
+  const trigger_outcome = document.getElementById('clTemplTrigger').value || null;
   if (!name || !subject || !body) { showToast('Name, Betreff und Text sind erforderlich', 'err'); return; }
   const btn = document.getElementById('clTemplSaveBtn');
   btn.disabled = true;
   try {
     if (id) {
-      await api('PATCH', `/email-templates/${id}`, { name, subject, body, category: category || null });
+      await api('PATCH', `/email-templates/${id}`, { name, subject, body, category: category || null, trigger_outcome });
     } else {
-      await api('POST', '/email-templates', { name, subject, body, category: category || null });
+      await api('POST', '/email-templates', { name, subject, body, category: category || null, trigger_outcome });
     }
+    MailVorschlag.reset();
     clCloseTemplModal();
     showToast('Vorlage gespeichert', 'ok');
     const templates = await api('GET', '/email-templates').catch(() => []);
@@ -1961,6 +1966,7 @@ async function clSaveTempl() {
 async function clToggleTempl(id, newActive) {
   try {
     await api('PATCH', `/email-templates/${id}`, { is_active: newActive });
+    MailVorschlag.reset();
     const templates = await api('GET', '/email-templates').catch(() => []);
     _clManagedTemplates = templates;
     const tmplEl = document.getElementById('closerEmailTemplate');
@@ -2689,11 +2695,16 @@ document.getElementById('editContactInputCl')?.addEventListener('keydown', funct
       </div>
       <div class="form-group">
         <label>Betreff <span style="color:var(--danger)">*</span></label>
-        <input class="form-control" id="clTemplSubject" placeholder="z.B. Neue Website für {company}?">
+        <input class="form-control" id="clTemplSubject" placeholder="z.B. Neue Website für {{firma}}?">
       </div>
       <div class="form-group">
         <label>Text <span style="color:var(--danger)">*</span></label>
-        <textarea class="form-control" id="clTemplBody" rows="8" placeholder="Vorlage-Text. Platzhalter: {company}, {name}"></textarea>
+        <textarea class="form-control" id="clTemplBody" rows="8" placeholder="Guten Tag {{kunde}},&#10;&#10;...&#10;&#10;Viele Grüße&#10;{{closer}}"></textarea>
+        <div style="font-size:11px;color:var(--text3);margin-top:5px">Platzhalter: {{kunde}} {{firma}} {{closer}} {{telefon}} {{email}} {{termin}}</div>
+      </div>
+      <div class="form-group">
+        <label>Nach dem Anruf vorschlagen bei <span style="font-weight:400;color:var(--text3);font-size:11px">(optional)</span></label>
+        <select class="form-control" id="clTemplTrigger"></select>
       </div>
       <div class="form-group" style="margin-bottom:0">
         <label>Kategorie <span style="font-weight:400;color:var(--text3);font-size:11px">(optional)</span></label>
@@ -2732,7 +2743,7 @@ document.getElementById('editContactInputCl')?.addEventListener('keydown', funct
           <div style="width:32px;height:32px;border-radius:8px;background:color-mix(in srgb, var(--green) 12%, transparent);display:flex;align-items:center;justify-content:center;color:var(--green);flex-shrink:0"><i class="fas fa-envelope"></i></div>
           <div>
             <div style="font-size:13px;font-weight:600;margin-bottom:3px">E-Mail Vorlagen</div>
-            <div style="font-size:12px;color:var(--text2);line-height:1.5">Wenn du einem Kunden eine E-Mail schreiben möchtest, öffne den Lead, klicke auf <strong>E-Mail</strong> und wähle eine passende Vorlage aus dem Dropdown. Die Vorlage füllt sich automatisch mit den Kundendaten — du kannst sie danach frei anpassen.</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.5">Wenn du einem Kunden eine E-Mail schreiben möchtest, öffne den Lead, klicke auf <strong>E-Mail</strong> und wähle eine passende Vorlage aus dem Dropdown. Die Vorlage füllt sich automatisch mit den Kundendaten — du kannst sie danach frei anpassen. Nach einem Gespräch schlägt dir das CRM die passende Mail sogar von selbst vor (Taste <strong>M</strong> im Anrufmodus).</div>
           </div>
         </div>
         <div style="display:flex;align-items:flex-start;gap:12px;padding:14px;background:var(--bg3);border-radius:10px;border:1px solid var(--border)">
