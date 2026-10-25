@@ -443,6 +443,18 @@ router.post('/:id/outcome', auth, async (req, res) => {
       );
       reminderId = r.insertId;
     }
+    // Termin im Gespräch vereinbart: steht direkt unter „Termine“ (mit Erinnerung vorher)
+    let appointmentId = null;
+    if (outcome === 'termin' && follow_up_at) {
+      const [r] = await db.query(
+        `INSERT INTO appointments (lead_id, closer_id, proposed_by, starts_at, topic, notes, status, responded_at)
+         VALUES (?,?,?,?,?,?, 'angenommen', NOW())`,
+        [leadId, lead.assigned_to || req.user.id, req.user.id, follow_up_at,
+         (follow_up_note && follow_up_note !== 'Termin' ? follow_up_note : 'Termin aus dem Telefonat').toString().slice(0, 200),
+         noteClean || null]);
+      appointmentId = r.insertId;
+      await db.query("UPDATE reminders SET kind='termin', sent=1, appointment_id=? WHERE id=?", [appointmentId, reminderId]);
+    }
 
     // 5) Deal: bei Interesse/Rückruf anlegen bzw. Wert aktualisieren, bei Abschluss
     //    gewinnen, bei "Kein Interesse" offene Deals als verloren schließen
@@ -468,7 +480,7 @@ router.post('/:id/outcome', auth, async (req, res) => {
 
     await log(req.user.id, 'call_logged', 'lead', leadId,
       { outcome, call_id: callId, follow_up_at: follow_up_at || null, deal_id: dealId }, req.ip);
-    res.json({ ok: true, call_id: callId, status: o.status || lead.status, reminder_id: reminderId, deal_id: dealId });
+    res.json({ ok: true, call_id: callId, status: o.status || lead.status, reminder_id: reminderId, deal_id: dealId, appointment_id: appointmentId });
   } catch (e) {
     console.error('Outcome error:', e);
     res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
