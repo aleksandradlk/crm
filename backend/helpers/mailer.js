@@ -89,4 +89,26 @@ async function sendLeadEmail({ to, subject, body, leadId, inReplyTo, references,
   return info.messageId || msgId;
 }
 
-module.exports = { sendReminder, sendLeadEmail };
+// Kurze Hinweis-Mail an einen Benutzer (Termine u. Ä.); zeilen dürfen <b> enthalten,
+// alles andere wird maskiert
+async function sendInfoMail({ to, toName, subject, zeilen }) {
+  const zeile = z => esc(z).replace(/&lt;(\/?)b&gt;/g, '<$1b>');
+  await transporter.sendMail({
+    from: `"NovaFlow CRM" <${process.env.SMTP_USER}>`,
+    to,
+    subject: stripHeaders(subject),
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;background:#f5f7fa;border-radius:8px">
+        <img src="cid:${LOGO_CID}" alt="NovaFlow Services" width="160" style="display:block;margin-bottom:20px">
+        <p style="color:#333;margin:0 0 14px">Hallo ${esc(toName)},</p>
+        <div style="background:#fff;border-left:4px solid #2c3a55;padding:16px;border-radius:4px;margin-bottom:16px;color:#1a2330;line-height:1.6">
+          ${zeilen.filter(Boolean).map(z => `<div style="margin-bottom:6px">${zeile(z)}</div>`).join('')}
+        </div>
+        <p style="color:#888;font-size:12px">${esc(process.env.BASE_URL || 'NovaFlow CRM')}</p>
+      </div>
+    `,
+    attachments: [LOGO_ATTACHMENT],
+  });
+}
+
+module.exports = { sendReminder, sendLeadEmail, sendInfoMail };

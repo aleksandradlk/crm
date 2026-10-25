@@ -26,6 +26,7 @@ const voiceRoutes          = require('./routes/voice');
 const dealRoutes           = require('./routes/deals');
 const callListRoutes       = require('./routes/calllists');
 const todayRoutes          = require('./routes/today');
+const termineRoutes        = require('./routes/termine');
 const { startReminderCron } = require('./cron/reminders');
 const { pollIncomingEmails } = require('./cron/emailPoller');
 const cron           = require('node-cron');
@@ -118,6 +119,7 @@ app.use('/api/voice',           voiceRoutes);
 app.use('/api/deals',           dealRoutes);
 app.use('/api/call-lists',      callListRoutes);
 app.use('/api/today',           todayRoutes);
+app.use('/api/termine',        termineRoutes);
 // Eigene Schnittstelle des CRM (API-Schlüssel) und deren Verwaltung
 const apiV1 = require('./routes/api-v1');
 app.use('/api/api-keys',        apiV1.keys);
@@ -558,6 +560,31 @@ migrate("SELECT value FROM app_settings WHERE key_name='mail_vorschlaege_v1'").t
   }
   await migrate("INSERT INTO app_settings (key_name, value) VALUES ('mail_vorschlaege_v1', '1') ON DUPLICATE KEY UPDATE value='1'");
 }).catch(e => console.error('Mail-Vorschläge:', e.message));
+
+// ── Termine (Übergabe an Closer, Terminübersicht) ────────────
+migrate(`CREATE TABLE IF NOT EXISTS appointments (
+  id            INT AUTO_INCREMENT PRIMARY KEY,
+  lead_id       INT NOT NULL,
+  closer_id     INT NOT NULL,
+  proposed_by   INT NULL,
+  starts_at     DATETIME NOT NULL,
+  duration_min  INT NOT NULL DEFAULT 30,
+  topic         VARCHAR(200) NULL,
+  notes         TEXT NULL,
+  status        VARCHAR(20) NOT NULL DEFAULT 'vorgeschlagen',
+  counter_at    DATETIME NULL,
+  response_note VARCHAR(1000) NULL,
+  responded_at  DATETIME NULL,
+  erinnert      TINYINT(1) NOT NULL DEFAULT 0,
+  created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE,
+  INDEX idx_appt_closer_start (closer_id, starts_at),
+  INDEX idx_appt_status (status, starts_at),
+  INDEX idx_appt_lead (lead_id)
+)`).catch(() => {});
+migrate('ALTER TABLE reminders ADD COLUMN appointment_id INT NULL').catch(() => {});
+cron.schedule('* * * * *', () => termineRoutes.erinnern());
 
 // ── Cron: Activity Log nach 7 Tagen bereinigen ───────────────
 cron.schedule('0 3 * * *', async () => {
