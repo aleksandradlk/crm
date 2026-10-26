@@ -209,6 +209,15 @@ const Dialer = {
       });
       return;
     }
+    // sipgate: Telefon des Vertrieblers klingelt, dann wird der Kunde verbunden
+    if (Sipgate.bereit()) {
+      try { this.callLogId = await Sipgate.anrufen(l.id, l.company); }
+      catch (e) { showToast(e.message, 'err'); return; }
+      this.callsToday++;
+      this._header();
+      document.getElementById('dlNote')?.focus();
+      return;
+    }
     // Ohne Browser-Telefonie: Nummer über die Telefon-App des Rechners wählen
     Softphone.hinweisOhneNummer();
     try {

@@ -28,11 +28,17 @@ router.get('/', auth, adminOnly, async (req, res) => {
   const einstellung = async k => { try { const [[r]] = await db.query('SELECT value FROM app_settings WHERE key_name=?', [k]); return r ? r.value : null; } catch (_) { return null; } };
 
   try {
-    const [tw, mail] = await Promise.all([require('./voice').twilioStatus().catch(e => ({ verbunden: false, fehler: e.message })), smtpPruefen()]);
+    const [tw, mail, sgSt] = await Promise.all([
+      require('./voice').twilioStatus().catch(e => ({ verbunden: false, fehler: e.message })), smtpPruefen(),
+      require('./sipgate').status().catch(e => ({ verbunden: false, fehler: e.message }))]);
 
-    // ── Telefonie ──
+    // ── Telefonie ── (sipgate hat Vorrang; Twilio wird nur geprüft, wenn sipgate nicht verbunden ist)
     const zuIntegration = { label: 'Integrationen', tab: 'integrationen' };
-    if (!tw.verbunden) {
+    if (sgSt.verbunden) {
+      add('Telefonie', 'sipgate verbunden', sgSt.fehler ? 'warn' : 'ok', sgSt.fehler ? `Verbunden, aber sipgate antwortet gerade nicht: ${sgSt.fehler}` : '„Anrufen“ im CRM klingelt am sipgate-Telefon des Vertrieblers und verbindet dann.', zuIntegration);
+      add('Telefonie', 'Anrufe automatisch erfassen', sgSt.webhook ? 'ok' : 'warn', sgSt.webhook ? 'sipgate meldet jeden Anruf ans CRM – Dauer und verpasste Anrufe landen beim Lead.' : 'sipgate meldet die Anrufe noch nicht ans CRM. Unter Integrationen → sipgate „Jetzt eintragen“ klicken.', zuIntegration);
+      add('Telefonie', 'Absendernummer', sgSt.firmennummer || sgSt.nummern ? 'ok' : 'fehlt', sgSt.firmennummer ? 'Firmennummer ist festgelegt.' : sgSt.nummern ? `${sgSt.nummern} Nummer(n) bei sipgate – unter Integrationen eine Firmennummer wählen.` : 'Bei sipgate gibt es noch keine Rufnummer.', zuIntegration);
+    } else if (!tw.verbunden) {
       add('Telefonie', 'Twilio verbunden', 'fehlt', 'Ohne Verbindung können die Closer nicht aus dem CRM anrufen. Unter Integrationen Account SID und Auth Token eintragen.', zuIntegration);
     } else {
       add('Telefonie', 'Twilio verbunden', tw.fehler ? 'warn' : 'ok', tw.fehler ? `Verbunden, aber Twilio antwortet gerade nicht: ${tw.fehler}` : 'Anrufe im Browser und auf dem Handy sind eingerichtet.', zuIntegration);
@@ -51,7 +57,7 @@ router.get('/', auth, adminOnly, async (req, res) => {
     }
     const basis = process.env.BASE_URL || '';
     add('Telefonie', 'Server-Adresse (BASE_URL)', /^https:\/\//.test(basis) ? 'ok' : 'warn',
-      /^https:\/\//.test(basis) ? `${basis} – Twilio erreicht das CRM darüber.` : 'In Hostinger bei den Umgebungsvariablen BASE_URL=https://crm.novaflowservices.de eintragen, damit Twilio-Rückmeldungen (Anrufstatus, eingehende Anrufe) sicher ankommen.');
+      /^https:\/\//.test(basis) ? `${basis} – ${sgSt.verbunden ? 'sipgate' : 'Twilio'} erreicht das CRM darüber.` : `In Hostinger bei den Umgebungsvariablen BASE_URL=https://crm.novaflowservices.de eintragen, damit ${sgSt.verbunden ? 'sipgate' : 'Twilio'}-Rückmeldungen (Anrufstatus, eingehende Anrufe) sicher ankommen.`);
 
     // ── E-Mail & Server ──
     add('E-Mail & Server', 'E-Mail-Versand', mail.stand,
@@ -79,16 +85,24 @@ router.get('/', auth, adminOnly, async (req, res) => {
 
     // ── Team ──
     const [closer] = await db.query(
-      `SELECT u.id, u.full_name, u.phone_line, u.caller_id, u.caller_id_verified, u.last_login,
+      `SELECT u.id, u.full_name, u.phone_line, u.caller_id, u.caller_id_verified, u.last_login, u.sipgate_user, u.sipgate_nummer,
               (SELECT COUNT(*) FROM leads l WHERE l.assigned_to=u.id AND l.archived_at IS NULL AND l.status NOT IN ('kunde','kein_interesse')) AS offen
        FROM users u WHERE u.role='closer' AND u.is_active=1 ORDER BY u.full_name`);
     if (!closer.length) add('Team', 'Closer angelegt', 'fehlt', 'Noch kein Closer angelegt. Unter Benutzer anlegen und die Zugangsdaten schicken.', { label: 'Benutzer', tab: 'users' });
     else {
       add('Team', 'Closer angelegt', 'ok', `${closer.length} aktiv: ${closer.map(c => c.full_name).join(', ')}.`);
-      const ohneNummer = closer.filter(c => !c.phone_line && !(c.caller_id && c.caller_id_verified));
-      add('Team', 'Nummer je Closer', !ohneNummer.length ? 'ok' : (tw.firmennummer ? 'warn' : 'fehlt'),
-        !ohneNummer.length ? 'Jeder Closer hat eine eigene Nummer.'
-          : `Ohne eigene Nummer: ${ohneNummer.map(c => c.full_name).join(', ')}.${tw.firmennummer ? ' Sie rufen bis dahin mit der Firmennummer an.' : ''}`, { label: 'Benutzer', tab: 'users' });
+      if (sgSt.verbunden) {
+        const ohneZugang = closer.filter(c => !c.sipgate_user);
+        add('Team', 'sipgate-Telefon je Closer', !ohneZugang.length ? 'ok' : 'fehlt',
+          !ohneZugang.length ? 'Jeder Closer hat einen sipgate-Zugang.' : `Noch ohne sipgate-Zugang: ${ohneZugang.map(c => c.full_name).join(', ')}. In sipgate einen Benutzer anlegen und unter Integrationen zuordnen – bis dahin wählen sie über ihr eigenes Telefon.`, zuIntegration);
+        const ohneNummer = closer.filter(c => c.sipgate_user && !c.sipgate_nummer);
+        if (ohneNummer.length) add('Team', 'Nummer je Closer', 'warn', `Mit Firmennummer: ${ohneNummer.map(c => c.full_name).join(', ')}. Eigene Nummer optional unter Integrationen.`, zuIntegration);
+      } else {
+        const ohneNummer = closer.filter(c => !c.phone_line && !(c.caller_id && c.caller_id_verified));
+        add('Team', 'Nummer je Closer', !ohneNummer.length ? 'ok' : (tw.firmennummer ? 'warn' : 'fehlt'),
+          !ohneNummer.length ? 'Jeder Closer hat eine eigene Nummer.'
+            : `Ohne eigene Nummer: ${ohneNummer.map(c => c.full_name).join(', ')}.${tw.firmennummer ? ' Sie rufen bis dahin mit der Firmennummer an.' : ''}`, { label: 'Benutzer', tab: 'users' });
+      }
       const wenig = closer.filter(c => c.offen < 20);
       add('Team', 'Leads verteilt', !wenig.length ? 'ok' : 'warn',
         !wenig.length ? 'Jeder Closer hat mindestens 20 offene Leads.'

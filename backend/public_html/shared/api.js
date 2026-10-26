@@ -787,6 +787,24 @@ const Inbox = {
 // ── Telefonie im Browser (Twilio Voice) ──────────────────────
 // Ist Twilio nicht eingerichtet, fallen die Seiten auf den bisherigen Ablauf zurück
 // (Nummer per tel:-Link wählen, Anruf danach dokumentieren).
+// ── Telefonie über sipgate (Click-to-Dial) ───────────────────
+// Der Anruf startet im CRM, klingelt zuerst am sipgate-Telefon des Vertrieblers
+// (App, Web-Telefon oder Tischtelefon) und verbindet dann mit dem Kunden.
+const Sipgate = {
+  config: null,
+  async loadConfig() {
+    try { this.config = await api('GET', '/sipgate/config'); }
+    catch (_) { this.config = { aktiv: false }; }
+    return this.config;
+  },
+  bereit() { return !!(this.config && this.config.aktiv && this.config.bereit); },
+  async anrufen(leadId, label) {
+    const r = await api('POST', '/sipgate/anrufen', { leadId });
+    showToast(`Dein sipgate-Telefon klingelt – nimm ab, dann wird ${label || 'der Kunde'} angerufen.`);
+    return r.id;
+  },
+};
+
 const Softphone = {
   config: null,
   device: null,
@@ -803,8 +821,17 @@ const Softphone = {
   hasCallerId() { return !!(this.config && this.config.effective_caller_id); },
   // Aus dem Browser anrufen geht erst mit Absendernummer. Solange Twilio die
   // Nummern noch prüft, wählen alle über ihr Telefon – der Anruf wird trotzdem erfasst.
-  canDial() { return this.isEnabled() && this.hasCallerId(); },
+  canDial() {
+    // Ist sipgate eingerichtet, telefoniert der Vertriebler darüber – nicht über Twilio
+    if (typeof Sipgate !== 'undefined' && Sipgate.bereit()) return false;
+    return this.isEnabled() && this.hasCallerId();
+  },
   hinweisOhneNummer() {
+    if (typeof Sipgate !== 'undefined' && Sipgate.config && Sipgate.config.aktiv && !Sipgate.config.bereit && !this._hinweisGezeigt) {
+      this._hinweisGezeigt = true;
+      showToast('Dir ist noch kein sipgate-Telefon zugeordnet – der Anruf läuft über dein Telefon und wird trotzdem erfasst.');
+      return;
+    }
     if (!this.isEnabled() || this.hasCallerId() || this._hinweisGezeigt) return;
     this._hinweisGezeigt = true;
     showToast('Noch keine Nummer im CRM – der Anruf läuft über dein Telefon und wird trotzdem erfasst.');

@@ -1218,6 +1218,11 @@ async function startCall(leadId, phone) {
     });
     return;
   }
+  if (Sipgate.bereit()) {
+    try { openCallDoc(leadId, phone, await Sipgate.anrufen(leadId, (allLeads.find(x => x.id === leadId) || {}).company), null); }
+    catch (e) { showToast(e.message, 'err'); }
+    return;
+  }
   try {
     Softphone.hinweisOhneNummer();
     const r = await api('POST', `/leads/${leadId}/calls/start`);
@@ -3036,6 +3041,7 @@ showTab('dashboard');
 loadToolsTab();
 loadClosersForSelect();
 Inbox.start();
+Sipgate.loadConfig();
 Softphone.loadConfig().then(() => Softphone.initIncoming({
   onStart: id => openLeadPanel(id),
   onEnd: ({ leadId, callLogId, durationSec, phone }) => {

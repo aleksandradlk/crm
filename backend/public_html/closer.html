@@ -1175,6 +1175,11 @@ async function startCallCl(leadId, phone) {
     });
     return;
   }
+  if (Sipgate.bereit()) {
+    try { openCallDocCl(leadId, phone, await Sipgate.anrufen(leadId, (allLeads.find(x => x.id === leadId) || {}).company), null); }
+    catch (e) { showToast(e.message, 'err'); }
+    return;
+  }
   try {
     Softphone.hinweisOhneNummer();
     const r = await api('POST', `/leads/${leadId}/calls/start`);
@@ -2439,6 +2444,7 @@ async function loadCloserSettings() {
 loadCloserSettings();
 loadCloserDashboard();
 Inbox.start();
+Sipgate.loadConfig();
 Softphone.loadConfig().then(() => Softphone.initIncoming({
   onStart: id => openPanel(id),
   onEnd: ({ leadId, callLogId, durationSec, phone }) => {
