@@ -24,6 +24,15 @@
     admin_mail: 'info@novaflowservices.de',
     demo_link: 'https://novaflowservices.de/',
     regeln: { l_auftragswert: 5000, m_kanaele: 3, m_anfragen: 10 },
+    // Provision und Bonus (§8): Basis = gezahlter Einmalpreis ohne Betreuung/Hosting
+    provision: {
+      satz: 20, satz_rabatt: 15,          // % – mit Rabatt > 0 vom reduzierten Preis
+      upgrade_tage: 30,                   // Quick-Win → Autopilot beim selben Kunden: Basis − Quick-Win-Preis
+      faellig_tage: 14,                   // Provision fällig = Zahlungseingang + X Tage
+      ust: 19,                            // Aufschlag, wenn am Benutzer „zzgl. USt“
+      bonus_pakete: ['s', 'm', 'l', 'software'],
+      bonus: [{ ab: 1, betrag: 50 }, { ab: 5, betrag: 150 }, { ab: 10, betrag: 300 }],
+    },
     gesundheit: ['arzt', 'ärzt', 'praxis', 'zahnarzt', 'heilpraktiker', 'therapie', 'therapeut', 'physio', 'pflege', 'klinik', 'ergo', 'logopäd', 'osteopath'],
   };
 
@@ -84,7 +93,7 @@
   function cfgMit(cfg) {
     const c = cfg || {};
     return { ...STANDARD, ...c, pakete: { ...STANDARD.pakete, ...(c.pakete || {}) }, zusatz: { ...STANDARD.zusatz, ...(c.zusatz || {}) },
-      regeln: { ...STANDARD.regeln, ...(c.regeln || {}) } };
+      regeln: { ...STANDARD.regeln, ...(c.regeln || {}) }, provision: { ...STANDARD.provision, ...(c.provision || {}) } };
   }
 
   function pruefen(d, cfg) {

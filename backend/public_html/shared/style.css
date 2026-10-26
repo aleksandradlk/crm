@@ -2520,3 +2520,47 @@ body.dark .tr-ueb-links a { color: var(--accent2); }
   .au-table tbody td[data-l]::before { content: attr(data-l); color: var(--text3); flex: 1; }
   .au-table tbody td[data-l] .au-bar { display: none; }
 }
+
+/* ── Provision & Bonus ─────────────────────────────────────── */
+.pv-box { margin: 4px 0 14px; padding: 12px 14px; border-radius: 12px; background: var(--bg3); border: 1px solid var(--border); }
+.pv-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.pv-label { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text3); display: inline-flex; gap: 6px; align-items: center; }
+.pv-label i { color: var(--copper); }
+.pv-tag { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--copper) 14%, transparent); color: var(--copper); white-space: nowrap; }
+.pv-tag.is-ok { background: color-mix(in srgb, var(--green) 14%, transparent); color: var(--green); }
+.pv-head .pv-tag { margin-left: auto; }
+.pv-sum { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.pv-sum b { font-size: 22px; color: var(--text); }
+.pv-sum span { font-size: 12px; color: var(--text3); }
+.pv-calc { font-size: 12px; color: var(--text3); margin-top: 2px; }
+.pv-plan { font-size: 13px; color: var(--text2); font-weight: 600; margin-top: 8px; }
+.pv-hint { font-size: 12px; color: var(--text3); margin-top: 8px; font-style: italic; }
+.pv-teile { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+.pv-teil { display: grid; grid-template-columns: minmax(110px, auto) 80px 1fr; gap: 10px; align-items: center; font-size: 12.5px; color: var(--text2); }
+.pv-teil b { text-align: right; color: var(--text); }
+.pv-teil em { font-style: normal; color: var(--text3); }
+.pv-teil em.ok { color: var(--green); }
+.pv-teil em.warn { color: var(--copper); }
+.pv-bonus { margin: 0 0 14px; padding: 12px 16px 10px; border-radius: 14px; background: var(--bg2); border: 1px solid var(--border); cursor: pointer; transition: border-color .15s; }
+.pv-bonus:hover { border-color: var(--border2); }
+.pv-bonus-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13.5px; color: var(--text); }
+.pv-bonus-go { font-size: 12px; color: var(--navy-light); font-weight: 600; }
+.pv-steps { position: relative; margin: 10px 0 22px; }
+.pv-steps .zl-bar { height: 7px; }
+.pv-step { position: absolute; top: 12px; font-size: 11px; color: var(--text3); white-space: nowrap; }
+.pv-step.is-done { color: var(--green); font-weight: 600; }
+.pv-bonus-sub { font-size: 12px; color: var(--text3); }
+.pv-bonus-sub b { color: var(--text2); }
+.pv-kpis { margin: 10px 0 14px; }
+.pv-deal { padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; margin-bottom: 8px; cursor: pointer; }
+.pv-deal:hover { border-color: var(--border2); }
+.pv-deal-top { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text); }
+.pv-sub { font-size: 11.5px; color: var(--text3); font-weight: 400; margin-top: 2px; }
+.vr-checks { flex-wrap: wrap; gap: 4px 12px !important; }
+.vr-grid .vr-checks label { font-weight: 400; display: inline-flex; gap: 5px; align-items: center; }
+@media (max-width: 768px) {
+  .pv-teile { gap: 8px; }
+  .pv-teil { grid-template-columns: 1fr auto; gap: 0 10px; }
+  .pv-teil em { grid-column: 1 / -1; font-size: 12px; }
+  .pv-bonus-go { display: none; }
+}

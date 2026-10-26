@@ -1590,6 +1590,31 @@ Antworte NUR mit gültigem JSON, kein Text davor oder danach:
         .map(r => ({ id: r.id, nummer: r.nummer || '(Entwurf)', titel: r.titel, datum: r.datum, status: r.status, zahlungsstatus: r.zahlungsstatus, brutto: r.summen.brutto }));
       return { angebote: angebote.sort((x, y) => (y.nummer > x.nummer ? 1 : -1)), rechnungen: rechnungen.sort((x, y) => String(y.datum).localeCompare(String(x.datum))) };
     },
+    // Für die Provision im CRM (nur lesen): Angebot zum Deal mit Einmal-Positionen,
+    // Zahlungsplan und den daraus erstellten Rechnungen samt Zahlungseingang
+    provisionsDaten(dealId) {
+      const rang = { angenommen: 0, versendet: 1, entwurf: 2 };
+      const a = ladeAlle(ANGEBOTE_DIR)
+        .filter(x => x.crm && Number(x.crm.dealId) === Number(dealId) && x.status !== 'abgelehnt')
+        .sort((x, y) => (rang[x.status] ?? 3) - (rang[y.status] ?? 3) || String(y.erstellt || '').localeCompare(String(x.erstellt || '')))[0];
+      if (!a) return null;
+      const v = angebotAnsicht(a);
+      const einmalig = v.positionen.filter(p => p.abrechnung === 'einmalig');
+      const rechnungen = ladeAlle(RECHNUNGEN_DIR)
+        .filter(r => r.bezug && r.bezug.angebotId === a.id && r.typ !== 'storno' && !r.storniertDurch)
+        .map(rechnungAnsicht)
+        .map(r => ({ id: r.id, nummer: r.nummer || null, netto: r.summen.netto, status: r.zahlungsstatus,
+          bezahltAm: r.zahlung && r.zahlung.bezahltAm || null, faelligAm: r.faelligAm || r.bezug.geplantFaellig || null,
+          rate: r.bezug.rate || 1, ratenGesamt: r.bezug.ratenGesamt || 1, anzahlung: !!r.bezug.anzahlung }))
+        .sort((x, y) => x.rate - y.rate);
+      return {
+        angebot: { id: a.id, nummer: a.nummer, status: v.statusEffektiv || a.status, datum: a.datum,
+          einmaligNetto: round2(einmalig.reduce((x, p) => x + positionGesamt(p), 0)),
+          rabatt: einmalig.some(p => Number(p.rabatt) > 0 || Number(p.einzelpreis) < 0),
+          zahlung: { art: v.zahlung.art, anzahlungProzent: v.zahlung.anzahlungProzent, raten: (v.zahlung.raten || []).map(r => r.betrag) } },
+        rechnungen,
+      };
+    },
     leer: () => db.leer(),
   };
 

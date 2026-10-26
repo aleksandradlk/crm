@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf40">
+<link rel="stylesheet" href="/shared/style.css?v=nf41">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -613,6 +613,17 @@
           <span>Angebote &amp; Rechnungen <span style="color:var(--text3);font-size:11px;font-weight:400">— sieht und bearbeitet alle Angebote, Rechnungen und Kunden der Abrechnung</span></span>
         </label>
       </div>
+      <div style="font-size:11px;font-weight:600;letter-spacing:1px;color:var(--text3);text-transform:uppercase;margin:14px 0 8px">Provision</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;font-size:13px">
+          <input type="checkbox" id="u-prov-ust" style="width:15px;height:15px;accent-color:var(--accent)">
+          <span>Provision zzgl. 19 % USt <span style="color:var(--text3);font-size:11px;font-weight:400">— Closer stellt Rechnungen mit Umsatzsteuer</span></span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;font-size:13px">
+          <input type="checkbox" id="u-prov-ausland" style="width:15px;height:15px;accent-color:var(--accent)">
+          <span>Sitz im Ausland <span style="color:var(--text3);font-size:11px;font-weight:400">— Provision immer ohne deutsche USt</span></span>
+        </label>
+      </div>
     </div>
     <div style="display:flex;gap:8px;margin-top:16px">
       <button class="btn btn-primary" style="flex:1" onclick="saveUser()"><i class="fas fa-check"></i> Speichern</button>
@@ -622,24 +633,25 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf40"></script>
-<script src="/shared/bedarf-regeln.js?v=nf40"></script>
-<script src="/shared/bedarf.js?v=nf40"></script>
-<script src="/shared/mailvorschlag.js?v=nf40"></script>
-<script src="/shared/dialer.js?v=nf40"></script>
-<script src="/shared/deals.js?v=nf40"></script>
-<script src="/shared/calllists.js?v=nf40"></script>
-<script src="/shared/today.js?v=nf40"></script>
-<script src="/shared/ziele.js?v=nf40"></script>
-<script src="/shared/auswertung.js?v=nf40"></script>
-<script src="/shared/termine.js?v=nf40"></script>
-<script src="/shared/duplicates.js?v=nf40"></script>
-<script src="/shared/wiki.js?v=nf40"></script>
-<script src="/shared/lines.js?v=nf40"></script>
-<script src="/shared/finder.js?v=nf40"></script>
-<script src="/shared/board.js?v=nf40"></script>
-<script src="/shared/integrations.js?v=nf40"></script>
-<script src="/shared/startklar.js?v=nf40"></script>
+<script src="/shared/api.js?v=nf41"></script>
+<script src="/shared/bedarf-regeln.js?v=nf41"></script>
+<script src="/shared/bedarf.js?v=nf41"></script>
+<script src="/shared/mailvorschlag.js?v=nf41"></script>
+<script src="/shared/dialer.js?v=nf41"></script>
+<script src="/shared/provision.js?v=nf41"></script>
+<script src="/shared/deals.js?v=nf41"></script>
+<script src="/shared/calllists.js?v=nf41"></script>
+<script src="/shared/today.js?v=nf41"></script>
+<script src="/shared/ziele.js?v=nf41"></script>
+<script src="/shared/auswertung.js?v=nf41"></script>
+<script src="/shared/termine.js?v=nf41"></script>
+<script src="/shared/duplicates.js?v=nf41"></script>
+<script src="/shared/wiki.js?v=nf41"></script>
+<script src="/shared/lines.js?v=nf41"></script>
+<script src="/shared/finder.js?v=nf41"></script>
+<script src="/shared/board.js?v=nf41"></script>
+<script src="/shared/integrations.js?v=nf41"></script>
+<script src="/shared/startklar.js?v=nf41"></script>
 <script>
 let allLeads = [], allUsers = [], editingUserId = null;
 let panelDirty = false;
@@ -1748,11 +1760,15 @@ function openUserModal(id) {
       PERM_IDS.forEach((elId, i) => {
         document.getElementById(elId).checked = !!u[PERM_KEYS[i]];
       });
+      document.getElementById('u-prov-ust').checked = !!u.provision_zzgl_ust;
+      document.getElementById('u-prov-ausland').checked = !!u.provision_ausland;
     }
   } else {
     ['u-name','u-username','u-email','u-phone','u-password'].forEach(fid => document.getElementById(fid).value = '');
     document.getElementById('u-role').value = 'closer';
     PERM_IDS.forEach(elId => document.getElementById(elId).checked = false);
+    document.getElementById('u-prov-ust').checked = false;
+    document.getElementById('u-prov-ausland').checked = false;
   }
   updatePermSection();
   const lineChanged = async () => {
@@ -1782,6 +1798,8 @@ async function saveUser() {
     const val = el.type === 'hidden' ? 1 : (el.checked ? 1 : 0);
     body[key] = (role === 'closer') ? val : 0;
   });
+  body.provision_zzgl_ust = role === 'closer' && document.getElementById('u-prov-ust').checked ? 1 : 0;
+  body.provision_ausland = role === 'closer' && document.getElementById('u-prov-ausland').checked ? 1 : 0;
   try {
     if (editingUserId) { await api('PATCH', `/users/${editingUserId}`, body); }
     else               { await api('POST', '/users', body); }

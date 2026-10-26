@@ -39,6 +39,7 @@ const Deals = {
         </div>
       </div>
       <div class="dash-kpis" id="dealKpis"></div>
+      ${!opts.isAdmin && typeof Provision !== 'undefined' ? '<div id="dealBonus"></div>' : ''}
       <div class="toolbar">
         <div class="search-bar"><i class="fas fa-search search-bar-icon"></i><input type="text" id="dealSearch" class="form-control" placeholder="Deals durchsuchen …" autocomplete="off" oninput="Deals.search=this.value.toLowerCase();Deals.render()"></div>
         ${this.canSeeAll() ? `<div class="chip-row" id="dealOwnerChips">
@@ -128,6 +129,7 @@ const Deals = {
       this.deals = deals;
       this.renderKpis(summary);
       this.render();
+      if (!this.opts.isAdmin && typeof Provision !== 'undefined') Provision.bonusLeiste('dealBonus');
     } catch (e) { showToast(e.message, 'err'); }
   },
 
@@ -316,6 +318,7 @@ const Deals = {
             <div class="form-group" id="dmOwnerGroup" style="display:none"><label>Verantwortlich</label><select id="dmOwner" class="form-control"></select></div>
           </div>
           <div class="form-group"><label>Notizen</label><textarea id="dmNotes" class="form-control" rows="3" placeholder="Umfang, Ansprechpartner, Besonderheiten …"></textarea></div>
+          <div id="dmProvision"></div>
           <div class="deal-modal-err" id="dmErr"></div>
           <div class="deal-modal-actions" id="dmActions"></div>
         </div>
@@ -363,6 +366,7 @@ const Deals = {
     this._newLeadId = leadId || null;
     document.getElementById('dmTitle').textContent = 'Neuer Deal';
     document.getElementById('dmStatusBar').innerHTML = '';
+    document.getElementById('dmProvision').innerHTML = '';
     document.getElementById('dmLeadGroup').style.display = leadId ? 'none' : '';
     document.getElementById('dmLeadSearch').value = '';
     document.getElementById('dmLeadResults').innerHTML = '';
@@ -450,6 +454,7 @@ const Deals = {
          <button class="btn btn-ghost" onclick="Deals.reopen(${d.id})"><i class="fas fa-undo"></i> Wieder öffnen</button>
          <span class="dc-spacer"></span>${leadBtn}${del}`;
     document.getElementById('dealModal').classList.add('open');
+    if (typeof Provision !== 'undefined') Provision.dealBox('dmProvision', d, { admin: !!this.opts.isAdmin });
   },
 
   close() { document.getElementById('dealModal').classList.remove('open'); },
