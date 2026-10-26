@@ -596,6 +596,14 @@ migrate('ALTER TABLE users ADD COLUMN goal_results INT NULL').catch(() => {});
 migrate("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('ziel_gespraeche','10')").catch(() => {});
 migrate("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('ziel_ergebnisse','2')").catch(() => {});
 
+// Alte Admin-Adresse ad@ gibt es nicht mehr: einmalig auf info@ umstellen
+migrate("SELECT value FROM app_settings WHERE key_name='admin_mail_info_v1'").then(async ([[done]]) => {
+  if (done) return;
+  const [[frei]] = await migrate("SELECT COUNT(*) AS n FROM users WHERE email='info@novaflowservices.de'");
+  if (!frei.n) await migrate("UPDATE users SET email='info@novaflowservices.de' WHERE email='ad@novaflowservices.de'");
+  await migrate("INSERT INTO app_settings (key_name, value) VALUES ('admin_mail_info_v1', '1') ON DUPLICATE KEY UPDATE value='1'");
+}).catch(e => console.error('Admin-Mail:', e.message));
+
 // ── Cron: Activity Log nach 7 Tagen bereinigen ───────────────
 cron.schedule('0 3 * * *', async () => {
   try {
