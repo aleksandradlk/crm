@@ -26,6 +26,8 @@ const voiceRoutes          = require('./routes/voice');
 const dealRoutes           = require('./routes/deals');
 const callListRoutes       = require('./routes/calllists');
 const todayRoutes          = require('./routes/today');
+const termineRoutes        = require('./routes/termine');
+const zieleRoutes          = require('./routes/ziele');
 const { startReminderCron } = require('./cron/reminders');
 const { pollIncomingEmails } = require('./cron/emailPoller');
 const cron           = require('node-cron');
@@ -119,6 +121,8 @@ app.use('/api/sipgate',         require('./routes/sipgate'));
 app.use('/api/deals',           dealRoutes);
 app.use('/api/call-lists',      callListRoutes);
 app.use('/api/today',           todayRoutes);
+app.use('/api/termine',        termineRoutes);
+app.use('/api/ziele',          zieleRoutes);
 // Eigene Schnittstelle des CRM (API-Schlüssel) und deren Verwaltung
 const apiV1 = require('./routes/api-v1');
 app.use('/api/api-keys',        apiV1.keys);
@@ -539,6 +543,66 @@ migrate(`CREATE TABLE IF NOT EXISTS deals (
   INDEX idx_deals_lead (lead_id),
   INDEX idx_deals_won (status, won_at)
 )`).catch(() => {});
+
+// ── Passende Mail nach dem Gespräch ──────────────────────────
+// Eine Vorlage kann einem Anrufergebnis zugeordnet werden; das CRM schlägt sie
+// dann nach dem Gespräch vor. Das Ergebnis selbst steht am Anruf.
+migrate('ALTER TABLE email_templates ADD COLUMN trigger_outcome VARCHAR(30) NULL').catch(() => {});
+migrate('ALTER TABLE call_logs ADD COLUMN outcome VARCHAR(30) NULL').catch(() => {});
+// Drei fertige Vorlagen, einmalig (wer sie löscht, bekommt sie nicht wieder)
+migrate("SELECT value FROM app_settings WHERE key_name='mail_vorschlaege_v1'").then(async ([[done]]) => {
+  if (done) return;
+  const vorlagen = [
+    ['interesse', 'Infos nach dem Telefonat', 'Unser Telefonat – Informationen für {{firma}}',
+     'Guten Tag {{kunde}},\n\nvielen Dank für das nette Gespräch eben. Wie besprochen schicke ich Ihnen hier die wichtigsten Informationen.\n\nIm nächsten Schritt erstelle ich Ihnen gerne ein unverbindliches Angebot, das genau zu {{firma}} passt. Bei Fragen antworten Sie einfach auf diese E-Mail.\n\nViele Grüße\n{{closer}}'],
+    ['rueckruf', 'Rückruf wie besprochen', 'Unser Rückruf am {{termin}}',
+     'Guten Tag {{kunde}},\n\nvielen Dank für Ihre Zeit am Telefon. Wie besprochen rufe ich Sie am {{termin}} noch einmal an.\n\nFalls Ihnen der Zeitpunkt doch nicht passt, antworten Sie einfach kurz auf diese E-Mail, dann finden wir einen anderen.\n\nViele Grüße\n{{closer}}'],
+    ['termin', 'Terminbestätigung', 'Terminbestätigung: {{termin}}',
+     'Guten Tag {{kunde}},\n\nhiermit bestätige ich unseren Termin am {{termin}}.\n\nIch freue mich auf das Gespräch. Sollte etwas dazwischenkommen, geben Sie mir bitte kurz Bescheid.\n\nViele Grüße\n{{closer}}'],
+  ];
+  for (const [outcome, name, subject, body] of vorlagen) {
+    const [[belegt]] = await migrate('SELECT id FROM email_templates WHERE trigger_outcome=? LIMIT 1', [outcome]);
+    if (belegt) continue;
+    const [[gleich]] = await migrate('SELECT id FROM email_templates WHERE name=? LIMIT 1', [name]);
+    if (gleich) await migrate('UPDATE email_templates SET trigger_outcome=? WHERE id=?', [outcome, gleich.id]);
+    else await migrate('INSERT INTO email_templates (name, subject, body, category, trigger_outcome) VALUES (?,?,?,?,?)',
+      [name, subject, body, 'Nach dem Gespräch', outcome]);
+  }
+  await migrate("INSERT INTO app_settings (key_name, value) VALUES ('mail_vorschlaege_v1', '1') ON DUPLICATE KEY UPDATE value='1'");
+}).catch(e => console.error('Mail-Vorschläge:', e.message));
+
+// ── Termine (Übergabe an Closer, Terminübersicht) ────────────
+migrate(`CREATE TABLE IF NOT EXISTS appointments (
+  id            INT AUTO_INCREMENT PRIMARY KEY,
+  lead_id       INT NOT NULL,
+  closer_id     INT NOT NULL,
+  proposed_by   INT NULL,
+  starts_at     DATETIME NOT NULL,
+  duration_min  INT NOT NULL DEFAULT 30,
+  topic         VARCHAR(200) NULL,
+  notes         TEXT NULL,
+  status        VARCHAR(20) NOT NULL DEFAULT 'vorgeschlagen',
+  counter_at    DATETIME NULL,
+  response_note VARCHAR(1000) NULL,
+  responded_at  DATETIME NULL,
+  erinnert      TINYINT(1) NOT NULL DEFAULT 0,
+  created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE,
+  INDEX idx_appt_closer_start (closer_id, starts_at),
+  INDEX idx_appt_status (status, starts_at),
+  INDEX idx_appt_lead (lead_id)
+)`).catch(() => {});
+migrate('ALTER TABLE reminders ADD COLUMN appointment_id INT NULL').catch(() => {});
+cron.schedule('* * * * *', () => termineRoutes.erinnern());
+
+// ── Ziele pro Closer (leer = Standard aus den Einstellungen) ──
+migrate("ALTER TABLE users ADD COLUMN goal_period VARCHAR(10) NULL").catch(() => {});
+migrate('ALTER TABLE users ADD COLUMN goal_calls INT NULL').catch(() => {});
+migrate('ALTER TABLE users ADD COLUMN goal_talks INT NULL').catch(() => {});
+migrate('ALTER TABLE users ADD COLUMN goal_results INT NULL').catch(() => {});
+migrate("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('ziel_gespraeche','10')").catch(() => {});
+migrate("INSERT IGNORE INTO app_settings (key_name, value) VALUES ('ziel_ergebnisse','2')").catch(() => {});
 
 // ── Cron: Activity Log nach 7 Tagen bereinigen ───────────────
 cron.schedule('0 3 * * *', async () => {

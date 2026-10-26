@@ -40,12 +40,16 @@ function leadFilter(user, alias = 'l') {
     : { sql: `${alias}.assigned_to = ?`, params: [user.id] };
 }
 
-// Lead geht an einen anderen Vertriebler: offene Deals und offene
-// Wiedervorlagen wandern mit, damit der Neue alles weiterführen kann.
+// Lead geht an einen anderen Vertriebler: offene Deals, offene
+// Wiedervorlagen und feste Termine wandern mit, damit der Neue alles weiterführen kann.
 async function uebergeben(leadId, alterId, neuerId) {
   if (!neuerId || neuerId === alterId) return;
   await db.query("UPDATE deals SET owner_id=? WHERE lead_id=? AND status='open'", [neuerId, leadId]);
   if (alterId) await db.query('UPDATE reminders SET user_id=? WHERE lead_id=? AND user_id=? AND done_at IS NULL', [neuerId, leadId, alterId]);
+  // Feste Termine gehen mit; offene Vorschläge an andere bleiben, wie sie sind
+  if (alterId) await db.query(
+    "UPDATE appointments SET closer_id=?, erinnert=0 WHERE lead_id=? AND closer_id=? AND status='angenommen' AND starts_at >= NOW()",
+    [neuerId, leadId, alterId]).catch(() => {});
 }
 
 module.exports = { freieLeadsSichtbar, neuLaden, siehtAlles, darfSehen, leadFilter, uebergeben };
