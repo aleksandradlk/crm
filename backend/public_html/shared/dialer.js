@@ -137,6 +137,11 @@ const Dialer = {
             <button class="btn btn-ghost" onclick="Dialer.skip()" title="Überspringen (taucht beim nächsten Öffnen wieder auf)"><i class="fas fa-forward"></i> Überspringen</button>
             ${typeof this.opts.openLead === 'function' ? `<button class="btn btn-ghost" onclick="Dialer.opts.openLead(${l.id})"><i class="fas fa-external-link-alt"></i> Details</button>` : ''}
           </div>
+          ${typeof Bedarf !== 'undefined' ? `<div class="dl-actions dl-actions-2">
+            <button class="btn btn-ghost" onclick="Dialer.bedarf()"><i class="fas fa-clipboard-list"></i> Bedarfsanalyse</button>
+            <button class="btn btn-ghost dl-kurz" onclick="Dialer.kurzCheck()" title="Kunde hat keine Zeit: 3 Fragen + Rückruftermin"><i class="fas fa-bolt"></i> Keine Zeit: Kurz-Check</button>
+          </div>
+          <div id="dlBedarf"></div>` : ''}
           <div class="dl-meta">${meta}<span><i class="fas fa-history"></i>${lastCall}</span> ${statusBadge(l.status)}</div>
           <div class="dl-history" id="dlHistory"></div>
         </div>
@@ -173,6 +178,44 @@ const Dialer = {
       </div>
       ${this.opts.script ? `<details class="dl-card dl-script" open><summary><i class="fas fa-scroll"></i> Gesprächsleitfaden</summary><div>${escHtml(this.opts.script)}</div></details>` : ''}`);
     this._loadHistory(l.id);
+    this._bedarfStand(l.id);
+  },
+
+  // ── Bedarfsanalyse & Kurz-Check ─────────────────────────────
+  async _bedarfStand(leadId) {
+    if (typeof Bedarf === 'undefined') return;
+    const s = await Bedarf.stand(leadId);
+    const el = document.getElementById('dlBedarf');
+    if (!el || this.lead?.id !== leadId) return;
+    el.innerHTML = s ? `<div class="dl-bedarf"><i class="fas fa-clipboard-list"></i>
+      Bedarfsanalyse <b>${s.fragen_ok} von ${s.gesamt}</b> · Vorschlag <b>${escHtml(s.paket)}</b>
+      ${s.reif ? '<span class="bd-reif"><i class="fas fa-check-circle"></i> angebotsreif</span>' : ''}
+      ${s.angefordert ? '<span>· Angebot angefordert</span>' : ''}
+      <button class="btn btn-ghost btn-sm" onclick="Dialer.bedarf()">Öffnen</button></div>` : '';
+  },
+  bedarf() {
+    const l = this.lead;
+    if (!l) return;
+    Bedarf.open(l.id, { onClose: () => this._bedarfStand(l.id) });
+  },
+  kurzCheck() {
+    const l = this.lead;
+    if (!l) return;
+    Bedarf.kurzCheck(l, {
+      imAnrufmodus: true,
+      // Ergebnis „Rückruf“ mit dem Termin speichern → Anruf, Status, Wiedervorlage, nächster Lead
+      onSaved: (at, v) => {
+        if (!this.lead || this.lead.id !== l.id) return;
+        this.pick('rueckruf', true);
+        const input = document.getElementById('dlFollowUpAt');
+        input.value = this._toLocalInput(at);
+        this.setFollowUp('custom');
+        const note = document.getElementById('dlNote');
+        note.value = `Kurz-Check · Vorschlag ${v.name}${note.value ? ' – ' + note.value : ''}`;
+        if (Softphone.call) { showToast('Kurz-Check gespeichert – nach dem Auflegen „Speichern“'); return; }
+        this.save();
+      },
+    });
   },
 
   async _loadHistory(leadId) {

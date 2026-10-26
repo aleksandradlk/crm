@@ -70,40 +70,34 @@ const Deals = {
     if (sel) sel.value = /^\d+$/.test(this.owner) ? this.owner : '';
   },
 
-  // Phase „Angebot anfordern“: Der Closer gibt dem Admin die Infos fürs Angebot mit
+  // Phase „Angebot anfordern“: geht nur mit angebotsreifer Bedarfsanalyse (prüft der Server)
   istAnfrage(stageId) { const s = this.stages.find(x => x.id === stageId); return !!s && /anfordern|anfrage/i.test(s.name); },
-  async _anfrageInfos(stageId, deal) {
-    if (!this.istAnfrage(stageId) || this.opts.isAdmin) return '';
-    if (!this._adminName) {
-      try { this._adminName = ((await api('GET', '/users/admin-contact')).full_name || 'Admin').split(' ')[0]; } catch (_) { this._adminName = 'Admin'; }
-    }
-    return new Promise(resolve => {
+  // Antwort des Servers auswerten: fehlende Pflichtfragen mit Knopf zur Bedarfsanalyse
+  _fehler(e, leadId) {
+    if (e.status === 409 && e.data?.fehlt) {
       document.getElementById('anfrageModal')?.remove();
       const o = document.createElement('div');
       o.id = 'anfrageModal'; o.className = 'modal-overlay open'; o.style.zIndex = 960;
-      o.innerHTML = `<div class="modal modal-flex" style="max-width:520px">
-        <div class="modal-header"><div class="modal-heading"><span class="modal-icon copper"><i class="fas fa-file-signature"></i></span>
-          <div style="min-width:0"><div class="modal-title">Infos für das Angebot an ${escHtml(this._adminName)}</div>
-          <div class="modal-subtitle">${escHtml(deal ? (deal.company || deal.title) : '')}</div></div></div>
-          <button class="modal-x" data-x><i class="fas fa-times"></i></button></div>
-        <div class="modal-body">
-          <textarea id="anfrageText" class="form-control" rows="6" placeholder="Was soll ins Angebot?\n• Leistung / Paket\n• Besprochener Preis oder Budget\n• Gewünschter Start\n• Besonderheiten, Ansprechpartner, E-Mail für das Angebot"></textarea>
-          <div class="modal-note"><i class="fas fa-info-circle" style="color:var(--copper);margin-right:6px"></i>${escHtml(this._adminName)} bekommt einen Hinweis, schreibt das Angebot und schickt es raus. Du siehst es danach am Lead.</div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-ghost" data-x>Abbrechen</button>
-          <button class="btn btn-primary" data-ok><i class="fas fa-paper-plane"></i> An ${escHtml(this._adminName)} schicken</button>
-        </div></div>`;
-      const fertig = v => { o.remove(); resolve(v); };
-      o.querySelectorAll('[data-x]').forEach(b => b.onclick = () => fertig(null));
-      o.querySelector('[data-ok]').onclick = () => {
-        const t = o.querySelector('#anfrageText').value.trim();
-        if (!t) { showToast('Bitte kurz aufschreiben, was ins Angebot soll', 'err'); return; }
-        fertig(t);
-      };
+      o.onclick = ev => { if (ev.target === o) o.remove(); };
+      o.innerHTML = `<div class="modal modal-flex" style="max-width:480px">
+        <div class="modal-header"><div class="modal-heading"><span class="modal-icon copper"><i class="fas fa-clipboard-list"></i></span>
+          <div><div class="modal-title">Noch nicht angebotsreif</div><div class="modal-subtitle">Für „Angebot anfordern“ fehlt noch:</div></div></div>
+          <button class="modal-x" onclick="this.closest('.modal-overlay').remove()"><i class="fas fa-times"></i></button></div>
+        <div class="modal-body"><ul class="bd-fehlt">${e.data.fehlt.map(f => `<li>${escHtml(f)}</li>`).join('')}</ul></div>
+        <div class="modal-footer"><button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Später</button>
+          <button class="btn btn-primary" onclick="this.closest('.modal-overlay').remove();Deals.close();Bedarf.open(${leadId || e.data.lead_id})"><i class="fas fa-clipboard-list"></i> Bedarfsanalyse öffnen</button></div></div>`;
       document.body.appendChild(o);
-      o.querySelector('#anfrageText').focus();
-    });
+      return;
+    }
+    showToast(e.message, 'err');
+  },
+  async angebotGesendet(id) {
+    try {
+      await api('POST', `/deals/${id}/angebot-gesendet`);
+      showToast('Angebot als verschickt markiert – der Closer ist informiert');
+      this.close();
+      this._afterChange();
+    } catch (e) { showToast(e.message, 'err'); }
   },
 
   async show() {
@@ -190,6 +184,7 @@ const Deals = {
         <div class="dc-title">${escHtml(d.title)}</div>
         <div class="dc-sub">${escHtml(d.company || '')}${d.ceo ? ' · ' + escHtml(d.ceo) : ''}</div>
         ${rotten ? `<div class="dc-rot"><i class="fas fa-hourglass-end"></i>${d.days_in_stage} Tage in dieser Phase</div>` : ''}
+        ${d.admin_flag ? `<div class="dc-flag" title="${escHtml(d.admin_flag)}"><i class="fas fa-exclamation-triangle"></i>${escHtml(d.admin_flag)}</div>` : ''}
         <div class="dc-foot">
           <span class="dc-value">${this.fmt(d.value)}</span>
           ${d.expected_close_date ? `<span class="dc-close${overdueClose ? ' is-late' : ''}" title="Erwarteter Abschluss"><i class="fas fa-flag-checkered"></i>${fmtDateShort(d.expected_close_date + 'T12:00:00').slice(0, 6)}</span>` : ''}
@@ -241,17 +236,15 @@ const Deals = {
     const d = this.deals.find(x => x.id === this._drag);
     this._drag = null;
     if (!d || d.stage_id === stageId) return;
-    const infos = await this._anfrageInfos(stageId, d);
-    if (infos === null) return;
     const prev = d.stage_id;
     d.stage_id = stageId; d.days_in_stage = 0;
     this.renderBoard();
     try {
-      await api('PATCH', `/deals/${d.id}`, { stage_id: stageId, angebot_infos: infos || undefined });
-      if (infos) showToast('Angebot angefordert ✓');
+      const r = await api('PATCH', `/deals/${d.id}`, { stage_id: stageId });
+      if (r?.message) showToast(r.message);
       this._refreshSummary();
     } catch (err) {
-      d.stage_id = prev; this.renderBoard(); showToast(err.message, 'err');
+      d.stage_id = prev; this.renderBoard(); this._fehler(err, d.lead_id);
     }
   },
   async dropOutcome(e, outcome) {
@@ -442,13 +435,17 @@ const Deals = {
       ? `<button class="btn btn-ghost" onclick="Deals.opts.onAngebot(Deals._current)"><i class="fas fa-file-signature"></i> Angebot erstellen</button>` : '';
     const leadBtn = typeof this.opts.openLead === 'function'
       ? `<button class="btn btn-ghost" onclick="Deals.close();Deals.opts.openLead(${d.lead_id})"><i class="fas fa-external-link-alt"></i> Lead</button>` : '';
+    const bedarfBtn = typeof Bedarf !== 'undefined'
+      ? `<button class="btn btn-ghost" onclick="Deals.close();Bedarf.open(${d.lead_id})"><i class="fas fa-clipboard-list"></i> Bedarfsanalyse</button>` : '';
+    const gesendetBtn = this.opts.isAdmin && d.status === 'open' && this.istAnfrage(d.stage_id)
+      ? `<button class="btn btn-ghost" onclick="Deals.angebotGesendet(${d.id})"><i class="fas fa-paper-plane"></i> Angebot verschickt</button>` : '';
     const del = this.opts.isAdmin ? `<button class="btn btn-ghost btn-icon" onclick="Deals.remove()" title="Deal löschen"><i class="fas fa-trash"></i></button>` : '';
     document.getElementById('dmActions').innerHTML = d.status === 'open'
       ? `<button class="btn btn-primary" onclick="Deals.save()"><i class="fas fa-check"></i> Speichern</button>
          <span class="dc-spacer"></span>
          <button class="btn deal-btn-won" onclick="Deals.markWon(${d.id})"><i class="fas fa-trophy"></i> Gewonnen</button>
          <button class="btn deal-btn-lost" onclick="Deals.askLost(${d.id})"><i class="fas fa-times-circle"></i> Verloren</button>
-         ${angebotBtn}${leadBtn}${del}`
+         ${gesendetBtn}${angebotBtn}${bedarfBtn}${leadBtn}${del}`
       : `<button class="btn btn-primary" onclick="Deals.save()"><i class="fas fa-check"></i> Speichern</button>
          <button class="btn btn-ghost" onclick="Deals.reopen(${d.id})"><i class="fas fa-undo"></i> Wieder öffnen</button>
          <span class="dc-spacer"></span>${leadBtn}${del}`;
@@ -476,13 +473,8 @@ const Deals = {
     if (!body.title) { err.textContent = 'Bitte einen Titel angeben.'; return; }
     try {
       if (this._current) {
-        if (body.stage_id && body.stage_id !== this._current.stage_id) {
-          const infos = await this._anfrageInfos(body.stage_id, this._current);
-          if (infos === null) return;
-          if (infos) body.angebot_infos = infos;
-        }
-        await api('PATCH', `/deals/${this._current.id}`, body);
-        showToast('Deal gespeichert');
+        const r = await api('PATCH', `/deals/${this._current.id}`, body);
+        showToast(r?.message || 'Deal gespeichert');
       } else {
         if (!this._newLeadId) { err.textContent = 'Bitte einen Lead aus der Liste auswählen.'; return; }
         await api('POST', '/deals', { ...body, lead_id: this._newLeadId });
@@ -490,16 +482,14 @@ const Deals = {
       }
       this.close();
       this._afterChange();
-    } catch (e) { err.textContent = e.message; }
+    } catch (e) { if (e.status === 409 && e.data?.fehlt) this._fehler(e, this._current?.lead_id); else err.textContent = e.message; }
   },
 
   async moveTo(stageId) {
     if (!this._current) return;
-    const infos = await this._anfrageInfos(stageId, this._current);
-    if (infos === null) return;
     try {
-      await api('PATCH', `/deals/${this._current.id}`, { stage_id: stageId, angebot_infos: infos || undefined });
-      if (infos) showToast('Angebot angefordert ✓');
+      const r = await api('PATCH', `/deals/${this._current.id}`, { stage_id: stageId });
+      if (r?.message) showToast(r.message);
       this._current.stage_id = stageId;
       const local = this.deals.find(x => x.id === this._current.id);
       if (local) { local.stage_id = stageId; local.days_in_stage = 0; }
