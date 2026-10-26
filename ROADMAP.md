@@ -39,6 +39,7 @@ und CentralStationCRM (Bewertungen von Vertrieblern auf G2, Capterra, OMR, Trust
 - [x] Closer sehen nur eigene Leads, Deals und Summen (freie Leads abschaltbar), Übergabe mit Verlauf beim Neuzuweisen
 - [x] Startklar-Check für den Admin, Sicherungen aus dem Angebotstool per Datei einspielen, Angebote & Rechnungen im Dark Mode
 - [x] Suchfelder vor Browser-Autofill geschützt (kein Benutzername mehr in der Suche)
+- [x] Telefonie über sipgate: Click-to-Dial, Anrufe automatisch erfassen (Push-API), Zuordnung Closer → Zugang/Telefon/Nummer
 
 ## Später
 | Feature | Nutzen | Aufwand |

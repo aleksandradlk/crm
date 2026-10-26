@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf34">
+<link rel="stylesheet" href="/shared/style.css?v=nf35">
 <style>
 .notif-panel{position:fixed;top:0;right:0;bottom:0;width:340px;background:var(--bg2);border-left:1px solid var(--border2);z-index:150;transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;padding:20px}
 .notif-panel.open{transform:translateX(0)}
@@ -452,18 +452,18 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf34"></script>
-<script src="/shared/mailvorschlag.js?v=nf34"></script>
-<script src="/shared/dialer.js?v=nf34"></script>
-<script src="/shared/deals.js?v=nf34"></script>
-<script src="/shared/calllists.js?v=nf34"></script>
-<script src="/shared/today.js?v=nf34"></script>
-<script src="/shared/ziele.js?v=nf34"></script>
-<script src="/shared/termine.js?v=nf34"></script>
-<script src="/shared/duplicates.js?v=nf34"></script>
-<script src="/shared/wiki.js?v=nf34"></script>
-<script src="/shared/finder.js?v=nf34"></script>
-<script src="/shared/board.js?v=nf34"></script>
+<script src="/shared/api.js?v=nf35"></script>
+<script src="/shared/mailvorschlag.js?v=nf35"></script>
+<script src="/shared/dialer.js?v=nf35"></script>
+<script src="/shared/deals.js?v=nf35"></script>
+<script src="/shared/calllists.js?v=nf35"></script>
+<script src="/shared/today.js?v=nf35"></script>
+<script src="/shared/ziele.js?v=nf35"></script>
+<script src="/shared/termine.js?v=nf35"></script>
+<script src="/shared/duplicates.js?v=nf35"></script>
+<script src="/shared/wiki.js?v=nf35"></script>
+<script src="/shared/finder.js?v=nf35"></script>
+<script src="/shared/board.js?v=nf35"></script>
 <script>
 const ME = Auth.getUser();
 const CAN = {
@@ -1173,6 +1173,11 @@ async function startCallCl(leadId, phone) {
       leadId, phone, label,
       onEnd: ({ callLogId, answered, durationSec }) => openCallDocCl(leadId, phone, callLogId, { answered, durationSec }),
     });
+    return;
+  }
+  if (Sipgate.bereit()) {
+    try { openCallDocCl(leadId, phone, await Sipgate.anrufen(leadId, (allLeads.find(x => x.id === leadId) || {}).company), null); }
+    catch (e) { showToast(e.message, 'err'); }
     return;
   }
   try {
@@ -2432,6 +2437,7 @@ async function loadCloserSettings() {
 loadCloserSettings();
 loadCloserDashboard();
 Inbox.start();
+Sipgate.loadConfig();
 Softphone.loadConfig().then(() => Softphone.initIncoming({
   onStart: id => openPanel(id),
   onEnd: ({ leadId, callLogId, durationSec, phone }) => {
