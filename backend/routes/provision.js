@@ -33,10 +33,13 @@ function planAusZahlung(art, prozent, raten) {
   if (art === 'raten' && raten.length > 1) { const s = raten.reduce((a, b) => a + b, 0) || 1; return raten.map((b, i) => ({ anteil: b / s, art: i ? 'rate' : 'anzahlung', nr: i + 1, von: raten.length })); }
   return [{ anteil: 1, art: 'einmal' }];
 }
+// Wunsch aus der Bedarfsanalyse: 50/50 oder 50 % bei Auftrag + Rest in n Monatsraten
 function planAusWunsch(zw) {
   if (zw === '5050') return planAusZahlung('anzahlung', 50, []);
   const m = /^raten(\d+)/.exec(zw || '');
-  return m ? planAusZahlung('raten', 0, Array(Math.max(1, parseInt(m[1]))).fill(1)) : planAusZahlung('einmal');
+  if (!m) return planAusZahlung('einmal');
+  const n = Math.max(1, parseInt(m[1]));
+  return planAusZahlung('raten', 0, [n, ...Array(n).fill(1)]);
 }
 
 // „X € bei Anzahlung, dann 3 × Y €“
@@ -55,7 +58,7 @@ async function berechne(deal, cfg, besitzer) {
   if (deal.status === 'lost') return { keine: true, grund: 'Der Deal ist verloren – keine Provision.' };
   if (besitzer && besitzer.role === 'admin') return { keine: true, grund: 'Deal eines Admins – keine Provision.' };
 
-  let basisPreis, rabatt, plan, quelle, angebot = null;
+  let basisPreis, rabatt, plan, quelle, angebot = null, gutschrift = 0;
   let analyse = null;
   const ladeAnalyse = async () => analyse || (analyse = (await bedarf.analyseLaden(deal.lead_id).catch(() => null))?.data || {});
   const daten = provisionsDaten(deal.id);
@@ -64,6 +67,7 @@ async function berechne(deal, cfg, besitzer) {
     angebot = { nummer: daten.angebot.nummer, status: daten.angebot.status };
     basisPreis = daten.angebot.einmaligNetto;
     rabatt = daten.angebot.rabatt;
+    gutschrift = daten.angebot.gutschrift || 0;
     if (daten.rechnungen.length) {
       const summe = daten.rechnungen.reduce((s, r) => s + r.netto, 0) || 1;
       plan = daten.rechnungen.map((r, i) => ({
@@ -94,20 +98,30 @@ async function berechne(deal, cfg, besitzer) {
       `SELECT id, won_at FROM deals WHERE lead_id=? AND id<>? AND status='won' AND paket='quickwin'
          AND won_at BETWEEN COALESCE(?, NOW()) - INTERVAL ? DAY AND COALESCE(?, NOW()) ORDER BY won_at DESC LIMIT 1`,
       [deal.lead_id, deal.id, deal.won_at || null, P.upgrade_tage, deal.won_at || null]);
-    if (qw) upgrade = { abzug: Number(cfg.pakete.quickwin?.einrichtung) || 0, quickwin_deal: qw.id };
+    if (qw) {
+      // Steht die Anrechnung schon als Minus-Position im Angebot, nicht doppelt abziehen – und sie ist kein Rabatt
+      upgrade = gutschrift > 0
+        ? { abzug: 0, im_angebot: gutschrift, quickwin_deal: qw.id }
+        : { abzug: Number(cfg.pakete.quickwin?.einrichtung) || 0, quickwin_deal: qw.id };
+      if (gutschrift > 0) rabatt = !!daten.angebot.rabattProzent;
+    }
   }
   const basis = round2(Math.max(0, basisPreis - (upgrade ? upgrade.abzug : 0)));
   const satz = rabatt ? Number(P.satz_rabatt) : Number(P.satz);
   const netto = round2(basis * satz / 100);
   const mitUst = !!(besitzer && besitzer.provision_zzgl_ust && !besitzer.provision_ausland);
   const ustSatz = mitUst ? Number(P.ust) : 0;
-  const auszahlung = round2(netto * (1 + ustSatz / 100));
 
-  // Auf die Zahlungen verteilen, Rundungsrest auf die letzte
+  // Auf die Zahlungen verteilen, Rundungsrest auf die letzte. Stornierte Rechnungen: Anteil entfällt
+  const storno = t => t.zahlungsstatus === 'storniert';
+  const letzte = plan.map(t => !storno(t)).lastIndexOf(true);
+  const soll = round2(netto * plan.filter(t => !storno(t)).reduce((x, t) => x + t.anteil, 0));
   let verteilt = 0;
   const heute = new Date().toISOString().slice(0, 10);
   const teile = plan.map((t, i) => {
-    const n = i === plan.length - 1 ? round2(netto - verteilt) : round2(netto * t.anteil);
+    if (storno(t)) return { art: t.art, nr: t.nr || i + 1, von: t.von || plan.length, rechnung: t.rechnung || null, netto: 0, auszahlung: 0,
+      kunde_bezahlt_am: null, rechnung_status: 'storniert', faellig_am: null, status: 'storniert' };
+    const n = i === letzte ? round2(soll - verteilt) : round2(netto * t.anteil);
     verteilt = round2(verteilt + n);
     const faellig = t.bezahlt_am ? plusTage(t.bezahlt_am, Number(P.faellig_tage) || 0) : null;
     const status = t.bezahlt_am ? (faellig <= heute ? 'faellig' : 'bezahlt') : t.rechnung !== undefined ? 'offen' : 'geplant';
@@ -115,11 +129,14 @@ async function berechne(deal, cfg, besitzer) {
       auszahlung: round2(n * (1 + ustSatz / 100)), kunde_bezahlt_am: t.bezahlt_am || null, rechnung_status: t.zahlungsstatus || null, faellig_am: faellig, status };
   });
 
+  const gueltig = teile.filter(t => t.status !== 'storniert');
+  const nettoSoll = round2(gueltig.reduce((x, t) => x + t.netto, 0));
+  const auszahlungSoll = round2(gueltig.reduce((x, t) => x + t.auszahlung, 0));
   return {
     quelle, geschaetzt: quelle !== 'angebot', angebot, paket, upgrade,
-    basis_preis: round2(basisPreis), basis, rabatt, satz, netto,
-    ust: { aktiv: mitUst, satz: ustSatz, ausland: !!(besitzer && besitzer.provision_ausland), betrag: round2(auszahlung - netto) },
-    auszahlung, teile, text: planText(teile),
+    basis_preis: round2(basisPreis), basis, rabatt, satz, netto: nettoSoll, netto_voll: netto,
+    ust: { aktiv: mitUst, satz: ustSatz, ausland: !!(besitzer && besitzer.provision_ausland), betrag: round2(auszahlungSoll - nettoSoll) },
+    auszahlung: auszahlungSoll, teile, text: planText(gueltig), storniert: gueltig.length < teile.length,
     erste_zahlung_da: teile.some(t => t.kunde_bezahlt_am),
   };
 }
@@ -129,7 +146,16 @@ async function besitzerLaden(id) {
   return u || null;
 }
 
-// Bonus-Zähler eines Closers für einen Monat (Monat der Unterschrift = Gewonnen-Datum)
+// Bonus-Zähler eines Closers für einen Monat (Monat der Unterschrift = Gewonnen-Datum).
+// Ein Abschluss zählt nur mit S, M, L oder individueller Software und erst, wenn die erste
+// Zahlung da ist. Einmalig: Bonus für den allerersten bezahlten Abschluss; pro Monat: Stufen.
+async function zaehlbar(d, cfg) {
+  let paket = d.paket;
+  if (!paket) paket = (await bedarf.analyseLaden(d.lead_id).catch(() => null))?.data?.paket_empfohlen || null;
+  if (!cfg.provision.bonus_pakete.includes(paket)) return null;
+  const daten = provisionsDaten(d.id);
+  return { paket, bezahlt: !!daten && daten.rechnungen.some(r => r.status === 'bezahlt') };
+}
 async function bonus(userId, monat, cfg) {
   const P = cfg.provision;
   const [deals] = await db.query(
@@ -137,19 +163,27 @@ async function bonus(userId, monat, cfg) {
      WHERE d.owner_id=? AND d.status='won' AND DATE_FORMAT(d.won_at, '%Y-%m')=? ORDER BY d.won_at`, [userId, monat]);
   const zaehlt = [], wartet = [];
   for (const d of deals) {
-    let paket = d.paket;
-    if (!paket) paket = (await bedarf.analyseLaden(d.lead_id).catch(() => null))?.data?.paket_empfohlen || null;
-    if (!P.bonus_pakete.includes(paket)) continue;
-    const daten = provisionsDaten(d.id);
-    const bezahlt = !!daten && daten.rechnungen.some(r => r.status === 'bezahlt');
-    (bezahlt ? zaehlt : wartet).push({ id: d.id, title: d.title, company: d.company, paket, paket_name: cfg.pakete[paket]?.name || paket });
+    const z = await zaehlbar(d, cfg);
+    if (!z) continue;
+    (z.bezahlt ? zaehlt : wartet).push({ id: d.id, title: d.title, company: d.company, paket: z.paket, paket_name: cfg.pakete[z.paket]?.name || z.paket });
   }
-  const stufen = [...P.bonus].map(s => ({ ab: Number(s.ab), betrag: Number(s.betrag) })).filter(s => s.ab > 0).sort((a, b) => a.ab - b.ab);
+  // Ältere Einträge mit „ab 1“ (frühere Standardwerte) gelten als Bonus für den ersten Abschluss
+  const alle = [...P.bonus].map(s => ({ ab: Number(s.ab), betrag: Number(s.betrag) })).filter(s => s.ab > 0);
+  const ersterBetrag = Number(P.bonus_erster ?? alle.find(s => s.ab === 1)?.betrag ?? 0);
+  const stufen = alle.filter(s => s.ab > 1).sort((a, b) => a.ab - b.ab);
+  // Erster Abschluss: gab es schon vor diesem Monat einen bezahlten, zählbaren?
+  let frueher = false;
+  if (ersterBetrag > 0) {
+    const [alt] = await db.query(
+      `SELECT id, lead_id, paket FROM deals WHERE owner_id=? AND status='won' AND won_at < ? ORDER BY won_at`, [userId, monat + '-01']);
+    for (const d of alt) { const z = await zaehlbar(d, cfg); if (z && z.bezahlt) { frueher = true; break; } }
+  }
   const n = zaehlt.length;
+  const erster = { betrag: ersterBetrag, erreicht: !frueher && n > 0 && ersterBetrag > 0, schon_frueher: frueher };
   const erreicht = stufen.filter(s => n >= s.ab);
   const naechste = stufen.find(s => n < s.ab) || null;
-  return { monat, anzahl: n, summe: erreicht.reduce((s, x) => s + x.betrag, 0), stufen, naechste,
-    fehlen: naechste ? naechste.ab - n : 0, zaehlt, wartet };
+  return { monat, anzahl: n, summe: erreicht.reduce((s, x) => s + x.betrag, 0) + (erster.erreicht ? ersterBetrag : 0),
+    erster, stufen, naechste, fehlen: naechste ? naechste.ab - n : 0, zaehlt, wartet };
 }
 
 // Übersicht eines Closers: Provision je gewonnenem Deal (12 Monate) + Bonus des Monats
@@ -202,7 +236,7 @@ router.get('/team', auth, adminOnly, async (req, res) => {
     for (const c of closer) {
       const u = await uebersicht(c.id, monat, cfg);
       team.push({ ...u.user, faellig_monat: u.faellig_monat, ausstehend: u.ausstehend, verdient: u.verdient,
-        bonus: { anzahl: u.bonus.anzahl, summe: u.bonus.summe, fehlen: u.bonus.fehlen, naechste: u.bonus.naechste, wartet: u.bonus.wartet.length },
+        bonus: { anzahl: u.bonus.anzahl, summe: u.bonus.summe, fehlen: u.bonus.fehlen, naechste: u.bonus.naechste, erster: u.bonus.erster, wartet: u.bonus.wartet.length },
         deals: u.deals.map(d => ({ id: d.id, title: d.title, company: d.company, auszahlung: d.auszahlung, text: d.text, geschaetzt: d.geschaetzt,
           teile: d.teile.filter(t => t.faellig_am && t.faellig_am.slice(0, 7) === monat) })) });
     }

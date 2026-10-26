@@ -454,7 +454,8 @@ const Bedarf = {
           <label>USt-Aufschlag (wenn am Closer eingestellt)</label><div>${num('vr-pv-ust', c.provision.ust, 70)} %</div>
           <label>Bonus zählt bei</label><div class="vr-checks">${pk.filter(([k]) => k !== 'quickwin').map(([k, p]) =>
             `<label><input type="checkbox" class="vr-pv-paket" value="${k}"${c.provision.bonus_pakete.includes(k) ? ' checked' : ''}> ${escHtml(p.name)}</label>`).join('')}</div>
-          <label>Bonus-Stufen (ab Abschlüssen → €)</label><div><input class="form-control" id="vr-pv-bonus" value="${escHtml(c.provision.bonus.map(b => `${b.ab}:${b.betrag}`).join(', '))}" style="width:200px" placeholder="1:50, 5:150, 10:300"></div>
+          <label>Bonus für den allerersten bezahlten Abschluss (einmalig)</label><div>${num('vr-pv-erster', c.provision.bonus_erster ?? 50, 70)} €</div>
+          <label>Bonus pro Monat (ab Abschlüssen → €)</label><div><input class="form-control" id="vr-pv-bonus" value="${escHtml(c.provision.bonus.filter(b => b.ab > 1).map(b => `${b.ab}:${b.betrag}`).join(', '))}" style="width:200px" placeholder="5:150, 10:300"></div>
         </div>
         <div class="modal-actions">
           <button class="btn btn-ghost btn-sm" id="vrReset">Standard wiederherstellen</button>
@@ -472,7 +473,7 @@ const Bedarf = {
     o.querySelector('#vrSave').onclick = () => {
       const pakete = {}, zusatz = {};
       const stufen = o.querySelector('#vr-pv-bonus').value.split(/[,;]+/).map(t => t.split(/[:=→]/).map(x => Number(String(x).replace(/[^\d.]/g, ''))))
-        .filter(([ab, b]) => ab > 0 && b >= 0).map(([ab, betrag]) => ({ ab, betrag }));
+        .filter(([ab, b]) => ab > 1 && b >= 0).map(([ab, betrag]) => ({ ab, betrag }));
       pk.forEach(([k, p]) => { pakete[k] = { ...p, einrichtung: val(`vr-p-${k}-e`), betreuung: val(`vr-p-${k}-b`) }; });
       zs.forEach(([k, p]) => { zusatz[k] = k === 'automation' ? p : { ...p, einrichtung: val(`vr-z-${k}-e`), betreuung: val(`vr-z-${k}-b`) }; });
       speichern({
@@ -485,7 +486,7 @@ const Bedarf = {
         gesundheit: o.querySelector('#vr-gesund').value.split(',').map(s => s.trim()).filter(Boolean),
         provision: {
           satz: val('vr-pv-satz'), satz_rabatt: val('vr-pv-rabatt'), upgrade_tage: val('vr-pv-upgrade'),
-          faellig_tage: val('vr-pv-faellig'), ust: val('vr-pv-ust'),
+          faellig_tage: val('vr-pv-faellig'), ust: val('vr-pv-ust'), bonus_erster: val('vr-pv-erster'),
           bonus_pakete: [...o.querySelectorAll('.vr-pv-paket:checked')].map(x => x.value),
           bonus: stufen.length ? stufen : R.STANDARD.provision.bonus,
         },

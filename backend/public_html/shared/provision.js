@@ -13,6 +13,7 @@ const Provision = {
     return { anzahlung: 'Anzahlung', rate: `Rate ${t.nr} von ${t.von}`, rest: 'Restzahlung' }[t.art] || 'Zahlung';
   },
   teilStatus(t) {
+    if (t.status === 'storniert') return ['', 'Rechnung storniert – dafür gibt es keine Provision'];
     if (t.status === 'faellig') return ['ok', `Kunde hat am ${this.datum(t.kunde_bezahlt_am)} bezahlt · fällig seit ${this.datum(t.faellig_am)}`];
     if (t.status === 'bezahlt') return ['ok', `Kunde hat am ${this.datum(t.kunde_bezahlt_am)} bezahlt · fällig am ${this.datum(t.faellig_am)}`];
     if (t.status === 'offen') return t.rechnung_status === 'entwurf' ? ['', 'Rechnung noch nicht verschickt'] : ['warn', 'wartet auf die Zahlung des Kunden'];
@@ -34,7 +35,9 @@ const Provision = {
     try { p = await api('GET', `/provision/deal/${deal.id}`); } catch (_) { return; }
     if (p.keine || document.getElementById(elId) !== el) return;
     const rechnung = p.upgrade
-      ? `${p.satz} % von ${this.eur(p.basis)} · Upgrade nach Quick-Win: ${this.eur(p.basis_preis)} − ${this.eur(p.upgrade.abzug)}`
+      ? (p.upgrade.im_angebot
+        ? `${p.satz} % von ${this.eur(p.basis)} · Upgrade nach Quick-Win, Anrechnung von ${this.eur(p.upgrade.im_angebot)} steht im Angebot`
+        : `${p.satz} % von ${this.eur(p.basis)} · Upgrade nach Quick-Win: ${this.eur(p.basis_preis)} − ${this.eur(p.upgrade.abzug)}`)
       : `${p.satz} % von ${this.eur(p.basis)} Einmalpreis${p.rabatt ? ' (mit Rabatt)' : ''}`;
     const quelle = { bedarf: 'Geschätzt aus der Bedarfsanalyse – die genaue Zahl steht, sobald das Angebot erstellt ist.',
       deal: 'Geschätzt aus dem Deal-Wert – die genaue Zahl steht, sobald das Angebot erstellt ist.' }[p.quelle];
@@ -53,8 +56,9 @@ const Provision = {
 
   // ── Bonus-Leiste über den Deals (Closer) ───────────────────
   bonusText(b) {
+    const e = b.erster || {};
+    if (!b.anzahl && e.betrag && !e.schon_frueher) return `Dein erster bezahlter Abschluss bringt ${this.eur(e.betrag)}`;
     if (!b.naechste) return 'Alle Bonus-Stufen erreicht';
-    if (!b.anzahl) return `Dein erster bezahlter Abschluss bringt ${this.eur(b.naechste.betrag)}`;
     return `${b.anzahl} von ${b.naechste.ab} bis zum Bonus`;
   },
   async bonusLeiste(elId) {
@@ -69,6 +73,7 @@ const Provision = {
         <span class="pv-label"><i class="fas fa-medal"></i> Bonus ${escHtml(this.monatName(b.monat).split(' ')[0])}</span>
         <b>${this.bonusText(b)}</b>
         <span class="dc-spacer"></span>
+        ${b.erster && b.erster.erreicht ? `<span class="pv-tag is-ok" title="Einmaliger Bonus für deinen allerersten bezahlten Abschluss">Erster Abschluss +${this.eur(b.erster.betrag)}</span>` : ''}
         ${b.summe ? `<span class="pv-tag is-ok">${this.eur(b.summe)} sicher</span>` : ''}
         <span class="pv-bonus-go">Meine Provision <i class="fas fa-arrow-right"></i></span>
       </div>
