@@ -1601,7 +1601,8 @@ Antworte NUR mit gültigem JSON, kein Text davor oder danach:
       const v = angebotAnsicht(a);
       const einmalig = v.positionen.filter(p => p.abrechnung === 'einmalig');
       const rechnungen = ladeAlle(RECHNUNGEN_DIR)
-        .filter(r => r.bezug && r.bezug.angebotId === a.id && r.typ !== 'storno' && !r.storniertDurch)
+        // Stornierte bleiben drin (Anteil entfällt, die anderen Raten werden nicht größer); Storno-Belege selbst nicht
+        .filter(r => r.bezug && r.bezug.angebotId === a.id && r.typ !== 'storno')
         .map(rechnungAnsicht)
         .map(r => ({ id: r.id, nummer: r.nummer || null, netto: r.summen.netto, status: r.zahlungsstatus,
           bezahltAm: r.zahlung && r.zahlung.bezahltAm || null, faelligAm: r.faelligAm || r.bezug.geplantFaellig || null,
@@ -1611,6 +1612,9 @@ Antworte NUR mit gültigem JSON, kein Text davor oder danach:
         angebot: { id: a.id, nummer: a.nummer, status: v.statusEffektiv || a.status, datum: a.datum,
           einmaligNetto: round2(einmalig.reduce((x, p) => x + positionGesamt(p), 0)),
           rabatt: einmalig.some(p => Number(p.rabatt) > 0 || Number(p.einzelpreis) < 0),
+          rabattProzent: einmalig.some(p => Number(p.rabatt) > 0),
+          // Minus-Positionen (z. B. „Anrechnung Quick-Win“)
+          gutschrift: round2(-einmalig.filter(p => positionGesamt(p) < 0).reduce((x, p) => x + positionGesamt(p), 0)),
           zahlung: { art: v.zahlung.art, anzahlungProzent: v.zahlung.anzahlungProzent, raten: (v.zahlung.raten || []).map(r => r.betrag) } },
         rechnungen,
       };

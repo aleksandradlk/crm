@@ -31,7 +31,8 @@
       faellig_tage: 14,                   // Provision fällig = Zahlungseingang + X Tage
       ust: 19,                            // Aufschlag, wenn am Benutzer „zzgl. USt“
       bonus_pakete: ['s', 'm', 'l', 'software'],
-      bonus: [{ ab: 1, betrag: 50 }, { ab: 5, betrag: 150 }, { ab: 10, betrag: 300 }],
+      bonus_erster: 50,                   // einmalig für den allerersten bezahlten Abschluss (Vertrag § 4)
+      bonus: [{ ab: 5, betrag: 150 }, { ab: 10, betrag: 300 }],   // pro Kalendermonat, zusammen 450 €
     },
     gesundheit: ['arzt', 'ärzt', 'praxis', 'zahnarzt', 'heilpraktiker', 'therapie', 'therapeut', 'physio', 'pflege', 'klinik', 'ergo', 'logopäd', 'osteopath'],
   };
