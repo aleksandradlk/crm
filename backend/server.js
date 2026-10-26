@@ -29,6 +29,7 @@ const todayRoutes          = require('./routes/today');
 const termineRoutes        = require('./routes/termine');
 const zieleRoutes          = require('./routes/ziele');
 const bedarfRoutes         = require('./routes/bedarf');
+const auswertungRoutes     = require('./routes/auswertung');
 const { startReminderCron } = require('./cron/reminders');
 const { pollIncomingEmails } = require('./cron/emailPoller');
 const cron           = require('node-cron');
@@ -125,6 +126,7 @@ app.use('/api/today',           todayRoutes);
 app.use('/api/termine',        termineRoutes);
 app.use('/api/ziele',          zieleRoutes);
 app.use('/api/bedarf',         bedarfRoutes);
+app.use('/api/auswertung',     auswertungRoutes);
 // Eigene Schnittstelle des CRM (API-Schlüssel) und deren Verwaltung
 const apiV1 = require('./routes/api-v1');
 app.use('/api/api-keys',        apiV1.keys);
