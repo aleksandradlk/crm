@@ -70,6 +70,9 @@ const Termine = {
   _lang(sql) {
     return this._d(sql).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' }) + ', ' + this._uhr(sql) + ' Uhr';
   },
+  _wann(a) {
+    return a.art === 'anruf_bis' ? 'Anruf bis ' + this._d(a.starts_at).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' }) : this._lang(a.starts_at);
+  },
   _sql(datum, uhr) { return `${datum} ${uhr}:00`; },
   _iso(d) { const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; },
 
@@ -77,7 +80,8 @@ const Termine = {
   render() {
     const jetzt = Date.now();
     const admin = this.opts.isAdmin;
-    const ende = a => this._d(a.starts_at).getTime() + (a.duration_min || 30) * 60000;
+    const ende = a => a.art === 'anruf_bis' ? this._d(a.starts_at.slice(0, 10) + ' 23:59:59').getTime()
+      : this._d(a.starts_at).getTime() + (a.duration_min || 30) * 60000;
     const offen = this.rows.filter(a => admin
       ? ['gegenvorschlag', 'abgelehnt', 'vorgeschlagen'].includes(a.status)
       : a.status === 'vorgeschlagen');
@@ -120,9 +124,11 @@ const Termine = {
   _anfrage(a) {
     const admin = this.opts.isAdmin;
     const kopf = `
-      <div class="tr-card-when"><b>${escHtml(this._lang(a.starts_at))}</b> · ${a.duration_min} Min. ${this._status(a)}</div>
+      <div class="tr-card-when"><b>${escHtml(this._wann(a))}</b>${a.art === 'anruf_bis' ? '' : ` · ${a.duration_min} Min.`} ${this._status(a)}${a.uebergabe ? ' <span class="tr-status s-warm">Warme Übergabe</span>' : ''}</div>
       <div class="tr-card-who">${escHtml(a.company || '—')}${a.ceo ? ` <span>· ${escHtml(a.ceo)}</span>` : ''}</div>
       ${a.topic ? `<div class="tr-card-topic">${escHtml(a.topic)}</div>` : ''}
+      ${a.painpoints ? `<div class="tr-card-notes tr-pain"><i class="fas fa-quote-left"></i>${escHtml(a.painpoints)}</div>` : ''}
+      ${a.website ? `<a class="tr-card-link" href="${escHtml(absUrl(a.website))}" target="_blank" rel="noopener"><i class="fas fa-globe"></i>${escHtml(a.website)}</a>` : ''}
       ${a.notes ? `<div class="tr-card-notes"><i class="fas fa-sticky-note"></i>${escHtml(a.notes)}</div>` : ''}
       <div class="tr-card-meta">${[
         admin ? `<span><i class="fas fa-user"></i>${escHtml(a.closer_name || '')}</span>` : `<span><i class="fas fa-user-tie"></i>von ${escHtml(a.proposed_name || 'Admin')}</span>`,
@@ -164,10 +170,11 @@ const Termine = {
     const laeuft = !vergangen && this._d(a.starts_at).getTime() <= Date.now();
     const darfLead = admin || a.assigned_to === ME?.id;
     return `<div class="tr-row ${laeuft ? 'is-now' : ''} ${vergangen ? 'is-past' : ''}">
-      <div class="tr-time"><b>${this._uhr(a.starts_at)}</b><span>${vergangen ? escHtml(this._d(a.starts_at).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })) : a.duration_min + ' Min.'}</span></div>
+      <div class="tr-time">${a.art === 'anruf_bis' ? '<b class="tr-bis">bis</b><span>Anruf</span>' : `<b>${this._uhr(a.starts_at)}</b><span>${vergangen ? escHtml(this._d(a.starts_at).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })) : a.duration_min + ' Min.'}</span>`}</div>
       <div class="tr-main" ${darfLead ? `onclick="Termine.opts.openLead(${a.lead_id})"` : ''}>
         <div class="tr-title">${escHtml(a.company || '—')}${a.ceo ? ` <span>· ${escHtml(a.ceo)}</span>` : ''} ${vergangen || a.status !== 'angenommen' ? this._status(a) : ''}</div>
         ${a.topic ? `<div class="tr-topic">${escHtml(a.topic)}</div>` : ''}
+        ${a.painpoints ? `<div class="tr-notes tr-pain"><i class="fas fa-quote-left"></i>${escHtml(a.painpoints)}</div>` : ''}
         ${a.notes ? `<div class="tr-notes"><i class="fas fa-sticky-note"></i>${escHtml(a.notes)}</div>` : ''}
         <div class="tr-meta">${[
           admin ? `<span><i class="fas fa-user"></i>${escHtml(a.closer_name || '')}</span>` : '',
@@ -289,6 +296,9 @@ const Termine = {
 
   // Neuer Termin (mit vorhandenem oder neuem Lead) oder bestehenden ändern.
   // o.lead: Lead aus dem Panel · o.id: Termin bearbeiten
+  // Admin → anderer Closer = warme Übergabe (Handbuch S. 4): mit Thema, Painpoints,
+  // Webseite und den schon bekannten Pflichtfragen.
+  UEB_QUELLEN: ['Instagram', 'LinkedIn', 'Empfehlung', 'Sonstiges'],
   async openEditor(o = {}) {
     const admin = this.opts.isAdmin;
     const a = o.id ? this.rows.find(x => x.id === o.id) || null : null;
@@ -297,60 +307,152 @@ const Termine = {
     const morgen = new Date(); morgen.setDate(morgen.getDate() + 1);
     while ([0, 6].includes(morgen.getDay())) morgen.setDate(morgen.getDate() + 1);
     const datum = a ? a.starts_at.slice(0, 10) : this._iso(morgen);
-    const uhr = a ? this._uhr(a.starts_at) : '10:00';
-    const closerId = a ? a.closer_id : (lead?.assigned_to || '');
+    const uhr = a && a.art !== 'anruf_bis' ? this._uhr(a.starts_at) : '10:00';
+    const closerId = a ? a.closer_id : (lead?.assigned_to && lead.assigned_to !== ME?.id ? lead.assigned_to : '');
     const closers = users.filter(u => u.role === 'closer');
     const andere = users.filter(u => u.role !== 'closer');
     const userOpts = list => list.map(u => `<option value="${u.id}" ${u.id === closerId ? 'selected' : ''}>${escHtml(u.full_name)}${u.id === ME?.id ? ' (ich)' : ''}</option>`).join('');
     const neuerLead = !a && !lead;
+    const R = window.BedarfRegeln;
     this._editLeadId = a ? a.lead_id : lead?.id || null;
     this._editId = a ? a.id : null;
+    this._art = a?.art || 'termin';
+    const voll = admin && !a;     // komplettes Übergabe-Formular
+    const L = lead || {};
+    const feld = (id, label, val, extra = '', req = false) => `<div class="form-group" style="margin:0"><label>${label}${req ? ' <span class="tr-req">*</span>' : ''}</label><input class="form-control" id="${id}" value="${escHtml(val || '')}" ${extra}></div>`;
+    const chips = (id, liste, multi) => `<div class="dl-chips tr-qchips" id="${id}" data-multi="${multi ? 1 : 0}">${liste.map(([k, l]) => `<button type="button" class="qf-btn" data-v="${escHtml(k)}">${escHtml(l)}</button>`).join('')}</div>`;
+    const frage = (nr, titel, body) => `<div class="tr-q"><label class="tr-check"><input type="checkbox" data-q="${nr}" onchange="this.closest('.tr-q').querySelector('.tr-q-body').hidden=!this.checked"> ${nr}. ${titel} <span class="tr-opt">bekannt</span></label><div class="tr-q-body" hidden>${body}</div></div>`;
     this._modal(a ? 'Termin ändern' : admin ? 'Termin an Closer übergeben' : 'Termin eintragen', 'fa-calendar-plus', `
-      ${neuerLead ? `
-        <div class="tr-sub">Kunde</div>
+      ${voll ? `
+        <div class="tr-sub">Betrieb</div>
+        ${neuerLead ? `<div class="form-group" style="margin:0;position:relative"><label>Lead suchen <span class="tr-opt">oder unten neu anlegen</span></label>
+          <input class="form-control" id="trLSearch" placeholder="Firma, Name oder Telefon" oninput="Termine._suche(this.value)" autocomplete="off">
+          <div class="tr-results" id="trLResults"></div></div>` : ''}
+        <div id="trLeadPick">${lead ? `<div class="tr-lead"><i class="fas fa-building"></i><b>${escHtml(L.company)}</b>${L.ceo ? ' · ' + escHtml(L.ceo) : ''}</div>` : ''}</div>
         <div class="tr-grid2">
-          <div class="form-group" style="margin:0"><label>Firma oder Name <span class="tr-req">*</span></label><input type="text" id="trLCompany" class="form-control" placeholder="z. B. Malerbetrieb Klaus"></div>
-          <div class="form-group" style="margin:0"><label>Ansprechpartner</label><input type="text" id="trLCeo" class="form-control" placeholder="z. B. Klaus Becker"></div>
-          <div class="form-group" style="margin:0"><label>Telefon</label><input type="tel" id="trLPhone" class="form-control" placeholder="+49 …"></div>
-          <div class="form-group" style="margin:0"><label>E-Mail</label><input type="email" id="trLEmail" class="form-control"></div>
+          ${neuerLead ? feld('trLCompany', 'Firma oder Name', '', 'placeholder="z. B. Malerbetrieb Klaus"', true) : ''}
+          ${feld('trLCeo', 'Ansprechpartner', L.ceo, 'placeholder="z. B. Klaus Becker"', true)}
+          ${feld('trLPhone', 'Telefon', L.phone, 'type="tel" placeholder="+49 …"', true)}
+          ${feld('trLEmail', 'E-Mail', L.email, 'type="email"')}
+          ${feld('trLWeb', 'Webseite', L.website, 'placeholder="betrieb.de"')}
+          ${feld('trLInsta', 'Instagram', L.instagram_url, 'placeholder="instagram.com/…"')}
+          ${feld('trLBranche', 'Branche', L.industry, 'list="trBranchen" placeholder="z. B. Maler"', true)}
         </div>
-        <div class="form-group" style="margin:0"><label>Woher kommt der Kontakt?</label>
-          <div class="dl-chips" id="trLSource">${this.QUELLEN.map((q, i) => `<button type="button" class="qf-btn ${i === 0 ? 'active' : ''}" data-q="${q}" onclick="Termine._quelle(this)">${q}</button>`).join('')}</div>
-        </div>` : `<div class="tr-lead"><i class="fas fa-building"></i><b>${escHtml(a?.company || lead?.company || '')}</b>${(a?.ceo || lead?.ceo) ? ' · ' + escHtml(a?.ceo || lead?.ceo) : ''}</div>`}
+        <datalist id="trBranchen">${R.W.branche.filter(([k]) => k !== 'andere').map(([, l]) => `<option value="${escHtml(l)}">`).join('')}</datalist>
+        ${neuerLead ? `<div class="form-group" style="margin:0" id="trQuelleGroup"><label>Quelle <span class="tr-req">*</span></label>
+          <div class="dl-chips" id="trLSource">${this.UEB_QUELLEN.map((q, i) => `<button type="button" class="qf-btn ${i === 0 ? 'active' : ''}" data-q="${q}" onclick="Termine._quelle(this)">${q}</button>`).join('')}</div>
+        </div>` : ''}` : (a ? '' : `<div class="tr-lead"><i class="fas fa-building"></i><b>${escHtml(L.company || '')}</b>${L.ceo ? ' · ' + escHtml(L.ceo) : ''}</div>`)}
+      ${a ? `<div class="tr-lead"><i class="fas fa-building"></i><b>${escHtml(a.company || '')}</b>${a.ceo ? ' · ' + escHtml(a.ceo) : ''}</div>` : ''}
       <div class="tr-sub">Termin</div>
       ${admin ? `<div class="form-group" style="margin:0"><label>Closer <span class="tr-req">*</span></label>
         <select id="trCloser" class="form-control"><option value="">— Closer wählen —</option>
           ${closers.length ? `<optgroup label="Closer">${userOpts(closers)}</optgroup>` : ''}
           ${andere.length ? `<optgroup label="Admins">${userOpts(andere)}</optgroup>` : ''}
         </select></div>` : ''}
-      <div class="tr-grid3">
+      ${admin ? `<div class="dl-chips" id="trArt">
+        <button type="button" class="qf-btn ${this._art === 'termin' ? 'active' : ''}" data-art="termin" onclick="Termine._setArt('termin')">Fester Termin</button>
+        <button type="button" class="qf-btn ${this._art === 'anruf_bis' ? 'active' : ''}" data-art="anruf_bis" onclick="Termine._setArt('anruf_bis')">Anruf bis …</button></div>` : ''}
+      <div class="tr-grid3" id="trZeitTermin" ${this._art === 'anruf_bis' ? 'style="display:none"' : ''}>
         <div class="form-group" style="margin:0"><label>Datum</label><input type="date" id="trDate" class="form-control" value="${datum}"></div>
         <div class="form-group" style="margin:0"><label>Uhrzeit</label><input type="time" id="trTime" class="form-control" step="900" value="${uhr}"></div>
         <div class="form-group" style="margin:0"><label>Dauer</label><select id="trDur" class="form-control">
           ${[15, 30, 45, 60, 90].map(m => `<option value="${m}" ${m === (a?.duration_min || 30) ? 'selected' : ''}>${m} Min.</option>`).join('')}</select></div>
       </div>
-      <div class="form-group" style="margin:0"><label>Thema</label><input type="text" id="trTopic" class="form-control" value="${escHtml(a?.topic || '')}" placeholder="z. B. Website-Angebot besprechen"></div>
-      <div class="form-group" style="margin:0"><label>Notizen ${admin ? 'für den Closer' : ''} <span class="tr-opt">(optional)</span></label><textarea id="trNotes" class="form-control" rows="3" placeholder="Was weiß der Kunde schon? Worauf achten?">${escHtml(a?.notes || '')}</textarea></div>
-      ${admin ? '<label class="tr-check"><input type="checkbox" id="trMail" checked> Closer zusätzlich per E-Mail benachrichtigen</label>' : ''}`,
+      <div class="form-group" id="trZeitBis" style="margin:0;${this._art === 'anruf_bis' ? '' : 'display:none'}"><label>Anrufen bis spätestens</label>
+        <input type="date" id="trBis" class="form-control" value="${datum}" style="max-width:220px"></div>
+      <div class="form-group" style="margin:0"><label>Thema${voll ? ' <span class="tr-req">*</span>' : ''}</label><input type="text" id="trTopic" class="form-control" value="${escHtml(a?.topic || '')}" placeholder="eine Zeile, z. B. Anfragen über Instagram automatisieren"></div>
+      ${admin ? `<div class="form-group" style="margin:0"><label>Painpoints${voll ? ' <span class="tr-req">*</span>' : ''} <span class="tr-opt">kurz, in Worten des Kunden</span></label>
+        <textarea id="trPain" class="form-control" rows="2" placeholder="z. B. „Ich komme abends nicht hinterher mit den WhatsApp-Anfragen“">${escHtml(a?.painpoints || '')}</textarea></div>` : ''}
+      ${voll ? `<div class="tr-sub">Schon bekannt? <span class="tr-opt">abhaken + Antwort eintragen, landet in der Bedarfsanalyse</span></div>
+        <div class="tr-qs">
+          ${frage(1, 'Kanäle', chips('trQKanaele', R.W.kanaele, true))}
+          ${frage(2, 'Menge', '<input type="number" min="0" class="form-control" id="trQAnfragen" placeholder="Anfragen pro Woche" style="max-width:200px">')}
+          ${frage(3, 'Ablauf heute', '<input class="form-control" id="trQAblauf" placeholder="Wer antwortet, und wann?">')}
+          ${frage(4, 'Größter Zeitfresser', '<input class="form-control" id="trQProblem" placeholder="Wörtlich, wie der Kunde es sagt">')}
+          ${frage(5, 'Rahmen', `<input class="form-control" id="trQStart" placeholder="Wunschstart, z. B. März">${chips('trQEntscheider', R.W.entscheider, false)}`)}
+        </div>` : ''}
+      ${admin ? `<div class="form-group" style="margin:0"><label>Bereits versprochen / erwähnt <span class="tr-opt">(optional)</span></label><input id="trVersprochen" class="form-control" value="${escHtml(a?.versprochen || '')}" placeholder="z. B. Demo gezeigt, 10 % Rabatt angedeutet"></div>` : ''}
+      <div class="form-group" style="margin:0"><label>Notizen ${admin ? 'für den Closer' : ''} <span class="tr-opt">(optional)</span></label><textarea id="trNotes" class="form-control" rows="2" placeholder="Was weiß der Kunde schon? Worauf achten?">${escHtml(a?.notes || '')}</textarea></div>
+      ${admin && !a ? '<label class="tr-check"><input type="checkbox" id="trMail" checked> Closer zusätzlich per E-Mail benachrichtigen</label>' : ''}`,
       `<button class="btn btn-ghost btn-sm" onclick="Termine._close()">Abbrechen</button>
        <button class="btn btn-primary btn-sm" id="trSave" onclick="Termine.speichern()"><i class="fas fa-paper-plane"></i> ${a ? 'Speichern' : admin ? 'Übergeben' : 'Eintragen'}</button>`);
-    setTimeout(() => document.getElementById(neuerLead ? 'trLCompany' : admin && !closerId ? 'trCloser' : 'trTopic')?.focus(), 50);
+    document.querySelectorAll('#trModal .tr-qchips').forEach(c => c.addEventListener('click', e => {
+      const b = e.target.closest('button[data-v]'); if (!b) return;
+      if (c.dataset.multi !== '1') c.querySelectorAll('button').forEach(x => x !== b && x.classList.remove('active'));
+      b.classList.toggle('active');
+    }));
+    setTimeout(() => document.getElementById(neuerLead && voll ? 'trLSearch' : admin && !closerId ? 'trCloser' : 'trTopic')?.focus(), 50);
   },
   _quelle(btn) {
     document.querySelectorAll('#trLSource .qf-btn').forEach(b => b.classList.toggle('active', b === btn));
   },
+  _setArt(art) {
+    this._art = art;
+    document.querySelectorAll('#trArt .qf-btn').forEach(b => b.classList.toggle('active', b.dataset.art === art));
+    document.getElementById('trZeitTermin').style.display = art === 'termin' ? '' : 'none';
+    document.getElementById('trZeitBis').style.display = art === 'anruf_bis' ? '' : 'none';
+  },
+  // Vorhandenen Lead im Übergabe-Formular suchen und übernehmen
+  _suche(q) {
+    clearTimeout(this._sucheT);
+    const box = document.getElementById('trLResults');
+    if (q.trim().length < 2) { box.innerHTML = ''; return; }
+    this._sucheT = setTimeout(async () => {
+      const rows = await api('GET', `/leads?search=${encodeURIComponent(q.trim())}&limit=8`).catch(() => []);
+      const list = Array.isArray(rows) ? rows : rows.leads || [];
+      this._treffer = list;
+      box.innerHTML = list.length ? list.map(l => `<button type="button" class="tr-result" onclick="Termine._waehle(${l.id})">
+        <b>${escHtml(l.company || '—')}</b><span>${escHtml([l.ceo, l.phone, l.location].filter(Boolean).join(' · '))}</span></button>`).join('')
+        : '<div class="tr-result is-empty">Nichts gefunden – unten neu anlegen</div>';
+    }, 250);
+  },
+  _waehle(id) {
+    const l = (this._treffer || []).find(x => x.id === id);
+    if (!l) return;
+    this._editLeadId = id;
+    document.getElementById('trLResults').innerHTML = '';
+    document.getElementById('trLSearch').value = '';
+    document.getElementById('trLeadPick').innerHTML = `<div class="tr-lead"><i class="fas fa-building"></i><b>${escHtml(l.company)}</b>${l.ceo ? ' · ' + escHtml(l.ceo) : ''}
+      <button type="button" class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="Termine._editLeadId=null;this.closest('.tr-lead').remove();document.getElementById('trLCompany').closest('.form-group').hidden=false;document.getElementById('trQuelleGroup').hidden=false">Anderer</button></div>`;
+    document.getElementById('trLCompany').closest('.form-group').hidden = true;
+    document.getElementById('trQuelleGroup').hidden = true;
+    const set = (fid, v) => { const i = document.getElementById(fid); if (i && !i.value && v) i.value = v; };
+    set('trLCeo', l.ceo); set('trLPhone', l.phone); set('trLEmail', l.email); set('trLWeb', l.website); set('trLBranche', l.industry);
+  },
+  _fragen() {
+    const an = nr => document.querySelector(`#trModal [data-q="${nr}"]`)?.checked;
+    const v = id => document.getElementById(id)?.value.trim() || '';
+    const sel = id => [...document.querySelectorAll(`#${id} .qf-btn.active`)].map(b => b.dataset.v);
+    const f = {};
+    if (an(1)) { f.kanaele = sel('trQKanaele'); if (f.kanaele.length === 1) f.kanal_wichtigster = f.kanaele[0]; }
+    if (an(2) && v('trQAnfragen')) f.anfragen_pro_woche = v('trQAnfragen');
+    if (an(3) && v('trQAblauf')) f.ablauf_heute = v('trQAblauf');
+    if (an(4) && v('trQProblem')) f.groesstes_problem = v('trQProblem');
+    if (an(5)) { if (v('trQStart')) f.wunschstart = v('trQStart'); const e = sel('trQEntscheider')[0]; if (e) f.entscheider = e; }
+    return f;
+  },
 
   async speichern(force = false, leadId = null) {
     const v = id => document.getElementById(id)?.value.trim() || '';
+    const admin = this.opts.isAdmin;
+    const bis = this._art === 'anruf_bis';
     const datum = v('trDate'), uhr = v('trTime');
-    if (!datum || !uhr) return this._err('Bitte Datum und Uhrzeit angeben.');
-    if (this.opts.isAdmin && !v('trCloser')) return this._err('Bitte einen Closer wählen.');
+    if (bis ? !v('trBis') : (!datum || !uhr)) return this._err(bis ? 'Bis wann soll angerufen werden?' : 'Bitte Datum und Uhrzeit angeben.');
+    if (admin && !v('trCloser')) return this._err('Bitte einen Closer wählen.');
     const body = {
-      starts_at: this._sql(datum, uhr), duration_min: parseInt(v('trDur')) || 30,
+      art: this._art,
+      ...(bis ? { anruf_bis: v('trBis') } : { starts_at: this._sql(datum, uhr) }),
+      duration_min: parseInt(v('trDur')) || 30,
       topic: v('trTopic'), notes: v('trNotes'),
-      closer_id: this.opts.isAdmin ? parseInt(v('trCloser')) : undefined,
+      painpoints: document.getElementById('trPain') ? v('trPain') : undefined,
+      versprochen: document.getElementById('trVersprochen') ? v('trVersprochen') : undefined,
+      closer_id: admin ? parseInt(v('trCloser')) : undefined,
       notify_mail: document.getElementById('trMail') ? document.getElementById('trMail').checked : undefined,
     };
+    if (!this._editId && document.getElementById('trLCeo')) {
+      body.lead = { ceo: v('trLCeo'), phone: v('trLPhone'), email: v('trLEmail'), website: v('trLWeb'), instagram: v('trLInsta'), industry: v('trLBranche') };
+      body.fragen = this._fragen();
+    }
     const btn = document.getElementById('trSave');
     btn.disabled = true;
     try {
@@ -361,14 +463,13 @@ const Termine = {
         if (lid) body.lead_id = lid;
         else {
           if (!v('trLCompany')) { btn.disabled = false; return this._err('Bitte Firma oder Namen des Kunden eintragen.'); }
-          body.lead = { company: v('trLCompany'), ceo: v('trLCeo'), phone: v('trLPhone'), email: v('trLEmail'),
-            source: document.querySelector('#trLSource .qf-btn.active')?.dataset.q || '' };
+          body.lead = { ...(body.lead || {}), company: v('trLCompany'), source: document.querySelector('#trLSource .qf-btn.active')?.dataset.q || '' };
           body.force = force;
         }
         r = await api('POST', '/termine', body);
       }
       const an = this.users.find(u => u.id === body.closer_id);
-      showToast(r.status === 'vorgeschlagen' ? `Termin an ${an ? an.full_name : 'den Closer'} geschickt – wartet auf Antwort` : 'Termin eingetragen ✓');
+      showToast(r.status === 'vorgeschlagen' ? `An ${an ? an.full_name : 'den Closer'} übergeben – wartet auf Antwort` : 'Termin eingetragen ✓');
       this._close();
       this.load();
       if (typeof this.opts.onChange === 'function') this.opts.onChange();
@@ -377,10 +478,29 @@ const Termine = {
       if (e.status === 409 && e.data?.duplicates) {
         const d = e.data.duplicates[0];
         this._err(`Diesen Kunden gibt es schon: <b>${escHtml(d.company)}</b>${d.assigned_name ? ' (betreut von ' + escHtml(d.assigned_name) + ')' : ''}.
-          <div class="tr-err-actions"><button class="btn btn-primary btn-sm" onclick="Termine.speichern(false, ${d.id})">Termin für diesen Lead</button>
+          <div class="tr-err-actions"><button class="btn btn-primary btn-sm" onclick="Termine.speichern(false, ${d.id})">Für diesen Lead übergeben</button>
           <button class="btn btn-ghost btn-sm" onclick="Termine.speichern(true)">Trotzdem neu anlegen</button></div>`);
       } else this._err(escHtml(e.message));
     }
+  },
+
+  // Übergabe-Infos zum Lead (Anrufmodus, Lead-Panel): Thema, Painpoints, Webseite, „Noch klären“
+  async uebergabeBox(leadId, elId) {
+    // Erst laden, dann suchen: der Platz wird oft gerade erst gezeichnet
+    const u = await api('GET', `/termine/uebergabe/${leadId}`).catch(() => null);
+    const box = document.getElementById(elId);
+    if (box && box.dataset.lead && box.dataset.lead !== String(leadId)) return;   // inzwischen anderer Lead
+    if (!box || !u) { if (box) box.innerHTML = ''; return; }
+    const link = (url, icon) => url ? `<a href="${escHtml(absUrl(url))}" target="_blank" rel="noopener"><i class="${icon}"></i>${escHtml(String(url).replace(/^https?:\/\//, ''))}</a>` : '';
+    box.innerHTML = `<div class="tr-ueb">
+      <div class="tr-ueb-head"><i class="fas fa-handshake"></i> Übergabe von ${escHtml(u.proposed_name || 'Aleksandra')}
+        <span>${u.art === 'anruf_bis' ? 'Anruf bis ' + escHtml(this._d(u.starts_at).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })) : escHtml(this._lang(u.starts_at))}</span></div>
+      ${u.topic ? `<div class="tr-ueb-topic">${escHtml(u.topic)}</div>` : ''}
+      ${u.painpoints ? `<div class="tr-ueb-pain"><i class="fas fa-quote-left"></i>${escHtml(u.painpoints)}</div>` : ''}
+      <div class="tr-ueb-links">${link(u.website, 'fas fa-globe')}${link(u.instagram, 'fab fa-instagram')}</div>
+      ${u.noch_klaeren?.length ? `<div class="tr-ueb-offen"><b>Noch klären:</b> ${u.noch_klaeren.map(f => escHtml(f.titel)).join(' · ')}</div>` : '<div class="tr-ueb-offen is-ok"><i class="fas fa-check-circle"></i> Alle Pflichtfragen bekannt</div>'}
+      ${u.versprochen ? `<div class="tr-ueb-vers"><b>Bereits versprochen:</b> ${escHtml(u.versprochen)}</div>` : ''}
+    </div>`;
   },
 
   // ── Hinweise: Anfragen-Zähler und Erinnerung kurz vor dem Termin ──

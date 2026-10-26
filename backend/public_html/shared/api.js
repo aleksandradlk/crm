@@ -162,12 +162,59 @@ function absUrl(s) {
   return /^https?:\/\//i.test(v) ? v : `https://${v}`;
 }
 
+// Lead-Status an einer Stelle (Reihenfolge = Anzeige)
+const LEAD_STATUS = [['neu', 'Neu'], ['kontaktiert', 'Kontaktiert'], ['nicht_erreicht', 'Nicht erreicht'], ['rueckruf', 'Rückruf'],
+  ['kein_interesse', 'Kein Interesse'], ['passt_nicht', 'Passt nicht'], ['keine_anrufe', 'Keine Anrufe mehr'], ['kunde', 'Kunde']];
+const LEAD_STATUS_LABEL = Object.fromEntries(LEAD_STATUS);
+const LEAD_STATUS_ZU = ['kunde', 'kein_interesse', 'passt_nicht', 'keine_anrufe'];   // ohne nächsten Schritt
 function statusBadge(status) {
-  const labels = {
-    neu: 'Neu', kontaktiert: 'Kontaktiert', nicht_erreicht: 'Nicht erreicht',
-    kein_interesse: 'Kein Interesse', rueckruf: 'Rückruf', kunde: 'Kunde'
-  };
-  return `<span class="status-badge s-${status}">${labels[status] || status}</span>`;
+  return `<span class="status-badge s-${status}">${LEAD_STATUS_LABEL[status] || status}</span>`;
+}
+function statusOptionen(current, leer) {
+  return (leer ? `<option value="">${leer}</option>` : '') + LEAD_STATUS.map(([v, l]) => `<option value="${v}"${current === v ? ' selected' : ''}>${l}</option>`).join('');
+}
+
+// „Passt nicht“ nur mit Grund: fragt den Grund ab, gibt {grund, grund_text} zurück (null = abgebrochen)
+function statusGrund(status, titel) {
+  if (status !== 'passt_nicht') return Promise.resolve({});
+  const gruende = (window.BedarfRegeln && BedarfRegeln.GRUENDE) || ['Sonstiges'];
+  return new Promise(resolve => {
+    document.getElementById('grundModal')?.remove();
+    const o = document.createElement('div');
+    o.id = 'grundModal'; o.className = 'modal-overlay open'; o.style.zIndex = 1200;
+    let gewaehlt = null;
+    o.innerHTML = `<div class="modal modal-flex" style="max-width:460px">
+      <div class="modal-header"><div class="modal-heading"><div class="modal-icon"><i class="fas fa-ban"></i></div>
+        <div><div class="modal-title">${titel || 'Warum passt der Lead nicht?'}</div><div class="modal-subtitle">Pflicht – hilft bei der Auswertung</div></div></div>
+        <button class="modal-x" data-x><i class="fas fa-times"></i></button></div>
+      <div class="modal-body">
+        <div class="dl-chips" id="grundChips">${gruende.map(g => `<button type="button" class="qf-btn" data-g="${escHtml(g)}">${escHtml(g)}</button>`).join('')}</div>
+        <input class="form-control" id="grundText" placeholder="Kurz beschreiben (bei „Sonstiges“ Pflicht)">
+        <div class="tr-err" id="grundErr"></div>
+        <div class="modal-actions"><button class="btn btn-ghost btn-sm" data-x>Abbrechen</button><button class="btn btn-primary btn-sm" data-ok>Speichern</button></div>
+      </div></div>`;
+    const fertig = v => { o.remove(); resolve(v); };
+    o.querySelectorAll('[data-x]').forEach(b => b.onclick = () => fertig(null));
+    o.querySelector('#grundChips').onclick = e => {
+      const b = e.target.closest('[data-g]'); if (!b) return;
+      gewaehlt = b.dataset.g;
+      o.querySelectorAll('#grundChips .qf-btn').forEach(x => x.classList.toggle('active', x === b));
+    };
+    o.querySelector('[data-ok]').onclick = () => {
+      const t = o.querySelector('#grundText').value.trim();
+      if (!gewaehlt) return (o.querySelector('#grundErr').textContent = 'Bitte einen Grund wählen.');
+      if (gewaehlt === 'Sonstiges' && !t) return (o.querySelector('#grundErr').textContent = 'Bitte kurz beschreiben, warum.');
+      fertig({ grund: gewaehlt, grund_text: t });
+    };
+    document.body.appendChild(o);
+  });
+}
+// Status setzen (mit Grund-Abfrage). false = abgebrochen
+async function statusSetzen(id, status, extra) {
+  const g = extra || await statusGrund(status);
+  if (g === null) return false;
+  await api('PATCH', `/leads/${id}/status`, { status, ...g });
+  return true;
 }
 
 function confBar(val) {
@@ -210,7 +257,7 @@ function nextStepCell(l) {
     else if (d <= endToday) { cls = 'ns-today'; label = `heute ${time}`; }
     return `<span class="next-step ${cls}"><i class="fas fa-bell"></i>${label}</span>${last}`;
   }
-  if (['kunde', 'kein_interesse'].includes(l.status)) return `<span class="cell-sub">—</span>${last}`;
+  if (LEAD_STATUS_ZU.includes(l.status)) return `<span class="cell-sub">${l.status === 'keine_anrufe' ? '⛔ gesperrt' : '—'}</span>${last}`;
   return `<span class="next-step ns-none" title="Kein nächster Schritt geplant"><i class="fas fa-exclamation-triangle"></i>nicht geplant</span>${last}`;
 }
 
@@ -315,7 +362,9 @@ function makeLeadSelection(cfg) {
     if (!status) { showToast('Bitte einen Status auswählen', 'err'); return; }
     const ids = [...S.ids];
     if (!ids.length) return;
-    const results = await Promise.allSettled(ids.map(id => cfg.statusRequest(id, status)));
+    const grund = await statusGrund(status);          // „passt nicht“: Grund einmal für alle
+    if (grund === null) return;
+    const results = await Promise.allSettled(ids.map(id => cfg.statusRequest(id, status, grund)));
     const failed = results.filter(r => r.status === 'rejected').length;
     const done = ids.length - failed;
     if (done) showToast(`Status für ${plural(done, 'Lead', 'Leads')} gesetzt ✓`);

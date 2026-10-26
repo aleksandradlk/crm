@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS leads (
   source        VARCHAR(50),
   confidence    TINYINT UNSIGNED DEFAULT 50,
   notes         TEXT,
-  status        ENUM('neu','kontaktiert','nicht_erreicht','kein_interesse','rueckruf','kunde') NOT NULL DEFAULT 'neu',
+  status        ENUM('neu','kontaktiert','nicht_erreicht','kein_interesse','rueckruf','kunde','passt_nicht','keine_anrufe') NOT NULL DEFAULT 'neu',
   assigned_to   INT,               -- user.id des Closers
   created_by    INT NOT NULL,       -- user.id des Admins
   created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

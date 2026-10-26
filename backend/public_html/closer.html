@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf37">
+<link rel="stylesheet" href="/shared/style.css?v=nf39">
 <style>
 .notif-panel{position:fixed;top:0;right:0;bottom:0;width:340px;background:var(--bg2);border-left:1px solid var(--border2);z-index:150;transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;padding:20px}
 .notif-panel.open{transform:translateX(0)}
@@ -129,6 +129,8 @@
           <option value="kontaktiert">Kontaktiert</option>
           <option value="nicht_erreicht">Nicht erreicht</option>
           <option value="kein_interesse">Kein Interesse</option>
+          <option value="passt_nicht">Passt nicht</option>
+          <option value="keine_anrufe">Keine Anrufe mehr</option>
           <option value="rueckruf">Rückruf</option>
           <option value="kunde">Kunde</option>
         </select>
@@ -166,6 +168,8 @@
           <option value="kontaktiert">Kontaktiert</option>
           <option value="nicht_erreicht">Nicht erreicht</option>
           <option value="kein_interesse">Kein Interesse</option>
+          <option value="passt_nicht">Passt nicht</option>
+          <option value="keine_anrufe">Keine Anrufe mehr</option>
           <option value="rueckruf">Rückruf</option>
           <option value="kunde">Kunde</option>
         </select>
@@ -220,6 +224,8 @@
           <option value="kontaktiert">Kontaktiert</option>
           <option value="nicht_erreicht">Nicht erreicht</option>
           <option value="kein_interesse">Kein Interesse</option>
+          <option value="passt_nicht">Passt nicht</option>
+          <option value="keine_anrufe">Keine Anrufe mehr</option>
           <option value="rueckruf">Rückruf</option>
           <option value="kunde">Kunde</option>
         </select>
@@ -273,7 +279,7 @@
             <thead><tr>
               <th class="cell-check"><input type="checkbox" id="selectAllLeadsCl" title="Alle auswählen" onchange="clAllSel.toggleAll(this.checked)"></th>
               <th class="mob-hide">#</th><th>Unternehmen</th><th>Telefon</th><th class="mob-hide">Standort</th>
-              <th class="mob-hide">Zugewiesen an</th><th>Status</th><th class="mob-hide">Letzter Kontakt</th><th></th>
+              <th class="mob-hide">Zugewiesen an</th><th>Status</th><th class="mob-hide">Nächster Schritt</th><th></th>
             </tr></thead>
             <tbody id="allLeadsBody"></tbody>
           </table>
@@ -452,20 +458,20 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf37"></script>
-<script src="/shared/bedarf-regeln.js?v=nf37"></script>
-<script src="/shared/bedarf.js?v=nf37"></script>
-<script src="/shared/mailvorschlag.js?v=nf37"></script>
-<script src="/shared/dialer.js?v=nf37"></script>
-<script src="/shared/deals.js?v=nf37"></script>
-<script src="/shared/calllists.js?v=nf37"></script>
-<script src="/shared/today.js?v=nf37"></script>
-<script src="/shared/ziele.js?v=nf37"></script>
-<script src="/shared/termine.js?v=nf37"></script>
-<script src="/shared/duplicates.js?v=nf37"></script>
-<script src="/shared/wiki.js?v=nf37"></script>
-<script src="/shared/finder.js?v=nf37"></script>
-<script src="/shared/board.js?v=nf37"></script>
+<script src="/shared/api.js?v=nf39"></script>
+<script src="/shared/bedarf-regeln.js?v=nf39"></script>
+<script src="/shared/bedarf.js?v=nf39"></script>
+<script src="/shared/mailvorschlag.js?v=nf39"></script>
+<script src="/shared/dialer.js?v=nf39"></script>
+<script src="/shared/deals.js?v=nf39"></script>
+<script src="/shared/calllists.js?v=nf39"></script>
+<script src="/shared/today.js?v=nf39"></script>
+<script src="/shared/ziele.js?v=nf39"></script>
+<script src="/shared/termine.js?v=nf39"></script>
+<script src="/shared/duplicates.js?v=nf39"></script>
+<script src="/shared/wiki.js?v=nf39"></script>
+<script src="/shared/finder.js?v=nf39"></script>
+<script src="/shared/board.js?v=nf39"></script>
 <script>
 const ME = Auth.getUser();
 const CAN = {
@@ -504,7 +510,7 @@ const clMySel = makeLeadSelection({
   bodyId: 'myLeadsBody', cardIds: ['clMyLeadsTableCard', 'myLeadsPipelineView'], boardIds: ['pipelineBoard'], barId: 'clMyBulkBar', countId: 'clMyBulkCount',
   allCbId: 'selectAllMyLeadsCl', modeBtnId: 'clMySelectModeBtn', hintId: 'clMySelectHint',
   statusSelectId: 'clMyBulkStatus',
-  statusRequest: (id, status) => api('PATCH', `/leads/${id}/status`, { status }),
+  statusRequest: (id, status, grund) => statusSetzen(id, status, grund),
   visible: () => _visibleMyLeads,
   open: id => openPanel(id),
   afterChange: () => loadLeads(),
@@ -752,27 +758,28 @@ async function loadLeads() {
   }
 }
 
-// Ohne „Alle Leads sehen“ zeigt der zweite Bereich nur freie Leads (die Leads
-// der Kollegen liefert der Server gar nicht erst aus)
-function teamLeads() { return CAN.viewAll ? allLeads : allLeads.filter(l => !l.assigned_to); }
+// „Alle Leads“ = alles, was der Closer sehen darf: eigene + freie (fremde liefert der Server nicht)
+function teamLeads() { return allLeads; }
 function leadSichtAnwenden(freie) {
   const nav = document.querySelector('.nav-item[data-sec="allLeads"]');
   const h1 = document.querySelector('#sec-allLeads h1'), desc = document.querySelector('#sec-allLeads .page-desc');
   const nur = !CAN.viewAll;
   if (nav) {
-    nav.innerHTML = nur ? '<i class="fas fa-hand-pointer"></i> Freie Leads' : '<i class="fas fa-list"></i> Alle Leads';
-    nav.style.display = nur && !freie ? 'none' : '';
+    nav.innerHTML = '<i class="fas fa-list"></i> Alle Leads';
+    nav.style.display = '';
   }
-  if (h1) h1.textContent = nur ? 'Freie Leads' : 'Alle Leads';
-  if (desc) desc.textContent = nur ? 'Leads ohne Zuständigen. Wenn du einen übernimmst, gehört er dir.' : 'Alle Leads im System. Freie Leads kannst du direkt übernehmen.';
+  if (h1) h1.textContent = 'Alle Leads';
+  if (desc) desc.textContent = nur
+    ? (freie ? 'Deine Leads und alle freien Leads. Freie kannst du direkt übernehmen.' : 'Deine Leads. Freie Leads sind gerade nicht freigegeben.')
+    : 'Alle Leads im System. Freie Leads kannst du direkt übernehmen.';
   document.getElementById('allAssignFilter').style.display = nur ? 'none' : '';
   document.querySelectorAll('#allQuickFilters .qf-btn')[2].style.display = nur ? 'none' : '';
   const kpis = document.querySelector('#sec-allLeads .dash-kpis');
   if (kpis) kpis.style.display = nur ? 'none' : '';
-  document.getElementById('allLeadTitle').textContent = nur ? 'Freie Leads' : 'Alle Leads';
+  document.getElementById('allLeadTitle').textContent = 'Alle Leads';
 }
 
-const STATUS_PRIORITY = { rueckruf:0, nicht_erreicht:1, kontaktiert:2, neu:3, kunde:4, kein_interesse:5 };
+const STATUS_PRIORITY = { rueckruf:0, nicht_erreicht:1, kontaktiert:2, neu:3, kunde:4, kein_interesse:5, passt_nicht:6, keine_anrufe:7 };
 
 function myLeads() {
   return allLeads
@@ -802,10 +809,7 @@ function filterMyLeads() {
 }
 
 // ── PIPELINE (Kanban) ─────────────────────────────────────────
-const PIPELINE_STATUSES = [
-  ['neu','Neu'],['kontaktiert','Kontaktiert'],['nicht_erreicht','Nicht erreicht'],
-  ['kein_interesse','Kein Interesse'],['rueckruf','Rückruf'],['kunde','Kunde']
-];
+const PIPELINE_STATUSES = LEAD_STATUS;
 
 function renderPipeline(leads, boardId = 'pipelineBoard') {
   const board = document.getElementById(boardId);
@@ -913,7 +917,9 @@ async function onColDrop(e, status, boardId = 'pipelineBoard') {
   const rerender = () => isAll ? renderPipeline(_visibleAllLeads.length ? _visibleAllLeads : teamLeads(), 'allPipelineBoard') : renderPipeline(myLeads());
   rerender();
   if (ids.length === 1 && !skipped) { await quickStatus(ids[0], status); rerender(); return; }
-  const results = await Promise.allSettled(ids.map(id => api('PATCH', `/leads/${id}/status`, { status })));
+  const grund = await statusGrund(status);
+  if (grund === null) { loadLeads(); return; }
+  const results = await Promise.allSettled(ids.map(id => statusSetzen(id, status, grund)));
   const failed = results.filter(r => r.status === 'rejected').length;
   if (failed) showToast(`${failed} ${failed === 1 ? 'Lead konnte' : 'Leads konnten'} nicht geändert werden`, 'err');
   else showToast(`Status für ${ids.length} ${ids.length === 1 ? 'Lead' : 'Leads'} aktualisiert ✓${skipped ? ` · ${skipped} fremde übersprungen` : ''}`);
@@ -994,7 +1000,7 @@ function renderAllLeads(leads) {
       <td class="mob-hide"><span class="cell-sub">${escHtml(l.location||'—')}</span></td>
       <td class="mob-hide">${l.assigned_name ? `<span class="assignee"><i>${escHtml(l.assigned_name[0].toUpperCase())}</i>${escHtml(l.assigned_name)}</span>` : '<span class="assignee none">Nicht zugewiesen</span>'}</td>
       <td>${statusBadge(l.status)}</td>
-      <td class="mob-hide"><span class="cell-sub mono">${fmtDateShort(l.updated_at || l.created_at)}</span></td>
+      <td class="mob-hide">${isMine || !l.assigned_to ? nextStepCell(l) : '<span class="cell-sub">—</span>'}</td>
       <td class="cell-actions" onclick="event.stopPropagation()">${assignBtn} <button class="btn btn-ghost btn-sm btn-icon" onclick="tableQuickNote(${l.id},this,event)" title="Schnellnotiz"><i class="fas fa-sticky-note"></i></button></td>
     </tr>`;
   }).join('');
@@ -1003,10 +1009,7 @@ function renderAllLeads(leads) {
 }
 
 function statusOptions(current) {
-  return [
-    ['neu','Neu'],['kontaktiert','Kontaktiert'],['nicht_erreicht','Nicht erreicht'],
-    ['kein_interesse','Kein Interesse'],['rueckruf','Rückruf'],['kunde','Kunde']
-  ].map(([v,l]) => `<option value="${v}"${current===v?' selected':''}>${l}</option>`).join('');
+  return LEAD_STATUS.map(([v,l]) => `<option value="${v}"${current===v?' selected':''}>${l}</option>`).join('');
 }
 
 function updateMyStats(leads) {
@@ -1032,7 +1035,7 @@ function updateAllStats(leads) {
 
 async function quickStatus(id, status) {
   try {
-    await api('PATCH', `/leads/${id}/status`, { status });
+    if (!(await statusSetzen(id, status))) { loadLeads(); return; }
     const lead = allLeads.find(l => l.id === id);
     if (lead) { lead.status = status; lead.updated_at = new Date().toISOString(); }
     filterMyLeads();
@@ -1292,7 +1295,7 @@ function renderPanelKeyInfo(l) {
   const lastActivity = lastNote && lastNote.created_at > (l.updated_at||'') ? lastNote.created_at : (l.updated_at||l.created_at);
   const canEdit = ME && ME.can_edit_contacts;
   const editBtnCl = (field, val) => canEdit ? `<button class="panel-icon-btn" onclick="editLeadContactCl(${l.id},'${field}',${escHtml(JSON.stringify(val||''))})" title="Bearbeiten"><i class="fas fa-edit"></i></button>` : '';
-  const callBtnCl = l.phone ? `<button class="panel-call-btn" onclick="startCallCl(${l.id},'${escHtml(l.phone)}')" title="Anrufen"><i class="fas fa-phone"></i> Anrufen</button>` : '';
+  const callBtnCl = l.phone && l.status !== 'keine_anrufe' ? `<button class="panel-call-btn" onclick="startCallCl(${l.id},'${escHtml(l.phone)}')" title="Anrufen"><i class="fas fa-phone"></i> Anrufen</button>` : '';
   const empty = `<span class="panel-muted">—</span>`;
   const contactItems = [
     l.ceo ? `<div class="panel-contact-row"><i class="fas fa-user"></i><span>${escHtml(l.ceo)}</span></div>` : '',
@@ -1304,6 +1307,7 @@ function renderPanelKeyInfo(l) {
   const sub = document.getElementById('panelSubtitle');
   if (sub) sub.textContent = [l.location, l.industry].filter(Boolean).join(' · ');
   MailVorschlag.panelBox(l, 'mvBox', 'mailMitVorlage');  // füllt #mvBox, sobald das Panel steht
+  Termine.uebergabeBox(l.id, 'uebBox');
   return `
     <div class="panel-meta">
       ${statusBadge(l.status)}
@@ -1317,6 +1321,8 @@ function renderPanelKeyInfo(l) {
       ${l.assigned_to === ME.id || !l.assigned_to ? `<button class="btn btn-ghost btn-sm" onclick="Bedarf.open(${l.id}, { onClose: () => openPanel(${l.id}) })"><i class="fas fa-clipboard-list"></i> Bedarfsanalyse</button>` : ''}
     </div>
     ${lastNote ? `<div class="panel-note"><div class="panel-note-label">Letzte Notiz</div><div class="panel-note-text">${escHtml(lastNote.text)}</div></div>` : ''}
+    ${l.status === 'keine_anrufe' ? '<div class="panel-gesperrt"><i class="fas fa-ban"></i><span><b>Keine Anrufe mehr</b> – dieser Lead wird nicht mehr angerufen. Aufheben kann nur Aleksandra.</span></div>' : ''}
+    <div id="uebBox"></div>
     <div id="mvBox"></div>
     <div id="callLogSectionCl">${renderCallLogsCl(l.call_logs||[])}</div>
   `;
@@ -1341,10 +1347,7 @@ function renderDetail(l) {
     return `<div class="panel-field${t==='wide'?' wide':''}"><div class="panel-field-k">${k}</div><div class="panel-field-v">${val}</div></div>`;
   }).join('');
 
-  const statusBtns = [
-    ['neu','Neu'],['kontaktiert','Kontaktiert'],['nicht_erreicht','Nicht erreicht'],
-    ['kein_interesse','Kein Interesse'],['rueckruf','Rückruf'],['kunde','Kunde']
-  ].map(([s,label]) =>
+  const statusBtns = LEAD_STATUS.map(([s,label]) =>
     `<button class="status-chip s-${s} ${l.status===s?'active':''}" onclick="setStatus(${l.id},'${s}')">${label}</button>`
   ).join('');
 
@@ -1440,15 +1443,12 @@ function renderDetail(l) {
 
 async function setStatus(id, status) {
   try {
-    await api('PATCH', `/leads/${id}/status`, { status });
+    if (!(await statusSetzen(id, status))) return;
     panelDirty = true;
     _panelLead.status = status;
     if (status === 'rueckruf') showRueckrufPopupCl(id);
     // Status-Buttons neu rendern (Highlight-Wechsel)
-    const btnHtml = [
-      ['neu','Neu'],['kontaktiert','Kontaktiert'],['nicht_erreicht','Nicht erreicht'],
-      ['kein_interesse','Kein Interesse'],['rueckruf','Rückruf'],['kunde','Kunde']
-    ].map(([s,label]) =>
+    const btnHtml = LEAD_STATUS.map(([s,label]) =>
       `<button class="status-chip s-${s} ${s===status?'active':''}" onclick="setStatus(${id},'${s}')">${label}</button>`
     ).join('');
     const btnEl = document.getElementById('panelStatusBtns');
@@ -2353,7 +2353,7 @@ async function loadCloserDashboard() {
 // Feature 3: Status setzen + nächsten Lead laden
 async function setStatusAndNext(id, status) {
   try {
-    await api('PATCH', `/leads/${id}/status`, { status });
+    if (!(await statusSetzen(id, status))) return;
     const { id: nextId } = await api('GET', `/leads/next?current_id=${id}`);
     if (nextId) { openPanel(nextId); showToast('Status gesetzt → nächster Lead'); }
     else { closePanel(); showToast('Alle Leads bearbeitet ✓', 'success'); }
@@ -2425,6 +2425,7 @@ Today.mount({
   openLead: id => openPanel(id),
   call: (id, phone) => startCallCl(id, phone),
   startDialer: o => startDialer(o),
+  showTermine: () => showSection('termine'),
 });
 Termine.mount({
   rootId: 'termineRoot',

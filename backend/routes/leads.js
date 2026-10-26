@@ -7,7 +7,8 @@ const { createDeal, markWon, markLost, parseValue } = require('./deals');
 const { refreshNorm, findDuplicates, normFields } = require('../helpers/dedupe');
 const { buildQueue } = require('../helpers/queue');
 
-const VALID_STATUSES = ['neu','kontaktiert','nicht_erreicht','kein_interesse','rueckruf','kunde'];
+const VALID_STATUSES = ['neu','kontaktiert','nicht_erreicht','kein_interesse','rueckruf','kunde','passt_nicht','keine_anrufe'];
+const { grundPruefen } = require('../public_html/shared/bedarf-regeln');
 
 // CSV mit Anführungszeichen ("Müller, Meier GmbH") und Zeilenumbrüchen in Feldern
 function parseCsv(text, delim) {
@@ -382,6 +383,7 @@ router.post('/:id/outcome', auth, async (req, res) => {
   try {
     const [[lead]] = await db.query('SELECT id, status, phone, assigned_to FROM leads WHERE id=? AND archived_at IS NULL', [leadId]);
     if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
+    if (lead.status === 'keine_anrufe') return res.status(409).json({ error: 'Bei diesem Lead gilt „Keine Anrufe mehr“.' });
     // Freier Lead (z.B. aus einer Wählliste): wer ihn anruft, übernimmt ihn
     if (lead.assigned_to === null && sicht.darfSehen(req.user, lead)) {
       const [r] = await db.query('UPDATE leads SET assigned_to=? WHERE id=? AND assigned_to IS NULL', [req.user.id, leadId]);
@@ -429,6 +431,8 @@ router.post('/:id/outcome', auth, async (req, res) => {
     // 3) Verlauf
     await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',
       [leadId, req.user.id, `📞 ${o.label}${noteClean ? ' – ' + noteClean : ''}`]);
+    // Erreicht: raus aus der Wählliste „nie erreicht“
+    if (o.call === 'reached') await db.query('UPDATE leads SET nie_erreicht=0 WHERE id=?', [leadId]);
 
     // 4) Fällige Wiedervorlagen schließen, nächste anlegen
     await db.query(
@@ -713,19 +717,38 @@ router.get('/:id', auth, async (req, res) => {
 // ── PATCH /api/leads/:id/status ──────────────────────────────
 router.patch('/:id/status', auth, async (req, res) => {
   const id     = parseInt(req.params.id);
-  const { status } = req.body;
-  if (!VALID_STATUSES.includes(status))
-    return res.status(400).json({ error: 'Ungültiger Status' });
+  try {
+    const { status } = req.body;
+    if (!VALID_STATUSES.includes(status))
+      return res.status(400).json({ error: 'Ungültiger Status' });
 
-  const [[lead]] = await db.query('SELECT * FROM leads WHERE id = ?', [id]);
-  if (!lead) return res.status(404).json({ error: 'Nicht gefunden' });
-  if (!canView(req.user, lead))
-    return res.status(403).json({ error: 'Kein Zugriff' });
+    const [[lead]] = await db.query('SELECT * FROM leads WHERE id = ?', [id]);
+    if (!lead) return res.status(404).json({ error: 'Nicht gefunden' });
+    if (!canView(req.user, lead))
+      return res.status(403).json({ error: 'Kein Zugriff' });
+    if (lead.status === status) return res.json({ ok: true });
+    // „Keine Anrufe mehr“ kann nur der Admin wieder aufheben
+    if (lead.status === 'keine_anrufe' && req.user.role !== 'admin')
+      return res.status(403).json({ error: '„Keine Anrufe mehr“ kann nur Aleksandra wieder aufheben.' });
+    // „Passt nicht“ nur mit Grund
+    let grund = null;
+    if (status === 'passt_nicht') {
+      const g = grundPruefen(req.body.grund, req.body.grund_text);
+      if (g.fehler) return res.status(400).json({ error: g.fehler, grund_noetig: true });
+      grund = g.voll;
+    }
 
-  await db.query('UPDATE leads SET status = ? WHERE id = ?', [status, id]);
-  await log(req.user.id, 'status_change', 'lead', id,
-    { from: lead.status, to: status }, req.ip);
-  res.json({ ok: true });
+    await db.query('UPDATE leads SET status = ?, status_grund = ? WHERE id = ?', [status, grund, id]);
+    if (status === 'passt_nicht' || status === 'keine_anrufe') {
+      await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',
+        [id, req.user.id, status === 'passt_nicht' ? `🚫 Passt nicht – ${grund}` : '⛔ Keine Anrufe mehr – aus allen Wähllisten genommen']);
+      // Offene Wiedervorlagen erledigen, damit der Lead nirgends mehr auftaucht
+      await db.query("UPDATE reminders SET done_at=NOW() WHERE lead_id=? AND done_at IS NULL", [id]);
+    }
+    await log(req.user.id, 'status_change', 'lead', id,
+      { from: lead.status, to: status }, req.ip);
+    res.json({ ok: true });
+  } catch (e) { console.error('Status ändern:', e); res.status(500).json({ error: 'Status konnte nicht gespeichert werden.' }); }
 });
 
 // ── PATCH /api/leads/:id — Update ──────────────────────────
@@ -956,15 +979,41 @@ router.post('/:id/email', auth, async (req, res) => {
   }
 });
 
+// ── POST /api/leads/:id/nie-erreicht — in die Wählliste „nie erreicht“ verschieben ──
+// Die Liste legt das CRM beim ersten Mal selbst an. Bis der Lead erreicht wird,
+// taucht er nur noch dort auf, nicht mehr im normalen Anrufmodus.
+router.post('/:id/nie-erreicht', auth, async (req, res) => {
+  const id = parseInt(req.params.id);
+  try {
+    const [[lead]] = await db.query('SELECT id, assigned_to FROM leads WHERE id=? AND archived_at IS NULL', [id]);
+    if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
+    if (!canView(req.user, lead)) return res.status(403).json({ error: 'Kein Zugriff' });
+    await db.query('UPDATE leads SET nie_erreicht=1 WHERE id=?', [id]);
+    await db.query("UPDATE reminders SET done_at=NOW() WHERE lead_id=? AND done_at IS NULL AND remind_at > NOW()", [id]);
+    const [[liste]] = await db.query("SELECT id FROM call_lists WHERE user_id=? AND filters LIKE '%\"nie_erreicht\":true%' LIMIT 1", [req.user.id]);
+    let listId = liste?.id;
+    if (!listId) {
+      const { cleanFilters } = require('../helpers/queue');
+      const [r] = await db.query('INSERT INTO call_lists (user_id, name, filters, shared) VALUES (?,?,?,0)',
+        [req.user.id, 'Nie erreicht', JSON.stringify(cleanFilters({ nie_erreicht: true, ignore_followups: true }))]);
+      listId = r.insertId;
+    }
+    await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)', [id, req.user.id, '📋 In Wählliste „nie erreicht“ verschoben']);
+    await log(req.user.id, 'lead_nie_erreicht', 'lead', id, { list_id: listId }, req.ip);
+    res.json({ ok: true, list_id: listId });
+  } catch (e) { console.error('nie-erreicht:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
+});
+
 // ── POST /api/leads/:id/calls/start — Anruf starten ─
 router.post('/:id/calls/start', auth, async (req, res) => {
   const leadId = parseInt(req.params.id);
   try {
     const [[lead]] = await db.query(
-      'SELECT id, phone, assigned_to FROM leads WHERE id=?', [leadId]
+      'SELECT id, phone, assigned_to, status FROM leads WHERE id=?', [leadId]
     );
     if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
     if (!lead.phone) return res.status(400).json({ error: 'Keine Telefonnummer gespeichert' });
+    if (lead.status === 'keine_anrufe') return res.status(409).json({ error: 'Bei diesem Lead gilt „Keine Anrufe mehr“ – Anrufen ist gesperrt.' });
     if (!canView(req.user, lead))
       return res.status(403).json({ error: 'Kein Zugriff auf diesen Lead' });
 

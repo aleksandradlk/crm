@@ -224,8 +224,9 @@ router.post('/anrufen', auth, async (req, res) => {
   if (!istAktiv()) return res.status(503).json({ error: 'sipgate ist nicht verbunden' });
   const leadId = parseInt(req.body.leadId);
   try {
-    const [[lead]] = await db.query('SELECT id, company, phone, assigned_to FROM leads WHERE id=? AND archived_at IS NULL', [leadId]);
+    const [[lead]] = await db.query('SELECT id, company, phone, assigned_to, status FROM leads WHERE id=? AND archived_at IS NULL', [leadId]);
     if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
+    if (lead.status === 'keine_anrufe') return res.status(409).json({ error: 'Bei diesem Lead gilt „Keine Anrufe mehr“ – Anrufen ist gesperrt.' });
     if (!sicht.darfSehen(req.user, lead)) return res.status(403).json({ error: 'Kein Zugriff auf diesen Lead' });
     const ziel = toE164(lead.phone);
     if (!ziel) return res.status(400).json({ error: 'Die Telefonnummer des Leads ist ungültig' });

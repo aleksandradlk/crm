@@ -6,10 +6,8 @@ const db     = require('../db');
 const { auth, adminOnly } = require('../middleware/auth');
 const { log } = require('../helpers/logger');
 
-const LOST_REASONS = [
-  'Kein Bedarf', 'Zu teuer', 'Kein Budget', 'Wettbewerber gewählt',
-  'Nicht mehr erreichbar', 'Falscher Ansprechpartner', 'Zeitpunkt passt nicht', 'Sonstiges',
-];
+// Gründe für „Verloren“ – dieselben wie für „passt nicht“ am Lead
+const { GRUENDE: LOST_REASONS, grundPruefen } = require('../public_html/shared/bedarf-regeln');
 
 const fmtEur = v => Number(v || 0).toLocaleString('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 
@@ -343,8 +341,12 @@ router.post('/:id/lost', auth, async (req, res) => {
   const deal = await loadDeal(parseInt(req.params.id));
   if (!deal) return res.status(404).json({ error: 'Deal nicht gefunden' });
   if (!canEdit(req.user, deal)) return res.status(403).json({ error: 'Kein Zugriff' });
-  const reason = String(req.body?.reason || '').trim().slice(0, 300);
-  if (!reason) return res.status(400).json({ error: 'Bitte einen Verlustgrund angeben' });
+  // grund + text, oder (älter) reason „Grund: Text“
+  let { grund, text } = req.body || {};
+  if (!grund && req.body?.reason) [grund, ...text] = String(req.body.reason).split(':'), text = text.join(':');
+  const g = grundPruefen(grund, text);
+  if (g.fehler) return res.status(400).json({ error: g.fehler });
+  const reason = g.voll;
   await markLost(deal, req.user.id, reason);
   await log(req.user.id, 'deal_lost', 'lead', deal.lead_id, { deal_id: deal.id, reason }, req.ip);
   res.json({ ok: true });

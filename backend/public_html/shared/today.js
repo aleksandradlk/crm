@@ -22,6 +22,10 @@ const Today = {
       <div class="today-goal" id="todayGoal"></div>
       <div class="today-grid">
         <div class="today-col">
+          <section class="card today-card is-anfrage" id="todayTerminCard" hidden>
+            <div class="card-header"><div class="card-title"><i class="fas fa-calendar-plus"></i> Neue Übergaben &amp; Terminanfragen <span class="badge" id="todayTerminCount">0</span></div></div>
+            <div class="today-list" id="todayTermine"></div>
+          </section>
           <section class="card today-card is-anfrage" id="todayAnfrageCard" hidden>
             <div class="card-header"><div class="card-title"><i class="fas fa-file-signature"></i> Angebote anfordern <span class="badge" id="todayAnfrageCount">0</span></div></div>
             <div class="today-list" id="todayAnfragen"></div>
@@ -101,6 +105,20 @@ const Today = {
     document.getElementById('todayQueueCount').textContent = d.queue_count ? d.queue_count : '';
     const time = t => new Date(t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
     const done = r => `<button class="btn btn-ghost btn-sm btn-icon" onclick="Today.done(${r.lead_id}, ${r.reminder_id})" title="Erledigt"><i class="fas fa-check"></i></button>`;
+
+    const ta = d.termin_anfragen || [];
+    document.getElementById('todayTerminCard').hidden = !ta.length;
+    document.getElementById('todayTerminCount').textContent = ta.length;
+    document.getElementById('todayTermine').innerHTML = ta.map(a => this._row({
+      title: escHtml(a.company || '—'),
+      sub: `<b>${escHtml(a.topic || 'Übergabe')}</b>${a.painpoints ? ' – ' + escHtml(String(a.painpoints).slice(0, 120)) : ''}`,
+      meta: a.art === 'anruf_bis'
+        ? `Anruf bis ${new Date(a.starts_at.slice(0, 10) + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}`
+        : new Date(a.starts_at.replace(' ', 'T')).toLocaleString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }),
+      leadId: a.lead_id, phone: a.phone,
+      extra: typeof Termine !== 'undefined' ? `<button class="btn btn-primary btn-sm" onclick="Termine.antworten(${a.id}, 'annehmen').then(() => Today.load())"><i class="fas fa-check"></i> Annehmen</button>
+        <button class="btn btn-ghost btn-sm" onclick="Today.opts.showTermine ? Today.opts.showTermine() : null">Ansehen</button>` : '',
+    })).join('');
 
     const anfr = d.angebot_anfragen || [];
     document.getElementById('todayAnfrageCard').hidden = !anfr.length;

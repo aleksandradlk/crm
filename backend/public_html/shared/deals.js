@@ -522,10 +522,10 @@ const Deals = {
   },
   async confirmLost() {
     const detail = document.getElementById('dlReasonText').value.trim();
-    if (!this._lostReason && !detail) { document.getElementById('dlErr').textContent = 'Bitte einen Grund wählen.'; return; }
-    const reason = [this._lostReason, detail].filter(Boolean).join(': ');
+    if (!this._lostReason) { document.getElementById('dlErr').textContent = 'Bitte einen Grund wählen.'; return; }
+    if (this._lostReason === 'Sonstiges' && !detail) { document.getElementById('dlErr').textContent = 'Bei „Sonstiges“ bitte kurz beschreiben, warum.'; return; }
     try {
-      await api('POST', `/deals/${this._lostId}/lost`, { reason });
+      await api('POST', `/deals/${this._lostId}/lost`, { grund: this._lostReason, text: detail });
       document.getElementById('dealLostModal').classList.remove('open');
       this.close();
       showToast('Deal als verloren markiert');

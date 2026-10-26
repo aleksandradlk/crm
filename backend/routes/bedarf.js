@@ -349,7 +349,29 @@ async function fristen() {
   } catch (e) { if (!/bedarfsanalysen|hinweis_24h_at/.test(e.message)) console.error('Fristen:', e.message); }
 }
 
+// Bekannte Antworten (z. B. aus der Übergabe) eintragen – nur leere Felder
+async function vorbefuellen(leadId, antworten, userId) {
+  const [[lead]] = await db.query('SELECT id, company, email, website, industry FROM leads WHERE id=?', [leadId]);
+  if (!lead) return null;
+  const alt = await analyseLaden(leadId);
+  const data = vorbelegt(lead, alt?.data || {});
+  const neu = bereinigen(antworten || {});
+  for (const [k, v] of Object.entries(neu)) if (R.leer(data[k])) data[k] = v;
+  await speichern(leadId, bereinigen(data), userId);
+  return R.pruefen({ ...data, _industry: lead.industry || '' }, await regeln());
+}
+// Offene Pflichtfragen eines Leads (für „Noch klären“)
+async function offeneFragen(leadId) {
+  const [[lead]] = await db.query('SELECT id, company, email, website, industry FROM leads WHERE id=?', [leadId]);
+  if (!lead) return [];
+  const a = await analyseLaden(leadId);
+  const p = R.pruefen({ ...vorbelegt(lead, a?.data || {}), _industry: lead.industry || '' }, await regeln());
+  return p.fragen.filter(f => !f.ok).map(f => ({ nr: f.nr, titel: f.titel }));
+}
+
 module.exports = router;
+module.exports.vorbefuellen = vorbefuellen;
+module.exports.offeneFragen = offeneFragen;
 module.exports.anfordern = anfordern;
 module.exports.angebotGesendet = angebotGesendet;
 module.exports.fristen = fristen;

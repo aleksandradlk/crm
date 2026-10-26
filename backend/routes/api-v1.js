@@ -13,7 +13,7 @@ const { log } = require('../helpers/logger');
 const { findDuplicates, refreshNorm } = require('../helpers/dedupe');
 
 const hash = k => crypto.createHash('sha256').update(k).digest('hex');
-const LEAD_STATUS = ['neu', 'kontaktiert', 'nicht_erreicht', 'kein_interesse', 'rueckruf', 'kunde'];
+const LEAD_STATUS = ['neu', 'kontaktiert', 'nicht_erreicht', 'kein_interesse', 'rueckruf', 'kunde', 'passt_nicht', 'keine_anrufe'];
 const LEAD_FELDER = ['company', 'ceo', 'email', 'phone', 'location', 'website', 'industry', 'employees', 'revenue', 'notes', 'linkedin_url'];
 
 // ── Schlüsselverwaltung (CRM-Oberfläche, nur Admin) ──────────

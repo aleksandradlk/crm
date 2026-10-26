@@ -648,6 +648,15 @@ for (const col of ['herkunft VARCHAR(30) NULL', 'paket VARCHAR(20) NULL', 'admin
   migrate(`ALTER TABLE deals ADD COLUMN ${col}`).catch(() => {});
 cron.schedule('*/10 * * * *', () => bedarfRoutes.fristen());
 
+// ── Status „passt nicht“/„Keine Anrufe mehr“, Wählliste „nie erreicht“, Übergabe ──
+// (nur ergänzend; Rückweg: db/rollback/2026-10-27_status-uebergabe.sql)
+migrate("ALTER TABLE leads MODIFY COLUMN status ENUM('neu','kontaktiert','nicht_erreicht','kein_interesse','rueckruf','kunde','passt_nicht','keine_anrufe') NOT NULL DEFAULT 'neu'").catch(e => console.error('Migration Lead-Status:', e.message));
+for (const col of ['status_grund VARCHAR(300) NULL', 'nie_erreicht TINYINT(1) NOT NULL DEFAULT 0', 'instagram_url VARCHAR(255) NULL'])
+  migrate(`ALTER TABLE leads ADD COLUMN ${col}`).catch(() => {});
+for (const col of ["art VARCHAR(20) NOT NULL DEFAULT 'termin'", 'painpoints TEXT NULL', 'versprochen TEXT NULL',
+  'offene_fragen VARCHAR(50) NULL', 'uebergabe TINYINT(1) NOT NULL DEFAULT 0', 'vorher_zugewiesen INT NULL'])
+  migrate(`ALTER TABLE appointments ADD COLUMN ${col}`).catch(() => {});
+
 // ── Cron: Activity Log nach 7 Tagen bereinigen ───────────────
 cron.schedule('0 3 * * *', async () => {
   try {

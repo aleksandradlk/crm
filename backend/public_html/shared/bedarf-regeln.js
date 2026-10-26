@@ -50,6 +50,20 @@
     reaktion_preis: [['passt', 'passt'], ['zoegert', 'zögert'], ['zu_teuer', 'zu teuer']],
     zahlungswunsch: [['5050', '50/50'], ['raten2', 'Raten 2 Monate'], ['raten3', 'Raten 3 Monate']],
   };
+  // Gründe für „Verloren“ (Deal) und „passt nicht“ (Lead) – Pflicht beim Speichern
+  const GRUENDE = ['Falsche Branche', 'Zu groß', 'Kein Bedarf', 'Kein Budget', 'Gesundheitsbranche', 'Nicht erreicht', 'Sonstiges'];
+  // „Sonstiges“ braucht einen Text; gespeichert wird „Grund: Text“
+  function grundPruefen(grund, text) {
+    const g = GRUENDE.find(x => x.toLowerCase() === String(grund || '').trim().toLowerCase());
+    const t = String(text || '').trim().slice(0, 250);
+    if (!g) return { fehler: 'Bitte einen Grund wählen.' };
+    if (g === 'Sonstiges' && !t) return { fehler: 'Bei „Sonstiges“ bitte kurz beschreiben, warum.' };
+    return { grund: g, text: t, voll: t ? `${g}: ${t}` : g };
+  }
+  // Lead-Status (Reihenfolge = Anzeige)
+  const STATUS = [['neu', 'Neu'], ['kontaktiert', 'Kontaktiert'], ['nicht_erreicht', 'Nicht erreicht'], ['rueckruf', 'Rückruf'],
+    ['kein_interesse', 'Kein Interesse'], ['passt_nicht', 'Passt nicht'], ['keine_anrufe', 'Keine Anrufe mehr'], ['kunde', 'Kunde']];
+
   const label = (feld, wert) => ((W[feld] || []).find(([k]) => k === wert) || [])[1] || wert || '';
 
   // Die 5 Pflichtfragen (Handbuch S. 9) und die Pflichtfelder im Ergebnis
@@ -167,7 +181,7 @@
     return out;
   }
 
-  const api = { STANDARD, W, FRAGEN, ERGEBNIS, label, pruefen, vorschlag, dealWert, positionen, gesundheit, cfgMit, eur, leer };
+  const api = { GRUENDE, grundPruefen, STATUS, STANDARD, W, FRAGEN, ERGEBNIS, label, pruefen, vorschlag, dealWert, positionen, gesundheit, cfgMit, eur, leer };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.BedarfRegeln = api;
 })(typeof window !== 'undefined' ? window : globalThis);

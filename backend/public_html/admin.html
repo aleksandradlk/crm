@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf37">
+<link rel="stylesheet" href="/shared/style.css?v=nf39">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -153,6 +153,8 @@
           <option value="kontaktiert">Kontaktiert</option>
           <option value="nicht_erreicht">Nicht erreicht</option>
           <option value="kein_interesse">Kein Interesse</option>
+          <option value="passt_nicht">Passt nicht</option>
+          <option value="keine_anrufe">Keine Anrufe mehr</option>
           <option value="rueckruf">Rückruf</option>
           <option value="kunde">Kunde</option>
         </select>
@@ -614,23 +616,23 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf37"></script>
-<script src="/shared/bedarf-regeln.js?v=nf37"></script>
-<script src="/shared/bedarf.js?v=nf37"></script>
-<script src="/shared/mailvorschlag.js?v=nf37"></script>
-<script src="/shared/dialer.js?v=nf37"></script>
-<script src="/shared/deals.js?v=nf37"></script>
-<script src="/shared/calllists.js?v=nf37"></script>
-<script src="/shared/today.js?v=nf37"></script>
-<script src="/shared/ziele.js?v=nf37"></script>
-<script src="/shared/termine.js?v=nf37"></script>
-<script src="/shared/duplicates.js?v=nf37"></script>
-<script src="/shared/wiki.js?v=nf37"></script>
-<script src="/shared/lines.js?v=nf37"></script>
-<script src="/shared/finder.js?v=nf37"></script>
-<script src="/shared/board.js?v=nf37"></script>
-<script src="/shared/integrations.js?v=nf37"></script>
-<script src="/shared/startklar.js?v=nf37"></script>
+<script src="/shared/api.js?v=nf39"></script>
+<script src="/shared/bedarf-regeln.js?v=nf39"></script>
+<script src="/shared/bedarf.js?v=nf39"></script>
+<script src="/shared/mailvorschlag.js?v=nf39"></script>
+<script src="/shared/dialer.js?v=nf39"></script>
+<script src="/shared/deals.js?v=nf39"></script>
+<script src="/shared/calllists.js?v=nf39"></script>
+<script src="/shared/today.js?v=nf39"></script>
+<script src="/shared/ziele.js?v=nf39"></script>
+<script src="/shared/termine.js?v=nf39"></script>
+<script src="/shared/duplicates.js?v=nf39"></script>
+<script src="/shared/wiki.js?v=nf39"></script>
+<script src="/shared/lines.js?v=nf39"></script>
+<script src="/shared/finder.js?v=nf39"></script>
+<script src="/shared/board.js?v=nf39"></script>
+<script src="/shared/integrations.js?v=nf39"></script>
+<script src="/shared/startklar.js?v=nf39"></script>
 <script>
 let allLeads = [], allUsers = [], editingUserId = null;
 let panelDirty = false;
@@ -749,10 +751,7 @@ function showTab(name) {
 }
 
 // ── PIPELINE (geteilt für Alle Leads + Meine Leads) ──────────
-const PIPELINE_STATUSES = [
-  ['neu','Neu'],['kontaktiert','Kontaktiert'],['nicht_erreicht','Nicht erreicht'],
-  ['kein_interesse','Kein Interesse'],['rueckruf','Rückruf'],['kunde','Kunde']
-];
+const PIPELINE_STATUSES = LEAD_STATUS;
 const _pipelineData = {};
 let _adminDraggedId = null;
 
@@ -847,7 +846,9 @@ async function onAdminColDrop(e, status, boardId) {
   ids.forEach(id => { const l = allLeads.find(x => x.id === id); if (l) l.status = status; });
   renderAdminPipeline(_pipelineData[boardId] || [], boardId);
   try {
-    await Promise.all(ids.map(id => api('PATCH', `/leads/${id}/status`, { status })));
+    const grund = await statusGrund(status);
+    if (grund === null) { loadLeads(); return; }
+    await Promise.all(ids.map(id => statusSetzen(id, status, grund)));
     updateLeadStats(allLeads);
     renderLeads(currentFilteredLeads.length ? currentFilteredLeads : allLeads);
     showToast(ids.length === 1 ? 'Status aktualisiert ✓' : `Status für ${ids.length} Leads aktualisiert ✓`);
@@ -943,8 +944,8 @@ function renderLeadKpis(containerId, leads) {
 }
 
 // ── STATUS QUICK-CHANGE (Tabellenzeile) ────────────────────────
-const STATUS_OPTS = ['neu','kontaktiert','nicht_erreicht','kein_interesse','rueckruf','kunde'];
-const STATUS_LABELS = { neu:'Neu', kontaktiert:'Kontaktiert', nicht_erreicht:'Nicht erreicht', kein_interesse:'Kein Interesse', rueckruf:'Rückruf', kunde:'Kunde' };
+const STATUS_OPTS = LEAD_STATUS.map(([k]) => k);
+const STATUS_LABELS = LEAD_STATUS_LABEL;
 
 function statusSelectHtml(l) {
   const opts = STATUS_OPTS.map(s => `<option value="${s}" ${l.status===s?'selected':''}>${STATUS_LABELS[s]}</option>`).join('');
@@ -955,7 +956,7 @@ async function quickChangeStatus(id, sel) {
   const status = sel.value;
   sel.disabled = true;
   try {
-    await api('PATCH', `/leads/${id}/status`, { status });
+    if (!(await statusSetzen(id, status))) { const l0 = allLeads.find(x => x.id === id); sel.value = l0?.status || ''; return; }
     sel.className = `status-select s-${status}`;
     const lead = allLeads.find(x => x.id === id);
     if (lead) lead.status = status;
@@ -1335,7 +1336,7 @@ function renderPanelKeyInfo(l) {
   const lastNote = (l.comments||[]).length ? l.comments[l.comments.length - 1] : null;
   const lastActivity = lastNote && lastNote.created_at > (l.updated_at||'') ? lastNote.created_at : (l.updated_at||l.created_at);
   const editBtn = (field, val) => `<button class="panel-icon-btn" onclick="editLeadContact(${l.id},'${field}',${escHtml(JSON.stringify(val||''))})" title="Bearbeiten"><i class="fas fa-edit"></i></button>`;
-  const callBtn = l.phone ? `<button class="panel-call-btn" onclick="startCall(${l.id},'${escHtml(l.phone)}')" title="Anrufen"><i class="fas fa-phone"></i> Anrufen</button>` : '';
+  const callBtn = l.phone && l.status !== 'keine_anrufe' ? `<button class="panel-call-btn" onclick="startCall(${l.id},'${escHtml(l.phone)}')" title="Anrufen"><i class="fas fa-phone"></i> Anrufen</button>` : '';
   const empty = `<span class="panel-muted">—</span>`;
   const contactItems = [
     l.ceo ? `<div class="panel-contact-row"><i class="fas fa-user"></i><span>${escHtml(l.ceo)}</span></div>` : '',
@@ -1347,6 +1348,7 @@ function renderPanelKeyInfo(l) {
   const sub = document.getElementById('panelSubtitle');
   if (sub) sub.textContent = [l.location, l.industry].filter(Boolean).join(' · ');
   MailVorschlag.panelBox(l, 'mvBox', 'mailMitVorlage');  // füllt #mvBox, sobald das Panel steht
+  Termine.uebergabeBox(l.id, 'uebBox');
   return `
     <div class="panel-meta">
       ${statusBadge(l.status)}
@@ -1362,6 +1364,8 @@ function renderPanelKeyInfo(l) {
       <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteLead(${l.id})" title="Lead löschen" style="color:var(--red);margin-left:auto"><i class="fas fa-trash"></i></button>
     </div>
     ${lastNote ? `<div class="panel-note"><div class="panel-note-label">Letzte Notiz</div><div class="panel-note-text">${escHtml(lastNote.text)}</div></div>` : ''}
+    ${l.status === 'keine_anrufe' ? '<div class="panel-gesperrt"><i class="fas fa-ban"></i><span><b>Keine Anrufe mehr</b> – gesperrt. Zum Aufheben unten einen anderen Status wählen.</span></div>' : ''}
+    <div id="uebBox"></div>
     <div id="mvBox"></div>
     <div id="callLogSection">${renderCallLogs(l.call_logs||[])}</div>
   `;
@@ -1383,8 +1387,8 @@ function renderLeadDetail(l) {
     return `<div class="panel-field"><div class="panel-field-k">${k}</div><div class="panel-field-v">${val}</div></div>`;
   }).join('');
 
-  const statusOpts = ['neu','kontaktiert','nicht_erreicht','kein_interesse','rueckruf','kunde'];
-  const statusLabels = { neu:'Neu', kontaktiert:'Kontaktiert', nicht_erreicht:'Nicht erreicht', kein_interesse:'Kein Interesse', rueckruf:'Rückruf', kunde:'Kunde' };
+  const statusOpts = LEAD_STATUS.map(([k]) => k);
+  const statusLabels = LEAD_STATUS_LABEL;
   const statusHtml = statusOpts.map(s =>
     `<button class="status-chip s-${s} ${l.status===s?'active':''}" onclick="changeStatus(${l.id},'${s}')">${statusLabels[s]}</button>`
   ).join('');
@@ -1463,7 +1467,7 @@ function renderLeadDetail(l) {
 
 async function changeStatus(id, status) {
   try {
-    await api('PATCH', `/leads/${id}/status`, { status });
+    if (!(await statusSetzen(id, status))) return;
     panelDirty = true;
     openLeadPanel(id);
     if (status === 'rueckruf') showRueckrufPopup(id);
@@ -3043,6 +3047,7 @@ function renderDashboard(data) {
       <div class="card">
         <div class="card-header"><div class="card-title"><i class="fas fa-bolt"></i> Schnellzugriff</div></div>
         <div class="quick-grid">
+          <button class="quick-btn" onclick="Termine.openEditor()"><i class="fas fa-calendar-plus"></i><div style="min-width:0"><b>Termin übergeben</b><span>Warmer Lead an einen Closer</span></div></button>
           <button class="quick-btn" onclick="openAddLeadModal()"><i class="fas fa-plus"></i><div style="min-width:0"><b>Lead anlegen</b><span>Manuell erfassen</span></div></button>
           <button class="quick-btn" onclick="showTab('generate')"><i class="fas fa-robot"></i><div style="min-width:0"><b>Leads generieren</b><span>KI-Recherche starten</span></div></button>
           <button class="quick-btn" onclick="openUserModal()"><i class="fas fa-user-plus"></i><div style="min-width:0"><b>Benutzer anlegen</b><span>Closer ins Team holen</span></div></button>
