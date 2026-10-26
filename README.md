@@ -167,6 +167,14 @@ Ablauf: Der Anrufer wird über die Telefonnummer dem Lead zugeordnet (unbekannte
 Wer annimmt, sieht sofort den Lead; danach öffnet sich die Anruf-Dokumentation. Nimmt niemand ab,
 hört der Anrufer eine Ansage und im CRM entsteht unter **Heute → Verpasste Anrufe** eine Rückruf-Aufgabe.
 
+### Telefonie über sipgate (deutsche Nummern ohne Extra-Prüfung)
+1. In sipgate oben rechts auf den Namen → **Personal Access Token** → neuen Token anlegen, alle Bereiche (Scopes) anhaken.
+2. Im CRM unter **Integrationen → Telefonie über sipgate** Token-ID (`token-…`) und Token einfügen.
+3. Das CRM trägt sich in sipgate für die Anrufmeldungen ein (`<BASE_URL>/api/sipgate/webhook`) – ist dort schon eine andere Adresse eingetragen, fragt es vorher – und ordnet Benutzer mit gleicher E-Mail automatisch zu.
+4. Unter „Wer telefoniert womit?“ jedem Closer seinen sipgate-Zugang, das Telefon (sipgate App, Web-Telefon, Tischtelefon) und die Nummer zuordnen, die Kunden sehen.
+
+„Anrufen“ im CRM lässt dann zuerst das sipgate-Telefon des Closers klingeln und verbindet danach mit dem Kunden. Beginn, Annahme und Ende meldet sipgate ans CRM: Dauer und Ergebnis landen beim Lead, Anrufe direkt aus der sipgate App werden ebenfalls erfasst, eingehende Anrufe von unbekannten Nummern werden als Lead angelegt, verpasste Anrufe als Rückruf-Aufgabe. Die Meldungen sind von sipgate signiert und werden geprüft. Ist sipgate eingerichtet, hat es Vorrang vor Twilio.
+
 ### Telefonie ohne .env einrichten (empfohlen)
 
 **Integrationen → Telefonie über Twilio:** Account SID und Auth Token aus der Twilio-Konsole einfügen,

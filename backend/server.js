@@ -115,6 +115,7 @@ app.use('/api/email-templates', emailTemplateRoutes);
 app.use('/api/tools',           toolRoutes);
 app.use('/api/emails',          emailRoutes);
 app.use('/api/voice',           voiceRoutes);
+app.use('/api/sipgate',         require('./routes/sipgate'));
 app.use('/api/deals',           dealRoutes);
 app.use('/api/call-lists',      callListRoutes);
 app.use('/api/today',           todayRoutes);
@@ -412,7 +413,14 @@ migrate(`CREATE TABLE IF NOT EXISTS integrations (
   config     TEXT NOT NULL,
   updated_by INT NULL,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-)`).then(() => require('./routes/voice').ladeKonfiguration()).catch(() => {});
+)`).then(() => Promise.all([require('./routes/voice').ladeKonfiguration(), require('./routes/sipgate').ladeKonfiguration()])).catch(() => {});
+// Telefonie über sipgate: Zuordnung CRM-Benutzer → sipgate-Zugang/Gerät/Nummer, Anruf-Kennung
+migrate('ALTER TABLE users ADD COLUMN sipgate_user VARCHAR(20) NULL').catch(() => {});
+migrate('ALTER TABLE users ADD COLUMN sipgate_device VARCHAR(20) NULL').catch(() => {});
+migrate('ALTER TABLE users ADD COLUMN sipgate_nummer VARCHAR(30) NULL').catch(() => {});
+migrate('ALTER TABLE call_logs ADD COLUMN sipgate_call_id VARCHAR(64) NULL').catch(() => {});
+migrate('ALTER TABLE call_logs ADD COLUMN answered_at DATETIME NULL').catch(() => {});
+migrate('CREATE INDEX idx_call_logs_sipgate ON call_logs (sipgate_call_id)').catch(() => {});
 migrate('ALTER TABLE leads ADD COLUMN archived_at DATETIME NULL').catch(() => {});
 migrate('ALTER TABLE leads ADD COLUMN archived_by INT NULL').catch(() => {});
 migrate('ALTER TABLE leads ADD COLUMN archive_reason VARCHAR(500) NULL').catch(() => {});

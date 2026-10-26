@@ -2164,3 +2164,18 @@ body.dark .bd-type.bug { color: var(--navy-light); }
 input[type="search"] { -webkit-appearance: none; appearance: none; }
 input[type="search"]::-webkit-search-decoration { display: none; }
 input[type="search"][readonly] { cursor: text; }
+
+/* ── sipgate (Integrationen) ─────────────────────────────── */
+.ig-logo.sg { background: linear-gradient(135deg, #3b3b3b, #0f0f0f); color: #e5ff00; }
+.ig-card.ig-wide { grid-column: 1 / -1; }
+.sg-map { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.sg-map-head, .sg-map-row { display: grid; grid-template-columns: minmax(140px, 1.1fr) repeat(3, minmax(150px, 1fr)); gap: 10px; align-items: center; padding: 10px 14px; }
+.sg-map-head { background: var(--bg3); font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text3); }
+.sg-map-row { border-top: 1px solid var(--border); }
+.sg-map-row b { font-size: 13px; display: flex; flex-direction: column; min-width: 0; }
+.sg-map-row b small { font-size: 11px; font-weight: 500; color: var(--text3); }
+.sg-map-row .form-control { font-size: 12.5px; padding: 7px 10px; }
+@media (max-width: 760px) {
+  .sg-map-head { display: none; }
+  .sg-map-row { grid-template-columns: 1fr; }
+}
