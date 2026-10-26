@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf35">
+<link rel="stylesheet" href="/shared/style.css?v=nf36">
 <style>
 .notif-panel{position:fixed;top:0;right:0;bottom:0;width:340px;background:var(--bg2);border-left:1px solid var(--border2);z-index:150;transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;padding:20px}
 .notif-panel.open{transform:translateX(0)}
@@ -452,18 +452,18 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf35"></script>
-<script src="/shared/mailvorschlag.js?v=nf35"></script>
-<script src="/shared/dialer.js?v=nf35"></script>
-<script src="/shared/deals.js?v=nf35"></script>
-<script src="/shared/calllists.js?v=nf35"></script>
-<script src="/shared/today.js?v=nf35"></script>
-<script src="/shared/ziele.js?v=nf35"></script>
-<script src="/shared/termine.js?v=nf35"></script>
-<script src="/shared/duplicates.js?v=nf35"></script>
-<script src="/shared/wiki.js?v=nf35"></script>
-<script src="/shared/finder.js?v=nf35"></script>
-<script src="/shared/board.js?v=nf35"></script>
+<script src="/shared/api.js?v=nf36"></script>
+<script src="/shared/mailvorschlag.js?v=nf36"></script>
+<script src="/shared/dialer.js?v=nf36"></script>
+<script src="/shared/deals.js?v=nf36"></script>
+<script src="/shared/calllists.js?v=nf36"></script>
+<script src="/shared/today.js?v=nf36"></script>
+<script src="/shared/ziele.js?v=nf36"></script>
+<script src="/shared/termine.js?v=nf36"></script>
+<script src="/shared/duplicates.js?v=nf36"></script>
+<script src="/shared/wiki.js?v=nf36"></script>
+<script src="/shared/finder.js?v=nf36"></script>
+<script src="/shared/board.js?v=nf36"></script>
 <script>
 const ME = Auth.getUser();
 const CAN = {
@@ -2294,14 +2294,21 @@ async function saveInviteCl() {
     const email = contact?.email;
     const phoneStr = phone ? ` 📱 ${phone}` : '';
     const emailStr = email ? ` ✉️ ${email}` : '';
-    ['onboardingAdminPhone','wikiAdminPhone'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = phoneStr;
-    });
-    ['onboardingAdminEmail','wikiAdminEmail'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = emailStr;
-    });
+    const wiki = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    wiki('wikiAdminPhone', phoneStr);
+    wiki('wikiAdminEmail', emailStr);
+    // Willkommen: WhatsApp-Link (deutsche Nummer → 49…) und Mail
+    const wa = document.getElementById('obWhatsapp');
+    if (wa && phone) {
+      const digits = String(phone).replace(/[^\d+]/g, '').replace(/^\+/, '').replace(/^00/, '').replace(/^0/, '49');
+      wa.href = 'https://wa.me/' + digits;
+      wa.hidden = false;
+      document.getElementById('onboardingAdminPhone').textContent = phone;
+    }
+    if (email) {
+      document.getElementById('obMail').href = 'mailto:' + email;
+      document.getElementById('onboardingAdminEmail').textContent = email;
+    }
   } catch {}
 })();
 
@@ -2727,44 +2734,43 @@ document.getElementById('editContactInputCl')?.addEventListener('keydown', funct
 </div>
 
 <!-- ONBOARDING MODAL -->
-<div class="modal-overlay" id="onboardingModal" style="z-index:9000;align-items:flex-end;justify-content:center;padding:0">
-  <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:18px 18px 0 0;box-shadow:0 -8px 40px rgba(0,0,0,0.2);width:100%;max-width:560px;max-height:calc(100dvh - 20px);max-height:calc(100svh - 20px);display:flex;flex-direction:column;overflow:hidden">
-    <!-- Scrollbarer Inhalt -->
-    <div style="flex:1;overflow-y:auto;overscroll-behavior:contain;padding:28px 24px 16px">
-      <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px">
-        <div style="width:44px;height:44px;border-radius:14px;background:var(--accent);display:flex;align-items:center;justify-content:center;color:var(--accent-fg);font-size:20px;flex-shrink:0">👋</div>
-        <div>
-          <div style="font-size:17px;font-weight:700;color:var(--text)">Willkommen bei NovaFlow!</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:2px">Hier sind die wichtigsten Dinge, die du wissen solltest</div>
+<div class="modal-overlay ob-overlay" id="onboardingModal">
+  <div class="ob-card" role="dialog" aria-labelledby="obTitle">
+    <div class="ob-hero">
+      <img class="ob-logo" src="/LogoOB.PNG" alt="NovaFlow">
+      <div class="ob-eyebrow">Willkommen im Team</div>
+      <h2 class="ob-title" id="obTitle">Schön, dass du da bist<span id="obName"></span>!</h2>
+      <p class="ob-lead">Das Wichtigste in einer Minute. Alles Weitere zeigt dir das CRM, wenn du es brauchst.</p>
+    </div>
+    <div class="ob-body">
+      <div class="ob-steps">
+        <div class="ob-step">
+          <div class="ob-icon is-green"><i class="fas fa-headset"></i></div>
+          <div><b>Anrufmodus</b><span>Grüner Knopf oben links: ein Lead nach dem anderen. Ergebnis wählen, fertig – Wiedervorlage und passende Mail kommen von selbst.</span></div>
+        </div>
+        <div class="ob-step">
+          <div class="ob-icon is-accent"><i class="fas fa-calendar-alt"></i></div>
+          <div><b>Termine</b><span>Termine vom Admin nimmst du unter <strong>Termine</strong> mit einem Klick an. 15 Minuten vorher erinnert dich das CRM.</span></div>
+        </div>
+        <div class="ob-step">
+          <div class="ob-icon is-copper"><i class="fas fa-book"></i></div>
+          <div><b>Wissensdatenbank</b><span><strong>Preisliste</strong>, <strong>Angebotsleitfaden</strong>, Gesprächsleitfaden und E-Mail-Vorlagen – immer aktuell.</span></div>
+        </div>
+        <div class="ob-step">
+          <div class="ob-icon is-accent"><i class="fas fa-bullseye"></i></div>
+          <div><b>Dein Ziel</b><span>Oben siehst du jederzeit, wo du heute stehst: Anwahlen, Gespräche, Anfragen &amp; Termine.</span></div>
         </div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <div style="display:flex;align-items:flex-start;gap:12px;padding:14px;background:var(--bg3);border-radius:10px;border:1px solid var(--border)">
-          <div style="width:32px;height:32px;border-radius:8px;background:color-mix(in srgb, var(--accent) 15%, transparent);display:flex;align-items:center;justify-content:center;color:var(--accent);flex-shrink:0"><i class="fas fa-book"></i></div>
-          <div>
-            <div style="font-size:13px;font-weight:600;margin-bottom:3px">Wissensdatenbank</div>
-            <div style="font-size:12px;color:var(--text2);line-height:1.5">Im Menüpunkt <strong>Wissensdatenbank</strong> findest du alle wichtigen Unterlagen: die <strong>Preisliste</strong> (die du jederzeit per E-Mail an Kunden weitergeben kannst), den internen <strong>Angebotsleitfaden</strong> zur Angebotsberechnung sowie weitere Dokumente.</div>
-          </div>
-        </div>
-        <div style="display:flex;align-items:flex-start;gap:12px;padding:14px;background:var(--bg3);border-radius:10px;border:1px solid var(--border)">
-          <div style="width:32px;height:32px;border-radius:8px;background:color-mix(in srgb, var(--green) 12%, transparent);display:flex;align-items:center;justify-content:center;color:var(--green);flex-shrink:0"><i class="fas fa-envelope"></i></div>
-          <div>
-            <div style="font-size:13px;font-weight:600;margin-bottom:3px">E-Mail Vorlagen</div>
-            <div style="font-size:12px;color:var(--text2);line-height:1.5">Wenn du einem Kunden eine E-Mail schreiben möchtest, öffne den Lead, klicke auf <strong>E-Mail</strong> und wähle eine passende Vorlage aus dem Dropdown. Die Vorlage füllt sich automatisch mit den Kundendaten — du kannst sie danach frei anpassen. Nach einem Gespräch schlägt dir das CRM die passende Mail sogar von selbst vor (Taste <strong>M</strong> im Anrufmodus).</div>
-          </div>
-        </div>
-        <div style="display:flex;align-items:flex-start;gap:12px;padding:14px;background:var(--bg3);border-radius:10px;border:1px solid var(--border)">
-          <div style="width:32px;height:32px;border-radius:8px;background:color-mix(in srgb, var(--green) 12%, transparent);display:flex;align-items:center;justify-content:center;color:var(--green);flex-shrink:0"><i class="fab fa-whatsapp"></i></div>
-          <div>
-            <div style="font-size:13px;font-weight:600;margin-bottom:3px">Fragen? Kein Problem!</div>
-            <div style="font-size:12px;color:var(--text2);line-height:1.5">Falls du Fragen hast oder etwas unklar ist, kannst du jederzeit eine <strong>Rücksprache</strong> über den Chat öffnen oder mir direkt per <strong>WhatsApp</strong> schreiben. Ich helfe dir gerne weiter!<br><span style="color:var(--text3)">— Aleksandra Dalak<span id="onboardingAdminPhone"></span><span id="onboardingAdminEmail"></span></span></div>
-          </div>
+      <div class="ob-contact">
+        <div class="ob-contact-text"><b>Fragen?</b><span>Öffne eine <strong>Rücksprache</strong> im Chat oder schreib mir direkt. — Aleksandra Dalak</span></div>
+        <div class="ob-contact-links">
+          <a class="ob-link is-wa" id="obWhatsapp" href="#" target="_blank" rel="noopener" hidden><i class="fab fa-whatsapp"></i><span id="onboardingAdminPhone"></span></a>
+          <a class="ob-link" id="obMail" href="mailto:info@novaflowservices.de"><i class="fas fa-envelope"></i><span id="onboardingAdminEmail">info@novaflowservices.de</span></a>
         </div>
       </div>
     </div>
-    <!-- Sticky Footer mit Button -->
-    <div style="padding:16px 24px 28px;flex-shrink:0;border-top:1px solid var(--border);background:var(--bg2)">
-      <button class="btn btn-primary" style="width:100%;min-height:48px;font-size:15px" onclick="closeOnboarding()"><i class="fas fa-check"></i> Verstanden, weiter</button>
+    <div class="ob-foot">
+      <button class="btn btn-primary ob-btn" onclick="closeOnboarding()"><i class="fas fa-check"></i> Verstanden, los geht's</button>
     </div>
   </div>
 </div>
@@ -2786,6 +2792,8 @@ document.getElementById('editContactInputCl')?.addEventListener('keydown', funct
 
 <script>
 if (ME && !ME.onboarding_shown) {
+  const vorname = String(ME.full_name || '').trim().split(/\s+/)[0];
+  if (vorname) document.getElementById('obName').textContent = ', ' + vorname;
   document.getElementById('onboardingModal').classList.add('open');
 }
 
