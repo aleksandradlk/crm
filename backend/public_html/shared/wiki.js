@@ -4,7 +4,7 @@
 // Eingebunden in closer.html und admin.html über Wiki.mount().
 // ============================================================
 const Wiki = {
-  opts: {}, files: [], templates: [], q: '', cat: 'alle', thumbs: {},
+  opts: {}, files: [], templates: [], artikel: [], referenzen: [], neu: null, q: '', cat: 'alle', thumbs: {},
   form: null,
 
   DEFAULT_CATS: ['Preise & Angebote', 'Gesprächsleitfaden', 'Referenzen', 'Marke & Design', 'Sonstiges'],
@@ -35,7 +35,7 @@ const Wiki = {
             <p class="kb-sub">${opts.sub}</p>
             <label class="kb-search">
               <i class="fas fa-search"></i>
-              <input type="search" id="kbSearch" placeholder="Unterlagen und Vorlagen durchsuchen…" autocomplete="off" oninput="Wiki.search(this.value)">
+              <input type="search" id="kbSearch" placeholder="Artikel, Unterlagen und Vorlagen durchsuchen…" autocomplete="off" oninput="Wiki.search(this.value)">
               <kbd>/</kbd>
             </label>
           </div>
@@ -43,10 +43,14 @@ const Wiki = {
             <div class="kb-stats" id="kbStats"></div>
             ${opts.isAdmin ? `<div class="kb-hero-actions">
               <button class="btn kb-btn-light" onclick="Wiki.openForm()"><i class="fas fa-cloud-upload-alt"></i> Unterlage hochladen</button>
+              <button class="btn kb-btn-glass" onclick="Wiki.editArtikel()"><i class="fas fa-file-alt"></i> Neuer Artikel</button>
+              <label class="btn kb-btn-glass" title="Markdown-Dateien wie 00_Start-hier.md … 08_FAQ.md"><i class="fas fa-file-import"></i> Artikel importieren
+                <input type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" multiple hidden onchange="Wiki.importieren(this.files);this.value=''"></label>
               ${t.onNew ? `<button class="btn kb-btn-glass" onclick="${t.onNew}"><i class="fas fa-plus"></i> Neue Vorlage</button>` : ''}
             </div>` : ''}
           </div>
         </header>
+        <div id="kbNeu"></div>
         <nav class="kb-chips" id="kbChips"></nav>
         <div id="kbDocs"></div>
         <section class="kb-cat kb-tpl" id="kbTplSection" hidden>
@@ -74,12 +78,14 @@ const Wiki = {
 
   async load() {
     try {
-      const reqs = [api('GET', '/wiki/files')];
+      const reqs = [api('GET', '/wiki/files'), api('GET', '/wiki/artikel').catch(() => []), api('GET', '/wiki/referenzen').catch(() => []),
+        this.neu ? Promise.resolve(this.neu) : api('GET', '/wiki/neu').catch(() => null)];
       if (this.opts.templates?.mode === 'read') reqs.push(api('GET', '/email-templates').catch(() => []));
-      const [files, templates] = await Promise.all(reqs);
-      this.files = files;
+      const [files, artikel, referenzen, neu, templates] = await Promise.all(reqs);
+      this.files = files; this.artikel = artikel; this.referenzen = referenzen; this.neu = neu;
       if (templates) this.templates = templates;
       this.render();
+      this._neuGesehen();
     } catch (e) { showToast(e.message, 'err'); }
   },
 
@@ -101,7 +107,16 @@ const Wiki = {
   _ext(f) { const fn = f.filename || ''; return fn.includes('.') ? fn.split('.').pop().toUpperCase() : ''; },
   _size(n) { return n ? (n >= 1048576 ? (n / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB') : ''; },
   _catIcon(c) { return (this.CAT_ICONS.find(([re]) => re.test(c)) || [, 'folder'])[1]; },
-  _cats() { return [...new Set(this.files.map(f => f.category))].sort((a, b) => a.localeCompare(b, 'de')); },
+  // „Vertrieb“ zuerst, „Referenzen“ zuletzt, dazwischen alphabetisch
+  _cats() {
+    const alle = [...new Set([...this.files.map(f => f.category), ...this.artikel.map(a => a.kategorie), 'Referenzen'])];
+    const rang = c => c === 'Vertrieb' ? 0 : c === 'Referenzen' ? 2 : 1;
+    return alle.sort((a, b) => rang(a) - rang(b) || a.localeCompare(b, 'de'));
+  },
+  _anzahl(c) {
+    return this.files.filter(f => f.category === c).length + this.artikel.filter(a => a.kategorie === c).length
+      + (c === 'Referenzen' ? this.referenzen.length : 0);
+  },
   _tplCount() {
     return this.opts.templates?.mode === 'read'
       ? this.templates.length
@@ -111,7 +126,7 @@ const Wiki = {
   render() {
     const cats = this._cats();
     const docs = document.getElementById('kbDocs');
-    if (!this.files.length) {
+    if (!this.files.length && !this.artikel.length && !this.opts.isAdmin) {
       docs.innerHTML = `<div class="kb-empty">
         <div class="kb-empty-art"><span class="kb-page"><b>PDF</b><span></span><span></span><span></span></span></div>
         <h3>${this.opts.isAdmin ? 'Noch keine Unterlagen' : 'Hier entsteht deine Wissensdatenbank'}</h3>
@@ -121,12 +136,18 @@ const Wiki = {
     } else {
       docs.innerHTML = cats.map((c, i) => {
         const list = this.files.filter(f => f.category === c);
+        const art = this.artikel.filter(a => a.kategorie === c);
+        const ref = c === 'Referenzen';
         return `<section class="kb-cat" data-cat="${escHtml(c)}">
           <div class="kb-cat-head">
-            <span class="kb-cat-ic ${i % 2 ? 'tone-copper' : 'tone-navy'}"><i class="fas fa-${this._catIcon(c)}"></i></span>
-            <div class="kb-cat-text"><h2 class="kb-cat-title">${escHtml(c)} <span class="kb-cat-count">${list.length}</span></h2></div>
+            <span class="kb-cat-ic ${i % 2 ? 'tone-copper' : 'tone-navy'}"><i class="fas fa-${c === 'Vertrieb' ? 'bullhorn' : this._catIcon(c)}"></i></span>
+            <div class="kb-cat-text"><h2 class="kb-cat-title">${escHtml(c)} <span class="kb-cat-count">${this._anzahl(c)}</span></h2>
+              ${c === 'Vertrieb' ? '<p class="kb-cat-hint">Handbuch, Preise, Einwände und FAQ – das gleiche findest du im Anrufmodus rechts im Seitenpanel.</p>' : ''}</div>
+            ${ref && this.opts.isAdmin ? '<button class="btn btn-ghost btn-sm" onclick="Wiki.editRef()"><i class="fas fa-plus"></i> Referenz anlegen</button>' : ''}
           </div>
-          <div class="kb-grid">${list.map(f => this._card(f)).join('')}</div>
+          ${list.length ? `<div class="kb-grid">${list.map(f => this._card(f)).join('')}</div>` : ''}
+          ${art.length ? `<div class="kb-arts">${art.map(a => this._artCard(a)).join('')}</div>` : ''}
+          ${ref ? this._refsHtml() : ''}
         </section>`;
       }).join('');
     }
@@ -135,10 +156,13 @@ const Wiki = {
         `<div class="kb-tpl-click" onclick="Wiki.showTemplate(${i})">${renderTemplateCard(t)}</div>`).join('');
     }
     const last = this.files.reduce((m, f) => (f.created_at > m ? f.created_at : m), '');
+    const lastArt = this.artikel.reduce((m, a) => (a.updated_at > m ? a.updated_at : m), '');
+    const stand = lastArt > last ? lastArt : last;
     document.getElementById('kbStats').innerHTML = [
+      this.artikel.length ? [this.artikel.length, this.artikel.length === 1 ? 'Artikel' : 'Artikel'] : null,
       [this.files.length, this.files.length === 1 ? 'Unterlage' : 'Unterlagen'],
       [cats.length, cats.length === 1 ? 'Kategorie' : 'Kategorien'],
-      last ? [fmtDateShort(last).replace(/\.\d{4}$/, '.'), 'Stand'] : null,
+      stand ? [fmtDateShort(stand).replace(/\.\d{4}$/, '.'), 'Stand'] : null,
     ].filter(Boolean).map(([n, l]) => `<div class="kb-stat"><b>${n}</b><span>${l}</span></div>`).join('');
     this.renderChips();
     this.filter();
@@ -177,8 +201,8 @@ const Wiki = {
     const el = document.getElementById('kbChips');
     if (!el) return;
     const n = this._tplCount();
-    const chips = [['alle', 'Alles', this.files.length + n, 'th-large']]
-      .concat(this._cats().map(c => [c, c, this.files.filter(f => f.category === c).length, this._catIcon(c)]));
+    const chips = [['alle', 'Alles', this.files.length + this.artikel.length + this.referenzen.length + n, 'th-large']]
+      .concat(this._cats().map(c => [c, c, this._anzahl(c), c === 'Vertrieb' ? 'bullhorn' : this._catIcon(c)]));
     if (n) chips.push(['__tpl', 'E-Mail-Vorlagen', n, 'envelope-open-text']);
     if (chips.length < 3) { el.innerHTML = ''; return; }
     el.innerHTML = chips.map(([k, label, count, icon]) => `<button class="kb-chip${this.cat === k ? ' active' : ''}"
@@ -191,10 +215,13 @@ const Wiki = {
     document.querySelectorAll('#kbDocs .kb-cat').forEach(sec => {
       const catOk = cat === 'alle' || sec.dataset.cat === cat;
       let any = false;
-      sec.querySelectorAll('.kb-doc').forEach(d => {
+      sec.querySelectorAll('.kb-doc, .kb-art, .kb-ref').forEach(d => {
         const ok = catOk && (!q || d.dataset.q.includes(q));
         d.hidden = !ok; if (ok) { any = true; shown++; }
       });
+      // Referenzen zeigen ihren Platzhalter, solange nicht gesucht wird
+      const leer = sec.querySelector('.kb-ref-leer');
+      if (leer) { leer.hidden = !catOk || !!q; if (!leer.hidden) any = true; }
       sec.hidden = !any;
     });
     const tplSec = document.getElementById('kbTplSection');
@@ -210,7 +237,7 @@ const Wiki = {
     tplSec.hidden = !(tplAny || manageEmpty);
     document.getElementById('kbTplCount').textContent = this._tplCount() || '';
     const none = document.getElementById('kbNone');
-    none.hidden = !(this.files.length || this._tplCount()) || shown > 0 || manageEmpty;
+    none.hidden = !(this.files.length || this.artikel.length || this._tplCount()) || shown > 0 || manageEmpty;
     none.innerHTML = `<i class="fas fa-search"></i><b>Nichts gefunden${q ? ` für „${escHtml(this.q)}“` : ''}</b>
       <button class="btn btn-ghost btn-sm" onclick="Wiki.reset()">Suche zurücksetzen</button>`;
   },

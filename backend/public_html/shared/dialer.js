@@ -73,10 +73,14 @@ const Dialer = {
         <div class="dl-title"><i class="fas fa-headset"></i> Anrufmodus <span class="dl-listname" id="dlListName"></span></div>
         <div class="dl-progress" id="dlProgress"></div>
         <div class="dl-goal" id="dlGoal"></div>
+        ${typeof Seite !== 'undefined' ? `<span class="dl-demo">
+          <button class="btn btn-ghost btn-sm" onclick="window.open(Seite.demoLink(), '_blank', 'noopener')" title="novaflowservices.de am Abschnitt „Nicht nur lesen. Ausprobieren.“"><i class="fas fa-play-circle"></i> Live-Demo</button>
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="Seite.demoKopieren()" title="Demo-Link kopieren"><i class="fas fa-link"></i></button></span>` : ''}
         <button class="btn btn-ghost btn-sm" onclick="Dialer.close()" title="Schließen (Esc)"><i class="fas fa-times"></i> Beenden</button>
       </div>
       <div class="dl-body" id="dlBody"></div>`;
     document.body.appendChild(el);
+    if (typeof Seite !== 'undefined') Seite.einbauen();
   },
   _body(html) { document.getElementById('dlBody').innerHTML = html; },
 
@@ -190,6 +194,7 @@ const Dialer = {
       ${this.opts.script ? `<details class="dl-card dl-script" open><summary><i class="fas fa-scroll"></i> Gesprächsleitfaden</summary><div>${escHtml(this.opts.script)}</div></details>` : ''}`);
     this._loadHistory(l.id);
     this._bedarfStand(l.id);
+    if (typeof Seite !== 'undefined') Seite.setLead(l);
     if (typeof Termine !== 'undefined') Termine.uebergabeBox(l.id, 'dlUeb');
   },
 
@@ -208,7 +213,9 @@ const Dialer = {
   bedarf() {
     const l = this.lead;
     if (!l) return;
-    Bedarf.open(l.id, { onClose: () => this._bedarfStand(l.id) });
+    // Seitenpanel offen (Desktop): dort im Tab „Bedarf“, sonst als eigenes Fenster
+    if (typeof Seite !== 'undefined' && !Seite.zu && !Seite._mobil()) { Seite.zeige('bedarf'); return; }
+    Bedarf.open(l.id, { onClose: () => { this._bedarfStand(l.id); if (typeof Seite !== 'undefined' && Seite.tab === 'bedarf') Seite.zeige('bedarf', { still: true }); } });
   },
   kurzCheck() {
     const l = this.lead;
@@ -566,6 +573,7 @@ const Dialer = {
     if (!document.getElementById('dialer')?.classList.contains('open')) return;
     if (e.key === 'Escape') {
       if (document.querySelector('.modal-overlay.open, .slide-panel.open')) return;
+      if (e.target.closest?.('#dlSide')) return;   // Esc im Seitenpanel (Suche, Bedarfsanalyse) schließt nicht den Anrufmodus
       e.preventDefault(); this.close(); return;
     }
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); this.save(); return; }

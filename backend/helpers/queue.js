@@ -62,7 +62,7 @@ async function buildQueue(user, rawFilters) {
 
   const [rows] = await db.query(
     `SELECT l.id, l.company, l.ceo, l.phone, l.email, l.location, l.status, l.created_at,
-            l.website, l.industry, l.assigned_to,
+            l.website, l.instagram_url, l.industry, l.assigned_to,
             r.id AS reminder_id, r.remind_at, r.note AS reminder_note,
             lc.last_call_at, lc.call_count, COALESCE(lc.gespraeche, 0) AS gespraeche, lc.versuch_zeiten,
             od.id AS deal_id, od.title AS deal_title, od.value AS deal_value, ds.name AS deal_stage,

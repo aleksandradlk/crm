@@ -22,7 +22,7 @@
     nachfass_tage: [2, 5, 10],
     anfrage_warte_std: 24,
     admin_mail: 'info@novaflowservices.de',
-    demo_link: 'https://novaflowservices.de/',
+    demo_link: 'https://novaflowservices.de/#ausprobieren',   // Abschnitt „Nicht nur lesen. Ausprobieren.“
     regeln: { l_auftragswert: 5000, m_kanaele: 3, m_anfragen: 10 },
     // Provision und Bonus (§8): Basis = gezahlter Einmalpreis ohne Betreuung/Hosting
     provision: {
@@ -92,7 +92,9 @@
   };
 
   function cfgMit(cfg) {
-    const c = cfg || {};
+    const c = { ...(cfg || {}) };
+    // Früherer Standard ohne Anker → auf den Abschnitt „Ausprobieren“ zeigen
+    if (/^https:\/\/novaflowservices\.de\/?$/.test(c.demo_link || '')) delete c.demo_link;
     return { ...STANDARD, ...c, pakete: { ...STANDARD.pakete, ...(c.pakete || {}) }, zusatz: { ...STANDARD.zusatz, ...(c.zusatz || {}) },
       regeln: { ...STANDARD.regeln, ...(c.regeln || {}) }, provision: { ...STANDARD.provision, ...(c.provision || {}) } };
   }

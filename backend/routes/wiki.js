@@ -121,6 +121,130 @@ router.delete('/files/:id', auth, adminOnly, async (req, res) => {
   } catch(e) { console.error('Wiki error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
+// ── Artikel (Markdown) ────────────────────────────────────────────────────
+// Kategorie „Vertrieb“ mit 00_Start-hier … 08_FAQ: Schlüssel = Nummer aus dem
+// Dateinamen („07_Einwaende.md“ → „07“), Reihenfolge nach Nummer.
+const textOk = (v, max) => String(v ?? '').slice(0, max);
+function ausDatei(name, inhalt) {
+  const basis = String(name || '').replace(/\.(md|markdown|txt)$/i, '');
+  const nr = (/^(\d{1,3})[\s_.-]/.exec(basis) || [])[1] || null;
+  const h1 = /^\s*#\s+(.+)$/m.exec(inhalt || '');
+  const titel = (h1 ? h1[1] : basis.replace(/^\d{1,3}[\s_.-]+/, '').replace(/[_-]+/g, ' ')).trim() || basis;
+  return { schluessel: nr ? nr.padStart(2, '0') : basis.toLowerCase().slice(0, 80), titel: titel.slice(0, 255), sort: nr ? parseInt(nr) : 999 };
+}
+
+router.get('/artikel', auth, async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT a.id, a.kategorie, a.schluessel, a.titel, a.inhalt, a.sort, a.updated_at, a.created_at, u.full_name AS updated_by_name
+       FROM wiki_artikel a LEFT JOIN users u ON u.id = a.updated_by ORDER BY a.kategorie, a.sort, a.titel`);
+    res.json(rows);
+  } catch (e) { console.error('Wiki Artikel:', e); res.status(500).json({ error: 'Artikel konnten nicht geladen werden.' }); }
+});
+
+router.post('/artikel', auth, adminOnly, async (req, res) => {
+  const titel = textOk(req.body.titel, 255).trim(), inhalt = textOk(req.body.inhalt, 2e6);
+  if (!titel) return res.status(400).json({ error: 'Bitte einen Titel eingeben.' });
+  try {
+    const [r] = await db.query('INSERT INTO wiki_artikel (kategorie, schluessel, titel, inhalt, sort, updated_by) VALUES (?,?,?,?,?,?)',
+      [textOk(req.body.kategorie || 'Vertrieb', 100).trim() || 'Vertrieb', req.body.schluessel ? textOk(req.body.schluessel, 80) : null,
+       titel, inhalt, parseInt(req.body.sort) || 999, req.user.id]);
+    await log(req.user.id, 'wiki_artikel_neu', 'wiki', r.insertId, { titel }, req.ip);
+    res.status(201).json({ ok: true, id: r.insertId });
+  } catch (e) {
+    if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Es gibt schon einen Artikel mit dieser Nummer.' });
+    console.error('Wiki Artikel:', e); res.status(500).json({ error: 'Artikel konnte nicht gespeichert werden.' });
+  }
+});
+
+router.put('/artikel/:id', auth, adminOnly, async (req, res) => {
+  const titel = textOk(req.body.titel, 255).trim();
+  if (!titel) return res.status(400).json({ error: 'Bitte einen Titel eingeben.' });
+  try {
+    await db.query('UPDATE wiki_artikel SET kategorie=?, titel=?, inhalt=?, sort=?, updated_by=?, updated_at=NOW() WHERE id=?',
+      [textOk(req.body.kategorie || 'Vertrieb', 100).trim() || 'Vertrieb', titel, textOk(req.body.inhalt, 2e6),
+       parseInt(req.body.sort) || 999, req.user.id, parseInt(req.params.id)]);
+    await log(req.user.id, 'wiki_artikel_update', 'wiki', parseInt(req.params.id), { titel }, req.ip);
+    res.json({ ok: true });
+  } catch (e) { console.error('Wiki Artikel:', e); res.status(500).json({ error: 'Artikel konnte nicht gespeichert werden.' }); }
+});
+
+router.delete('/artikel/:id', auth, adminOnly, async (req, res) => {
+  try {
+    await db.query('DELETE FROM wiki_artikel WHERE id=?', [parseInt(req.params.id)]);
+    await log(req.user.id, 'wiki_artikel_loeschen', 'wiki', parseInt(req.params.id), {}, req.ip);
+    res.json({ ok: true });
+  } catch (e) { console.error('Wiki Artikel:', e); res.status(500).json({ error: 'Artikel konnte nicht gelöscht werden.' }); }
+});
+
+// POST /api/wiki/artikel/import { name, inhalt, kategorie? } – eine .md-Datei; gleiche Nummer ersetzt den Artikel
+router.post('/artikel/import', auth, adminOnly, async (req, res) => {
+  const inhalt = textOk(req.body.inhalt, 2e6);
+  if (!inhalt.trim()) return res.status(400).json({ error: 'Die Datei ist leer.' });
+  const a = ausDatei(req.body.name, inhalt);
+  const kategorie = textOk(req.body.kategorie || 'Vertrieb', 100).trim() || 'Vertrieb';
+  try {
+    const [[alt]] = await db.query('SELECT id, inhalt FROM wiki_artikel WHERE schluessel=?', [a.schluessel]);
+    if (alt) {
+      if (alt.inhalt === inhalt) return res.json({ ok: true, id: alt.id, titel: a.titel, unveraendert: true });
+      await db.query('UPDATE wiki_artikel SET titel=?, inhalt=?, sort=?, kategorie=?, updated_by=?, updated_at=NOW() WHERE id=?',
+        [a.titel, inhalt, a.sort, kategorie, req.user.id, alt.id]);
+      await log(req.user.id, 'wiki_artikel_import', 'wiki', alt.id, { titel: a.titel, ersetzt: true }, req.ip);
+      return res.json({ ok: true, id: alt.id, titel: a.titel, ersetzt: true });
+    }
+    const [r] = await db.query('INSERT INTO wiki_artikel (kategorie, schluessel, titel, inhalt, sort, updated_by) VALUES (?,?,?,?,?,?)',
+      [kategorie, a.schluessel, a.titel, inhalt, a.sort, req.user.id]);
+    await log(req.user.id, 'wiki_artikel_import', 'wiki', r.insertId, { titel: a.titel }, req.ip);
+    res.status(201).json({ ok: true, id: r.insertId, titel: a.titel, neu: true });
+  } catch (e) { console.error('Wiki Import:', e); res.status(500).json({ error: 'Import fehlgeschlagen.' }); }
+});
+
+// ── Referenzen ─────────────────────────────────────────────────────────────
+const refFelder = b => [textOk(b.betrieb, 255).trim(), textOk(b.branche, 120).trim() || null, textOk(b.paket, 60).trim() || null,
+  textOk(b.ergebnis, 2000).trim() || null, /^https?:\/\//i.test(String(b.link || '').trim()) ? textOk(b.link, 500).trim() : null];
+router.get('/referenzen', auth, async (req, res) => {
+  try { const [rows] = await db.query('SELECT * FROM wiki_referenzen ORDER BY created_at DESC'); res.json(rows); }
+  catch (e) { console.error('Referenzen:', e); res.status(500).json({ error: 'Referenzen konnten nicht geladen werden.' }); }
+});
+router.post('/referenzen', auth, adminOnly, async (req, res) => {
+  const f = refFelder(req.body);
+  if (!f[0]) return res.status(400).json({ error: 'Bitte den Betrieb eintragen.' });
+  try {
+    const [r] = await db.query('INSERT INTO wiki_referenzen (betrieb, branche, paket, ergebnis, link, created_by) VALUES (?,?,?,?,?,?)', [...f, req.user.id]);
+    res.status(201).json({ ok: true, id: r.insertId });
+  } catch (e) { console.error('Referenzen:', e); res.status(500).json({ error: 'Referenz konnte nicht gespeichert werden.' }); }
+});
+router.put('/referenzen/:id', auth, adminOnly, async (req, res) => {
+  const f = refFelder(req.body);
+  if (!f[0]) return res.status(400).json({ error: 'Bitte den Betrieb eintragen.' });
+  try { await db.query('UPDATE wiki_referenzen SET betrieb=?, branche=?, paket=?, ergebnis=?, link=? WHERE id=?', [...f, parseInt(req.params.id)]); res.json({ ok: true }); }
+  catch (e) { console.error('Referenzen:', e); res.status(500).json({ error: 'Referenz konnte nicht gespeichert werden.' }); }
+});
+router.delete('/referenzen/:id', auth, adminOnly, async (req, res) => {
+  try { await db.query('DELETE FROM wiki_referenzen WHERE id=?', [parseInt(req.params.id)]); res.json({ ok: true }); }
+  catch (e) { console.error('Referenzen:', e); res.status(500).json({ error: 'Referenz konnte nicht gelöscht werden.' }); }
+});
+
+// ── „Aktualisiert: …“ – einmaliger Hinweis je Benutzer ─────────────────────
+// Neu seit dem letzten Öffnen der Wissensdatenbank (eigene Änderungen zählen nicht)
+router.get('/neu', auth, async (req, res) => {
+  try {
+    const [[u]] = await db.query('SELECT wiki_gesehen_at, created_at FROM users WHERE id=?', [req.user.id]);
+    const seit = u?.wiki_gesehen_at || u?.created_at || new Date();
+    const [artikel] = await db.query(
+      `SELECT id, titel, updated_at FROM wiki_artikel WHERE updated_at > ? AND (updated_by IS NULL OR updated_by <> ?) ORDER BY updated_at DESC`,
+      [seit, req.user.id]);
+    const [dateien] = await db.query(
+      'SELECT id, name AS titel, created_at AS updated_at FROM wiki_files WHERE created_at > ? AND (uploaded_by IS NULL OR uploaded_by <> ?) ORDER BY created_at DESC',
+      [seit, req.user.id]);
+    res.json({ seit, artikel, dateien, anzahl: artikel.length + dateien.length });
+  } catch (e) { res.json({ artikel: [], dateien: [], anzahl: 0 }); }
+});
+router.post('/gesehen', auth, async (req, res) => {
+  try { await db.query('UPDATE users SET wiki_gesehen_at=NOW() WHERE id=?', [req.user.id]); res.json({ ok: true }); }
+  catch (e) { res.json({ ok: false }); }
+});
+
 // GET /api/wiki/template
 router.get('/template', auth, async (req, res) => {
   try {

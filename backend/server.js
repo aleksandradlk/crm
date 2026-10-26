@@ -662,6 +662,33 @@ for (const col of ["art VARCHAR(20) NOT NULL DEFAULT 'termin'", 'painpoints TEXT
   'offene_fragen VARCHAR(50) NULL', 'uebergabe TINYINT(1) NOT NULL DEFAULT 0', 'vorher_zugewiesen INT NULL'])
   migrate(`ALTER TABLE appointments ADD COLUMN ${col}`).catch(() => {});
 
+// Wissensdatenbank (§5): Artikel (Markdown), Referenzen, „gelesen bis“ je Benutzer
+// Rollback: db/rollback/2026-10-27_wissensdatenbank.sql
+migrate(`CREATE TABLE IF NOT EXISTS wiki_artikel (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  kategorie VARCHAR(100) NOT NULL DEFAULT 'Vertrieb',
+  schluessel VARCHAR(80) NULL,
+  titel VARCHAR(255) NOT NULL,
+  inhalt MEDIUMTEXT NOT NULL,
+  sort INT NOT NULL DEFAULT 0,
+  updated_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_wiki_artikel_schluessel (schluessel)
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`).catch(e => console.error('Migration wiki_artikel:', e.message));
+migrate(`CREATE TABLE IF NOT EXISTS wiki_referenzen (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  betrieb VARCHAR(255) NOT NULL,
+  branche VARCHAR(120) NULL,
+  paket VARCHAR(60) NULL,
+  ergebnis TEXT NULL,
+  link VARCHAR(500) NULL,
+  created_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`).catch(e => console.error('Migration wiki_referenzen:', e.message));
+migrate('ALTER TABLE users ADD COLUMN wiki_gesehen_at DATETIME NULL').catch(() => {});
+
 // Provision (§8): zzgl. USt am Benutzer, Sitz im Ausland (ohne USt) – Rollback: db/rollback/2026-10-27_provision.sql
 for (const col of ['provision_zzgl_ust TINYINT(1) NOT NULL DEFAULT 0', 'provision_ausland TINYINT(1) NOT NULL DEFAULT 0'])
   migrate(`ALTER TABLE users ADD COLUMN ${col}`).catch(() => {});
