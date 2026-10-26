@@ -111,4 +111,14 @@ async function sendInfoMail({ to, toName, subject, zeilen }) {
   });
 }
 
-module.exports = { sendReminder, sendLeadEmail, sendInfoMail };
+// Interne Mail mit fertigem HTML (z. B. Angebots-Anfrage an den Admin)
+async function sendHtmlMail({ to, subject, html }) {
+  await transporter.sendMail({
+    from: `"NovaFlow CRM" <${process.env.SMTP_USER}>`,
+    to,
+    subject: stripHeaders(subject),
+    html,
+  });
+}
+
+module.exports = { sendReminder, sendLeadEmail, sendInfoMail, sendHtmlMail };

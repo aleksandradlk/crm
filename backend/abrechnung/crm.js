@@ -206,7 +206,21 @@ function registriere(app, { ki } = {}) {
       if (req.body.dealId) {
         [[deal]] = await db.query('SELECT id, title, lead_id FROM deals WHERE id=? AND lead_id=?', [parseInt(req.body.dealId), lead.id]);
       }
-      const angebot = mandant.crm.angebotEntwurf({ lead, deal });
+      // Aus der Bedarfsanalyse vorbefüllen: Paket, Betreuung, Zusätze, Rabatt, Zahlungsart
+      let vorlage = {};
+      try {
+        const bedarf = require('../routes/bedarf');
+        const a = await bedarf.analyseLaden(lead.id);
+        if (a?.data?.paket_empfohlen) {
+          const cfg = await bedarf.regeln();
+          const zw = a.data.zahlungswunsch;
+          vorlage = {
+            positionen: bedarf.R.positionen(a.data, cfg),
+            zahlung: zw === '5050' ? { art: 'anzahlung', anzahlungProzent: 50 } : /^raten(\d)/.test(zw || '') ? { art: 'raten', anzahl: parseInt(zw.slice(5)) } : undefined,
+          };
+        }
+      } catch (e) { console.error('Angebot aus Bedarfsanalyse:', e.message); }
+      const angebot = mandant.crm.angebotEntwurf({ lead, deal, ...vorlage });
       // Offene Angebots-Anfrage des Closers ist damit in Arbeit
       await db.query("UPDATE reminders SET done_at=NOW() WHERE lead_id=? AND kind='angebot' AND done_at IS NULL", [lead.id]);
       await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',

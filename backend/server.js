@@ -28,6 +28,7 @@ const callListRoutes       = require('./routes/calllists');
 const todayRoutes          = require('./routes/today');
 const termineRoutes        = require('./routes/termine');
 const zieleRoutes          = require('./routes/ziele');
+const bedarfRoutes         = require('./routes/bedarf');
 const { startReminderCron } = require('./cron/reminders');
 const { pollIncomingEmails } = require('./cron/emailPoller');
 const cron           = require('node-cron');
@@ -123,6 +124,7 @@ app.use('/api/call-lists',      callListRoutes);
 app.use('/api/today',           todayRoutes);
 app.use('/api/termine',        termineRoutes);
 app.use('/api/ziele',          zieleRoutes);
+app.use('/api/bedarf',         bedarfRoutes);
 // Eigene Schnittstelle des CRM (API-Schlüssel) und deren Verwaltung
 const apiV1 = require('./routes/api-v1');
 app.use('/api/api-keys',        apiV1.keys);
@@ -611,6 +613,40 @@ migrate("SELECT value FROM app_settings WHERE key_name='admin_mail_info_v1'").th
   if (!frei.n) await migrate("UPDATE users SET email='info@novaflowservices.de' WHERE email='ad@novaflowservices.de'");
   await migrate("INSERT INTO app_settings (key_name, value) VALUES ('admin_mail_info_v1', '1') ON DUPLICATE KEY UPDATE value='1'");
 }).catch(e => console.error('Admin-Mail:', e.message));
+
+// ── Bedarfsanalyse (nur ergänzend; Rückweg: db/rollback/2026-10-27_bedarfsanalyse.sql) ──
+migrate(`CREATE TABLE IF NOT EXISTS bedarfsanalysen (
+  id              INT AUTO_INCREMENT PRIMARY KEY,
+  lead_id         INT NOT NULL,
+  deal_id         INT NULL,
+  data            LONGTEXT NOT NULL,
+  angebotsreif    TINYINT(1) NOT NULL DEFAULT 0,
+  fragen_ok       TINYINT NOT NULL DEFAULT 0,
+  paket_vorschlag VARCHAR(20) NULL,
+  angefordert_am  DATETIME NULL,
+  angefordert_von INT NULL,
+  created_by      INT NULL,
+  updated_by      INT NULL,
+  created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_bedarf_lead (lead_id),
+  FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
+)`).catch(() => {});
+migrate(`CREATE TABLE IF NOT EXISTS bedarfsanalyse_snapshots (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  analyse_id INT NOT NULL,
+  lead_id    INT NOT NULL,
+  deal_id    INT NULL,
+  anlass     VARCHAR(30) NOT NULL,
+  data       LONGTEXT NOT NULL,
+  created_by INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_bsnap_lead (lead_id)
+)`).catch(() => {});
+for (const col of ['herkunft VARCHAR(30) NULL', 'paket VARCHAR(20) NULL', 'admin_flag VARCHAR(255) NULL',
+  'angefordert_at DATETIME NULL', 'angebot_gesendet_at DATETIME NULL', 'hinweis_24h_at DATETIME NULL'])
+  migrate(`ALTER TABLE deals ADD COLUMN ${col}`).catch(() => {});
+cron.schedule('*/10 * * * *', () => bedarfRoutes.fristen());
 
 // ── Cron: Activity Log nach 7 Tagen bereinigen ───────────────
 cron.schedule('0 3 * * *', async () => {

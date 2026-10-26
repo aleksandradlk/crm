@@ -1564,12 +1564,12 @@ Antworte NUR mit gültigem JSON, kein Text davor oder danach:
       return k;
     },
     // Neuen Angebotsentwurf für einen Deal anlegen
-    angebotEntwurf({ lead, deal }) {
+    angebotEntwurf({ lead, deal, positionen, zahlung }) {
       const kunde = crm.kundeFuerLead(lead);
       const datum = heute();
       const basis = { id: neueId(), nummer: naechsteAngebotsnummer(datum.slice(0, 4)), status: 'entwurf', umgewandelt: null,
         erstellt: new Date().toISOString(), crm: { leadId: lead.id, dealId: deal ? deal.id : null } };
-      const a = angebotAusBody({ kundeId: kunde.id, datum, betreff: deal ? deal.title : '', positionen: [] }, basis);
+      const a = angebotAusBody({ kundeId: kunde.id, datum, betreff: deal ? deal.title : '', positionen: positionen || [], zahlung }, basis);
       speichere(ANGEBOTE_DIR, a);
       return angebotMitKunde(a);
     },

@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf36">
+<link rel="stylesheet" href="/shared/style.css?v=nf37">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -84,6 +84,7 @@
         </div>
       </div>
       <div id="dashStartklar"></div>
+      <div id="dashAngebote"></div>
       <div id="dashboardContent"><div class="wiki-empty">Kennzahlen werden geladen …</div></div>
     </div>
 
@@ -613,21 +614,23 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf36"></script>
-<script src="/shared/mailvorschlag.js?v=nf36"></script>
-<script src="/shared/dialer.js?v=nf36"></script>
-<script src="/shared/deals.js?v=nf36"></script>
-<script src="/shared/calllists.js?v=nf36"></script>
-<script src="/shared/today.js?v=nf36"></script>
-<script src="/shared/ziele.js?v=nf36"></script>
-<script src="/shared/termine.js?v=nf36"></script>
-<script src="/shared/duplicates.js?v=nf36"></script>
-<script src="/shared/wiki.js?v=nf36"></script>
-<script src="/shared/lines.js?v=nf36"></script>
-<script src="/shared/finder.js?v=nf36"></script>
-<script src="/shared/board.js?v=nf36"></script>
-<script src="/shared/integrations.js?v=nf36"></script>
-<script src="/shared/startklar.js?v=nf36"></script>
+<script src="/shared/api.js?v=nf37"></script>
+<script src="/shared/bedarf-regeln.js?v=nf37"></script>
+<script src="/shared/bedarf.js?v=nf37"></script>
+<script src="/shared/mailvorschlag.js?v=nf37"></script>
+<script src="/shared/dialer.js?v=nf37"></script>
+<script src="/shared/deals.js?v=nf37"></script>
+<script src="/shared/calllists.js?v=nf37"></script>
+<script src="/shared/today.js?v=nf37"></script>
+<script src="/shared/ziele.js?v=nf37"></script>
+<script src="/shared/termine.js?v=nf37"></script>
+<script src="/shared/duplicates.js?v=nf37"></script>
+<script src="/shared/wiki.js?v=nf37"></script>
+<script src="/shared/lines.js?v=nf37"></script>
+<script src="/shared/finder.js?v=nf37"></script>
+<script src="/shared/board.js?v=nf37"></script>
+<script src="/shared/integrations.js?v=nf37"></script>
+<script src="/shared/startklar.js?v=nf37"></script>
 <script>
 let allLeads = [], allUsers = [], editingUserId = null;
 let panelDirty = false;
@@ -1355,6 +1358,7 @@ function renderPanelKeyInfo(l) {
       <button class="btn btn-ghost btn-sm" onclick="openCreateChatFromLead(${l.id})" title="Rücksprache erstellen"><i class="fas fa-comments"></i> Rücksprache</button>
       <button class="btn btn-ghost btn-sm" onclick="openEmailModal()"><i class="fas fa-envelope"></i> E-Mail</button>
       <button class="btn btn-ghost btn-sm" onclick="Termine.openEditor({ lead: _panelLead })" title="Termin vereinbaren und einem Closer geben"><i class="fas fa-calendar-plus"></i> Termin</button>
+      <button class="btn btn-ghost btn-sm" onclick="Bedarf.open(${l.id}, { onClose: () => openLeadPanel(${l.id}) })"><i class="fas fa-clipboard-list"></i> Bedarfsanalyse</button>
       <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteLead(${l.id})" title="Lead löschen" style="color:var(--red);margin-left:auto"><i class="fas fa-trash"></i></button>
     </div>
     ${lastNote ? `<div class="panel-note"><div class="panel-note-label">Letzte Notiz</div><div class="panel-note-text">${escHtml(lastNote.text)}</div></div>` : ''}
@@ -2702,6 +2706,17 @@ Termine.mount({
   onChange: () => { if (_panelLead && document.getElementById('leadPanel').classList.contains('open')) openLeadPanel(_panelLead.id); },
 });
 Termine.startBadge();
+// Links aus Mails: ?deal=… öffnet den Deal, ?angebot_deal=…&lead=… legt das Angebot vorbefüllt an
+(() => {
+  const q = new URLSearchParams(location.search);
+  const deal = parseInt(q.get('deal')), aDeal = parseInt(q.get('angebot_deal')), lead = parseInt(q.get('lead'));
+  if (!deal && !aDeal) return;
+  history.replaceState(null, '', location.pathname);
+  setTimeout(() => {
+    if (aDeal && lead) angebotErstellen(lead, aDeal);
+    else if (deal) { showTab('deals'); Deals.open(deal); }
+  }, 600);
+})();
 Dupes.init({
   isAdmin: true,
   openLead: id => openLeadPanel(id),
@@ -2933,6 +2948,15 @@ async function saveInviteAdmin() {
 
 // ── DASHBOARD ─────────────────────────────────────────────────
 async function loadDashboard() {
+  // Angebots-Anfragen, die länger als die Frist warten
+  api('GET', '/bedarf/admin-hinweis').then(r => {
+    const el = document.getElementById('dashAngebote');
+    if (!el) return;
+    const n = r.wartend.length;
+    el.innerHTML = n ? `<button class="sk-bar fehlt" onclick="showTab('today')"><i class="fas fa-file-signature"></i>
+      <span><b>${n} ${n === 1 ? 'Angebot wartet' : 'Angebote warten'} seit über ${r.warte_std} Std.</b> · ${r.wartend.slice(0, 3).map(w => escHtml(w.company)).join(', ')}${n > 3 ? ' …' : ''}</span>
+      <span class="sk-bar-go">Ansehen <i class="fas fa-arrow-right"></i></span></button>` : '';
+  }).catch(() => {});
   try {
     const [data, deals] = await Promise.all([
       api('GET', '/leads/dashboard'),
@@ -3359,6 +3383,7 @@ document.getElementById('addLeadModal').addEventListener('click', function(e){ i
       </div>
       <div style="font-size:11px;color:var(--text3);margin-top:5px;line-height:1.5">Richtwerte pro Tag: 60–80 Anwahlen, 10–15 Gespräche, 2–3 Angebotsanfragen oder Termine. In der Einarbeitung 50–70 % davon.</div>
     </div>
+    <button type="button" class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="Bedarf.openRegeln()"><i class="fas fa-sliders-h"></i> Vertriebsregeln: Preise, Rabatt, Fristen, Demo-Link</button>
     <div class="form-group" style="margin-top:8px">
       <label>Leitfaden-Text <span style="font-size:11px;color:var(--text3);font-weight:400">(wird im Panel der Closer angezeigt)</span></label>
       <textarea id="settingCallScript" class="form-control" rows="6" placeholder="1. Hallo, mein Name ist...&#10;2. Ich rufe an wegen...&#10;3. Haben Sie kurz Zeit?" style="resize:vertical;font-size:12px;line-height:1.6"></textarea>

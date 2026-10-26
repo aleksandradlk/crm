@@ -52,6 +52,7 @@ router.get('/', auth, async (req, res) => {
     if (req.user.role === 'admin') {
       [anfragen] = await db.query(
         `SELECT d.id, d.lead_id, d.title, d.value, s.name AS stage_name, DATEDIFF(NOW(), d.stage_changed_at) AS days_in_stage,
+                TIMESTAMPDIFF(HOUR, COALESCE(d.angefordert_at, d.stage_changed_at), NOW()) AS std, d.admin_flag, d.paket,
                 l.company, l.phone, u.full_name AS owner_name,
                 (SELECT c.text FROM comments c WHERE c.lead_id = d.lead_id AND c.text LIKE '📝 Angebot angefordert%' ORDER BY c.id DESC LIMIT 1) AS infos
          FROM deals d JOIN leads l ON l.id = d.lead_id AND l.archived_at IS NULL
@@ -59,7 +60,8 @@ router.get('/', auth, async (req, res) => {
          LEFT JOIN users u ON u.id = d.owner_id
          WHERE d.status = 'open' AND s.name REGEXP 'anforder|anfrage'
          ORDER BY d.stage_changed_at ASC LIMIT 50`);
-      anfragen = anfragen.map(a => ({ ...a, infos: a.infos ? a.infos.replace(/^📝 Angebot angefordert:?\s*/, '') : '' }));
+      const warte = Number((await require('./bedarf').regeln()).anfrage_warte_std) || 24;
+      anfragen = anfragen.map(a => ({ ...a, infos: a.infos ? a.infos.replace(/^📝 Angebot angefordert:?\s*/, '') : '', zu_lange: a.std >= warte }));
     }
 
     const startToday = new Date(); startToday.setHours(0, 0, 0, 0);

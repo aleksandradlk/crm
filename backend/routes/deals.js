@@ -43,6 +43,7 @@ async function loadDeal(id) {
 }
 // Phase, in der der Closer dem Admin die Infos für ein Angebot übergibt
 const istAngebotAnfrage = name => /anfordern|anfrage/i.test(String(name || ''));
+const istAngebotGesendet = name => /gesendet|verschickt/i.test(String(name || ''));
 
 async function note(leadId, userId, text) {
   await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)', [leadId, userId, text]);
@@ -172,7 +173,7 @@ router.get('/', auth, async (req, res) => {
   const [rows] = await db.query(
     `SELECT d.id, d.lead_id, d.title, d.value, d.stage_id, d.status, d.owner_id,
             DATE_FORMAT(d.expected_close_date, '%Y-%m-%d') AS expected_close_date,
-            d.won_at, d.lost_at, d.lost_reason, d.notes,
+            d.won_at, d.lost_at, d.lost_reason, d.notes, d.admin_flag, d.paket, d.herkunft, d.angefordert_at, d.angebot_gesendet_at,
             d.stage_changed_at, d.created_at, d.updated_at,
             l.company, l.ceo, l.phone, l.assigned_to AS lead_assigned_to,
             u.full_name AS owner_name, s.name AS stage_name, s.probability,
@@ -291,26 +292,39 @@ router.patch('/:id', auth, async (req, res) => {
     const [[s]] = await db.query('SELECT id, name FROM deal_stages WHERE id=? AND is_active=1', [parseInt(req.body.stage_id)]);
     if (!s) return res.status(400).json({ error: 'Ungültige Phase' });
     newStage = s;
-    updates.push('stage_id=?', 'stage_changed_at=NOW()'); params.push(s.id);
   }
+  // „Angebot gesendet“ setzt nur der Admin – sobald das Angebot wirklich raus ist
+  if (newStage && istAngebotGesendet(newStage.name) && req.user.role !== 'admin')
+    return res.status(403).json({ error: '„Angebot gesendet“ setzt Aleksandra, sobald das Angebot raus ist.' });
+  // „Angebot anfordern“ nur mit angebotsreifer Bedarfsanalyse – dann läuft die ganze Anfrage
+  if (newStage && istAngebotAnfrage(newStage.name)) {
+    if (updates.length) { params.push(deal.id); await db.query(`UPDATE deals SET ${updates.join(',')} WHERE id=?`, params); }
+    const r = await require('./bedarf').anfordern(req, deal.lead_id, deal.id);
+    if (!r.ok) return res.status(r.status).json(r);
+    return res.json(r);
+  }
+  if (newStage) { updates.push('stage_id=?', 'stage_changed_at=NOW()'); params.push(newStage.id); }
   if (!updates.length) return res.json({ ok: true });
   params.push(deal.id);
   await db.query(`UPDATE deals SET ${updates.join(',')} WHERE id=?`, params);
   if (newStage) await note(deal.lead_id, req.user.id, `➜ ${deal.title}: Phase „${newStage.name}“`);
-  if (newStage && istAngebotAnfrage(newStage.name)) {
-    const infos = String(req.body.angebot_infos || '').trim().slice(0, 3000);
-    await note(deal.lead_id, req.user.id, `📝 Angebot angefordert${infos ? `: ${infos}` : ''}`);
-    // Admins sehen die Anfrage in „Heute“ und bekommen den Reminder-Hinweis
-    if (req.user.role !== 'admin') {
-      const [admins] = await db.query("SELECT id FROM users WHERE role='admin' AND is_active=1");
-      for (const a of admins) {
-        await db.query("INSERT INTO reminders (lead_id, user_id, remind_at, note, kind) VALUES (?, ?, NOW(), ?, 'angebot')",
-          [deal.lead_id, a.id, `Angebot anfordern: ${deal.title} (${req.user.full_name})${infos ? ` – ${infos.slice(0, 200)}` : ''}`]);
-      }
-    }
-  }
+  if (newStage && istAngebotGesendet(newStage.name)) await require('./bedarf').angebotGesendet(deal.id, req.user);
   await log(req.user.id, newStage ? 'deal_stage_change' : 'deal_update', 'lead', deal.lead_id,
     { deal_id: deal.id, ...(newStage ? { stage: newStage.name } : {}) }, req.ip);
+  res.json({ ok: true });
+});
+
+// ── POST /api/deals/:id/angebot-gesendet — Admin: Angebot ist raus ──
+router.post('/:id/angebot-gesendet', auth, adminOnly, async (req, res) => {
+  const deal = await loadDeal(parseInt(req.params.id));
+  if (!deal) return res.status(404).json({ error: 'Deal nicht gefunden' });
+  const [[s]] = await db.query("SELECT id, name FROM deal_stages WHERE is_active=1 AND name REGEXP 'gesendet|verschickt' ORDER BY sort_order LIMIT 1");
+  if (s && s.id !== deal.stage_id) {
+    await db.query('UPDATE deals SET stage_id=?, stage_changed_at=NOW() WHERE id=?', [s.id, deal.id]);
+    await note(deal.lead_id, req.user.id, `➜ ${deal.title}: Phase „${s.name}“`);
+  }
+  await require('./bedarf').angebotGesendet(deal.id, req.user);
+  await log(req.user.id, 'angebot_gesendet', 'lead', deal.lead_id, { deal_id: deal.id }, req.ip);
   res.json({ ok: true });
 });
 

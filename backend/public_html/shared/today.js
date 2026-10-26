@@ -108,9 +108,12 @@ const Today = {
     document.getElementById('todayAnfragen').innerHTML = anfr.map(a => this._row({
       title: `${escHtml(a.company || '—')} <span class="today-deal-val">${typeof Deals !== 'undefined' ? Deals.fmt(a.value) : a.value}</span>`,
       sub: `<b>${escHtml(a.owner_name || '')}:</b> ${escHtml((a.infos || 'ohne Infos').replace(/\s+/g, ' ').slice(0, 160))}`,
-      meta: a.days_in_stage ? `seit ${a.days_in_stage} ${a.days_in_stage === 1 ? 'Tag' : 'Tagen'}` : 'heute',
+      meta: (a.zu_lange ? '⚠ ' : '') + (a.std >= 24 ? `seit ${Math.floor(a.std / 24)} ${Math.floor(a.std / 24) === 1 ? 'Tag' : 'Tagen'}` : a.std >= 1 ? `seit ${a.std} Std.` : 'gerade eben')
+        + (a.admin_flag ? ' · Rabatt prüfen' : ''),
+      cls: a.zu_lange ? 'is-late' : '',
       leadId: a.lead_id, phone: a.phone,
-      extra: this.opts.onAngebot ? `<button class="btn btn-primary btn-sm" onclick="Today.opts.onAngebot(${a.lead_id}, ${a.id})"><i class="fas fa-file-signature"></i> Angebot erstellen</button>` : '',
+      extra: (this.opts.onAngebot ? `<button class="btn btn-primary btn-sm" onclick="Today.opts.onAngebot(${a.lead_id}, ${a.id})"><i class="fas fa-file-signature"></i> Angebot erstellen</button>` : '')
+        + (this.opts.isAdmin && typeof Deals !== 'undefined' ? `<button class="btn btn-ghost btn-sm" onclick="Deals.angebotGesendet(${a.id}).then(() => Today.load())" title="Angebot ist raus: Closer benachrichtigen, Nachfassen planen"><i class="fas fa-paper-plane"></i> Angebot verschickt</button>` : ''),
     })).join('');
 
     document.getElementById('todayMissedCard').hidden = !d.missed_calls.length;
