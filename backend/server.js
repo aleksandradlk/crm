@@ -139,6 +139,9 @@ const abrechnung = require('./abrechnung/crm').registriere(app, {
     ? { client: new (require('@anthropic-ai/sdk'))({ apiKey: process.env.CLAUDE_API_KEY }), model: 'claude-haiku-4-5', limit: 0 }
     : null,
 });
+const provisionRoutes = require('./routes/provision');
+provisionRoutes.verbinde(abrechnung.crm);
+app.use('/api/provision', provisionRoutes);
 
 // ── Gesundheits-Check ─────────────────────────────────────────
 app.get('/api/health', async (req, res) => {
@@ -658,6 +661,10 @@ for (const col of ['status_grund VARCHAR(300) NULL', 'nie_erreicht TINYINT(1) NO
 for (const col of ["art VARCHAR(20) NOT NULL DEFAULT 'termin'", 'painpoints TEXT NULL', 'versprochen TEXT NULL',
   'offene_fragen VARCHAR(50) NULL', 'uebergabe TINYINT(1) NOT NULL DEFAULT 0', 'vorher_zugewiesen INT NULL'])
   migrate(`ALTER TABLE appointments ADD COLUMN ${col}`).catch(() => {});
+
+// Provision (§8): zzgl. USt am Benutzer, Sitz im Ausland (ohne USt) – Rollback: db/rollback/2026-10-27_provision.sql
+for (const col of ['provision_zzgl_ust TINYINT(1) NOT NULL DEFAULT 0', 'provision_ausland TINYINT(1) NOT NULL DEFAULT 0'])
+  migrate(`ALTER TABLE users ADD COLUMN ${col}`).catch(() => {});
 
 // ── Cron: Activity Log nach 7 Tagen bereinigen ───────────────
 cron.schedule('0 3 * * *', async () => {

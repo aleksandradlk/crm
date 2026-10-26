@@ -5,6 +5,8 @@ const { auth, adminOnly } = require('../middleware/auth');
 const { log }  = require('../helpers/logger');
 
 const PERM_FIELDS = ['can_edit_contacts','can_archive_leads','can_reassign_leads','can_view_all_leads','can_create_users','can_generate_leads','can_manage_email_templates','can_abrechnung'];
+// Provision: zzgl. USt bzw. Sitz im Ausland (dann ohne USt)
+const PROV_FIELDS = ['provision_zzgl_ust','provision_ausland'];
 
 // GET /api/users — alle User (Admin)
 router.get('/', auth, adminOnly, async (req, res) => {
@@ -14,6 +16,7 @@ router.get('/', auth, adminOnly, async (req, res) => {
             u.can_edit_contacts, u.can_archive_leads, u.can_reassign_leads,
             u.can_view_all_leads, u.can_create_users, u.can_generate_leads,
             u.can_manage_email_templates, u.can_abrechnung, u.phone_line,
+            u.provision_zzgl_ust, u.provision_ausland,
             s.last_active, s.click_count, s.login_at AS session_start,
             c.full_name AS creator_name, c.email AS creator_email
      FROM users u
@@ -137,7 +140,7 @@ router.post('/', auth, async (req, res) => {
 
   // Berechtigungen nur Admin darf setzen
   if (req.user.role === 'admin') {
-    for (const f of PERM_FIELDS) {
+    for (const f of [...PERM_FIELDS, ...PROV_FIELDS]) {
       if (req.body[f] !== undefined)
         await db.query(`UPDATE users SET ${f}=? WHERE id=?`, [req.body[f] ? 1 : 0, result.insertId]);
     }
@@ -175,7 +178,7 @@ router.patch('/:id', auth, adminOnly, async (req, res) => {
     await db.query('UPDATE users SET password_hash=? WHERE id=?', [hash, id]);
   }
 
-  for (const f of PERM_FIELDS) {
+  for (const f of [...PERM_FIELDS, ...PROV_FIELDS]) {
     if (req.body[f] !== undefined)
       await db.query(`UPDATE users SET ${f}=? WHERE id=?`, [req.body[f] ? 1 : 0, id]);
   }

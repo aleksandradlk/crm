@@ -63,7 +63,9 @@ const Auswertung = {
         <div class="card au-card au-wide"><div class="au-h">Gründe</div>
           <div class="au-gruende-wrap">${gruende(d.gruende.verloren, 'Deal verloren')}${gruende(d.gruende.passt_nicht, 'Lead passt nicht')}</div>
         </div>
+        ${typeof Provision !== 'undefined' ? '<div class="au-wide" id="auProvision"></div>' : ''}
       </div>`;
+    if (typeof Provision !== 'undefined') Provision.team('auProvision');
   },
 
   // Dashboard: Hinweis auf Closer ohne Aktivität

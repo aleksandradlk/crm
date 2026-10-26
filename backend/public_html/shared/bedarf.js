@@ -445,6 +445,17 @@ const Bedarf = {
           <label>Live-Demo-Link</label><div><input class="form-control" id="vr-demo" value="${escHtml(c.demo_link)}"></div>
           <label>Gesundheitsbranche erkennen an</label><div><textarea class="form-control" id="vr-gesund" rows="2">${escHtml((c.gesundheit || []).join(', '))}</textarea></div>
         </div>
+        <div class="tr-sub">Provision &amp; Bonus</div>
+        <div class="vr-grid">
+          <label>Provision vom Einmalpreis</label><div>${num('vr-pv-satz', c.provision.satz, 70)} %</div>
+          <label>Provision mit Rabatt (vom reduzierten Preis)</label><div>${num('vr-pv-rabatt', c.provision.satz_rabatt, 70)} %</div>
+          <label>Quick-Win-Upgrade zählt innerhalb von</label><div>${num('vr-pv-upgrade', c.provision.upgrade_tage, 70)} Tagen</div>
+          <label>Provision fällig nach Zahlungseingang</label><div>${num('vr-pv-faellig', c.provision.faellig_tage, 70)} Tage</div>
+          <label>USt-Aufschlag (wenn am Closer eingestellt)</label><div>${num('vr-pv-ust', c.provision.ust, 70)} %</div>
+          <label>Bonus zählt bei</label><div class="vr-checks">${pk.filter(([k]) => k !== 'quickwin').map(([k, p]) =>
+            `<label><input type="checkbox" class="vr-pv-paket" value="${k}"${c.provision.bonus_pakete.includes(k) ? ' checked' : ''}> ${escHtml(p.name)}</label>`).join('')}</div>
+          <label>Bonus-Stufen (ab Abschlüssen → €)</label><div><input class="form-control" id="vr-pv-bonus" value="${escHtml(c.provision.bonus.map(b => `${b.ab}:${b.betrag}`).join(', '))}" style="width:200px" placeholder="1:50, 5:150, 10:300"></div>
+        </div>
         <div class="modal-actions">
           <button class="btn btn-ghost btn-sm" id="vrReset">Standard wiederherstellen</button>
           <button class="btn btn-primary btn-sm" id="vrSave"><i class="fas fa-check"></i> Speichern</button></div>
@@ -460,6 +471,8 @@ const Bedarf = {
     o.querySelector('#vrReset').onclick = () => { if (confirm('Alle Vertriebsregeln auf Standard zurücksetzen?')) speichern({}); };
     o.querySelector('#vrSave').onclick = () => {
       const pakete = {}, zusatz = {};
+      const stufen = o.querySelector('#vr-pv-bonus').value.split(/[,;]+/).map(t => t.split(/[:=→]/).map(x => Number(String(x).replace(/[^\d.]/g, ''))))
+        .filter(([ab, b]) => ab > 0 && b >= 0).map(([ab, betrag]) => ({ ab, betrag }));
       pk.forEach(([k, p]) => { pakete[k] = { ...p, einrichtung: val(`vr-p-${k}-e`), betreuung: val(`vr-p-${k}-b`) }; });
       zs.forEach(([k, p]) => { zusatz[k] = k === 'automation' ? p : { ...p, einrichtung: val(`vr-z-${k}-e`), betreuung: val(`vr-z-${k}-b`) }; });
       speichern({
@@ -470,6 +483,12 @@ const Bedarf = {
         admin_mail: o.querySelector('#vr-mail').value.trim() || R.STANDARD.admin_mail,
         demo_link: o.querySelector('#vr-demo').value.trim() || R.STANDARD.demo_link,
         gesundheit: o.querySelector('#vr-gesund').value.split(',').map(s => s.trim()).filter(Boolean),
+        provision: {
+          satz: val('vr-pv-satz'), satz_rabatt: val('vr-pv-rabatt'), upgrade_tage: val('vr-pv-upgrade'),
+          faellig_tage: val('vr-pv-faellig'), ust: val('vr-pv-ust'),
+          bonus_pakete: [...o.querySelectorAll('.vr-pv-paket:checked')].map(x => x.value),
+          bonus: stufen.length ? stufen : R.STANDARD.provision.bonus,
+        },
       });
     };
   },
