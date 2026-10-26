@@ -216,7 +216,7 @@ function registriere(app, { ki } = {}) {
           const zw = a.data.zahlungswunsch;
           vorlage = {
             positionen: bedarf.R.positionen(a.data, cfg),
-            zahlung: zw === '5050' ? { art: 'anzahlung', anzahlungProzent: 50 } : /^raten(\d)/.test(zw || '') ? { art: 'raten', anzahl: parseInt(zw.slice(5)) } : undefined,
+            zahlung: zw === '5050' ? { art: 'anzahlung', anzahlungProzent: 50 } : /^raten(\d)/.test(zw || '') ? { art: 'raten', anzahl: parseInt(zw.slice(5)), ratenAnzahlung: 50 } : undefined,
           };
         }
       } catch (e) { console.error('Angebot aus Bedarfsanalyse:', e.message); }
