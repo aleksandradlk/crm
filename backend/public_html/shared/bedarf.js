@@ -154,7 +154,7 @@ const Bedarf = {
         <div class="bd-progress-text"><b>${p.fragen_ok} von ${p.fragen_gesamt}</b> Pflichtfragen
           ${p.angebotsreif ? '<span class="bd-reif"><i class="fas fa-check-circle"></i> angebotsreif</span>' : ''}</div>
         <div class="zl-bar"><div style="width:${pct}%" class="${p.angebotsreif ? 'is-done' : ''}"></div></div>
-        <div class="bd-steps">${p.fragen.map(f => `<button type="button" class="bd-step ${f.ok ? 'ok' : ''}" onclick="Bedarf._springe(${f.nr})">${f.ok ? '<i class="fas fa-check"></i>' : f.nr}<span>${escHtml(f.titel)}</span></button>`).join('')}</div>
+        <div class="bd-steps">${p.fragen.map(f => `<button type="button" class="bd-step ${f.ok ? 'ok' : ''}" onclick="Bedarf._springe(${f.nr})">${f.ok ? '<i class="fas fa-check"></i>' : `<em>${f.nr}</em>`}<span>${escHtml(f.titel)}</span></button>`).join('')}</div>
         ${p.fehlt.length && !p.angebotsreif ? `<div class="bd-fehlt-line"><b>Es fehlt noch:</b> ${p.fehlt.map(escHtml).join(' · ')}</div>` : ''}
       </div>`;
     this.el.querySelectorAll('.bd-ok[data-ok]').forEach(s => {
