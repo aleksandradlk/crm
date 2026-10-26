@@ -2475,3 +2475,48 @@ body.dark .tr-ueb-links a { color: var(--accent2); }
 .panel-gesperrt { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--red); background: color-mix(in srgb, var(--red) 8%, var(--bg2)); border-radius: 10px; padding: 8px 10px; margin-top: 8px; }
 #dlNie { margin: 2px 0 10px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--copper) 9%, var(--bg3)); }
 #dlNie[hidden] { display: none; }
+
+/* ── Vertriebs-Auswertung (Tracking) ───────────────────────── */
+.au-nav { gap: 6px; }
+.au-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 600px), 1fr)); gap: 14px; }
+.au-card { padding: 14px 16px; overflow-x: auto; }
+.au-wide { grid-column: 1 / -1; }
+.au-h { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 10px; }
+.au-sub { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text3); margin-bottom: 8px; }
+.au-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.au-table th { text-align: left; font-size: 11px; font-weight: 600; color: var(--text3); padding: 4px 10px 6px 0; }
+.au-table td:not(:first-child) { white-space: nowrap; }
+.au-table td { padding: 7px 10px 7px 0; border-top: 1px solid var(--border); color: var(--text2); vertical-align: middle; }
+.au-table td b { color: var(--text); }
+.au-bar { height: 5px; margin-top: 4px; max-width: 90px; min-width: 50px; }
+.au-muted { color: var(--text3); }
+.au-empty { font-size: 13px; color: var(--text3); padding: 6px 0; }
+.au-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 8px; }
+.au-kpis > div { background: var(--bg3); border-radius: 10px; padding: 10px; }
+.au-kpis b { display: block; font-size: 18px; color: var(--text); }
+.au-kpis span { font-size: 11.5px; color: var(--text3); }
+.au-kpis .is-warn b { color: var(--copper); }
+.au-gruende-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.au-grund { display: grid; grid-template-columns: 150px 1fr 30px; align-items: center; gap: 10px; font-size: 13px; color: var(--text2); margin-bottom: 6px; }
+.au-grund .au-bar { max-width: none; margin: 0; }
+.au-grund b { text-align: right; color: var(--text); }
+.au-warn { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; padding: 12px 14px; border-radius: 12px; background: color-mix(in srgb, var(--copper) 10%, var(--bg2)); border: 1px solid color-mix(in srgb, var(--copper) 30%, transparent); font-size: 13px; color: var(--text2); }
+.au-warn i { color: var(--copper); font-size: 18px; margin-top: 2px; }
+.au-warn b { display: block; color: var(--text); }
+@media (max-width: 900px) {
+  .au-grid, .au-gruende-wrap { grid-template-columns: 1fr; }
+  .au-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .au-grund { grid-template-columns: 110px 1fr 26px; }
+}
+/* Auswertung mobil: Zeilen als Karten, jede Zahl mit Beschriftung */
+@media (max-width: 768px) {
+  .au-card { overflow-x: visible; }
+  .au-table tbody tr { background: var(--bg3); }
+  .au-table tbody td { border-top: none; padding: 3px 0; text-align: left; }
+  .au-table tbody td:first-child { display: block !important; font-size: 13px; padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
+  .au-table tbody td:nth-child(2) { font-size: 12px !important; font-weight: 400 !important; padding: 3px 0 !important; margin-bottom: 0 !important; border-bottom: none !important; }
+  .au-table tbody td[data-l] { display: flex !important; justify-content: space-between; align-items: center; gap: 10px; }
+  .au-table tbody td[data-l] { gap: 4px; }
+  .au-table tbody td[data-l]::before { content: attr(data-l); color: var(--text3); flex: 1; }
+  .au-table tbody td[data-l] .au-bar { display: none; }
+}
