@@ -294,7 +294,7 @@ function ratenplanTabelle(doc, raten) {
   raten.forEach(r => {
     if (y + 16 > INHALT_UNTEN) { doc.addPage(); y = doc.y; }
     doc.font('M400').fontSize(9).fillColor(INK);
-    doc.text(`${r.nr} von ${raten.length}`, x + 5, y + 4, { width: 60, lineBreak: false });
+    doc.text(r.anzahlung ? 'Anzahlung' : `${r.nr} von ${raten.filter(x => !x.anzahlung).length}`, x + 5, y + 4, { width: 60, lineBreak: false });
     doc.text(datum(r.faelligAm), x + 70, y + 4, { width: 100, lineBreak: false });
     doc.font('M600').text(euro(r.betrag), x + 180, y + 4, { width: 110, align: 'right', lineBreak: false });
     y += 16;
@@ -340,7 +340,10 @@ function erzeugeAngebotPdf({ angebot, kunde, absender, kleinunternehmer }) {
   platzSicherstellen(doc, 60 + raten.length * 16);
   ueberschrift(doc, 'Zahlungsbedingungen');
   if (raten.length) {
-    absatz(doc, `Zahlung in ${angebot.zahlung.raten.length} monatlichen Raten, jeweils fällig zum angegebenen Datum:`, { abstand: 6 });
+    const n = raten.filter(r => !r.anzahlung).length;
+    absatz(doc, raten[0].anzahlung
+      ? `${menge(angebot.zahlung.ratenAnzahlung)} % Anzahlung bei Auftrag, der Rest in ${n} ${n === 1 ? 'Monatsrate' : 'monatlichen Raten'}, jeweils fällig zum angegebenen Datum:`
+      : `Zahlung in ${n} monatlichen Raten, jeweils fällig zum angegebenen Datum:`, { abstand: 6 });
     ratenplanTabelle(doc, angebot.zahlung.raten);
   } else if (angebot.zahlung && angebot.zahlung.art === 'anzahlung') {
     const z = angebot.zahlung;

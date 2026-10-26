@@ -258,15 +258,25 @@ function bauMandant(app, ctx) {
     const ust = kleinunternehmer ? 0 : round2(netto * UST_SATZ / 100);
     return { positionenSumme, rabatt: round2(positionenSumme - netto), netto, ust, brutto: round2(netto + ust), ustSatz: kleinunternehmer ? 0 : UST_SATZ };
   }
-  function ratenplan(gesamt, anzahl, ersteRate) {
+  // Mit anzahlungProzent > 0: erst die Anzahlung (fällig ersteRate), dann der Rest in `anzahl`
+  // Monatsraten ab einen Monat später (z. B. 50 % bei Auftrag, Rest in 3 Monatsraten).
+  // Ohne Anzahlung wie bisher: `anzahl` gleiche Raten ab ersteRate.
+  function ratenplan(gesamt, anzahl, ersteRate, anzahlungProzent = 0) {
     anzahl = Math.max(1, Math.min(36, parseInt(anzahl, 10) || 1));
-    const rate = round2(gesamt / anzahl);
+    const p = Math.max(0, Math.min(99, Number(anzahlungProzent) || 0));
     const raten = [];
+    let rest = gesamt, start = 0;
+    if (p > 0) {
+      const anz = round2(gesamt * p / 100);
+      raten.push({ nr: 0, anzahlung: true, faelligAm: ersteRate, betrag: anz });
+      rest = round2(gesamt - anz); start = 1;
+    }
+    const rate = round2(rest / anzahl);
     let verteilt = 0;
     for (let i = 1; i <= anzahl; i++) {
-      const betrag = i === anzahl ? round2(gesamt - verteilt) : rate; // Rundungsdifferenz auf die letzte Rate
+      const betrag = i === anzahl ? round2(rest - verteilt) : rate; // Rundungsdifferenz auf die letzte Rate
       verteilt = round2(verteilt + betrag);
-      raten.push({ nr: i, faelligAm: plusMonate(ersteRate, i - 1), betrag });
+      raten.push({ nr: i, faelligAm: plusMonate(ersteRate, i - 1 + start), betrag });
     }
     return raten;
   }
@@ -284,7 +294,8 @@ function bauMandant(app, ctx) {
     if (zahlung.art === 'raten') {
       const erste = istDatum(zahlung.ersteRate) ? zahlung.ersteRate : plusTage(a.datum, 14);
       zahlung.ersteRate = erste;
-      zahlung.raten = ratenplan(s.brutto, zahlung.anzahl, erste);
+      zahlung.ratenAnzahlung = Math.max(0, Math.min(99, Number(a.zahlung.ratenAnzahlung) || 0));
+      zahlung.raten = ratenplan(s.brutto, zahlung.anzahl, erste, zahlung.ratenAnzahlung);
     }
     let status = a.status;
     if (status === 'versendet' && a.gueltigBis < heute()) status = 'abgelaufen';
@@ -602,6 +613,8 @@ function bauMandant(app, ctx) {
         art: ['raten', 'anzahlung'].includes(zahlungNeu.art ?? zahlungAlt.art) ? (zahlungNeu.art ?? zahlungAlt.art) : 'einmal',
         anzahl: Math.max(1, Math.min(36, parseInt(zahlungNeu.anzahl ?? zahlungAlt.anzahl, 10) || 1)),
         ersteRate: istDatum(zahlungNeu.ersteRate) ? zahlungNeu.ersteRate : (zahlungAlt.ersteRate || null),
+        // Ratenzahlung mit Anzahlung bei Auftrag (0 = gleiche Raten wie früher)
+        ratenAnzahlung: Math.max(0, Math.min(99, round2(zahlungNeu.ratenAnzahlung ?? zahlungAlt.ratenAnzahlung ?? 0) || 0)),
         // Anzahlung + Schlussrechnung (z. B. 50 % bei Auftrag, 50 % nach Abschluss)
         anzahlungProzent: Math.max(1, Math.min(99, round2(zahlungNeu.anzahlungProzent ?? zahlungAlt.anzahlungProzent) || 50)),
         anzahlungText: String(zahlungNeu.anzahlungText ?? zahlungAlt.anzahlungText ?? '').trim() || 'bei Auftragserteilung',
@@ -845,16 +858,19 @@ function bauMandant(app, ctx) {
         bezug: { ...bezug, rate: 2, ratenGesamt: 2, schlussrechnung: true }
       })));
     } else if (einmalig.length && v.zahlung.art === 'raten') {
-      const n = v.zahlung.raten.length;
+      const n = v.zahlung.raten.filter(r => !r.anzahlung).length;
       v.zahlung.raten.forEach(rate => {
         // Rate netto: bei USt-Pflicht ist der Ratenbetrag brutto, die Position wird netto geführt.
         const netto = a.kleinunternehmer ? rate.betrag : round2(rate.betrag / (1 + UST_SATZ / 100));
         rechnungen.push(speichere(RECHNUNGEN_DIR, neueRechnung({
           quelle: 'angebot', kundeId: a.kundeId, kleinunternehmer: a.kleinunternehmer,
-          titel: a.betreff, geplantMonat: monatVon(rate.faelligAm),
+          titel: rate.anzahlung ? `Anzahlung ${menge(v.zahlung.ratenAnzahlung)} % – ${a.betreff}` : a.betreff, geplantMonat: monatVon(rate.faelligAm),
           leistungVon: a.datum < rate.faelligAm ? a.datum : rate.faelligAm, leistungBis: rate.faelligAm,
-          positionen: [{ artikelNr: null, titel: `${a.betreff} – Rate ${rate.nr} von ${n}`, beschreibung: `Teilzahlung gemäß Angebot ${a.nummer} vom ${datumDe(a.datum)} (${beschreibungPositionen}).`, menge: 1, einheit: 'Rate', einheitMehrzahl: 'Raten', einzelpreis: netto, abrechnung: 'einmalig' }],
-          bezug: { ...bezug, rate: rate.nr, ratenGesamt: n, geplantFaellig: rate.faelligAm }
+          positionen: [rate.anzahlung
+            ? { artikelNr: null, titel: `${a.betreff} – Anzahlung ${menge(v.zahlung.ratenAnzahlung)} % bei Auftrag`, beschreibung: `Anzahlung gemäß Angebot ${a.nummer} vom ${datumDe(a.datum)} (${beschreibungPositionen}). Der Rest folgt in ${n} ${n === 1 ? 'Monatsrate' : 'Monatsraten'}.`, menge: 1, einheit: 'Pauschal', einheitMehrzahl: 'Pauschal', einzelpreis: netto, abrechnung: 'einmalig' }
+            : { artikelNr: null, titel: `${a.betreff} – Rate ${rate.nr} von ${n}`, beschreibung: `Teilzahlung gemäß Angebot ${a.nummer} vom ${datumDe(a.datum)} (${beschreibungPositionen}).`, menge: 1, einheit: 'Rate', einheitMehrzahl: 'Raten', einzelpreis: netto, abrechnung: 'einmalig' }],
+          bezug: rate.anzahlung ? { ...bezug, rate: 0, ratenGesamt: n, anzahlung: true, geplantFaellig: rate.faelligAm }
+            : { ...bezug, rate: rate.nr, ratenGesamt: n, geplantFaellig: rate.faelligAm }
         })));
       });
     }
@@ -1606,7 +1622,7 @@ Antworte NUR mit gültigem JSON, kein Text davor oder danach:
         .map(rechnungAnsicht)
         .map(r => ({ id: r.id, nummer: r.nummer || null, netto: r.summen.netto, status: r.zahlungsstatus,
           bezahltAm: r.zahlung && r.zahlung.bezahltAm || null, faelligAm: r.faelligAm || r.bezug.geplantFaellig || null,
-          rate: r.bezug.rate || 1, ratenGesamt: r.bezug.ratenGesamt || 1, anzahlung: !!r.bezug.anzahlung }))
+          rate: r.bezug.anzahlung ? 0 : (r.bezug.rate || 1), ratenGesamt: r.bezug.ratenGesamt || 1, anzahlung: !!r.bezug.anzahlung }))
         .sort((x, y) => x.rate - y.rate);
       return {
         angebot: { id: a.id, nummer: a.nummer, status: v.statusEffektiv || a.status, datum: a.datum,
@@ -1615,7 +1631,8 @@ Antworte NUR mit gültigem JSON, kein Text davor oder danach:
           rabattProzent: einmalig.some(p => Number(p.rabatt) > 0),
           // Minus-Positionen (z. B. „Anrechnung Quick-Win“)
           gutschrift: round2(-einmalig.filter(p => positionGesamt(p) < 0).reduce((x, p) => x + positionGesamt(p), 0)),
-          zahlung: { art: v.zahlung.art, anzahlungProzent: v.zahlung.anzahlungProzent, raten: (v.zahlung.raten || []).map(r => r.betrag) } },
+          zahlung: { art: v.zahlung.art, anzahlungProzent: v.zahlung.anzahlungProzent, raten: (v.zahlung.raten || []).map(r => r.betrag),
+            mitAnzahlung: (v.zahlung.raten || []).some(r => r.anzahlung) } },
         rechnungen,
       };
     },

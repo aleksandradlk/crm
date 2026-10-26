@@ -530,7 +530,7 @@ async function zeigeAngebote() {
   const rows = S.angebote.map(a => `<tr>
     <td><span class="name">${esc(a.nummer)}</span><div class="sub">${datumDe(a.datum)} · gültig bis ${datumDe(a.gueltigBis)}</div></td>
     <td>${esc(a.kunde ? a.kunde.firma : '–')}<div class="sub">${esc(a.betreff)}${(a.anhaenge || []).length ? ' · 📎 ' + a.anhaenge.length : ''}</div></td>
-    <td class="zahl">${euro(a.summen.brutto)}${a.monatlichSumme ? `<div class="sub">+ ${euro(a.monatlichSumme)}/Monat</div>` : ''}<div class="sub">${a.zahlung.art === 'raten' ? a.zahlung.anzahl + ' Raten' : a.zahlung.art === 'anzahlung' ? a.zahlung.anzahlungProzent + ' % Anzahlung' : 'Einmalzahlung'}</div></td>
+    <td class="zahl">${euro(a.summen.brutto)}${a.monatlichSumme ? `<div class="sub">+ ${euro(a.monatlichSumme)}/Monat</div>` : ''}<div class="sub">${a.zahlung.art === 'raten' ? (a.zahlung.ratenAnzahlung ? a.zahlung.ratenAnzahlung + ' % + ' + a.zahlung.anzahl + ' Raten' : a.zahlung.anzahl + ' Raten') : a.zahlung.art === 'anzahlung' ? a.zahlung.anzahlungProzent + ' % Anzahlung' : 'Einmalzahlung'}</div></td>
     <td>${chip(a.statusEffektiv)}${a.umgewandelt ? '<div class="sub">umgewandelt</div>' : ''}${(a.versand || []).length ? `<div class="sub">gemailt ${datumDe((a.versand[a.versand.length - 1].am))}</div>` : ''}</td>
     <td class="aktionen">
       <a class="btn klein sekundaer" href="${API}/angebote/${a.id}/pdf" target="_blank" style="text-decoration:none">PDF</a>
@@ -575,8 +575,9 @@ function angebotEditor(a) {
       <div class="field klein" id="ag-anz-prozent-feld"><label>Anzahlung %</label><input type="number" id="ag-anz-prozent" min="1" max="99" value="${z.anzahlungProzent || 50}" oninput="posSumme()"></div>
       <div class="field" id="ag-anz-text-feld"><label>Anzahlung fällig …</label><input id="ag-anz-text" value="${esc(z.anzahlungText || 'bei Auftragserteilung')}" oninput="posSumme()"></div>
       <div class="field" id="ag-rest-text-feld"><label>Rest fällig …</label><input id="ag-rest-text" value="${esc(z.restText || 'nach Abschluss des Projekts')}" oninput="posSumme()"></div>
-      <div class="field klein" id="ag-raten-anzahl-feld"><label>Anzahl Raten</label><input type="number" id="ag-raten-anzahl" min="2" max="36" value="${z.anzahl || 3}" oninput="posSumme()"></div>
-      <div class="field klein" id="ag-raten-erste-feld"><label>1. Rate fällig am</label><input type="date" id="ag-raten-erste" value="${z.ersteRate || plusTage(a.datum || heute(), 14)}" oninput="posSumme()"></div>
+      <div class="field klein" id="ag-raten-anz-feld"><label>Anzahlung bei Auftrag %</label><input type="number" id="ag-raten-anz" min="0" max="99" value="${z.ratenAnzahlung ?? (a.id ? 0 : (KONTEXT.admin ? 50 : 0))}" oninput="ratenFelder()"><div class="hint">0 = gleiche Raten ohne Anzahlung</div></div>
+      <div class="field klein" id="ag-raten-anzahl-feld"><label id="ag-raten-anzahl-label">Anzahl Raten</label><input type="number" id="ag-raten-anzahl" min="1" max="36" value="${z.anzahl || 3}" oninput="posSumme()"></div>
+      <div class="field klein" id="ag-raten-erste-feld"><label id="ag-raten-erste-label">1. Rate fällig am</label><input type="date" id="ag-raten-erste" value="${z.ersteRate || plusTage(a.datum || heute(), 14)}" oninput="posSumme()"></div>
       <div class="field"><label>Monatliche Leistungen ab</label><input type="date" id="ag-monatlich-start" value="${a.monatlichStart || ''}"><div class="hint">Leer = 1. des Folgemonats. Monatliche Positionen erscheinen nicht in der Einmalsumme, sondern als „Zusätzlich ab …“.</div></div>
     </div>
     <div id="ratenplan-vorschau" class="sub" style="margin-bottom:12px"></div>
@@ -618,6 +619,10 @@ async function kiVorschlag() {
 function ratenFelder() {
   const art = $('ag-zahlart').value;
   $('ag-raten-anzahl-feld').style.display = art === 'raten' ? '' : 'none';
+  $('ag-raten-anz-feld').style.display = art === 'raten' ? '' : 'none';
+  const mitAnz = (Number($('ag-raten-anz').value) || 0) > 0;
+  $('ag-raten-anzahl-label').textContent = mitAnz ? 'Monatsraten für den Rest' : 'Anzahl Raten';
+  $('ag-raten-erste-label').textContent = mitAnz ? 'Anzahlung fällig am' : '1. Rate fällig am';
   $('ag-raten-erste-feld').style.display = art === 'raten' ? '' : 'none';
   $('ag-anz-prozent-feld').style.display = art === 'anzahlung' ? '' : 'none';
   $('ag-anz-text-feld').style.display = art === 'anzahlung' ? '' : 'none';
@@ -635,15 +640,19 @@ function ratenVorschau(gesamt) {
   }
   if ($('ag-zahlart').value !== 'raten') { box.textContent = 'Zahlungsbedingung im PDF: „Einmalzahlung, 14 Tage nach Rechnungsstellung.“'; return; }
   const n = Math.max(1, parseInt($('ag-raten-anzahl').value, 10) || 1);
-  const rate = round2(gesamt / n);
-  const letzte = round2(gesamt - rate * (n - 1));
-  box.textContent = `Ratenplan im PDF: ${n} × ${euro(rate)} monatlich ab ${datumDe($('ag-raten-erste').value)}${letzte !== rate ? ` (letzte Rate ${euro(letzte)} wegen Rundung)` : ''}.`;
+  const p = Math.max(0, Math.min(99, Number($('ag-raten-anz').value) || 0));
+  const anz = round2(gesamt * p / 100), rest = round2(gesamt - anz);
+  const rate = round2(rest / n);
+  const letzte = round2(rest - rate * (n - 1));
+  box.textContent = p
+    ? `Ratenplan im PDF: ${p} % Anzahlung (${euro(anz)}) am ${datumDe($('ag-raten-erste').value)}, dann ${n} × ${euro(rate)} monatlich${letzte !== rate ? ` (letzte Rate ${euro(letzte)} wegen Rundung)` : ''}. Beim Umwandeln entsteht je Zahlung ein Rechnungsentwurf.`
+    : `Ratenplan im PDF: ${n} × ${euro(rate)} monatlich ab ${datumDe($('ag-raten-erste').value)}${letzte !== rate ? ` (letzte Rate ${euro(letzte)} wegen Rundung)` : ''}.`;
 }
 async function angebotSpeichern(id) {
   const body = {
     kundeId: $('ag-kunde').value, datum: $('ag-datum').value, gueltigBis: $('ag-gueltig').value, betreff: $('ag-betreff').value,
     anrede: $('ag-anrede').value, einleitung: $('ag-einleitung').value, schlusstext: $('ag-schluss').value, gruss: $('ag-gruss').value,
-    positionen: POS, zahlung: { art: $('ag-zahlart').value, anzahl: $('ag-raten-anzahl').value, ersteRate: $('ag-raten-erste').value, anzahlungProzent: $('ag-anz-prozent').value, anzahlungText: $('ag-anz-text').value, restText: $('ag-rest-text').value },
+    positionen: POS, zahlung: { art: $('ag-zahlart').value, anzahl: $('ag-raten-anzahl').value, ersteRate: $('ag-raten-erste').value, ratenAnzahlung: $('ag-raten-anz').value, anzahlungProzent: $('ag-anz-prozent').value, anzahlungText: $('ag-anz-text').value, restText: $('ag-rest-text').value },
     monatlichStart: $('ag-monatlich-start').value || null, projektvereinbarung: $('ag-pv').checked
   };
   try {

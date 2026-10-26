@@ -28,9 +28,14 @@ function provisionsDaten(dealId) {
 }
 
 // Zahlungsplan als Anteile, wenn es noch keine Rechnungen gibt
-function planAusZahlung(art, prozent, raten) {
+function planAusZahlung(art, prozent, raten, mitAnzahlung) {
   if (art === 'anzahlung') { const p = Math.min(99, Math.max(1, Number(prozent) || 50)) / 100; return [{ anteil: p, art: 'anzahlung' }, { anteil: 1 - p, art: 'rest' }]; }
-  if (art === 'raten' && raten.length > 1) { const s = raten.reduce((a, b) => a + b, 0) || 1; return raten.map((b, i) => ({ anteil: b / s, art: i ? 'rate' : 'anzahlung', nr: i + 1, von: raten.length })); }
+  if (art === 'raten' && raten.length > 1) {
+    const s = raten.reduce((a, b) => a + b, 0) || 1;
+    // Mit Anzahlung: „Anzahlung, dann Rate 1 … n von n“ wie auf den Rechnungen
+    if (mitAnzahlung) return raten.map((b, i) => ({ anteil: b / s, art: i ? 'rate' : 'anzahlung', nr: i, von: raten.length - 1 }));
+    return raten.map((b, i) => ({ anteil: b / s, art: i ? 'rate' : 'anzahlung', nr: i + 1, von: raten.length }));
+  }
   return [{ anteil: 1, art: 'einmal' }];
 }
 // Wunsch aus der Bedarfsanalyse: 50/50 oder 50 % bei Auftrag + Rest in n Monatsraten
@@ -39,7 +44,7 @@ function planAusWunsch(zw) {
   const m = /^raten(\d+)/.exec(zw || '');
   if (!m) return planAusZahlung('einmal');
   const n = Math.max(1, parseInt(m[1]));
-  return planAusZahlung('raten', 0, [n, ...Array(n).fill(1)]);
+  return planAusZahlung('raten', 0, [n, ...Array(n).fill(1)], true);
 }
 
 // „X € bei Anzahlung, dann 3 × Y €“
@@ -74,7 +79,7 @@ async function berechne(deal, cfg, besitzer) {
         anteil: r.netto / summe, art: r.anzahlung || (i === 0 && r.ratenGesamt > 1) ? 'anzahlung' : r.ratenGesamt > 1 ? 'rate' : 'einmal',
         nr: r.rate, von: r.ratenGesamt, rechnung: r.nummer, bezahlt_am: r.status === 'bezahlt' ? r.bezahltAm : null,
         zahlungsstatus: r.status, kunde_faellig: r.faelligAm }));
-    } else plan = planAusZahlung(daten.angebot.zahlung.art, daten.angebot.zahlung.anzahlungProzent, daten.angebot.zahlung.raten);
+    } else plan = planAusZahlung(daten.angebot.zahlung.art, daten.angebot.zahlung.anzahlungProzent, daten.angebot.zahlung.raten, daten.angebot.zahlung.mitAnzahlung);
   } else {
     const d = await ladeAnalyse();
     if (d.paket_empfohlen && cfg.pakete[d.paket_empfohlen]) {
