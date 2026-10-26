@@ -64,6 +64,13 @@ router.get('/', auth, async (req, res) => {
       anfragen = anfragen.map(a => ({ ...a, infos: a.infos ? a.infos.replace(/^📝 Angebot angefordert:?\s*/, '') : '', zu_lange: a.std >= warte }));
     }
 
+    // Übergaben/Terminanfragen, die auf die Antwort des Closers warten
+    const [terminAnfragen] = await db.query(
+      `SELECT a.id, a.lead_id, a.art, DATE_FORMAT(a.starts_at, '%Y-%m-%d %H:%i:%s') AS starts_at, a.topic, a.painpoints,
+              l.company, l.phone, p.full_name AS proposed_name
+       FROM appointments a JOIN leads l ON l.id=a.lead_id LEFT JOIN users p ON p.id=a.proposed_by
+       WHERE a.closer_id=? AND a.status='vorgeschlagen' ORDER BY a.starts_at LIMIT 20`, [uid]).catch(() => [[]]);
+
     const startToday = new Date(); startToday.setHours(0, 0, 0, 0);
     res.json({
       calls_today,
@@ -75,6 +82,7 @@ router.get('/', auth, async (req, res) => {
       replies,
       deals: dealsAttention,
       angebot_anfragen: anfragen,
+      termin_anfragen: terminAnfragen,
     });
   } catch (e) {
     console.error('Today error:', e);

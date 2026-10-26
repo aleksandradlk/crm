@@ -10,6 +10,8 @@ const db = require('../db');
 const { siehtAlles, freieLeadsSichtbar } = require('./sichtbarkeit');
 
 const STATUSES = ['neu', 'kontaktiert', 'nicht_erreicht', 'kein_interesse', 'rueckruf', 'kunde'];
+// Nie im Anrufmodus: „Keine Anrufe mehr“ (gesperrt) und „passt nicht“
+const GESPERRT = "l.status NOT IN ('keine_anrufe','passt_nicht')";
 
 // Filter aus Benutzereingaben auf erlaubte Werte reduzieren
 function cleanFilters(f = {}) {
@@ -27,13 +29,14 @@ function cleanFilters(f = {}) {
     has_open_deal: ['yes', 'no'].includes(f.has_open_deal) ? f.has_open_deal : '',
     include_unassigned: !!f.include_unassigned,
     ignore_followups: !!f.ignore_followups,
+    nie_erreicht: !!f.nie_erreicht,
   };
 }
 
 async function buildQueue(user, rawFilters) {
   const uid = user.id;
   const f = rawFilters ? cleanFilters(rawFilters) : null;
-  const where = ['l.archived_at IS NULL'];
+  const where = ['l.archived_at IS NULL', GESPERRT];
   const params = [uid, uid];
 
   if (f && f.include_unassigned && (siehtAlles(user) || freieLeadsSichtbar())) { where.push('(l.assigned_to = ? OR l.assigned_to IS NULL)'); params.push(uid); }
@@ -41,6 +44,8 @@ async function buildQueue(user, rawFilters) {
 
   if (f && f.statuses.length) { where.push(`l.status IN (${f.statuses.map(() => '?').join(',')})`); params.push(...f.statuses); }
   else where.push("l.status NOT IN ('kunde','kein_interesse')");
+  // Wählliste „nie erreicht“: nur die dorthin verschobenen Leads – sonst sind sie raus
+  where.push(f && f.nie_erreicht ? 'l.nie_erreicht = 1' : 'COALESCE(l.nie_erreicht, 0) = 0');
 
   if (f) {
     const like = v => `%${v.replace(/[%_]/g, '\\$&')}%`;
@@ -59,7 +64,7 @@ async function buildQueue(user, rawFilters) {
     `SELECT l.id, l.company, l.ceo, l.phone, l.email, l.location, l.status, l.created_at,
             l.website, l.industry, l.assigned_to,
             r.id AS reminder_id, r.remind_at, r.note AS reminder_note,
-            lc.last_call_at, lc.call_count,
+            lc.last_call_at, lc.call_count, COALESCE(lc.gespraeche, 0) AS gespraeche, lc.versuch_zeiten,
             od.id AS deal_id, od.title AS deal_title, od.value AS deal_value, ds.name AS deal_stage,
             (SELECT MIN(r2.remind_at) FROM reminders r2
               WHERE r2.lead_id = l.id AND r2.user_id = ? AND r2.done_at IS NULL) AS next_reminder_at
@@ -71,8 +76,10 @@ async function buildQueue(user, rawFilters) {
      ) rd ON rd.lead_id = l.id
      LEFT JOIN reminders r ON r.id = rd.id
      LEFT JOIN (
-       SELECT lead_id, MAX(started_at) AS last_call_at, COUNT(*) AS call_count
-       FROM call_logs GROUP BY lead_id
+       SELECT lead_id, MAX(started_at) AS last_call_at, COUNT(*) AS call_count,
+              SUM(status IN ('reached','completed') OR outcome IN ('rueckruf','interesse','termin','kein_interesse','kunde')) AS gespraeche,
+              GROUP_CONCAT(DATE_FORMAT(started_at, '%H:%i') ORDER BY started_at SEPARATOR ',') AS versuch_zeiten
+       FROM call_logs WHERE direction IS NULL OR direction <> 'inbound' GROUP BY lead_id
      ) lc ON lc.lead_id = l.id
      LEFT JOIN (
        SELECT lead_id, MAX(id) AS id FROM deals WHERE status = 'open' GROUP BY lead_id

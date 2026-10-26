@@ -164,7 +164,8 @@ const Bedarf = {
 
     // Gesundheitsbranche
     this.el.querySelector('#bdGesund').innerHTML = p.gesundheit
-      ? `<div class="bd-warn is-red"><i class="fas fa-ban"></i><span><b>Gesundheitsbranche nehmen wir aktuell nicht an.</b> Freundlich absagen und den Lead als „passt nicht“ markieren.</span></div>` : '';
+      ? `<div class="bd-warn is-red"><i class="fas fa-ban"></i><span><b>Gesundheitsbranche nehmen wir aktuell nicht an.</b> Freundlich absagen und den Lead als „passt nicht“ markieren.</span>
+          <button type="button" class="btn btn-ghost btn-sm" style="margin-left:auto;white-space:nowrap" onclick="Bedarf.passtNicht()">Als „passt nicht“ markieren</button></div>` : '';
 
     // Paket-Vorschlag
     const gewaehlt = d.paket_empfohlen;
@@ -209,6 +210,14 @@ const Bedarf = {
       <span class="bd-anfordern-wrap" title="${escHtml(tip)}">
         <button type="button" class="btn btn-primary bd-anfordern" ${p.angebotsreif ? '' : 'disabled'} onclick="Bedarf.anfordern()">
           <i class="fas fa-file-signature"></i> Angebot anfordern</button></span>`;
+  },
+
+  async passtNicht() {
+    try {
+      await statusSetzen(this.leadId, 'passt_nicht', { grund: 'Gesundheitsbranche', grund_text: this.data.branche_text || '' });
+      showToast('Lead als „passt nicht“ markiert (Gesundheitsbranche)');
+      this.close();
+    } catch (e) { showToast(e.message, 'err'); }
   },
 
   _springe(nr) {

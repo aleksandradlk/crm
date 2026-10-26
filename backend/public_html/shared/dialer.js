@@ -7,9 +7,9 @@
 // ============================================================
 const Dialer = {
   OUTCOMES: [
-    { key: 'nicht_erreicht', label: 'Nicht erreicht',     icon: 'fa-phone-slash',     tone: 'muted',  followUp: 'tomorrow10' },
+    { key: 'nicht_erreicht', label: 'Nicht erreicht',     icon: 'fa-phone-slash',     tone: 'muted',  followUp: 'fenster' },
     { key: 'besetzt',        label: 'Besetzt',            icon: 'fa-ban',             tone: 'muted',  followUp: '+1h' },
-    { key: 'mailbox',        label: 'Mailbox',            icon: 'fa-voicemail',       tone: 'muted',  followUp: 'tomorrow10' },
+    { key: 'mailbox',        label: 'Mailbox',            icon: 'fa-voicemail',       tone: 'muted',  followUp: 'fenster' },
     { key: 'rueckruf',       label: 'Rückruf vereinbart', icon: 'fa-phone-volume',    tone: 'copper', followUp: 'required' },
     { key: 'interesse',      label: 'Interesse',          icon: 'fa-fire',            tone: 'accent', followUp: '+3d' },
     { key: 'termin',         label: 'Termin vereinbart',  icon: 'fa-calendar-check',  tone: 'green',  followUp: 'required' },
@@ -114,6 +114,13 @@ const Dialer = {
     const lastCall = l.last_call_at
       ? `${l.call_count}× angerufen, zuletzt ${fmtDate(l.last_call_at)}`
       : 'Noch nie angerufen';
+    // Nicht erreicht: Versuche ohne Gespräch, andere Tageszeit, nach 3 Versuchen „nie erreicht“
+    const fenster = this._fenster(l);
+    const ohne = !Number(l.gespraeche) && Number(l.call_count) > 0;
+    const versuche = ohne ? `<div class="dl-versuche"><i class="fas fa-clock"></i>
+        <span><b>${l.call_count} ${Number(l.call_count) === 1 ? 'Versuch' : 'Versuche'} ohne Gespräch</b> (${escHtml((l.versuch_zeiten || '').split(',').join(', '))} Uhr) · nächster Versuch: <b>${fenster.kurz}</b></span>
+        ${Number(l.call_count) >= 3 ? `<button class="btn btn-ghost btn-sm" onclick="Dialer.nieErreicht()"><i class="fas fa-list"></i> In „nie erreicht“ verschieben</button>` : ''}
+      </div>` : '';
     const meta = [
       l.location && `<span><i class="fas fa-map-marker-alt"></i>${escHtml(l.location)}</span>`,
       l.industry && `<span><i class="fas fa-industry"></i>${escHtml(l.industry)}</span>`,
@@ -124,6 +131,7 @@ const Dialer = {
     this._body(`
       <div class="dl-main">
         <div class="dl-card dl-lead">
+          <div id="dlUeb" data-lead="${l.id}"></div>
           <div class="dl-reason ${reasonCls}"><i class="fas ${l.reminder_id ? 'fa-bell' : 'fa-circle'}"></i>${reasonText}</div>
           ${!l.assigned_to ? '<div class="dl-free"><i class="fas fa-hand-pointer"></i>Freier Lead – wird beim Speichern dir zugewiesen</div>' : ''}
           <h2 class="dl-company">${escHtml(l.company || '—')}</h2>
@@ -143,6 +151,7 @@ const Dialer = {
           </div>
           <div id="dlBedarf"></div>` : ''}
           <div class="dl-meta">${meta}<span><i class="fas fa-history"></i>${lastCall}</span> ${statusBadge(l.status)}</div>
+          ${versuche}
           <div class="dl-history" id="dlHistory"></div>
         </div>
 
@@ -161,6 +170,7 @@ const Dialer = {
           <div id="dlFollowUp" class="dl-followup" hidden>
             <div class="dl-label">Wiedervorlage</div>
             <div class="dl-chips">
+              <button class="qf-btn" data-fu="fenster" onclick="Dialer.setFollowUp('fenster')" title="Andere Tageszeit als bisher"><i class="fas fa-random"></i>${escHtml(fenster.kurz)}</button>
               ${this.FOLLOW_UPS.filter(([k]) => k !== 'today16' || new Date().getHours() < 15).map(([k, label]) => `<button class="qf-btn" data-fu="${k}" onclick="Dialer.setFollowUp('${k}')">${label}</button>`).join('')}
               <button class="qf-btn" data-fu="none" onclick="Dialer.setFollowUp('none')">Keine</button>
             </div>
@@ -168,6 +178,7 @@ const Dialer = {
           </div>
 
           <div id="dlDeal" class="dl-deal" hidden></div>
+          <div id="dlNie" hidden></div>
           <div id="dlMail" class="dl-mail" hidden></div>
 
           <div class="dl-error" id="dlError"></div>
@@ -179,6 +190,7 @@ const Dialer = {
       ${this.opts.script ? `<details class="dl-card dl-script" open><summary><i class="fas fa-scroll"></i> Gesprächsleitfaden</summary><div>${escHtml(this.opts.script)}</div></details>` : ''}`);
     this._loadHistory(l.id);
     this._bedarfStand(l.id);
+    if (typeof Termine !== 'undefined') Termine.uebergabeBox(l.id, 'dlUeb');
   },
 
   // ── Bedarfsanalyse & Kurz-Check ─────────────────────────────
@@ -288,6 +300,7 @@ const Dialer = {
     document.querySelector('#dlFollowUp [data-fu="none"]').style.display = o.followUp === 'required' ? 'none' : '';
     this._renderDeal(key);
     this._renderMail(key);
+    this._renderNie(key);
     this._validate();
   },
 
@@ -410,6 +423,7 @@ const Dialer = {
     const d = new Date();
     const at = (days, h, m = 0) => { const x = new Date(); x.setDate(x.getDate() + days); x.setHours(h, m, 0, 0); return x; };
     if (key === '+1h') return new Date(d.getTime() + 3600000);
+    if (key === 'fenster') return this._fenster(this.lead).at;
     if (key === 'today16') return d.getHours() < 16 ? at(0, 16) : at(1, 10);
     if (key === 'tomorrow10') {
       const x = at(1, 10);
@@ -472,6 +486,8 @@ const Dialer = {
       });
       if (!this.callLogId) { this.callsToday++; }
       const o = this.OUTCOMES.find(x => x.key === this.outcome);
+      if (this._nieAn && ['nicht_erreicht', 'besetzt', 'mailbox'].includes(this.outcome))
+        await api('POST', `/leads/${l.id}/nie-erreicht`).then(() => showToast('In die Wählliste „nie erreicht“ verschoben')).catch(e => showToast(e.message, 'err'));
       let mailInfo = '';
       if (this.mail?.an) {
         const subject = document.getElementById('dlMailSubject').value.trim();
@@ -492,6 +508,47 @@ const Dialer = {
       this.saving = false;
       this._validate();
     }
+  },
+
+  // ── Andere Tageszeit (7–8 · 12–13 · ab 17 Uhr) ──────────────
+  // Nimmt das Zeitfenster, in dem noch nicht (oder am längsten nicht) angerufen wurde
+  FENSTER: [[7, '7–8 Uhr'], [12, '12–13 Uhr'], [17, 'ab 17 Uhr']],
+  _fenster(l) {
+    const zuFenster = h => (h < 10 ? 7 : h < 15 ? 12 : 17);
+    const versucht = String(l?.versuch_zeiten || '').split(',').filter(Boolean).map(t => zuFenster(parseInt(t)));
+    versucht.push(zuFenster(new Date().getHours()));        // der Versuch gerade eben
+    const letzter = versucht[versucht.length - 1];
+    const reihe = this.FENSTER.map(([h]) => h);
+    const ab = reihe.indexOf(letzter);
+    const kandidaten = [1, 2, 3].map(i => reihe[(ab + i) % 3]);
+    const h = kandidaten.find(x => !versucht.includes(x)) ?? kandidaten[0];
+    const at = new Date(); at.setHours(h, h === 7 ? 30 : 0, 0, 0);
+    if (at.getTime() < Date.now() + 30 * 60000) at.setDate(at.getDate() + 1);
+    while ([0, 6].includes(at.getDay())) at.setDate(at.getDate() + 1);
+    const label = (this.FENSTER.find(([x]) => x === h) || [])[1];
+    const heute = at.toDateString() === new Date().toDateString();
+    const tag = heute ? 'heute' : at.toLocaleDateString('de-DE', { weekday: 'short' });
+    return { at, label, kurz: `${tag} ${label}` };
+  },
+  _renderNie(key) {
+    const el = document.getElementById('dlNie');
+    const l = this.lead;
+    this._nieAn = false;
+    if (!el) return;
+    const dritter = ['nicht_erreicht', 'besetzt', 'mailbox'].includes(key) && !Number(l.gespraeche) && Number(l.call_count || 0) + (this.callLogId ? 0 : 1) >= 3;
+    el.hidden = !dritter;
+    el.innerHTML = dritter ? `<label class="dl-mail-toggle dl-nie"><input type="checkbox" id="dlNieOn" onchange="Dialer._nieAn=this.checked">
+      <span class="dl-mail-title"><i class="fas fa-list"></i>Schon ${Number(l.call_count || 0) + (this.callLogId ? 0 : 1)}× ohne Gespräch – in die Wählliste <b>„nie erreicht“</b> verschieben</span></label>` : '';
+  },
+  async nieErreicht() {
+    const l = this.lead;
+    if (!l) return;
+    try {
+      await api('POST', `/leads/${l.id}/nie-erreicht`);
+      showToast(`${l.company || 'Lead'} liegt jetzt in der Wählliste „nie erreicht“`);
+      this.idx++;
+      this._show();
+    } catch (e) { showToast(e.message, 'err'); }
   },
 
   copy() {
