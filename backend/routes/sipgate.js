@@ -238,7 +238,9 @@ router.post('/setup', auth, adminOnly, async (req, res) => {
     const users = await sg('GET', 'users', undefined, zugang).then(r => (r && r.items) || []);
     const nrn = await sg('GET', 'numbers', undefined, zugang).then(r => (r && r.items) || []).catch(() => []);
     // Feste Nummer bevorzugen – Testnummern laufen ab
-    const festnetz = nrn.find(n => n.type === 'LANDLINE' && !istTestnummer(n.number)) || nrn.find(n => n.type === 'LANDLINE');
+    // Feste Nummer bevorzugen (Festnetz vor Handy), Testnummern nur, wenn es nichts anderes gibt
+    const nutzbar = nrn.filter(n => n.type !== 'QUICKDIAL');
+    const festnetz = nutzbar.find(n => n.type !== 'MOBILE' && !istTestnummer(n.number)) || nutzbar.find(n => !istTestnummer(n.number)) || nutzbar[0];
     await speichern({ ...cfg, tokenId, token, firmennummer: cfg.firmennummer || (festnetz ? sgNummer(festnetz.number) : null) }, req.user.id);
 
     // Benutzer automatisch zuordnen (gleiche E-Mail), der Admin bekommt sonst den Hauptzugang
