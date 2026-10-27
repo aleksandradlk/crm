@@ -432,6 +432,8 @@ migrate(`CREATE TABLE IF NOT EXISTS integrations (
 migrate('ALTER TABLE users ADD COLUMN sipgate_user VARCHAR(20) NULL').catch(() => {});
 migrate('ALTER TABLE users ADD COLUMN sipgate_device VARCHAR(20) NULL').catch(() => {});
 migrate('ALTER TABLE users ADD COLUMN sipgate_nummer VARCHAR(30) NULL').catch(() => {});
+// Closer ohne eigenen sipgate-Zugang: Anruf über den Hauptzugang, zuerst klingelt dieses Handy – Rollback: db/rollback/2026-10-27_sipgate-handy.sql
+migrate('ALTER TABLE users ADD COLUMN sipgate_handy VARCHAR(30) NULL').catch(() => {});
 migrate('ALTER TABLE call_logs ADD COLUMN sipgate_call_id VARCHAR(64) NULL').catch(() => {});
 // Nummern-Pool: Ablaufdatum, Bezeichnung, eigene Nummern – Rollback: db/rollback/2026-10-27_nummern-pool.sql
 migrate(`CREATE TABLE IF NOT EXISTS telefonnummern (

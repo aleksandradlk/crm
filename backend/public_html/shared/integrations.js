@@ -57,7 +57,8 @@ const Integrationen = {
         p.firma ? 'Firmennummer' : '', (p.vergeben_an || []).length ? 'vergeben: ' + p.vergeben_an.map(v => v.name).join(', ') : p.firma ? '' : 'frei'].filter(Boolean).join(' · '); };
     const nrOpts = (aktuell) => `<option value="">${s.firmennummer ? 'Firmennummer (' + escHtml(firmaAnzeige) + ')' : 'Standard von sipgate'}</option>`
       + nummern.map(n => `<option value="${escHtml(n.nummer)}" ${n.nummer === aktuell ? 'selected' : ''}>${escHtml(n.anzeige)} – ${escHtml(poolInfo(n))}</option>`).join('');
-    const userOpts = (aktuell) => `<option value="">– nicht telefonieren –</option>`
+    const userOpts = (aktuell, handy) => `<option value="">– nicht telefonieren –</option>`
+      + `<option value="handy" ${!aktuell && handy ? 'selected' : ''}>Ohne eigenen Zugang: Handy klingelt</option>`
       + benutzer.map(b => `<option value="${escHtml(b.id)}" ${b.id === aktuell ? 'selected' : ''}>${escHtml(b.name)}</option>`).join('');
     const geraetOpts = (sUser, aktuell) => {
       const b = benutzer.find(x => x.id === sUser);
@@ -71,11 +72,12 @@ const Integrationen = {
     const testNr = new Set(nummern.filter(n => n.test).map(n => n.nummer));
     const zu = (s.zuordnung || []);
     const nutzt = u => u.sipgate_nummer || s.firmennummer;
-    const mitTest = zu.filter(u => u.sipgate_user && testNr.has(nutzt(u)));
+    const telefoniert = u => u.sipgate_user || u.sipgate_handy;
+    const mitTest = zu.filter(u => telefoniert(u) && testNr.has(nutzt(u)));
     const proNummer = {};
-    zu.filter(u => u.sipgate_user && u.sipgate_nummer).forEach(u => { (proNummer[u.sipgate_nummer] = proNummer[u.sipgate_nummer] || []).push(u.full_name); });
+    zu.filter(u => telefoniert(u) && u.sipgate_nummer).forEach(u => { (proNummer[u.sipgate_nummer] = proNummer[u.sipgate_nummer] || []).push(u.full_name); });
     const doppelt = Object.entries(proNummer).filter(([, l]) => l.length > 1);
-    const ohne = zu.filter(u => u.role === 'closer' && !u.sipgate_user);
+    const ohne = zu.filter(u => u.role === 'closer' && !telefoniert(u));
     const hinweise = [
       mitTest.length || testNr.has(s.firmennummer) ? `<b>Testnummern laufen ab</b> (sipgate zeigt das Datum unter Rufnummern, z. B. „Nutzbar bis 20.11.2026“). Betroffen: ${escHtml([...(testNr.has(s.firmennummer) ? ['Firmennummer'] : []), ...mitTest.map(u => u.full_name)].join(', '))}. Rechtzeitig feste Nummern buchen und hier zuordnen.` : '',
       doppelt.length ? `<b>Gleiche Nummer bei mehreren:</b> ${doppelt.map(([n, l]) => `${escHtml(fmtPhoneDE(n))} (${escHtml(l.join(', '))})`).join('; ')}. Rückrufe auf diese Nummer klingeln nur dort, wo sie in sipgate als Ziel eingestellt ist.` : '',
@@ -103,12 +105,15 @@ const Integrationen = {
         <div class="sg-map-head"><span>CRM-Benutzer</span><span>sipgate-Zugang</span><span>Telefon, das klingelt</span><span>Nummer, die Kunden sehen</span></div>
         ${(s.zuordnung || []).map(u => `<div class="sg-map-row" data-id="${u.id}">
           <b>${escHtml(u.full_name)}<small>${u.role === 'admin' ? 'Admin' : 'Closer'}</small></b>
-          <select class="form-control" data-f="sipgate_user" onchange="Integrationen.sgZuordnen(${u.id}, this)">${userOpts(u.sipgate_user)}</select>
-          <select class="form-control" data-f="sipgate_device" onchange="Integrationen.sgZuordnen(${u.id})" ${u.sipgate_user ? '' : 'disabled'}>${geraetOpts(u.sipgate_user, u.sipgate_device)}</select>
-          <select class="form-control" data-f="sipgate_nummer" onchange="Integrationen.sgZuordnen(${u.id})" ${u.sipgate_user ? '' : 'disabled'}>${nrOpts(u.sipgate_nummer)}</select>
+          <select class="form-control" data-f="sipgate_user" onchange="Integrationen.sgZuordnen(${u.id}, this)">${userOpts(u.sipgate_user, u.sipgate_handy)}</select>
+          ${!u.sipgate_user && u.sipgate_handy
+            ? `<input class="form-control" data-f="sipgate_handy" placeholder="Handy, z. B. 0171 1234567" value="${escHtml(u.sipgate_handy ? fmtPhoneDE(u.sipgate_handy) : '')}" onchange="Integrationen.sgZuordnen(${u.id})" title="Dieses Handy klingelt zuerst. Kunden sehen es nicht, sie sehen die Nummer rechts.">`
+            : `<select class="form-control" data-f="sipgate_device" onchange="Integrationen.sgZuordnen(${u.id})" ${u.sipgate_user ? '' : 'disabled'}>${geraetOpts(u.sipgate_user, u.sipgate_device)}</select>`}
+          <select class="form-control" data-f="sipgate_nummer" onchange="Integrationen.sgZuordnen(${u.id})" ${telefoniert(u) ? '' : 'disabled'}>${nrOpts(u.sipgate_nummer)}</select>
         </div>`).join('')}
       </div>
-      <p class="ig-hint">Jeder, der telefonieren soll, braucht einen eigenen <b>sipgate-Zugang</b> (in sipgate unter Benutzer anlegen) und dort ein Telefon – am einfachsten die <b>sipgate App</b> auf dem Handy oder das <b>Web-Telefon</b> im Browser. Testnummern von sipgate laufen zum angegebenen Datum ab; danach eine feste Nummer zuordnen.</p>
+      <p class="ig-hint"><b>Ohne eigenen Zugang</b> (zum Testen, ohne zusätzliche sipgate-Benutzer): „Anrufen“ läuft über deinen sipgate-Zugang, zuerst klingelt das Handy des Closers, Kunden sehen die Nummer rechts. Dabei fallen zwei Gesprächsstrecken an (Closer und Kunde). Rückrufe klingeln dort, wo die Nummer in sipgate als Ziel eingestellt ist.</p>
+      <p class="ig-hint">Mit eigenem Zugang: Jeder, der telefonieren soll, braucht einen eigenen <b>sipgate-Zugang</b> (in sipgate unter Benutzer anlegen) und dort ein Telefon – am einfachsten die <b>sipgate App</b> auf dem Handy oder das <b>Web-Telefon</b> im Browser. Testnummern von sipgate laufen zum angegebenen Datum ab; danach eine feste Nummer zuordnen.</p>
       ${links}
       <button class="btn btn-ghost btn-sm ig-trennen" onclick="Integrationen.sgTrennen()"><i class="fas fa-unlink"></i> Verbindung trennen</button>
     </div>`;
@@ -193,8 +198,21 @@ const Integrationen = {
   },
   async sgZuordnen(userId, userSelect) {
     const row = document.querySelector(`.sg-map-row[data-id="${userId}"]`);
-    const wert = f => row.querySelector(`[data-f="${f}"]`).value || null;
-    const body = { sipgate_user: wert('sipgate_user'), sipgate_device: userSelect ? null : wert('sipgate_device'), sipgate_nummer: wert('sipgate_nummer') };
+    const wert = f => row.querySelector(`[data-f="${f}"]`)?.value || null;
+    const art = wert('sipgate_user');
+    // „Handy klingelt“: erst die Nummer abfragen, dann speichern
+    if (art === 'handy') {
+      let handy = userSelect ? null : wert('sipgate_handy');
+      if (!handy) handy = (prompt('Handynummer des Closers, die zuerst klingelt (Kunden sehen sie nicht):', '') || '').trim();
+      if (!handy) { this.loadSipgate(); return; }
+      try {
+        const r = await api('PUT', `/sipgate/zuordnung/${userId}`, { sipgate_user: null, sipgate_handy: handy, sipgate_nummer: userSelect ? null : wert('sipgate_nummer') });
+        showToast(r.automatisch ? `Gespeichert ✓ – Nummer ${fmtPhoneDE(r.nummer)} aus dem Pool zugewiesen` : 'Gespeichert ✓');
+      } catch (e) { showToast(e.message, 'err'); }
+      this.loadSipgate();
+      return;
+    }
+    const body = { sipgate_user: art, sipgate_device: userSelect ? null : wert('sipgate_device'), sipgate_nummer: wert('sipgate_nummer') };
     if (!body.sipgate_user) { body.sipgate_device = null; body.sipgate_nummer = null; }
     try {
       const r = await api('PUT', `/sipgate/zuordnung/${userId}`, body);
