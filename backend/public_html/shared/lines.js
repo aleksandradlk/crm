@@ -20,9 +20,22 @@ const Lines = {
     if (!el) return;
     this.user = user; this.onChange = onChange;
     if (!user) { el.innerHTML = '<div class="line-hint">Nach dem Anlegen kannst du hier eine Nummer zuteilen.</div>'; return; }
+    // sipgate verbunden: Zuordnung zeigen (die Nummern verwaltet sipgate, nicht Twilio)
+    const sg = await api('GET', `/sipgate/benutzer/${user.id}`).catch(() => ({ aktiv: false }));
+    if (sg.aktiv) {
+      const vorname = escHtml(user.full_name.split(' ')[0]);
+      el.innerHTML = sg.zugang
+        ? `<div class="line-current"><span class="line-ic"><i class="fas fa-phone-volume"></i></span>
+            <div class="line-main"><b class="mono">${sg.nummer ? escHtml(this.fmt(sg.nummer)) : 'Standardnummer von sipgate'}</b>
+              <span>über sipgate · ${sg.eigeneNummer ? 'eigene Nummer' : 'Firmennummer'}${sg.testnummer ? ' · <em style="color:var(--copper);font-style:normal;font-weight:600">Testnummer, läuft ab</em>' : ''}. „Anrufen“ klingelt zuerst in ${vorname}s sipgate-App bzw. Web-Telefon.</span></div>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="closeUserModal();showTab('integrationen')">Ändern</button></div>`
+        : `<div class="line-hint"><i class="fas fa-info-circle"></i> ${vorname} hat noch keinen sipgate-Zugang und kann im CRM noch nicht anrufen.
+            <a href="#" onclick="closeUserModal();showTab('integrationen');return false">Unter Integrationen → sipgate zuordnen</a>.</div>`;
+      return;
+    }
     const d = await this.load();
     if (!d.enabled) {
-      el.innerHTML = '<div class="line-hint"><i class="fas fa-info-circle"></i> Telefonie ist noch nicht verbunden. <a href="#" onclick="closeUserModal();showTab(\'integrationen\');return false">Unter Integrationen Twilio verbinden</a>.</div>';
+      el.innerHTML = '<div class="line-hint"><i class="fas fa-info-circle"></i> Telefonie ist noch nicht verbunden. <a href="#" onclick="closeUserModal();showTab(\'integrationen\');return false">Unter Integrationen sipgate verbinden</a>.</div>';
       return;
     }
     const n = user.phone_line;

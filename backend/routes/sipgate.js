@@ -42,6 +42,13 @@ function sgNummer(v) {
   return /^\+[1-9]\d{6,17}$/.test(d) ? d : null;
 }
 
+// Testrufnummern von sipgate haben eine angehängte Durchwahl (z. B. 0211 87973989756)
+// und laufen nach einiger Zeit ab – normale deutsche Nummern sind kürzer
+function istTestnummer(v) {
+  const d = String(v || '').replace(/\D/g, '').replace(/^49/, '0').replace(/^(?!0)/, '0');
+  return d.length > 13;
+}
+
 function fehlertext(status, text) {
   if (status === 401) return 'sipgate lehnt die Anmeldung ab – Token-ID und Token prüfen.';
   if (status === 403) return 'Dem sipgate-Token fehlen Rechte. Beim Erstellen alle Bereiche (Scopes) anhaken, mindestens Anrufe, Benutzer, Geräte, Nummern, Anrufliste und Webhooks.';
@@ -126,7 +133,7 @@ router.get('/setup', auth, adminOnly, async (req, res) => {
       verbunden: true, webhookUrl, firmennummer: cfg.firmennummer || null,
       konto: info ? { domain: info.domain, id: info.masterSipId } : null,
       benutzer: mitGeraeten,
-      nummern: nrn.filter(n => n.type !== 'QUICKDIAL').map(n => ({ nummer: sgNummer(n.number) || n.number, anzeige: n.localized || n.number, typ: n.type, ziel: n.endpointAlias || '' })),
+      nummern: nrn.filter(n => n.type !== 'QUICKDIAL').map(n => ({ nummer: sgNummer(n.number) || n.number, anzeige: n.localized || n.number, typ: n.type, ziel: n.endpointAlias || '', test: istTestnummer(n.number) })),
       webhook: hooks ? { eingehend: hooks.incomingUrl === webhookUrl, ausgehend: hooks.outgoingUrl === webhookUrl, incomingUrl: hooks.incomingUrl || '', outgoingUrl: hooks.outgoingUrl || '' } : null,
       zuordnung: crm,
     });
@@ -143,7 +150,8 @@ router.post('/setup', auth, adminOnly, async (req, res) => {
     await sg('GET', 'authorization/userinfo', undefined, zugang);
     const users = await sg('GET', 'users', undefined, zugang).then(r => (r && r.items) || []);
     const nrn = await sg('GET', 'numbers', undefined, zugang).then(r => (r && r.items) || []).catch(() => []);
-    const festnetz = nrn.find(n => n.type === 'LANDLINE');
+    // Feste Nummer bevorzugen – Testnummern laufen ab
+    const festnetz = nrn.find(n => n.type === 'LANDLINE' && !istTestnummer(n.number)) || nrn.find(n => n.type === 'LANDLINE');
     await speichern({ ...cfg, tokenId, token, firmennummer: cfg.firmennummer || (festnetz ? sgNummer(festnetz.number) : null) }, req.user.id);
 
     // Benutzer automatisch zuordnen (gleiche E-Mail), der Admin bekommt sonst den Hauptzugang
@@ -206,6 +214,15 @@ router.put('/zuordnung/:userId', auth, adminOnly, async (req, res) => {
   if (!r.affectedRows) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
   await log(req.user.id, 'sipgate_zuordnung', 'user', id, { sUser, geraet, nummer }, req.ip);
   res.json({ ok: true });
+});
+
+// Kurzinfo für den Benutzer-Dialog (ohne Abfrage bei sipgate)
+router.get('/benutzer/:userId', auth, adminOnly, async (req, res) => {
+  if (!istAktiv()) return res.json({ aktiv: false });
+  const [[u]] = await db.query('SELECT sipgate_user, sipgate_device, sipgate_nummer FROM users WHERE id=?', [parseInt(req.params.userId)]);
+  const nummer = (u && u.sipgate_nummer) || cfg.firmennummer || null;
+  res.json({ aktiv: true, zugang: (u && u.sipgate_user) || null, geraet: (u && u.sipgate_device) || null,
+    nummer, eigeneNummer: !!(u && u.sipgate_nummer), testnummer: istTestnummer(nummer) });
 });
 
 // ── Für alle: kann ich über sipgate anrufen? ────────────────────
@@ -410,3 +427,9 @@ module.exports = router;
 module.exports.ladeKonfiguration = ladeKonfiguration;
 module.exports.istAktiv = istAktiv;
 module.exports.status = status;
+// Nummer, unter der ein Benutzer nach außen anruft (eigene sipgate-Nummer, sonst Firmennummer)
+module.exports.nummerFuer = async userId => {
+  if (!istAktiv()) return null;
+  const [[u]] = await db.query('SELECT sipgate_nummer FROM users WHERE id=?', [userId]);
+  return (u && u.sipgate_nummer) || cfg.firmennummer || null;
+};

@@ -79,13 +79,27 @@ async function markWon(deal, userId, value) {
     "UPDATE deals SET status='won', won_at=NOW(), lost_at=NULL, lost_reason=NULL, value=? WHERE id=?",
     [v, deal.id]);
   await db.query("UPDATE leads SET status='kunde' WHERE id=?", [deal.lead_id]);
+  await nachfassErledigt(deal.lead_id);
   await note(deal.lead_id, userId, `🏆 Deal gewonnen: ${deal.title} (${fmtEur(v)})`);
+  // Closer erfährt es, wenn jemand anderes (Admin, Abrechnung) den Deal gewonnen setzt
+  const closer = deal.owner_id || deal.created_by;
+  if (closer && closer !== userId)
+    await db.query("INSERT INTO reminders (lead_id, user_id, remind_at, note, kind, sent) VALUES (?,?,NOW(),?, 'info', 1)",
+      [deal.lead_id, closer, `Gewonnen: ${deal.title}. Deine Provision siehst du unter „Provision“.`.slice(0, 500)]);
+}
+
+// Offene Nachfass-Erinnerungen zum Angebot sind nach Gewonnen/Verloren hinfällig
+async function nachfassErledigt(leadId) {
+  const [[offen]] = await db.query("SELECT COUNT(*) AS n FROM deals WHERE lead_id=? AND status='open'", [leadId]);
+  if (offen.n) return;
+  await db.query("UPDATE reminders SET done_at=NOW() WHERE lead_id=? AND done_at IS NULL AND (kind IN ('nachfass_auto','nachfass','angebot','angebot_wartet') OR (kind='info' AND note LIKE '%Jetzt nachfassen%'))", [leadId]);
 }
 
 async function markLost(deal, userId, reason) {
   await db.query(
     "UPDATE deals SET status='lost', lost_at=NOW(), won_at=NULL, lost_reason=? WHERE id=?",
     [reason, deal.id]);
+  await nachfassErledigt(deal.lead_id);
   await note(deal.lead_id, userId, `✖ Deal verloren: ${deal.title} – ${reason}`);
 }
 

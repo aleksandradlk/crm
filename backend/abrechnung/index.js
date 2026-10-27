@@ -57,6 +57,27 @@ const ARTIKEL_STANDARD = [
 ];
 
 // ── Hilfsfunktionen ───────────────────────────────────────────
+// Aktueller NovaFlow-Katalog laut Leistungsübersicht (Stand 26.10.2026). Wird einmalig ergänzt,
+// die alten Artikel (Automation Business, Hosting …) werden dabei nur auf „inaktiv“ gesetzt.
+const BETREUUNG_BASIS = 'Hosting auf Servern in Deutschland, Überwachung und Fehlerbehebung, Anpassung bei Änderungen von Meta, Google oder WhatsApp, tägliche Backups (30 Tage), Sicherheit mit 2FA und Vertrag zur Auftragsverarbeitung.';
+const KATALOG_2026_10 = [
+  { nr: 'AP-001', titel: 'Quick-Win – Einrichtung', preis: 490, abrechnung: 'einmalig', beschreibung: 'Der Einstieg, in einer Woche fertig: Benachrichtigung aufs Handy bei jeder neuen Anfrage und automatische Eingangsbestätigung an den Kunden. Wird voll angerechnet, wenn Sie binnen 30 Tagen einen Anfragen-Autopiloten buchen.' },
+  { nr: 'AP-002', titel: 'Anfragen-Autopilot S – Einrichtung', preis: 1490, abrechnung: 'einmalig', beschreibung: 'Bis 2 Kanäle in einem Postfach, sofortige Eingangsbestätigung, Vorqualifizierung mit Fotos, Maßen und Wunsch, Benachrichtigung aufs Handy, Übersicht aller Anfragen.' },
+  { nr: 'AP-003', titel: 'Anfragen-Autopilot M – Einrichtung', preis: 2490, abrechnung: 'einmalig', beschreibung: 'Alles aus S, dazu: bis 4 Kanäle in einem Postfach, KI-Antwortentwurf mit Ihrer Freigabe, Terminvorschlag und Erinnerung, Nachfassen offener Angebote, Bewertungsanfrage nach dem Auftrag.' },
+  { nr: 'AP-004', titel: 'Anfragen-Autopilot L – Einrichtung', preis: 3990, abrechnung: 'einmalig', beschreibung: 'Alles aus M, dazu: KI-Angebotsentwurf aus der Anfrage, Zahlungserinnerung, Wartungs- oder Pflegeerinnerung an Bestandskunden, Monatsübersicht mit Kennzahlen, Quartalsgespräch.' },
+  { nr: 'ZU-001', titel: 'Google Business Profil', preis: 349, abrechnung: 'einmalig', beschreibung: 'Fragebogen, Keyword-Recherche für Ihre Region, Profil einrichten oder optimieren, Abgleich mit der Webseite, Eintrag bei Bing und Apple, Bewertungslink mit QR-Code, Report vorher und nachher.' },
+  { nr: 'ZU-002', titel: 'Webseite – Einrichtung', preis: 1200, abrechnung: 'einmalig', beschreibung: 'Eine Seite mit Leistungen, Preisrahmen und Anfrageformular, das direkt im Anfragen-Autopiloten landet.' },
+  { nr: 'ZU-003', titel: 'Individuelle Software – Einrichtung', preis: 2490, abrechnung: 'einmalig', beschreibung: 'Eigene Tools für interne Abläufe, z. B. Kalkulation oder Auftragsübersicht. Preis nach Umfang, ab 2.490 €.' },
+  { nr: 'ZU-004', titel: 'Weitere Automation', preis: 0, abrechnung: 'einmalig', beschreibung: 'Erweiterung eines bestehenden Pakets, z. B. neue Kanäle oder Anbindung Ihrer Software. Festpreis nach Aufwand.' },
+  { nr: 'BE-001', titel: 'Betreuung Quick-Win', preis: 59, abrechnung: 'monatlich', beschreibung: BETREUUNG_BASIS + ' Antwort auf Fragen am nächsten Werktag. Keine Mindestlaufzeit, monatlich kündbar mit einem Monat Frist zum Monatsende.' },
+  { nr: 'BE-002', titel: 'Betreuung Anfragen-Autopilot S', preis: 99, abrechnung: 'monatlich', beschreibung: BETREUUNG_BASIS + ' Dazu kleine Änderungen bis 30 Min. pro Monat und alle 3 Monate ein Update oder eine neue Funktion. Keine Mindestlaufzeit, monatlich kündbar mit einem Monat Frist zum Monatsende.' },
+  { nr: 'BE-003', titel: 'Betreuung Anfragen-Autopilot M', preis: 199, abrechnung: 'monatlich', beschreibung: BETREUUNG_BASIS + ' Dazu kleine Änderungen bis 1 Std. pro Monat, Update alle 3 Monate, Monatsbericht, Antwort und Hilfe bei Ausfall werktags in 4 Std. Keine Mindestlaufzeit, monatlich kündbar mit einem Monat Frist zum Monatsende.' },
+  { nr: 'BE-004', titel: 'Betreuung Anfragen-Autopilot L', preis: 349, abrechnung: 'monatlich', beschreibung: BETREUUNG_BASIS + ' Dazu kleine Änderungen bis 2 Std. pro Monat, Update alle 3 Monate, Monatsbericht, Quartalsgespräch, Antwort werktags in 4 Std., Hilfe bei Ausfall werktags in 2 Std. Keine Mindestlaufzeit, monatlich kündbar mit einem Monat Frist zum Monatsende.' },
+  { nr: 'BE-005', titel: 'Webseite – Hosting & Pflege', preis: 29, abrechnung: 'monatlich', beschreibung: 'Hosting, Domain, SSL, Backups und Updates Ihrer Webseite. Monatlich kündbar.' },
+  { nr: 'BE-006', titel: 'Betreuung Individuelle Software', preis: 199, abrechnung: 'monatlich', beschreibung: BETREUUNG_BASIS + ' Monatlich kündbar.' },
+].map(a => ({ ...a, einheit: a.abrechnung === 'monatlich' ? 'Monat' : 'Paket', einheitMehrzahl: a.abrechnung === 'monatlich' ? 'Monate' : 'Pakete' }));
+const KATALOG_ALT = ['AB-001', 'AB-002', 'AB-003', 'BT-001', 'BT-002', 'HO-001', 'HO-002', 'HO-003'];
+
 function round2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
 function heute() { return new Date().toISOString().slice(0, 10); }
 function pad(n, l) { return String(n).padStart(l, '0'); }
@@ -215,7 +236,11 @@ function bauMandant(app, ctx) {
     const einleitung = dok.einleitung || standardEinleitung;
     return beginntMitBegruessung(einleitung) ? '' : kundeAnrede(kunde);
   }
-  function kundeGruss(kunde) { return kunde && kunde.anrede === 'du' ? 'Viele Grüße' : 'Mit freundlichen Grüßen'; }
+  // Grußformel aus den Stammdaten (leer = Standard)
+  function kundeGruss(kunde) {
+    const s = db.einstellung('stammdaten', null) || {};
+    return kunde && kunde.anrede === 'du' ? ((s.grussDu || '').trim() || 'Viele Grüße') : ((s.grussSie || '').trim() || 'Mit freundlichen Grüßen');
+  }
   function standardTexte(kunde) {
     const du = kunde && kunde.anrede === 'du';
     return {
@@ -465,7 +490,7 @@ function bauMandant(app, ctx) {
   const asyncRoute = fn => (req, res) => fn(req, res).catch(e => { console.error('Abrechnung:', e.message); fehler(res, 400, e.message); });
 
   // ── Stammdaten ────────────────────────────────────────────
-  app.get('/api/abrechnung/stammdaten', (req, res) => ok(res, { stammdaten: ladeStammdaten() }));
+  app.get('/api/abrechnung/stammdaten', (req, res) => { const s = ladeStammdaten(); ok(res, { stammdaten: s, signaturStandard: signaturText({ ...s, signatur: undefined }) }); });
   app.put('/api/abrechnung/stammdaten', express.json({ limit: '3mb' }), asyncRoute(async (req, res) => {
     const b = req.body || {};
     const alt = ladeStammdaten();
@@ -483,6 +508,10 @@ function bauMandant(app, ctx) {
       mahnfristTage: Math.max(1, parseInt(b.mahnfristTage ?? alt.mahnfristTage, 10) || 7),
       mahngebuehr2: Math.max(0, round2(b.mahngebuehr2 ?? alt.mahngebuehr2)),
       mahngebuehr3: Math.max(0, round2(b.mahngebuehr3 ?? alt.mahngebuehr3)),
+      signatur: b.signatur !== undefined ? String(b.signatur).slice(0, 2000) : alt.signatur,
+      grussDu: b.grussDu !== undefined ? String(b.grussDu).trim().slice(0, 80) : alt.grussDu,
+      grussSie: b.grussSie !== undefined ? String(b.grussSie).trim().slice(0, 80) : alt.grussSie,
+      signaturLogo: b.signaturLogo !== undefined ? !!b.signaturLogo : alt.signaturLogo !== false,
       sicherungMail: {
         aktiv: b.sicherungMail && b.sicherungMail.aktiv !== undefined ? !!b.sicherungMail.aktiv : (alt.sicherungMail || {}).aktiv !== false,
         an: String((b.sicherungMail && b.sicherungMail.an) ?? (alt.sicherungMail || {}).an ?? '').trim(),
@@ -723,15 +752,98 @@ function bauMandant(app, ctx) {
     const ergebnis = await mail.sende({ an, betreff: 'Test-E-Mail aus der NovaFlow-Abrechnung', text: `Diese Test-E-Mail wurde am ${datumDe(heute())} aus dem Abrechnungsbereich von tool.novaflowservices.de gesendet. Wenn sie ankommt, ist der Versand korrekt eingerichtet.\n\n${stamm.firma}` });
     ok(res, { an: ergebnis.an });
   }));
+  // ── E-Mail-Signatur ─────────────────────────────────────────
+  // Wird beim Senden automatisch angehängt (Text + HTML mit Logo), gepflegt in den Stammdaten.
+  const STD_SIGNATUR_NOVAFLOW = 'Aleksandra Dalak\nFounder | AI & Automation Consultant\n\nNovaFlow Services\nKI-Lösungen • Automatisierung • Prozessoptimierung\nwww.novaflowservices.de';
+  function signaturText(stamm) {
+    if (typeof stamm.signatur === 'string') return stamm.signatur.trim();   // gespeichert (leer = keine Signatur)
+    if (ctx.id === 'novaflow') return STD_SIGNATUR_NOVAFLOW;
+    return [stamm.inhaberin, stamm.firma, stamm.telefon, stamm.website].filter(Boolean).join('\n');
+  }
+  function signaturLogo(stamm) {
+    if (stamm.signaturLogo === false) return null;
+    const m = /^data:(image\/(png|jpe?g));base64,(.+)$/.exec(stamm.logo || '');
+    if (m) return { cid: 'signatur-logo', filename: 'logo.' + (m[2] === 'png' ? 'png' : 'jpg'), content: Buffer.from(m[3], 'base64') };
+    // NovaFlow: Logo mit Schriftzug wie in der Hostinger-Signatur
+    if (ctx.id === 'novaflow') { try { return { cid: 'signatur-logo', filename: 'novaflow-logo.png', content: fs.readFileSync(path.join(__dirname, '..', 'public_html', 'LogoKomplett-klein.PNG')) }; } catch (_) {} }
+    return null;
+  }
+  const escH = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  // Text → HTML: Absätze, „- “-Zeilen als Liste, Links klickbar
+  function textZuHtml(text) {
+    const link = s => escH(s).replace(/(https?:\/\/[^\s<]+|www\.[^\s<]+)/g, u => `<a href="${u.startsWith('www.') ? 'https://' + u : u}" style="color:#2C3A55">${u}</a>`);
+    const punkt = z => /^\s*[-•]\s+/.test(z);
+    return String(text || '').replace(/\r\n?/g, '\n').split(/\n{2,}/).map(block => {
+      // Zeilen mit „- “ werden zur Liste, die anderen bleiben Absatz (auch gemischt im selben Block)
+      const gruppen = [];
+      block.split('\n').forEach(z => {
+        const typ = punkt(z) ? 'ul' : 'p', letzte = gruppen[gruppen.length - 1];
+        if (letzte && letzte.typ === typ) letzte.zeilen.push(z); else gruppen.push({ typ, zeilen: [z] });
+      });
+      return gruppen.map(g => g.typ === 'ul'
+        ? `<ul style="margin:0 0 14px;padding-left:20px">${g.zeilen.map(z => `<li style="margin:0 0 6px">${link(z.replace(/^\s*[-•]\s+/, ''))}</li>`).join('')}</ul>`
+        : `<p style="margin:0 0 ${gruppen.length > 1 ? 6 : 14}px">${g.zeilen.map(link).join('<br>')}</p>`).join('');
+    }).join('');
+  }
+  function signaturHtml(text, logo) {
+    const zeilen = String(text || '').split('\n');
+    const html = zeilen.map((z, i) => {
+      if (!z.trim()) return '<div style="height:10px"></div>';
+      const t = escH(z).replace(/(https?:\/\/[^\s<]+|www\.[^\s<]+)/g, u => `<a href="${u.startsWith('www.') ? 'https://' + u : u}" style="color:#2C3A55;text-decoration:underline">${u}</a>`)
+        .replace(/([^\s@<>]+@[^\s@<>]+\.[a-z]{2,})/gi, m => `<a href="mailto:${m}" style="color:#2C3A55">${m}</a>`);
+      return `<div style="${i === 0 ? 'font-weight:700;color:#1A2330;' : 'color:#59616E;'}font-size:13px;line-height:1.5">${t}</div>`;
+    }).join('');
+    return `<div style="margin-top:18px">${html}${logo ? `<img src="cid:${logo.cid}" alt="Logo" width="180" style="display:block;margin-top:14px;max-width:180px;height:auto">` : ''}</div>`;
+  }
+
+  // Standard-Text fürs Angebot: das Wichtigste aus dem Angebot als Liste (Betrag, Zahlung,
+  // Betreuung, kostenlose Extras), Projektvereinbarung zurückschicken, Gültigkeit
+  function angebotMailText(a, kunde, stamm) {
+    const du = kunde && kunde.anrede === 'du';
+    const v = angebotAnsicht(a);
+    const eur = n => (Math.round(n * 100) % 100 ? euroText(n) : round2(n).toLocaleString('de-DE') + ' €');
+    const z = v.zahlung, brutto = v.summen.brutto;
+    const punkte = [];
+    if (brutto > 0) {
+      let p = `${eur(brutto)} einmalig`;
+      if (z.art === 'anzahlung') p += `: ${menge(z.anzahlungProzent)} % (${eur(z.anzahlungBetrag)}) ${z.anzahlungText}, der Rest (${eur(z.restBetrag)}) ${z.restText}.`;
+      else if (z.art === 'raten' && z.raten.length) {
+        const anz = z.raten.find(r => r.anzahlung), raten = z.raten.filter(r => !r.anzahlung);
+        p += anz ? `: ${menge(z.ratenAnzahlung)} % (${eur(anz.betrag)}) bei Auftrag, dann ${raten.length} × ${eur(raten[0].betrag)} monatlich ab ${datumDe(raten[0].faelligAm)}.`
+          : ` in ${raten.length} Monatsraten à ${eur(raten[0].betrag)} ab ${datumDe(raten[0].faelligAm)}.`;
+      } else p += `, zahlbar innerhalb von ${stamm.zahlungszielTage || 14} Tagen nach Rechnung.`;
+      if (ctx.id === 'novaflow' && z.art !== 'raten' && brutto >= 1490) p += du ? ' Lieber in Raten? Sag mir einfach Bescheid.' : ' Lieber in Raten? Sagen Sie mir einfach Bescheid.';
+      punkte.push(p);
+    }
+    if (v.monatlichPositionen.length) {
+      const start = a.monatlichStart || plusMonate(monatsAnfang(monatVon(heute())), 1);
+      const gratis = v.monatlichPositionen.some(p => /gratis|kostenlos/i.test(`${p.titel} ${p.beschreibung || ''}`));
+      const liste = v.monatlichPositionen.map(p => `${p.titel} ${eur(positionGesamt(p))}`).join(', ');
+      punkte.push(`${du ? 'Deine' : 'Ihre'} laufende Betreuung: ${liste} im Monat${gratis ? ', der erste Monat ist kostenlos' : ''}. Abrechnung ab ${datumDe(start)}, monatlich kündbar.`);
+    }
+    v.positionen.filter(p => p.abrechnung === 'einmalig' && Number(p.einzelpreis) === 0 && p.titel)
+      .forEach(p => punkte.push(`${p.titel} ${du ? 'bekommst du' : 'bekommen Sie'} kostenlos dazu.`));
+    const pv = (a.anhaenge || []).length > 0;
+    const teile = [
+      kundeAnrede(kunde),
+      `${du ? 'wie besprochen findest du im Anhang dein Angebot' : 'wie besprochen finden Sie im Anhang Ihr Angebot'}${a.betreff ? ` „${a.betreff}“` : ` ${a.nummer}`}${pv ? ' und die Projektvereinbarung' : ''}.`,
+      punkte.length ? `${du ? 'Kurz das Wichtigste für dich:' : 'Kurz das Wichtigste für Sie:'}\n${punkte.map(p => '- ' + p).join('\n')}` : '',
+      pv ? (du ? 'Wenn für dich alles passt, unterschreib die Vereinbarung bitte und schick sie mir zurück. Ein Scan oder Foto reicht.' : 'Wenn für Sie alles passt, unterschreiben Sie die Vereinbarung bitte und schicken Sie sie mir zurück. Ein Scan oder Foto reicht.')
+        : (du ? 'Wenn für dich alles passt, gib mir einfach kurz Bescheid, dann lege ich los.' : 'Wenn für Sie alles passt, geben Sie mir einfach kurz Bescheid, dann lege ich los.'),
+      `Das Angebot gilt bis ${datumDe(a.gueltigBis)}. ${du ? 'Bei Fragen schreib mir einfach.' : 'Bei Fragen melden Sie sich gern.'}`,
+      kundeGruss(kunde),
+    ];
+    return teile.filter(Boolean).join('\n\n');
+  }
+
   function emailVorlage(typ, dok, kunde, stamm, extra = {}) {
     const du = kunde && kunde.anrede === 'du';
     const anrede = kundeAnrede(kunde);
-    const gruss = `${kundeGruss(kunde)}\n${stamm.inhaberin}\n${stamm.firma}${stamm.telefon ? '\n' + stamm.telefon : ''}${stamm.website ? '\n' + stamm.website : ''}`;
+    const gruss = kundeGruss(kunde);   // Signatur hängt versende() an
     let betreff, text;
     if (typ === 'angebot') {
       betreff = `Angebot ${dok.nummer} – ${dok.betreff || stamm.firma}`;
-      const mitPv = (dok.anhaenge || []).length ? (du ? ' sowie die Projektvereinbarung' : ' sowie die Projektvereinbarung') : '';
-      text = `${anrede}\n\n${du ? 'wie besprochen findest du' : 'wie besprochen finden Sie'} im Anhang das Angebot ${dok.nummer}${mitPv}. Es ist gültig bis ${datumDe(dok.gueltigBis)}.\n\n${du ? 'Wenn du Fragen hast, melde dich gern. Ich freue mich auf die Zusammenarbeit!' : 'Bei Fragen melden Sie sich gern. Ich freue mich auf die Zusammenarbeit!'}\n\n${gruss}`;
+      text = angebotMailText(dok, kunde, stamm);
     } else if (typ === 'mahnung') {
       const m = extra.mahnung;
       betreff = `${MAHN_TITEL[m.stufe]} zu Rechnung ${dok.nummer}`;
@@ -741,7 +853,7 @@ function bauMandant(app, ctx) {
       text = `${anrede}\n\n${du ? 'im Anhang findest du' : 'im Anhang finden Sie'} die Stornorechnung ${dok.nummer} zur Rechnung ${dok.bezug.originalNummer}.\n\n${gruss}`;
     } else {
       betreff = `Rechnung ${dok.nummer}${dok.titel ? ' – ' + dok.titel : ''}`;
-      text = `${anrede}\n\n${du ? 'im Anhang findest du' : 'im Anhang finden Sie'} die Rechnung ${dok.nummer} über ${euroText(summen(dok.positionen, dok.kleinunternehmer).brutto)}${dok.bezug.rate ? ` (Rate ${dok.bezug.rate} von ${dok.bezug.ratenGesamt} zum Angebot ${dok.bezug.angebotNummer})` : ''}. ${du ? 'Bitte überweise' : 'Bitte überweisen Sie'} den Betrag bis zum ${datumDe(dok.faelligAm)} mit dem Verwendungszweck ${dok.nummer}.\n\n${du ? 'Vielen Dank für dein Vertrauen!' : 'Vielen Dank für Ihr Vertrauen!'}\n\n${gruss}`;
+      text = `${anrede}\n\n${du ? 'im Anhang findest du' : 'im Anhang finden Sie'} die Rechnung ${dok.nummer} über ${euroText(summen(dok.positionen, dok.kleinunternehmer).brutto)}${dok.bezug.anzahlung ? ` (Anzahlung zum Angebot ${dok.bezug.angebotNummer})` : dok.bezug.rate ? ` (Rate ${dok.bezug.rate} von ${dok.bezug.ratenGesamt} zum Angebot ${dok.bezug.angebotNummer})` : ''}. ${du ? 'Bitte überweise' : 'Bitte überweisen Sie'} den Betrag bis zum ${datumDe(dok.faelligAm)} mit dem Verwendungszweck ${dok.nummer}.\n\n${du ? 'Vielen Dank für dein Vertrauen!' : 'Vielen Dank für Ihr Vertrauen!'}\n\n${gruss}`;
     }
     return { an: (kunde && kunde.email) || '', betreff, text };
   }
@@ -750,8 +862,11 @@ function bauMandant(app, ctx) {
     if (!ctx.email) throw new Error('E-Mail-Versand ist in diesem Konto nicht verfügbar. Bitte das PDF herunterladen und selbst versenden.');
     const an = String((body || {}).an || vorlage.an || '').trim();
     const betreff = String((body || {}).betreff || vorlage.betreff);
-    const text = String((body || {}).text || vorlage.text);
-    const ergebnis = await mail.sende({ an, betreff, text, anhaenge, antwortAn: stamm.email || undefined, kopie: !!(body || {}).kopie });
+    const text = String((body || {}).text || vorlage.text).replace(/\s+$/, '');
+    const sig = signaturText(stamm);
+    const logo = signaturLogo(stamm);
+    const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1A2330;max-width:620px">${textZuHtml(text)}${sig || logo ? signaturHtml(sig, logo) : ''}</div>`;
+    const ergebnis = await mail.sende({ an, betreff, text: sig ? `${text}\n\n${sig}` : text, html, eingebettet: logo ? [logo] : [], anhaenge, antwortAn: stamm.email || undefined, kopie: !!(body || {}).kopie });
     return { am: new Date().toISOString(), an: ergebnis.an, betreff };
   }
 
@@ -802,7 +917,7 @@ function bauMandant(app, ctx) {
     const a = ladeEins(ANGEBOTE_DIR, req.params.id);
     if (!a) return fehler(res, 404, 'Angebot nicht gefunden.');
     const kunde = ladeKunden().find(k => k.id === a.kundeId) || a.kunde;
-    ok(res, { vorlage: emailVorlage('angebot', a, kunde, ladeStammdaten()), versand: a.versand || [] });
+    ok(res, { signatur: signaturText(ladeStammdaten()), signaturLogo: !!signaturLogo(ladeStammdaten()), vorlage: emailVorlage('angebot', a, kunde, ladeStammdaten()), versand: a.versand || [] });
   });
   app.post('/api/abrechnung/angebote/:id/email', asyncRoute(async (req, res) => {
     const a = ladeEins(ANGEBOTE_DIR, req.params.id);
@@ -1140,7 +1255,7 @@ Antworte NUR mit gültigem JSON, kein Text davor oder danach:
     if (!r) return fehler(res, 404, 'Rechnung nicht gefunden.');
     let m; try { m = mahnungVon(r, req.params.stufe); } catch (e) { return fehler(res, 404, e.message); }
     const kunde = r.kunde || kundeSnapshot(ladeKunden().find(k => k.id === r.kundeId));
-    ok(res, { vorlage: emailVorlage('mahnung', r, kunde, ladeStammdaten(), { mahnung: m }), versand: m.versand || [] });
+    ok(res, { signatur: signaturText(ladeStammdaten()), signaturLogo: !!signaturLogo(ladeStammdaten()), vorlage: emailVorlage('mahnung', r, kunde, ladeStammdaten(), { mahnung: m }), versand: m.versand || [] });
   });
   app.post('/api/abrechnung/rechnungen/:id/mahnung/:stufe/email', asyncRoute(async (req, res) => {
     const r = ladeEins(RECHNUNGEN_DIR, req.params.id);
@@ -1162,7 +1277,7 @@ Antworte NUR mit gültigem JSON, kein Text davor oder danach:
     if (!r) return fehler(res, 404, 'Rechnung nicht gefunden.');
     if (r.status !== 'finalisiert') return fehler(res, 400, 'Nur finalisierte Rechnungen können versendet werden.');
     const kunde = r.kunde || kundeSnapshot(ladeKunden().find(k => k.id === r.kundeId));
-    ok(res, { vorlage: emailVorlage('rechnung', r, kunde, ladeStammdaten()), versand: r.versand || [] });
+    ok(res, { signatur: signaturText(ladeStammdaten()), signaturLogo: !!signaturLogo(ladeStammdaten()), vorlage: emailVorlage('rechnung', r, kunde, ladeStammdaten()), versand: r.versand || [] });
   });
   app.post('/api/abrechnung/rechnungen/:id/email', asyncRoute(async (req, res) => {
     const r = ladeEins(RECHNUNGEN_DIR, req.params.id);
@@ -1580,12 +1695,14 @@ Antworte NUR mit gültigem JSON, kein Text davor oder danach:
       return k;
     },
     // Neuen Angebotsentwurf für einen Deal anlegen
-    angebotEntwurf({ lead, deal, positionen, zahlung }) {
+    angebotEntwurf({ lead, deal, positionen, zahlung, gratismonat }) {
       const kunde = crm.kundeFuerLead(lead);
       const datum = heute();
       const basis = { id: neueId(), nummer: naechsteAngebotsnummer(datum.slice(0, 4)), status: 'entwurf', umgewandelt: null,
         erstellt: new Date().toISOString(), crm: { leadId: lead.id, dealId: deal ? deal.id : null } };
-      const a = angebotAusBody({ kundeId: kunde.id, datum, betreff: deal ? deal.title : '', positionen: positionen || [], zahlung }, basis);
+      const a = angebotAusBody({ kundeId: kunde.id, datum, betreff: deal ? deal.title : '', positionen: positionen || [], zahlung,
+        // Erster Monat gratis: Betreuung erst ab dem übernächsten Monatsersten abrechnen
+        monatlichStart: gratismonat ? plusMonate(monatsAnfang(monatVon(datum)), 2) : null }, basis);
       speichere(ANGEBOTE_DIR, a);
       return angebotMitKunde(a);
     },
@@ -1636,6 +1753,41 @@ Antworte NUR mit gültigem JSON, kein Text davor oder danach:
         rechnungen,
       };
     },
+    // Einmalig: aktuellen Katalog ergänzen, alte Artikel inaktiv (nur NovaFlow)
+    katalogAktualisieren() {
+      if (db.einstellung('katalog_2026_10', null)) return null;
+      const vorhanden = new Map(ladeArtikel().map(x => [x.nr, x]));
+      let neu = 0, alt = 0;
+      db.transaktion(() => {
+        KATALOG_2026_10.forEach(x => { if (!vorhanden.has(x.nr)) { db.setze('artikel', x.nr, { ...x, aktiv: true }); neu++; } });
+        KATALOG_ALT.forEach(nr => { const x = vorhanden.get(nr); if (x && x.aktiv !== false) { db.setze('artikel', nr, { ...x, aktiv: false }); alt++; } });
+        db.einstellungSetzen('katalog_2026_10', { am: new Date().toISOString(), neu, alt });
+      });
+      return { neu, alt };
+    },
+    // Was in der Abrechnung ansteht (für „Heute“ und die tägliche Erinnerung)
+    faellig() {
+      const h = heute(), bald = plusTage(h, 5);
+      const kunden = new Map(ladeKunden().map(k => [k.id, k]));
+      const name = d => ((kunden.get(d.kundeId) || d.kunde || {}).firma) || '–';
+      const rechnungen = ladeAlle(RECHNUNGEN_DIR).map(rechnungAnsicht);
+      const entwuerfe = rechnungen.filter(r => r.status === 'entwurf' && r.typ !== 'storno')
+        .map(r => ({ id: r.id, kunde: name(r), titel: r.titel || '', brutto: r.summen.brutto, datum: (r.bezug && r.bezug.geplantFaellig) || (r.geplantMonat ? r.geplantMonat + '-01' : r.datum) || h,
+          art: r.bezug && r.bezug.anzahlung ? 'Anzahlung' : r.bezug && r.bezug.schlussrechnung ? 'Schlussrechnung' : r.bezug && r.bezug.rate ? `Rate ${r.bezug.rate} von ${r.bezug.ratenGesamt}` : r.quelle === 'abo' ? 'Monatsrechnung' : 'Rechnung' }))
+        .filter(r => r.datum <= bald);
+      const unversendet = rechnungen.filter(r => r.status === 'finalisiert' && r.typ !== 'storno' && !r.storniertDurch && !(r.versand || []).length && r.zahlungsstatus !== 'bezahlt')
+        .map(r => ({ id: r.id, nummer: r.nummer, kunde: name(r), brutto: r.summen.brutto, datum: r.datum }));
+      const ueberfaellig = rechnungen.filter(r => r.zahlungsstatus === 'ueberfaellig')
+        .map(r => ({ id: r.id, nummer: r.nummer, kunde: name(r), brutto: r.summen.brutto, datum: r.faelligAm, mahnstufe: r.mahnstufe, naechste: r.naechsteMahnung || null }));
+      const angebote = ladeAlle(ANGEBOTE_DIR).map(angebotAnsicht)
+        .filter(a => a.status === 'versendet' && a.gueltigBis && a.gueltigBis <= plusTage(h, 3))
+        .map(a => ({ id: a.id, nummer: a.nummer, kunde: name(a), betreff: a.betreff || '', datum: a.gueltigBis, abgelaufen: a.gueltigBis < h }));
+      const abos = ladeAlle(ABOS_DIR).filter(x => x.aktiv && !x.letzteAbrechnung && x.start && x.start > h && x.start <= plusTage(h, 21))
+        .map(x => ({ id: x.id, kunde: name(x), titel: x.titel || '', datum: x.start, monatlich: round2((x.positionen || []).reduce((s, p) => s + (Number(p.preis) || 0), 0)) }));
+      return { entwuerfe, unversendet, ueberfaellig, angebote, abos };
+    },
+    // Katalogartikel für die Vorbefüllung aus der Bedarfsanalyse
+    artikel(nr) { const a = ladeArtikel().find(x => x.nr === nr); return a && a.aktiv !== false ? a : null; },
     leer: () => db.leer(),
   };
 

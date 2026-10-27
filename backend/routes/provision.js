@@ -77,7 +77,7 @@ async function berechne(deal, cfg, besitzer) {
       const summe = daten.rechnungen.reduce((s, r) => s + r.netto, 0) || 1;
       plan = daten.rechnungen.map((r, i) => ({
         anteil: r.netto / summe, art: r.anzahlung || (i === 0 && r.ratenGesamt > 1) ? 'anzahlung' : r.ratenGesamt > 1 ? 'rate' : 'einmal',
-        nr: r.rate, von: r.ratenGesamt, rechnung: r.nummer, bezahlt_am: r.status === 'bezahlt' ? r.bezahltAm : null,
+        nr: r.rate, von: r.ratenGesamt, rechnung: r.nummer, rechnung_id: r.id, bezahlt_am: r.status === 'bezahlt' ? r.bezahltAm : null,
         zahlungsstatus: r.status, kunde_faellig: r.faelligAm }));
     } else plan = planAusZahlung(daten.angebot.zahlung.art, daten.angebot.zahlung.anzahlungProzent, daten.angebot.zahlung.raten, daten.angebot.zahlung.mitAnzahlung);
   } else {
@@ -123,14 +123,22 @@ async function berechne(deal, cfg, besitzer) {
   const soll = round2(netto * plan.filter(t => !storno(t)).reduce((x, t) => x + t.anteil, 0));
   let verteilt = 0;
   const heute = new Date().toISOString().slice(0, 10);
+  // Schon ausgezahlte Teile (Admin hat „ausgezahlt“ markiert)
+  const schluessel = plan.filter(t => t.rechnung_id).map(t => 'prov:' + t.rechnung_id);
+  const ausgezahlt = {};
+  if (schluessel.length) {
+    const [rows] = await db.query('SELECT schluessel, ausgezahlt_am FROM provision_auszahlungen WHERE schluessel IN (?)', [schluessel]).catch(() => [[]]);
+    rows.forEach(r => { ausgezahlt[r.schluessel] = r.ausgezahlt_am; });
+  }
   const teile = plan.map((t, i) => {
     if (storno(t)) return { art: t.art, nr: t.nr || i + 1, von: t.von || plan.length, rechnung: t.rechnung || null, netto: 0, auszahlung: 0,
       kunde_bezahlt_am: null, rechnung_status: 'storniert', faellig_am: null, status: 'storniert' };
     const n = i === letzte ? round2(soll - verteilt) : round2(netto * t.anteil);
     verteilt = round2(verteilt + n);
     const faellig = t.bezahlt_am ? plusTage(t.bezahlt_am, Number(P.faellig_tage) || 0) : null;
-    const status = t.bezahlt_am ? (faellig <= heute ? 'faellig' : 'bezahlt') : t.rechnung !== undefined ? 'offen' : 'geplant';
-    return { art: t.art, nr: t.nr || i + 1, von: t.von || plan.length, rechnung: t.rechnung || null, netto: n,
+    const key = t.rechnung_id ? 'prov:' + t.rechnung_id : null;
+    const status = key && ausgezahlt[key] ? 'ausgezahlt' : t.bezahlt_am ? (faellig <= heute ? 'faellig' : 'bezahlt') : t.rechnung !== undefined ? 'offen' : 'geplant';
+    return { art: t.art, nr: t.nr || i + 1, von: t.von || plan.length, rechnung: t.rechnung || null, schluessel: key, ausgezahlt_am: key ? ausgezahlt[key] || null : null, netto: n,
       auszahlung: round2(n * (1 + ustSatz / 100)), kunde_bezahlt_am: t.bezahlt_am || null, rechnung_status: t.zahlungsstatus || null, faellig_am: faellig, status };
   });
 
@@ -249,6 +257,54 @@ router.get('/team', auth, adminOnly, async (req, res) => {
   } catch (e) { console.error('Provision Team:', e); res.status(500).json({ error: 'Provision konnte nicht geladen werden.' }); }
 });
 
+// Alles, was an Closer auszuzahlen ist: fällige Provision (Kunde hat bezahlt + 14 Tage)
+// und der Bonus des Vormonats – jeweils ohne die schon als ausgezahlt markierten
+async function faelligeAuszahlungen() {
+  const cfg = await bedarf.regeln();
+  const [closer] = await db.query("SELECT id, full_name FROM users WHERE role='closer' AND is_active=1");
+  const raus = [];
+  const heute = new Date().toISOString().slice(0, 10);
+  for (const c of closer) {
+    const besitzer = await besitzerLaden(c.id);
+    const [deals] = await db.query(`SELECT d.id, d.title, d.lead_id, d.owner_id, d.status, d.paket, d.value, d.won_at, l.company
+      FROM deals d LEFT JOIN leads l ON l.id=d.lead_id WHERE d.owner_id=? AND d.status='won'`, [c.id]);
+    for (const d of deals) {
+      const p = await berechne(d, cfg, besitzer);
+      if (p.keine) continue;
+      p.teile.filter(t => t.status === 'faellig' && t.schluessel).forEach(t => raus.push({ art: 'provision', user_id: c.id, closer: c.full_name,
+        deal_id: d.id, kunde: d.company || d.title, teil: t.art === 'anzahlung' ? 'Anzahlung' : t.art === 'rate' ? `Rate ${t.nr} von ${t.von}` : 'Zahlung',
+        betrag: t.auszahlung, datum: t.faellig_am, schluessel: t.schluessel }));
+    }
+    // Bonus des Vormonats (fällig ab dem 1. des Folgemonats)
+    const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1);
+    const vormonat = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const b = await bonus(c.id, vormonat, cfg);
+    const key = `bonus:${c.id}:${vormonat}`;
+    if (b.summe > 0) {
+      const [[schon]] = await db.query('SELECT id FROM provision_auszahlungen WHERE schluessel=?', [key]).catch(() => [[null]]);
+      if (!schon) raus.push({ art: 'bonus', user_id: c.id, closer: c.full_name, kunde: `${b.anzahl} bezahlte Abschlüsse`, teil: `Bonus ${vormonat.slice(5)}/${vormonat.slice(0, 4)}`,
+        betrag: b.summe * (besitzer && besitzer.provision_zzgl_ust && !besitzer.provision_ausland ? 1 + Number(cfg.provision.ust) / 100 : 1), datum: heute.slice(0, 8) + '01', schluessel: key });
+    }
+  }
+  return raus.sort((a, b) => String(a.datum).localeCompare(String(b.datum)));
+}
+
+// POST /api/provision/auszahlung { schluessel, user_id, betrag, art } – als ausgezahlt markieren (Admin)
+router.post('/auszahlung', auth, adminOnly, async (req, res) => {
+  const key = String(req.body.schluessel || '');
+  if (!/^(prov:[0-9a-f]{6,40}|bonus:\d+:\d{4}-\d{2})$/.test(key)) return res.status(400).json({ error: 'Unbekannte Auszahlung' });
+  try {
+    await db.query('INSERT IGNORE INTO provision_auszahlungen (schluessel, user_id, art, betrag, erstellt_von) VALUES (?,?,?,?,?)',
+      [key, parseInt(req.body.user_id) || 0, key.startsWith('bonus') ? 'bonus' : 'provision', round2(req.body.betrag), req.user.id]);
+    res.json({ ok: true });
+  } catch (e) { console.error('Auszahlung:', e); res.status(500).json({ error: 'Konnte nicht gespeichert werden.' }); }
+});
+router.delete('/auszahlung/:schluessel', auth, adminOnly, async (req, res) => {
+  try { await db.query('DELETE FROM provision_auszahlungen WHERE schluessel=?', [String(req.params.schluessel)]); res.json({ ok: true }); }
+  catch (e) { res.status(500).json({ error: 'Konnte nicht gelöscht werden.' }); }
+});
+
+router.faelligeAuszahlungen = faelligeAuszahlungen;
 router.berechne = berechne;
 router.bonus = bonus;
 module.exports = router;

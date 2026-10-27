@@ -302,6 +302,14 @@
       </div>
       <div class="hint" style="margin:-6px 0 14px">Reihenfolge: Zahlungserinnerung (ohne Gebühr) → 1. Mahnung → 2. Mahnung. Gebühren dürfen nur den tatsächlichen Verzugsschaden abdecken, 0 ist rechtlich immer sicher.</div>
       <div class="nur-email">
+      <div class="untertitel">E-Mail-Signatur</div>
+      <div class="hint" style="margin:-6px 0 10px">Wird an jede E-Mail aus der Abrechnung angehängt (Angebote, Rechnungen, Mahnungen). Die erste Zeile erscheint fett, Links werden klickbar. Leer lassen = keine Signatur.</div>
+      <div class="row">
+        <div class="field"><div class="row" style="margin:0 0 8px"><div class="field" style="margin:0"><label>Gruß bei „du“</label><input id="st-gruss-du" placeholder="Viele Grüße" oninput="signaturVorschau()"></div><div class="field" style="margin:0"><label>Gruß bei „Sie“</label><input id="st-gruss-sie" placeholder="Mit freundlichen Grüßen"></div></div>
+          <label>Signatur</label><textarea id="st-signatur" style="min-height:150px;font-size:0.85rem" oninput="signaturVorschau()"></textarea>
+          <label class="check" style="margin-top:8px"><input type="checkbox" id="st-signatur-logo" onchange="signaturVorschau()"> Logo unter der Signatur zeigen</label></div>
+        <div class="field"><label>Vorschau</label><div id="st-signatur-vorschau" style="border:1px solid var(--border);border-radius:12px;padding:14px 16px;background:#fff;color:#1A2330;color-scheme:light;min-height:150px"></div></div>
+      </div>
       <div class="untertitel">E-Mail-Versand</div>
       <div class="hinweis" id="st-email-status">…</div>
       <div class="btn-zeile" style="margin:-6px 0 16px"><button class="btn klein sekundaer" onclick="emailTest()">Test-E-Mail an mich senden</button><span class="status-text" id="st-email-test"></span></div>
@@ -413,7 +421,7 @@ let KONTEXT = { admin: false, emailMoeglich: false, emailErlaubt: false, inhaber
 
 async function ladeBasis() {
   const [kx, st, ar, ku] = await Promise.all([api('/kontext'), api('/stammdaten'), api('/artikel'), api('/kunden')]);
-  KONTEXT = kx; S.stammdaten = st.stammdaten; S.artikel = ar.artikel; S.kunden = ku.kunden;
+  KONTEXT = kx; S.stammdaten = st.stammdaten; S.signaturStandard = st.signaturStandard; S.artikel = ar.artikel; S.kunden = ku.kunden;
   if (KONTO) {
     document.querySelectorAll('a[href^="/api/abrechnung/"]').forEach(x => x.setAttribute('href', API + x.getAttribute('href').slice('/api/abrechnung'.length)));
     if (KONTEXT.nurLesen) document.documentElement.classList.add('nur-lesen');
@@ -778,7 +786,9 @@ async function emailDialog(pfad, titel, danach) {
   const okk = await modal(titel, hinweis,
     `<div class="field"><label>An</label><input id="em-an" value="${esc(v.vorlage.an)}" placeholder="kunde@firma.de"></div>
      <div class="field"><label>Betreff</label><input id="em-betreff" value="${esc(v.vorlage.betreff)}"></div>
-     <div class="field"><label>Text</label><textarea id="em-text" style="min-height:190px;font-size:0.85rem">${esc(v.vorlage.text)}</textarea></div>
+     <div class="field"><label>Text</label><textarea id="em-text" style="min-height:260px;font-size:0.85rem">${esc(v.vorlage.text)}</textarea>
+       <div class="hint">Zeilen mit „- “ am Anfang werden in der E-Mail zur Liste.</div></div>
+     ${v.signatur || v.signaturLogo ? `<div class="field"><label>Wird automatisch angehängt</label><div class="sub" style="white-space:pre-line;border-left:3px solid var(--border);padding-left:10px">${esc(v.signatur || '')}${v.signaturLogo ? '\n[Logo]' : ''}</div><div class="hint">Ändern unter Stammdaten → E-Mail-Signatur.</div></div>` : ''}
      <label class="check"><input type="checkbox" id="em-kopie" checked> Kopie an mich (BCC)</label>
      ${v.versand.length ? `<div class="sub">Bereits gesendet: ${v.versand.map(x => datumDe(x.am) + ' an ' + esc(x.an.join(', '))).join(' · ')}</div>` : ''}`);
   if (!okk) return;
@@ -916,6 +926,10 @@ async function zeigeStammdaten() {
   $('st-ku').checked = !!s.kleinunternehmer; $('st-zahlungsziel').value = s.zahlungszielTage; $('st-gueltig').value = s.angebotGueltigTage; $('st-stichtag').value = s.aboStichtag;
   $('st-mahnfrist').value = s.mahnfristTage; $('st-mahngebuehr2').value = s.mahngebuehr2; $('st-mahngebuehr3').value = s.mahngebuehr3;
   logoAnzeigen(s.logo);
+  $('st-signatur').value = typeof s.signatur === 'string' ? s.signatur : (S.signaturStandard || '');
+  $('st-signatur-logo').checked = s.signaturLogo !== false;
+  $('st-gruss-du').value = s.grussDu || ''; $('st-gruss-sie').value = s.grussSie || '';
+  signaturVorschau();
   $('st-sich-aktiv').checked = (s.sicherungMail || {}).aktiv !== false; $('st-sich-an').value = (s.sicherungMail || {}).an || ''; $('st-sich-tage').value = (s.sicherungMail || {}).rhythmusTage || 7;
   api('/sicherung/status').then(z => { $('st-sich-status').textContent = z.letzte ? 'Letzte Sicherungs-Mail: ' + new Date(z.letzte).toLocaleString('de-DE') : 'Noch keine Sicherungs-Mail gesendet.'; $('st-sich-status').className = 'status-text'; }).catch(() => {});
   const st = await api('/email/status');
@@ -927,6 +941,14 @@ async function emailTest() {
   const el = $('st-email-test'); el.textContent = 'Sende …'; el.className = 'status-text';
   try { const d = await api('/email/test', 'POST', { an: $('st-email').value }); el.textContent = `Gesendet an ${d.an.join(', ')} – bitte Posteingang prüfen.`; el.className = 'status-text ok'; }
   catch (e) { el.textContent = e.message; el.className = 'status-text fehler'; }
+}
+function signaturVorschau() {
+  const box = $('st-signatur-vorschau'); if (!box) return;
+  const zeilen = $('st-signatur').value.split('\n');
+  const logo = $('st-signatur-logo').checked ? (S.stammdaten.logo || (KONTEXT.admin ? '/LogoKomplett-klein.PNG' : '')) : '';
+  box.innerHTML = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#1A2330;margin-bottom:10px">${esc($('st-gruss-du').value.trim() || 'Viele Grüße')}</div>` + zeilen.map((z, i) => z.trim()
+    ? `<div style="font-family:Arial,sans-serif;font-size:13px;line-height:1.5;${i === 0 ? 'font-weight:700;color:#1A2330' : 'color:#59616E'}">${esc(z).replace(/(https?:\/\/\S+|www\.\S+)/g, '<u style="color:#2C3A55">$1</u>')}</div>`
+    : '<div style="height:10px"></div>').join('') + (logo ? `<img src="${logo}" alt="" style="display:block;margin-top:14px;width:180px;height:auto">` : '');
 }
 function logoAnzeigen(logo) {
   const img = $('st-logo-vorschau'), btn = $('st-logo-entfernen');
@@ -955,6 +977,8 @@ async function stammdatenSpeichern() {
   body.bank = { name: $('st-bank-name').value, kontoinhaberin: $('st-bank-inhaberin').value, iban: $('st-bank-iban').value, bic: $('st-bank-bic').value };
   body.kleinunternehmer = $('st-ku').checked; body.zahlungszielTage = $('st-zahlungsziel').value; body.angebotGueltigTage = $('st-gueltig').value; body.aboStichtag = $('st-stichtag').value;
   body.mahnfristTage = $('st-mahnfrist').value; body.mahngebuehr2 = $('st-mahngebuehr2').value; body.mahngebuehr3 = $('st-mahngebuehr3').value;
+  body.signatur = $('st-signatur').value; body.signaturLogo = $('st-signatur-logo').checked;
+  body.grussDu = $('st-gruss-du').value; body.grussSie = $('st-gruss-sie').value;
   body.sicherungMail = { aktiv: $('st-sich-aktiv').checked, an: $('st-sich-an').value, rhythmusTage: $('st-sich-tage').value };
   try { const d = await api('/stammdaten', 'PUT', body); S.stammdaten = d.stammdaten; $('st-status').textContent = 'Gespeichert.'; $('st-status').className = 'status-text ok'; } catch (e) { $('st-status').textContent = e.message; $('st-status').className = 'status-text fehler'; }
 }

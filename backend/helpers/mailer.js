@@ -52,7 +52,17 @@ async function sendReminder({ to, toName, leadCompany, note, remindAt }) {
 // inReplyTo/references: Message-IDs der bisherigen Konversation. Nur gesetzt, wenn
 // vorhanden — dann hängt die Antwort im Mailprogramm des Kunden am richtigen Thread
 // statt eine neue Konversation aufzumachen.
-async function sendLeadEmail({ to, subject, body, leadId, inReplyTo, references, senderName }) {
+// Signatur unter Lead-Mails: Name, Rolle, Rückrufnummer (sipgate), Website
+function leadSignatur({ senderName, rolle, telefon }) {
+  // Vorwahl abtrennen, wo sie bekannt ist (Krefeld, Düsseldorf), sonst Nummer am Stück
+  const n = telefon ? String(telefon).replace(/^\+49/, '0') : '';
+  const vw = ['02151', '0211'].find(v => n.startsWith(v));
+  const tel = vw ? `${vw} ${n.slice(vw.length)}` : n;
+  return `<p style="margin:0;font-size:13px;line-height:1.5;color:#1a2330">${senderName ? `<b>${esc(senderName)}</b><br>` : ''}${esc(rolle || 'NovaFlow Services')}<br>`
+    + `${rolle ? 'NovaFlow Services<br>' : ''}${tel ? `Telefon ${esc(tel)}<br>` : ''}<a href="https://www.novaflowservices.de" style="color:#2c3a55">www.novaflowservices.de</a></p>`;
+}
+
+async function sendLeadEmail({ to, subject, body, leadId, inReplyTo, references, senderName, rolle, telefon }) {
   const domain = (process.env.SMTP_USER || 'info@novaflowservices.de').split('@')[1] || 'novaflowservices.de';
   const msgId  = `<crm-lead-${leadId}-${Date.now()}@${domain}>`;
   const taggedSubject = subject.includes('[NF-') ? subject : `${subject} [NF-${leadId}]`;
@@ -79,8 +89,8 @@ async function sendLeadEmail({ to, subject, body, leadId, inReplyTo, references,
       <div style="font-family:Arial,sans-serif;max-width:580px;margin:0 auto;color:#1a2330">
         ${body.includes('<') ? body : body.split('\n').map(l => l.trim() ? `<p style="margin:0 0 12px">${l}</p>` : '<br>').join('')}
         <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
-        <img src="cid:${LOGO_CID}" alt="NovaFlow Services" width="160" style="display:block;margin-bottom:12px">
-        <p style="color:#59616e;font-size:12px">NovaFlow Services · info@novaflowservices.de</p>
+        ${leadSignatur({ senderName, rolle, telefon })}
+        <img src="cid:${LOGO_CID}" alt="NovaFlow Services" width="160" style="display:block;margin:14px 0 0">
       </div>
     `,
     attachments: [LOGO_ATTACHMENT],
