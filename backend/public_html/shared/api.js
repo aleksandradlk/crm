@@ -423,12 +423,16 @@ function makeLeadSelection(cfg) {
 // ── Activity Heartbeat (Closer-Tracking) ─────────────────────
 let _clickCount = 0;
 let _inactiveTimer = null;
-const INACTIVITY_MS = (window.INACTIVITY_TIMEOUT || 5) * 60 * 1000;
+// 30 Minuten: Closer telefonieren oft länger, ohne zu klicken, und Admins arbeiten parallel in sipgate & Co.
+const INACTIVITY_MIN = window.INACTIVITY_TIMEOUT || 30;
+const INACTIVITY_MS = INACTIVITY_MIN * 60 * 1000;
 
 function resetInactiveTimer() {
   clearTimeout(_inactiveTimer);
   _inactiveTimer = setTimeout(async () => {
-    showToast('Automatisch abgemeldet (5 Min. Inaktivität)', 'info');
+    // Im Anrufmodus nie abmelden (Gespräch läuft gerade)
+    if (document.getElementById('dialer')?.classList.contains('open')) { resetInactiveTimer(); return; }
+    showToast(`Automatisch abgemeldet (${INACTIVITY_MIN} Min. ohne Aktivität)`, 'info');
     try { await api('POST', '/auth/logout', { reason: 'inactivity' }); } catch {}
     Auth.clear();
     setTimeout(() => window.location.href = '/login', 1500);
@@ -441,6 +445,9 @@ function startActivityTracking() {
   document.addEventListener('click',     () => { _clickCount++; resetInactiveTimer(); });
   document.addEventListener('mousemove', resetInactiveTimer);
   document.addEventListener('keydown',   resetInactiveTimer);
+  document.addEventListener('scroll',    resetInactiveTimer, { passive: true, capture: true });
+  // Zurück in den Tab (z. B. aus sipgate): zählt als Aktivität
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) resetInactiveTimer(); });
   resetInactiveTimer();
 
   // Heartbeat every 30s

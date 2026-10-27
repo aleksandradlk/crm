@@ -51,18 +51,19 @@ function cookieWert(req) {
   return null;
 }
 async function nurBerechtigte(req, res, next) {
-  try {
-    const header = req.headers.authorization || '';
-    const token = header.startsWith('Bearer ') ? header.slice(7) : cookieWert(req);
-    if (!token) return res.status(401).json({ success: false, error: 'Bitte zuerst im CRM anmelden.' });
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await ladeBerechtigten(payload.id);
-    if (!user) return res.status(403).json({ success: false, error: 'Für Angebote & Rechnungen fehlt dir die Berechtigung. Ein Admin kann sie unter Benutzer freischalten.' });
-    req.user = user;
-    next();
-  } catch (_) {
-    res.status(401).json({ success: false, error: 'Sitzung abgelaufen – bitte neu anmelden.' });
-  }
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : cookieWert(req);
+  if (!token) return res.status(401).json({ success: false, error: 'Bitte zuerst im CRM anmelden.' });
+  let payload;
+  try { payload = jwt.verify(token, process.env.JWT_SECRET); }
+  catch (_) { return res.status(401).json({ success: false, error: 'Sitzung abgelaufen – bitte neu anmelden.' }); }
+  let user;
+  // Datenbank kurz weg: nicht zum Login schicken
+  try { user = await ladeBerechtigten(payload.id); }
+  catch (e) { console.error('Abrechnung Anmeldung:', e.message); return res.status(503).json({ success: false, error: 'Der Server ist gerade kurz nicht erreichbar. Bitte gleich noch einmal versuchen.' }); }
+  if (!user) return res.status(403).json({ success: false, error: 'Für Angebote & Rechnungen fehlt dir die Berechtigung. Ein Admin kann sie unter Benutzer freischalten.' });
+  req.user = user;
+  next();
 }
 
 // ── Angebotsstatus → Deal im CRM ─────────────────────────────
