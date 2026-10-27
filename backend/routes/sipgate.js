@@ -179,7 +179,14 @@ async function hauptGeraet() {
   if (a && a.sipgate_device) return a.sipgate_device;
   const liste = await sipgateBenutzer().catch(() => []);
   const su = (a && liste.find(x => x.id === a.sipgate_user)) || liste[0];
-  return (su && su.defaultDevice) || null;
+  return su ? geraetVon(su) : null;
+}
+// Telefon eines sipgate-Benutzers: Standardgerät, sonst ein Gerät, das online ist, sonst das erste
+async function geraetVon(su) {
+  if (!su) return null;
+  if (su.defaultDevice) return su.defaultDevice;
+  const g = await geraeteVon(su.id);
+  return (g.find(d => d.online) || g[0] || {}).id || null;
 }
 
 // Nummer, die Kunden bei einem Benutzer sehen (abgelaufene eigene → Firmennummer)
@@ -453,13 +460,20 @@ router.post('/anrufen', auth, async (req, res) => {
     let geraet = u && u.sipgate_device, erst = null;
     if (!geraet && u && u.sipgate_user) {
       const su = (await sipgateBenutzer()).find(x => x.id === u.sipgate_user);
-      geraet = su && su.defaultDevice;
+      geraet = await geraetVon(su);
+    }
+    // Admin ohne Zuordnung, und es gibt bei sipgate nur einen Zugang: das ist ihrer
+    if (!geraet && u && !u.sipgate_user && !u.sipgate_handy && req.user.role === 'admin') {
+      const liste = await sipgateBenutzer().catch(() => []);
+      if (liste.length === 1) geraet = await geraetVon(liste[0]);
     }
     // Ohne eigenen Zugang: über das Gerät des Hauptzugangs, zuerst klingelt das Handy des Closers
     if (!geraet && u && u.sipgate_handy) { erst = u.sipgate_handy; geraet = await hauptGeraet(); }
     if (!geraet) return res.status(400).json({ error: u && u.sipgate_handy
       ? 'Für Anrufe ohne eigenen sipgate-Zugang braucht der Admin ein sipgate-Telefon. Ein Admin kann das unter Integrationen → sipgate erledigen.'
-      : 'Dir ist noch kein sipgate-Telefon zugeordnet. Ein Admin kann das unter Integrationen → sipgate erledigen.' });
+      : req.user.role === 'admin'
+        ? 'Dir ist noch kein sipgate-Telefon zugeordnet. Unter Integrationen → sipgate → „Wer telefoniert womit?“ in deiner Zeile deinen sipgate-Zugang und das Telefon wählen.'
+        : 'Dir ist noch kein sipgate-Telefon zugeordnet. Ein Admin kann das unter Integrationen → sipgate erledigen.' });
 
     const [c] = await db.query(
       `INSERT INTO call_logs (lead_id, user_id, phone_number, direction, started_at, status)
