@@ -243,6 +243,7 @@ router.get('/setup', auth, adminOnly, async (req, res) => {
       pool: await pool(nrn),
       webhook_zuletzt: await webhookZuletzt(),
       webhook_abgelehnt: await settingWert('sipgate_webhook_abgelehnt'),
+      neoUrl: baseUrl(req) + NEO_PFAD + await neoSchluessel(),
       system: cfg.system || null,
     });
   } catch (e) {
@@ -639,6 +640,127 @@ router.post('/webhook', express.raw({ type: '*/*', limit: '64kb' }), async (req,
   }
 });
 
+// ── Neues sipgate (Neo): Meldung nach Gesprächsende als JSON ──
+// In sipgate pro Channel einzutragen (App Web: CI-Webhook, Desktop-App: AI Assist Webhook,
+// Format „Standard JSON“). Diese Meldungen sind nicht signiert, deshalb steckt ein geheimer
+// Schlüssel in der Adresse. Die Felder unterscheiden sich je nach Variante und Version,
+// darum wird tolerant gelesen (call.from/to oder call.caller/callee, Sekunden oder Millisekunden).
+const NEO_PFAD = '/api/sipgate/anrufende/';
+async function neoSchluessel() {
+  let k = await settingWert('sipgate_webhook_schluessel');
+  if (!k) {
+    k = crypto.randomBytes(18).toString('hex');
+    await db.query("INSERT INTO app_settings (key_name, value) VALUES ('sipgate_webhook_schluessel', ?) ON DUPLICATE KEY UPDATE value=value", [k]);
+    k = await settingWert('sipgate_webhook_schluessel');
+  }
+  return k;
+}
+const zeitpunkt = v => {
+  if (v === undefined || v === null || v === '') return null;
+  const n = Number(v);
+  const d = Number.isFinite(n) ? new Date(n < 1e12 ? n * 1000 : n) : new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+const nummerAus = v => {
+  if (!v) return null;
+  if (typeof v === 'object') v = v.number || v.phoneNumber || v.e164 || v.phone || '';
+  return plus(String(v).replace(/[^\d+]/g, '')) || null;
+};
+// Einheitliche Form: { id, raus, kunde, unsere, start, sekunden, angenommen }
+function neoLesen(j) {
+  const c = (j && typeof j.call === 'object' && j.call) || j || {};
+  const id = String(c.id || c.callId || c.call_id || j.callId || '').slice(0, 64) || null;
+  const richtung = String(c.direction || j.direction || '').toLowerCase();
+  const raus = /^out/.test(richtung);
+  if (!raus && !/^in/.test(richtung)) return null;
+  const von = nummerAus(c.from || c.caller), an = nummerAus(c.to || c.callee);
+  const start = zeitpunkt(c.startTime || c.startedAt || c.start), ende = zeitpunkt(c.endTime || c.endedAt || c.end);
+  let sekunden = start && ende ? Math.round((ende - start) / 1000) : null;
+  if (sekunden === null && c.duration !== undefined) {
+    const d = Number(c.duration) || 0;
+    sekunden = d > 6 * 3600 ? Math.round(d / 1000) : Math.round(d);   // Millisekunden oder Sekunden
+  }
+  sekunden = Math.max(0, Math.min(sekunden || 0, 24 * 3600));
+  const status = String(c.status || c.result || '').toLowerCase();
+  const angenommen = /answer|connect|complet|success/.test(status) && !/no.?answer|not/.test(status) ? true : sekunden > 0;
+  return { id, raus, kunde: raus ? an : von, unsere: raus ? von : an, start, sekunden, angenommen };
+}
+
+router.get('/anrufende/:k', (req, res) => res.type('text').send('Diese Adresse nimmt die Anrufmeldungen von sipgate an (nur POST).'));
+router.post('/anrufende/:k', express.raw({ type: '*/*', limit: '512kb' }), async (req, res) => {
+  try {
+    const k = await neoSchluessel();
+    const a1 = Buffer.from(String(req.params.k)), a2 = Buffer.from(String(k || ''));
+    const ok = k && a1.length === a2.length && crypto.timingSafeEqual(a1, a2);
+    if (!ok) return res.status(403).json({ error: 'unbekannte Adresse' });
+    let j = req.body;
+    if (Buffer.isBuffer(j)) { try { j = JSON.parse(j.toString('utf8') || '{}'); } catch (_) { j = null; } }
+    db.query("INSERT INTO app_settings (key_name, value) VALUES ('sipgate_webhook_zuletzt', ?) ON DUPLICATE KEY UPDATE value=VALUES(value)",
+      [new Date().toISOString()]).catch(() => {});
+    const a = j && typeof j === 'object' ? neoLesen(j) : null;
+    if (!a || !a.kunde) return res.json({ ok: true, erfasst: false });
+    const start = a.start || new Date(Date.now() - a.sekunden * 1000);
+    const ende = new Date(start.getTime() + a.sekunden * 1000);
+    // Schon erfasst (Meldung kam doppelt)?
+    if (a.id) {
+      const [[da]] = await db.query('SELECT id FROM call_logs WHERE sipgate_call_id=? LIMIT 1', [a.id]);
+      if (da) {
+        await db.query(`UPDATE call_logs SET duration_seconds=COALESCE(duration_seconds, ?), ended_at=COALESCE(ended_at, ?),
+          status=IF(status='started', ?, status) WHERE id=?`, [a.sekunden, ende, a.angenommen ? 'reached' : 'no-answer', da.id]);
+        return res.json({ ok: true, erfasst: true });
+      }
+    }
+    const [[inhaber]] = a.unsere ? await db.query('SELECT id FROM users WHERE sipgate_nummer=? AND is_active=1 LIMIT 1', [a.unsere]) : [[null]];
+    if (a.raus) {
+      // Vom CRM gestarteter Anruf: passenden „started“-Eintrag rund um den Gesprächsbeginn übernehmen
+      const [kand] = await db.query(
+        `SELECT id, phone_number FROM call_logs WHERE direction='outbound' AND sipgate_call_id IS NULL AND duration_seconds IS NULL
+           AND started_at BETWEEN ? - INTERVAL 10 MINUTE AND ? + INTERVAL 2 MINUTE ORDER BY id DESC LIMIT 20`, [start, start]);
+      const k = kand.find(x => toE164(x.phone_number) === a.kunde);
+      if (k) {
+        await db.query(
+          `UPDATE call_logs SET sipgate_call_id=?, duration_seconds=?, ended_at=?, answered_at=IF(?, COALESCE(answered_at, ?), answered_at),
+             status=IF(status='started', ?, status) WHERE id=?`,
+          [a.id, a.sekunden, ende, a.angenommen ? 1 : 0, start, a.angenommen ? 'reached' : 'no-answer', k.id]);
+      } else {
+        // Direkt in der sipgate App gewählt: beim Lead erfassen, wenn wir die Nummer kennen
+        const lead = await findLeadByPhone(a.kunde);
+        const userId = (inhaber && inhaber.id) || lead?.assigned_to || await firstAdminId();
+        if (lead && userId) await db.query(
+          `INSERT INTO call_logs (lead_id, user_id, phone_number, direction, started_at, ended_at, duration_seconds, answered_at, status, sipgate_call_id)
+           VALUES (?, ?, ?, 'outbound', ?, ?, ?, ?, ?, ?)`,
+          [lead.id, userId, a.kunde, start, ende, a.sekunden, a.angenommen ? start : null, a.angenommen ? 'reached' : 'no-answer', a.id]);
+      }
+    } else {
+      let lead = await findLeadByPhone(a.kunde);
+      if (!lead) {
+        const von = inhaber ? inhaber.id : await firstAdminId();
+        const [r] = await db.query(
+          `INSERT INTO leads (company, phone, status, created_by, assigned_to, source, confidence)
+           VALUES (?, ?, 'neu', ?, ?, 'eingehender-anruf', 50)`, [`Anrufer ${a.kunde}`, a.kunde, von, inhaber ? inhaber.id : null]);
+        await refreshNorm(r.insertId);
+        lead = { id: r.insertId, assigned_to: inhaber ? inhaber.id : null };
+      }
+      const userId = (inhaber && inhaber.id) || lead.assigned_to || await firstAdminId();
+      if (userId) {
+        await db.query(
+          `INSERT INTO call_logs (lead_id, user_id, phone_number, direction, started_at, ended_at, duration_seconds, answered_at, status, sipgate_call_id)
+           VALUES (?, ?, ?, 'inbound', ?, ?, ?, ?, ?, ?)`,
+          [lead.id, userId, a.kunde, start, ende, a.sekunden, a.angenommen ? start : null, a.angenommen ? 'reached' : 'no-answer', a.id]);
+        if (!a.angenommen) {
+          await db.query(`INSERT INTO reminders (lead_id, user_id, remind_at, note, kind, sent) VALUES (?, ?, NOW(), ?, 'missed_call', 1)`,
+            [lead.id, userId, `Verpasster Anruf von ${a.kunde}`]);
+          await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)', [lead.id, userId, `📞 Verpasster Anruf von ${a.kunde}`]);
+        }
+      }
+    }
+    res.json({ ok: true, erfasst: true });
+  } catch (e) {
+    console.error('sipgate Anrufende:', e.message);
+    res.json({ ok: false });   // keine Fehlerseite an sipgate, sonst wird endlos wiederholt
+  }
+});
+
 // Zustand für den Startklar-Check
 async function status() {
   if (!istAktiv()) return { verbunden: false };
@@ -646,7 +768,9 @@ async function status() {
   try {
     const [nrn, hooks] = await Promise.all([nummern(), sg('GET', 'settings/sipgateio').catch(() => null)]);
     st.nummern = nrn.filter(n => n.type === 'LANDLINE' || n.type === 'MOBILE').length;
-    st.webhook = !!(hooks && hooks.incomingUrl && hooks.incomingUrl.endsWith(WEBHOOK_PFAD) && hooks.outgoingUrl && hooks.outgoingUrl.endsWith(WEBHOOK_PFAD));
+    const zuletzt = await webhookZuletzt();
+    st.webhook = !!(hooks && hooks.incomingUrl && hooks.incomingUrl.endsWith(WEBHOOK_PFAD) && hooks.outgoingUrl && hooks.outgoingUrl.endsWith(WEBHOOK_PFAD))
+      || !!(zuletzt && Date.now() - new Date(zuletzt).getTime() < 14 * 864e5);
   } catch (e) { st.fehler = e.message; }
   return st;
 }

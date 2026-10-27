@@ -59,6 +59,8 @@ const Wiki = {
             <div class="kb-cat-text"><h2 class="kb-cat-title">E-Mail-Vorlagen <span class="kb-cat-count" id="kbTplCount"></span></h2>
               <p class="kb-cat-hint">${t.hint || ''}</p></div>
             ${t.mode === 'manage' && t.onNew && !opts.isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="${t.onNew}"><i class="fas fa-plus"></i> Neue Vorlage</button>` : ''}
+            ${t.onImport ? `<label class="btn btn-ghost btn-sm" title="JSON-Datei mit mehreren Vorlagen"><i class="fas fa-file-import"></i> Vorlagen importieren
+              <input type="file" accept=".json,application/json" hidden onchange="${t.onImport};this.value=''"></label>` : ''}
           </div>
           <div id="kbTplSlot">${t.mode === 'manage' ? (t.slotHtml || '') : '<div class="tpl-grid" id="kbTplGrid"></div>'}</div>
         </section>
@@ -134,18 +136,28 @@ const Wiki = {
         ${this.opts.isAdmin ? '<button class="btn btn-primary" onclick="Wiki.openForm()"><i class="fas fa-cloud-upload-alt"></i> Erste Unterlage hochladen</button>' : ''}
       </div>`;
     } else {
-      docs.innerHTML = cats.map((c, i) => {
-        const list = this.files.filter(f => f.category === c);
+      // Alle Dateien in einem Raster nebeneinander (sonst steht bei einer Datei pro Kategorie
+      // jede Karte allein in ihrer Zeile); die Kategorie steht auf der Karte
+      const dateien = cats.flatMap(c => this.files.filter(f => f.category === c));
+      const ueberall = dateien.length ? `<section class="kb-cat kb-files" data-cat="__files">
+          <div class="kb-cat-head">
+            <span class="kb-cat-ic tone-navy"><i class="fas fa-file-alt"></i></span>
+            <div class="kb-cat-text"><h2 class="kb-cat-title">Unterlagen <span class="kb-cat-count">${dateien.length}</span></h2>
+              <p class="kb-cat-hint">PDFs und Vorlagen zum Ansehen und Herunterladen.</p></div>
+          </div>
+          <div class="kb-grid">${dateien.map(f => this._card(f, cats.length > 1)).join('')}</div>
+        </section>` : '';
+      docs.innerHTML = ueberall + cats.map((c, i) => {
         const art = this.artikel.filter(a => a.kategorie === c);
         const ref = c === 'Referenzen';
+        if (!art.length && !ref) return '';
         return `<section class="kb-cat" data-cat="${escHtml(c)}">
           <div class="kb-cat-head">
             <span class="kb-cat-ic ${i % 2 ? 'tone-copper' : 'tone-navy'}"><i class="fas fa-${c === 'Vertrieb' ? 'bullhorn' : this._catIcon(c)}"></i></span>
-            <div class="kb-cat-text"><h2 class="kb-cat-title">${escHtml(c)} <span class="kb-cat-count">${this._anzahl(c)}</span></h2>
+            <div class="kb-cat-text"><h2 class="kb-cat-title">${escHtml(c)} <span class="kb-cat-count">${art.length + (ref ? this.referenzen.length : 0)}</span></h2>
               ${c === 'Vertrieb' ? '<p class="kb-cat-hint">Handbuch, Preise, Einwände und FAQ – das gleiche findest du im Anrufmodus rechts im Seitenpanel.</p>' : ''}</div>
             ${ref && this.opts.isAdmin ? '<button class="btn btn-ghost btn-sm" onclick="Wiki.editRef()"><i class="fas fa-plus"></i> Referenz anlegen</button>' : ''}
           </div>
-          ${list.length ? `<div class="kb-grid">${list.map(f => this._card(f)).join('')}</div>` : ''}
           ${art.length ? `<div class="kb-arts">${art.map(a => this._artCard(a)).join('')}</div>` : ''}
           ${ref ? this._refsHtml() : ''}
         </section>`;
@@ -169,12 +181,12 @@ const Wiki = {
     this._loadThumbs();
   },
 
-  _card(f) {
+  _card(f, mitKat = false) {
     const kind = this._kind(f), ext = this._ext(f);
     const fresh = f.created_at && (Date.now() - new Date(f.created_at)) < 14 * 864e5;
     const meta = [ext, this._size(f.size), fmtDateShort(f.created_at)].filter(Boolean).join(' · ');
     const search = [f.name, f.note, f.category, ext].join(' ').toLowerCase();
-    return `<article class="kb-doc k-${kind}" data-q="${escHtml(search)}" onclick="Wiki.open(${f.id})" tabindex="0"
+    return `<article class="kb-doc k-${kind}" data-cat="${escHtml(f.category)}" data-q="${escHtml(search)}" onclick="Wiki.open(${f.id})" tabindex="0"
         onkeydown="if(event.key==='Enter')Wiki.open(${f.id})">
       <div class="kb-doc-thumb">
         ${kind === 'img'
@@ -183,6 +195,7 @@ const Wiki = {
         ${fresh ? '<span class="kb-new">Neu</span>' : ''}
       </div>
       <div class="kb-doc-body">
+        ${mitKat ? `<span class="kb-doc-cat"><i class="fas fa-${f.category === 'Vertrieb' ? 'bullhorn' : this._catIcon(f.category)}"></i>${escHtml(f.category)}</span>` : ''}
         <h3 class="kb-doc-name" title="${escHtml(f.name)}">${escHtml(f.name)}</h3>
         ${f.note ? `<p class="kb-doc-note">${escHtml(f.note)}</p>` : ''}
         <div class="kb-doc-meta">${meta}</div>
@@ -216,7 +229,7 @@ const Wiki = {
       const catOk = cat === 'alle' || sec.dataset.cat === cat;
       let any = false;
       sec.querySelectorAll('.kb-doc, .kb-art, .kb-ref').forEach(d => {
-        const ok = catOk && (!q || d.dataset.q.includes(q));
+        const ok = (cat === 'alle' || (d.dataset.cat || sec.dataset.cat) === cat) && (!q || d.dataset.q.includes(q));
         d.hidden = !ok; if (ok) { any = true; shown++; }
       });
       // Referenzen zeigen ihren Platzhalter, solange nicht gesucht wird

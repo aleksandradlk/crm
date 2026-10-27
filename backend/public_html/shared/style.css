@@ -950,6 +950,8 @@ body.auth-body { background: var(--bg2); }
 .kb-doc:hover .kb-page { transform: rotate(0deg) translateY(-3px) scale(1.05); }
 .kb-new { position: absolute; top: 12px; left: 12px; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 9px; border-radius: 99px; background: var(--copper); color: #fff; box-shadow: 0 4px 10px color-mix(in srgb, var(--copper) 35%, transparent); }
 .kb-doc-body { flex: 1; padding: 14px 16px 6px; min-width: 0; }
+.kb-doc-cat { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--copper-deep); margin-bottom: 5px; }
+.kb-doc-cat i { font-size: 9.5px; }
 .kb-doc-name { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.35; margin: 0; color: var(--text); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
 .kb-doc-note { margin: 6px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text2); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .kb-doc-meta { margin-top: 8px; font-size: 11px; color: var(--text3); font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
@@ -2093,6 +2095,18 @@ body.dark .bd-type.bug { color: var(--navy-light); }
 .ig-facts > div { background: var(--bg3); border-radius: 12px; padding: 10px 12px; min-width: 0; }
 .ig-facts span { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text3); }
 .ig-facts b { font-size: 13.5px; overflow-wrap: anywhere; }
+.ig-details { font-size: 12.5px; line-height: 1.55; border: 1px solid var(--border); border-radius: 10px; background: var(--surface, transparent); }
+.ig-details > summary { list-style: none; cursor: pointer; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; padding: 10px 12px; color: var(--text2); }
+.ig-details > summary::-webkit-details-marker { display: none; }
+.ig-details > summary > i { color: var(--navy, var(--text2)); }
+.ig-details > summary > span { flex: 1 1 260px; }
+.ig-details > summary u { color: var(--copper-deep); text-underline-offset: 2px; white-space: nowrap; }
+.ig-details[open] > summary u { text-decoration: none; }
+.ig-details-body { padding: 0 12px 12px; color: var(--text2); }
+.ig-details-body p { margin: 0 0 8px; }
+.ig-details-body ol { margin: 0 0 8px; padding-left: 18px; display: grid; gap: 8px; }
+.ig-url { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+.ig-url .mono { word-break: break-all; background: color-mix(in srgb, var(--text2) 8%, transparent); padding: 3px 7px; border-radius: 6px; }
 .ig-hint { font-size: 12.5px; color: var(--text2); margin: 0; line-height: 1.55; }
 .ig-row { display: flex; gap: 8px; }
 .ig-row .form-control { flex: 1; min-width: 0; }
@@ -2737,3 +2751,9 @@ tr.ds-flash td { background: color-mix(in srgb, var(--copper) 14%, transparent);
 .zl-ein { text-transform: none; letter-spacing: 0; font-size: 11.5px; font-weight: 600; color: var(--copper); border: 1px solid color-mix(in srgb, var(--copper) 40%, transparent); border-radius: 999px; padding: 1px 8px; }
 .zl-head .zl-ein { margin: 0 auto 0 10px; }
 .ig-facts small { display: block; font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+/* Termin an Closer übergeben */
+.tr-lead-wann { margin-left: auto; font-size: 12.5px; color: var(--text2); white-space: nowrap; }
+.tr-closer-pick { display: flex; flex-wrap: wrap; gap: 6px; }
+.tr-ueb-btn { white-space: nowrap; }
+@media (max-width: 640px) { .tr-ueb-txt { display: none; } .tr-lead { flex-wrap: wrap; } .tr-lead-wann { margin-left: 0; width: 100%; } }

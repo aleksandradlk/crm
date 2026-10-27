@@ -36,7 +36,7 @@ router.get('/', auth, adminOnly, async (req, res) => {
     const zuIntegration = { label: 'Integrationen', tab: 'integrationen' };
     if (sgSt.verbunden) {
       add('Telefonie', 'sipgate verbunden', sgSt.fehler ? 'warn' : 'ok', sgSt.fehler ? `Verbunden, aber sipgate antwortet gerade nicht: ${sgSt.fehler}` : '„Anrufen“ im CRM klingelt am sipgate-Telefon des Vertrieblers und verbindet dann.', zuIntegration);
-      add('Telefonie', 'Anrufe automatisch erfassen', sgSt.webhook ? 'ok' : 'warn', sgSt.webhook ? 'sipgate meldet jeden Anruf ans CRM – Dauer und verpasste Anrufe landen beim Lead.' : 'sipgate meldet die Anrufe noch nicht ans CRM. Unter Integrationen → sipgate „Jetzt eintragen“ klicken.', zuIntegration);
+      add('Telefonie', 'Anrufe automatisch erfassen', sgSt.webhook ? 'ok' : 'warn', sgSt.webhook ? 'sipgate meldet jeden Anruf ans CRM – Dauer und verpasste Anrufe landen beim Lead.' : 'Optional: sipgate meldet Gesprächsdauer und verpasste Anrufe noch nicht. Anleitung unter Integrationen → sipgate („So richtest du es ein“).', zuIntegration);
       add('Telefonie', 'Absendernummer', sgSt.firmennummer || sgSt.nummern ? 'ok' : 'fehlt', sgSt.firmennummer ? 'Firmennummer ist festgelegt.' : sgSt.nummern ? `${sgSt.nummern} Nummer(n) bei sipgate – unter Integrationen eine Firmennummer wählen.` : 'Bei sipgate gibt es noch keine Rufnummer.', zuIntegration);
     } else if (!tw.verbunden) {
       add('Telefonie', 'Twilio verbunden', 'fehlt', 'Ohne Verbindung können die Closer nicht aus dem CRM anrufen. Unter Integrationen Account SID und Auth Token eintragen.', zuIntegration);
