@@ -51,8 +51,12 @@ const Integrationen = {
     }
     const nummern = s.nummern || [], benutzer = s.benutzer || [];
     const firmaAnzeige = s.firmennummer ? ((nummern.find(n => n.nummer === s.firmennummer) || {}).anzeige || fmtPhoneDE(s.firmennummer)) : '';
+    const pool = s.pool || [];
+    const poolInfo = n => { const p = pool.find(x => x.nummer === n.nummer) || {};
+      return [p.bezeichnung, n.typ === 'MOBILE' ? 'Handy' : '', n.test ? 'Testnummer' : '', p.status === 'abgelaufen' ? 'abgelaufen' : p.gueltig_bis ? 'bis ' + new Date(p.gueltig_bis + 'T12:00:00').toLocaleDateString('de-DE') : '',
+        p.firma ? 'Firmennummer' : '', (p.vergeben_an || []).length ? 'vergeben: ' + p.vergeben_an.map(v => v.name).join(', ') : p.firma ? '' : 'frei'].filter(Boolean).join(' · '); };
     const nrOpts = (aktuell) => `<option value="">${s.firmennummer ? 'Firmennummer (' + escHtml(firmaAnzeige) + ')' : 'Standard von sipgate'}</option>`
-      + nummern.map(n => `<option value="${escHtml(n.nummer)}" ${n.nummer === aktuell ? 'selected' : ''}>${escHtml(n.anzeige)}${n.typ === 'MOBILE' ? ' (Handy)' : ''}${n.test ? ' · Testnummer' : ''}</option>`).join('');
+      + nummern.map(n => `<option value="${escHtml(n.nummer)}" ${n.nummer === aktuell ? 'selected' : ''}>${escHtml(n.anzeige)} – ${escHtml(poolInfo(n))}</option>`).join('');
     const userOpts = (aktuell) => `<option value="">– nicht telefonieren –</option>`
       + benutzer.map(b => `<option value="${escHtml(b.id)}" ${b.id === aktuell ? 'selected' : ''}>${escHtml(b.name)}</option>`).join('');
     const geraetOpts = (sUser, aktuell) => {
@@ -93,6 +97,7 @@ const Integrationen = {
       </div>
       <p class="ig-hint">Die <b>Firmennummer</b> sehen Kunden, wenn ein Vertriebler keine eigene Nummer hat.</p>
       ${hinweise.map(h => `<div class="line-err"><i class="fas fa-exclamation-triangle"></i> ${h}</div>`).join('')}
+      ${this.poolHtml(pool)}
       <div class="modal-section-label" style="margin:4px 0 0">Wer telefoniert womit?</div>
       <div class="sg-map">
         <div class="sg-map-head"><span>CRM-Benutzer</span><span>sipgate-Zugang</span><span>Telefon, das klingelt</span><span>Nummer, die Kunden sehen</span></div>
@@ -120,14 +125,80 @@ const Integrationen = {
       this.loadSipgate();
     } catch (e) { showToast(e.message, 'err'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-plug"></i> sipgate verbinden'; }
   },
+  // ── Nummern-Pool: Ablaufdatum, Bezeichnung, eigene Nummern, verteilen ──
+  poolHtml(pool) {
+    const tag = iso => iso ? new Date(iso + 'T12:00:00').toLocaleDateString('de-DE') : '';
+    const STATUS = { frei: ['ok', 'frei'], vergeben: ['', 'vergeben'], laeuft_ab: ['warn', 'läuft bald ab'], abgelaufen: ['err', 'abgelaufen'], fehlt: ['err', 'nicht in sipgate'] };
+    const zeile = n => {
+      const [cls, txt] = STATUS[n.status] || ['', n.status];
+      const wer = [n.firma ? 'Firmennummer' : '', ...n.vergeben_an.map(v => v.name)].filter(Boolean).join(', ');
+      return `<div class="sg-pool-row" data-nr="${escHtml(n.nummer)}">
+        <b>${escHtml(n.anzeige)}<small>${[n.typ === 'MOBILE' ? 'Handy' : '', n.test ? 'Testnummer' : '', n.manuell ? 'selbst eingetragen' : ''].filter(Boolean).join(' · ') || 'Festnetz'}</small></b>
+        <input class="form-control" data-f="bezeichnung" maxlength="100" placeholder="z. B. Krefeld, Maria" value="${escHtml(n.bezeichnung)}" onchange="Integrationen.poolSpeichern(this)">
+        <input class="form-control" type="date" data-f="gueltig_bis" value="${escHtml(n.gueltig_bis || '')}" onchange="Integrationen.poolSpeichern(this)" title="Nutzbar bis (leer = unbegrenzt)">
+        <span class="sg-pool-wer">${escHtml(wer) || '<em>niemand</em>'}</span>
+        <span class="sg-pool-st ${cls}">${txt}${n.ohne_datum ? '<br><em>Datum fehlt</em>' : ''}</span>
+        ${n.manuell || n.in_sipgate === false ? `<button class="btn btn-ghost btn-sm btn-icon" title="Aus dem Pool entfernen" onclick="Integrationen.poolEntfernen('${escHtml(n.nummer)}')"><i class="fas fa-trash"></i></button>` : '<span></span>'}
+      </div>`;
+    };
+    const frei = pool.filter(n => n.status === 'frei').length;
+    return `<div class="modal-section-label" style="margin:4px 0 0">Nummern-Pool <span class="sg-pool-zahl">${pool.length} Nummern · ${frei} frei</span></div>
+      <div class="sg-pool">
+        <div class="sg-pool-head"><span>Nummer</span><span>Bezeichnung</span><span>Nutzbar bis</span><span>Genutzt von</span><span>Status</span><span></span></div>
+        ${pool.map(zeile).join('') || '<div class="sg-pool-row"><em>Noch keine Nummern. In sipgate Nummern buchen, sie erscheinen hier automatisch.</em></div>'}
+        <div class="sg-pool-row sg-pool-neu">
+          <input class="form-control" id="poolNeuNr" placeholder="Neue Nummer, z. B. 02151 9719631">
+          <input class="form-control" id="poolNeuBez" maxlength="100" placeholder="Bezeichnung">
+          <input class="form-control" id="poolNeuBis" type="date" title="Nutzbar bis (leer = unbegrenzt)">
+          <button class="btn btn-ghost btn-sm" onclick="Integrationen.poolNeu()"><i class="fas fa-plus"></i> Hinzufügen</button>
+          <span></span><span></span>
+        </div>
+      </div>
+      <div class="ig-row">
+        <button class="btn btn-ghost btn-sm" onclick="Integrationen.poolVerteilen()"><i class="fas fa-random"></i> Freie Nummern an Closer ohne Nummer verteilen</button>
+      </div>
+      <p class="ig-hint">Nummern aus sipgate erscheinen hier automatisch. Trag bei <b>Testnummern</b> das Datum aus sipgate ein („Nutzbar bis …“), dann erinnert dich „Heute → Fällig“ 14 Tage vorher. Neue Closer bekommen beim ersten Zuordnen automatisch eine freie Nummer, feste Nummern zuerst. Abgelaufene Nummern werden nicht mehr gesendet, dann sehen Kunden die Firmennummer. Selbst eingetragene Nummern müssen auch in sipgate gebucht sein.</p>`;
+  },
+  async poolSpeichern(el) {
+    const row = el.closest('.sg-pool-row');
+    const v = f => row.querySelector(`[data-f="${f}"]`).value;
+    try {
+      await api('PUT', `/sipgate/nummern/${encodeURIComponent(row.dataset.nr)}`, { bezeichnung: v('bezeichnung'), gueltig_bis: v('gueltig_bis') || null });
+      showToast('Gespeichert ✓');
+      if (el.dataset.f === 'gueltig_bis') this.loadSipgate();
+    } catch (e) { showToast(e.message, 'err'); }
+  },
+  async poolNeu() {
+    const nr = document.getElementById('poolNeuNr').value.trim();
+    if (!nr) return showToast('Bitte eine Nummer eingeben', 'err');
+    try {
+      await api('POST', '/sipgate/nummern', { nummer: nr, bezeichnung: document.getElementById('poolNeuBez').value, gueltig_bis: document.getElementById('poolNeuBis').value || null });
+      showToast('Nummer hinzugefügt ✓');
+      this.loadSipgate();
+    } catch (e) { showToast(e.message, 'err'); }
+  },
+  async poolEntfernen(nr) {
+    if (!await customConfirm('Wer die Nummer nutzt, telefoniert danach mit der Firmennummer.', { title: 'Nummer aus dem Pool entfernen?', okLabel: 'Entfernen', danger: true })) return;
+    try { const r = await api('DELETE', `/sipgate/nummern/${encodeURIComponent(nr)}`); showToast(r.freigegeben ? `Entfernt, ${r.freigegeben} Benutzer jetzt mit Firmennummer` : 'Entfernt'); this.loadSipgate(); }
+    catch (e) { showToast(e.message, 'err'); }
+  },
+  async poolVerteilen() {
+    try {
+      const r = await api('POST', '/sipgate/nummern/verteilen');
+      const ok = r.verteilt.filter(v => v.nummer), ohne = r.verteilt.filter(v => !v.nummer);
+      showToast(ok.length ? ok.map(v => `${v.name}: ${v.anzeige}`).join(' · ') : 'Alle Closer mit sipgate-Zugang haben schon eine Nummer');
+      if (ohne.length) showToast(`Keine freie Nummer mehr für: ${ohne.map(v => v.name).join(', ')} – in sipgate weitere Nummern buchen`, 'err');
+      this.loadSipgate();
+    } catch (e) { showToast(e.message, 'err'); }
+  },
   async sgZuordnen(userId, userSelect) {
     const row = document.querySelector(`.sg-map-row[data-id="${userId}"]`);
     const wert = f => row.querySelector(`[data-f="${f}"]`).value || null;
     const body = { sipgate_user: wert('sipgate_user'), sipgate_device: userSelect ? null : wert('sipgate_device'), sipgate_nummer: wert('sipgate_nummer') };
     if (!body.sipgate_user) { body.sipgate_device = null; body.sipgate_nummer = null; }
     try {
-      await api('PUT', `/sipgate/zuordnung/${userId}`, body);
-      showToast('Gespeichert ✓');
+      const r = await api('PUT', `/sipgate/zuordnung/${userId}`, body);
+      showToast(r.automatisch ? `Gespeichert ✓ – Nummer ${fmtPhoneDE(r.nummer)} aus dem Pool zugewiesen` : 'Gespeichert ✓');
       if (typeof Sipgate !== 'undefined') Sipgate.loadConfig();
       if (userSelect) this.loadSipgate();
     } catch (e) { showToast(e.message, 'err'); }

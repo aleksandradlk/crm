@@ -433,6 +433,16 @@ migrate('ALTER TABLE users ADD COLUMN sipgate_user VARCHAR(20) NULL').catch(() =
 migrate('ALTER TABLE users ADD COLUMN sipgate_device VARCHAR(20) NULL').catch(() => {});
 migrate('ALTER TABLE users ADD COLUMN sipgate_nummer VARCHAR(30) NULL').catch(() => {});
 migrate('ALTER TABLE call_logs ADD COLUMN sipgate_call_id VARCHAR(64) NULL').catch(() => {});
+// Nummern-Pool: Ablaufdatum, Bezeichnung, eigene Nummern – Rollback: db/rollback/2026-10-27_nummern-pool.sql
+migrate(`CREATE TABLE IF NOT EXISTS telefonnummern (
+  nummer VARCHAR(30) NOT NULL PRIMARY KEY,
+  bezeichnung VARCHAR(100) NULL,
+  gueltig_bis DATE NULL,
+  notiz VARCHAR(255) NULL,
+  manuell TINYINT(1) NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`).catch(e => console.error('Migration telefonnummern:', e.message));
 migrate('ALTER TABLE call_logs ADD COLUMN answered_at DATETIME NULL').catch(() => {});
 migrate('CREATE INDEX idx_call_logs_sipgate ON call_logs (sipgate_call_id)').catch(() => {});
 migrate('ALTER TABLE leads ADD COLUMN archived_at DATETIME NULL').catch(() => {});
@@ -704,6 +714,30 @@ migrate(`CREATE TABLE IF NOT EXISTS provision_auszahlungen (
   ausgezahlt_am DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   erstellt_von INT NULL
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`).catch(e => console.error('Migration provision_auszahlungen:', e.message));
+
+// Abschlüsse dauerhaft gesichert (Auftragswert, Satz, Provision je gewonnenem Deal) – Rollback: db/rollback/2026-10-27_abschluesse.sql
+migrate(`CREATE TABLE IF NOT EXISTS provision_abschluesse (
+  deal_id INT NOT NULL PRIMARY KEY,
+  user_id INT NULL,
+  lead_id INT NULL,
+  firma VARCHAR(255) NULL,
+  titel VARCHAR(255) NULL,
+  paket VARCHAR(20) NULL,
+  gewonnen_am DATETIME NULL,
+  auftragswert DECIMAL(10,2) NOT NULL DEFAULT 0,
+  basis DECIMAL(10,2) NOT NULL DEFAULT 0,
+  satz DECIMAL(5,2) NOT NULL DEFAULT 0,
+  provision_netto DECIMAL(10,2) NOT NULL DEFAULT 0,
+  ust_satz DECIMAL(5,2) NOT NULL DEFAULT 0,
+  provision DECIMAL(10,2) NOT NULL DEFAULT 0,
+  geschaetzt TINYINT(1) NOT NULL DEFAULT 0,
+  status VARCHAR(20) NOT NULL DEFAULT 'gewonnen',
+  festgeschrieben_am DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  aktualisiert_am DATETIME NULL,
+  INDEX idx_abschluesse_user (user_id, gewonnen_am)
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`)
+  .then(() => setTimeout(() => provisionRoutes.nachtragen().then(n => { if (n) console.log(`Provision: ${n} Abschlüsse nachgetragen`); }).catch(() => {}), 8000))
+  .catch(e => console.error('Migration provision_abschluesse:', e.message));
 
 // Provision (§8): zzgl. USt am Benutzer, Sitz im Ausland (ohne USt) – Rollback: db/rollback/2026-10-27_provision.sql
 for (const col of ['provision_zzgl_ust TINYINT(1) NOT NULL DEFAULT 0', 'provision_ausland TINYINT(1) NOT NULL DEFAULT 0'])

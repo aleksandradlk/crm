@@ -84,12 +84,13 @@ const Today = {
     card.hidden = !punkte.length;
     document.getElementById('todayFaelligCount').textContent = punkte.length;
     const datum = iso => iso ? new Date(String(iso).slice(0, 10) + 'T12:00:00').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) : '';
-    const GR = { angebot: 'Angebot', rechnung: 'Rechnung', zahlung: 'Zahlung', betreuung: 'Betreuung', provision: 'Auszahlung' };
+    const GR = { angebot: 'Angebot', rechnung: 'Rechnung', zahlung: 'Zahlung', betreuung: 'Betreuung', provision: 'Auszahlung', telefon: 'Nummer' };
     document.getElementById('todayFaellig').innerHTML = punkte.map((p, i) => {
       const a = p.aktion || {};
       const knopf = a.typ === 'auszahlung'
         ? `<button class="btn btn-primary btn-sm" onclick="Today.ausgezahlt(${i})" title="Als ausgezahlt markieren"><i class="fas fa-check"></i> Ausgezahlt</button>`
-        : a.typ === 'abrechnung' ? `<button class="btn btn-ghost btn-sm" onclick="Today.zurAbrechnung('${escHtml(a.bereich || '')}')">Öffnen</button>` : '';
+        : a.typ === 'abrechnung' ? `<button class="btn btn-ghost btn-sm" onclick="Today.zurAbrechnung('${escHtml(a.bereich || '')}')">Öffnen</button>`
+        : a.typ === 'integrationen' && typeof showTab === 'function' ? `<button class="btn btn-ghost btn-sm" onclick="showTab('integrationen')">Nummern-Pool</button>` : '';
       return `<div class="today-row ${p.dringend ? 'is-late' : ''}">
         <div class="today-row-main">
           <div class="today-row-title"><span class="today-tag">${GR[p.gruppe] || ''}</span> ${escHtml(p.titel)}</div>

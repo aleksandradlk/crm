@@ -52,6 +52,17 @@ async function sammeln() {
   raus.forEach(p => punkte.push({ gruppe: 'provision', titel: `${p.art === 'bonus' ? 'Bonus' : 'Provision'} auszahlen: ${p.closer} ${eur(p.betrag)}`,
     text: `${p.kunde} · ${p.teil}${p.art === 'provision' ? `, fällig seit ${datum(p.datum)}` : ''}`, datum: p.datum, dringend: true,
     aktion: { typ: 'auszahlung', schluessel: p.schluessel, user_id: p.user_id, betrag: p.betrag } }));
+  // 4) Telefonnummern, die ablaufen (sipgate-Testnummern, gebuchte mit Enddatum)
+  const nrn = await require('./sipgate').nummernWarnungen().catch(e => { console.error('Fällig (Nummern):', e.message); return []; });
+  nrn.forEach(n => {
+    const wer = [n.firma ? 'Firmennummer' : null, ...n.vergeben_an.map(v => v.name)].filter(Boolean).join(', ');
+    punkte.push({ gruppe: 'telefon',
+      titel: n.ohne_datum ? `Testnummer ohne Ablaufdatum: ${n.anzeige}` : `${n.status === 'abgelaufen' ? 'Nummer abgelaufen' : 'Nummer läuft ab'}: ${n.anzeige}`,
+      text: n.ohne_datum ? `genutzt von ${wer} – Datum aus sipgate („Nutzbar bis …“) im Nummern-Pool eintragen`
+        : `${n.status === 'abgelaufen' ? 'seit' : 'am'} ${datum(n.gueltig_bis)}, genutzt von ${wer} – neue Nummer buchen und im Nummern-Pool zuweisen`,
+      datum: n.gueltig_bis || heute, dringend: n.status === 'abgelaufen' || n.status === 'laeuft_ab',
+      aktion: { typ: 'integrationen' } });
+  });
   punkte.sort((a, b) => (b.dringend - a.dringend) || String(a.datum).localeCompare(String(b.datum)));
   return { punkte, anzahl: punkte.length, dringend: punkte.filter(p => p.dringend).length, abrechnung: !!crm };
 }
@@ -62,7 +73,7 @@ router.get('/', auth, adminOnly, async (req, res) => {
 });
 
 // Tägliche Erinnerungsmail an die Admin-Adresse aus den Vertriebsregeln (nur wenn etwas ansteht)
-const GRUPPEN = { angebot: 'Angebote', rechnung: 'Rechnungen', zahlung: 'Zahlungen', betreuung: 'Betreuung', provision: 'Provision & Bonus' };
+const GRUPPEN = { angebot: 'Angebote', rechnung: 'Rechnungen', zahlung: 'Zahlungen', betreuung: 'Betreuung', provision: 'Provision & Bonus', telefon: 'Telefonnummern' };
 async function morgenMail() {
   const cfg = await bedarf.regeln();
   if (cfg.faellig_mail === false || !cfg.admin_mail) return null;

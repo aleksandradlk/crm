@@ -81,6 +81,7 @@ async function markWon(deal, userId, value) {
   await db.query("UPDATE leads SET status='kunde' WHERE id=?", [deal.lead_id]);
   await nachfassErledigt(deal.lead_id);
   await note(deal.lead_id, userId, `🏆 Deal gewonnen: ${deal.title} (${fmtEur(v)})`);
+  await require('./provision').festschreiben(deal.id).catch(e => console.error('Abschluss sichern:', e.message));
   // Closer erfährt es, wenn jemand anderes (Admin, Abrechnung) den Deal gewonnen setzt
   const closer = deal.owner_id || deal.created_by;
   if (closer && closer !== userId)
@@ -101,6 +102,7 @@ async function markLost(deal, userId, reason) {
     [reason, deal.id]);
   await nachfassErledigt(deal.lead_id);
   await note(deal.lead_id, userId, `✖ Deal verloren: ${deal.title} – ${reason}`);
+  await require('./provision').festschreiben(deal.id).catch(e => console.error('Abschluss sichern:', e.message));
 }
 
 // ── Phasen ───────────────────────────────────────────────────
@@ -377,6 +379,7 @@ router.post('/:id/reopen', auth, async (req, res) => {
     "UPDATE deals SET status='open', won_at=NULL, lost_at=NULL, lost_reason=NULL, stage_id=?, stage_changed_at=NOW() WHERE id=?",
     [stageId, deal.id]);
   await note(deal.lead_id, req.user.id, `↺ Deal wieder geöffnet: ${deal.title}`);
+  await require('./provision').festschreiben(deal.id).catch(e => console.error('Abschluss sichern:', e.message));
   await log(req.user.id, 'deal_reopen', 'lead', deal.lead_id, { deal_id: deal.id }, req.ip);
   res.json({ ok: true });
 });
