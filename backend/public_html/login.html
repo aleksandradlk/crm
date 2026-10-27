@@ -94,12 +94,22 @@
   </aside>
 </div>
 
-<script src="/shared/api.js?v=nf18"></script>
+<script src="/shared/api.js?v=nf51"></script>
 <script>
-  // Redirect if already logged in
-  if (Auth.getToken()) {
-    window.location.href = Auth.isAdmin() ? '/admin' : '/closer';
+  // Schon angemeldet: direkt ins CRM (replace, damit „Zurück“ nicht wieder hier landet)
+  function weiterWennAngemeldet() {
+    if (Auth.getToken()) { window.location.replace(Auth.isAdmin() ? '/admin' : '/closer'); return true; }
+    return false;
   }
+  weiterWennAngemeldet();
+  // Mit „Zurück“ zeigt der Browser die Seite aus dem Speicher – samt hängendem „Anmelden…“.
+  // Dann Knopf zurücksetzen bzw. gleich weiterleiten.
+  window.addEventListener('pageshow', e => {
+    if (weiterWennAngemeldet()) return;
+    const btn = document.getElementById('loginBtn');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Anmelden';
+  });
 
   // Check if setup needed
   fetch('/api/auth/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
@@ -133,7 +143,7 @@
     try {
       const data = await api('POST', '/auth/login', { username, password });
       Auth.setSession(data.token, data.user);
-      window.location.href = data.user.role === 'admin' ? '/admin' : '/closer';
+      window.location.replace(data.user.role === 'admin' ? '/admin' : '/closer');
     } catch (e) {
       err.textContent = e.message;
       btn.disabled = false;

@@ -164,6 +164,10 @@ async function nummerGueltig(nr) {
   return !(m && m.g && m.g < isoTag());
 }
 
+async function settingWert(k) {
+  const [[r]] = await db.query('SELECT value FROM app_settings WHERE key_name=?', [k]).catch(() => [[null]]);
+  return r ? r.value : null;
+}
 async function webhookZuletzt() {
   const [[r]] = await db.query("SELECT value FROM app_settings WHERE key_name='sipgate_webhook_zuletzt'").catch(() => [[null]]);
   return r ? r.value : null;
@@ -238,6 +242,8 @@ router.get('/setup', auth, adminOnly, async (req, res) => {
       zuordnung: crm,
       pool: await pool(nrn),
       webhook_zuletzt: await webhookZuletzt(),
+      webhook_abgelehnt: await settingWert('sipgate_webhook_abgelehnt'),
+      system: cfg.system || null,
     });
   } catch (e) {
     console.error('sipgate setup:', e.message);
@@ -397,6 +403,40 @@ router.get('/config', auth, async (req, res) => {
   });
 });
 
+// ── Altes (classic) oder neues sipgate (Neo, Konten seit 09/2025)? ──
+// Neo startet Anrufe über POST /calls statt /sessions/calls. Erkennung über das Konto
+// (featureScope NEO_PBX); ist das unklar, wird der andere Weg versucht, wenn einer 404/405 meldet.
+async function systemErkennen() {
+  if (cfg.system) return cfg.system;
+  let system = null;
+  try {
+    const a = await sg('GET', 'account');
+    const scope = String((a && (a.featureScope || a.feature_scope)) || '').toUpperCase();
+    system = scope.includes('NEO') ? 'neo' : scope ? 'classic' : null;
+  } catch (_) { /* unbekannt */ }
+  if (system) { cfg.system = system; await speichern({ ...cfg }, null).catch(() => {}); }
+  return system;
+}
+async function anrufStarten(body) {
+  const system = await systemErkennen();
+  const wege = system === 'neo' ? ['calls', 'sessions/calls'] : ['sessions/calls', 'calls'];
+  let letzter;
+  for (const weg of wege) {
+    try {
+      await sg('POST', weg, body);
+      if (!cfg.system || cfg.system !== (weg === 'calls' ? 'neo' : 'classic')) {
+        cfg.system = weg === 'calls' ? 'neo' : 'classic';
+        speichern({ ...cfg }, null).catch(() => {});
+      }
+      return;
+    } catch (e) {
+      letzter = e;
+      if (![404, 405, 410].includes(e.status)) throw e;   // nur bei „gibt es hier nicht“ den anderen Weg versuchen
+    }
+  }
+  throw letzter;
+}
+
 // ── Anruf starten (Click-to-Dial) ───────────────────────────────
 router.post('/anrufen', auth, async (req, res) => {
   if (!istAktiv()) return res.status(503).json({ error: 'sipgate ist nicht verbunden' });
@@ -426,7 +466,7 @@ router.post('/anrufen', auth, async (req, res) => {
     // Abgelaufene Nummer (laut Pool) nicht mehr senden, dann Firmennummer
     const absender = (await aktuelleNummer(req.user.id)) || undefined;
     try {
-      await sg('POST', 'sessions/calls', { caller: erst || geraet, deviceId: geraet, callee: ziel, ...(absender ? { callerId: absender } : {}) });
+      await anrufStarten({ caller: erst || geraet, deviceId: geraet, callee: ziel, ...(absender ? { callerId: absender } : {}) });
     } catch (e) {
       await db.query("UPDATE call_logs SET status='failed', ended_at=NOW() WHERE id=?", [c.insertId]);
       throw e;
@@ -481,9 +521,19 @@ async function firstAdminId() {
   return a ? a.id : null;
 }
 
+// Im Browser aufgerufen: zeigen, dass die Adresse stimmt (sipgate schickt per POST)
+router.get('/webhook', (req, res) => {
+  res.type('text/plain; charset=utf-8').send('Diese Adresse ist richtig. Hierhin schickt sipgate die Anrufmeldungen (per POST). Im Browser gibt es hier sonst nichts zu sehen.');
+});
 router.post('/webhook', express.raw({ type: '*/*', limit: '64kb' }), async (req, res) => {
   res.type('application/xml');
-  if (!signaturOk(req)) { res.status(403); return res.send('<?xml version="1.0" encoding="UTF-8"?><Error message="invalid signature"/>'); }
+  if (!signaturOk(req)) {
+    // Merken, damit die Einstellungsseite zeigen kann: Meldungen kommen an, aber die Prüfung schlägt fehl
+    db.query("INSERT INTO app_settings (key_name, value) VALUES ('sipgate_webhook_abgelehnt', ?) ON DUPLICATE KEY UPDATE value=VALUES(value)",
+      [new Date().toISOString()]).catch(() => {});
+    console.warn('sipgate Webhook: Signatur ungültig', (req.headers['user-agent'] || '').slice(0, 80));
+    res.status(403); return res.send('<?xml version="1.0" encoding="UTF-8"?><Error message="invalid signature"/>');
+  }
   const p = new URLSearchParams(Buffer.isBuffer(req.body) ? req.body.toString('utf8') : '');
   const event = p.get('event');
   // Merken, dass Meldungen ankommen (auch wenn die Adresse von Hand in sipgate eingetragen wurde)
