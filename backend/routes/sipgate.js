@@ -146,6 +146,15 @@ async function nummerGueltig(nr) {
   return !(m && m.g && m.g < isoTag());
 }
 
+// Gerät des Hauptzugangs (für Closer ohne eigenen Zugang): Admin-Zuordnung, sonst erster sipgate-Benutzer
+async function hauptGeraet() {
+  const [[a]] = await db.query("SELECT sipgate_user, sipgate_device FROM users WHERE role='admin' AND is_active=1 AND sipgate_user IS NOT NULL ORDER BY id LIMIT 1");
+  if (a && a.sipgate_device) return a.sipgate_device;
+  const liste = await sipgateBenutzer().catch(() => []);
+  const su = (a && liste.find(x => x.id === a.sipgate_user)) || liste[0];
+  return (su && su.defaultDevice) || null;
+}
+
 // Nummer, die Kunden bei einem Benutzer sehen (abgelaufene eigene → Firmennummer)
 async function aktuelleNummer(userId) {
   const [[u]] = await db.query('SELECT sipgate_nummer FROM users WHERE id=?', [userId]);
@@ -164,7 +173,7 @@ async function verteilen(userId = null) {
   const liste = await pool(istAktiv() ? await nummern() : null);
   const ab = new Set(liste.filter(n => n.status === 'abgelaufen').map(n => n.nummer));
   const [kandidaten] = await db.query(
-    `SELECT id, full_name, sipgate_nummer FROM users WHERE is_active=1 AND role='closer' AND sipgate_user IS NOT NULL ${userId ? 'AND id=?' : ''} ORDER BY id`,
+    `SELECT id, full_name, sipgate_nummer FROM users WHERE is_active=1 AND role='closer' AND (sipgate_user IS NOT NULL OR sipgate_handy IS NOT NULL) ${userId ? 'AND id=?' : ''} ORDER BY id`,
     userId ? [userId] : []);
   const vergeben = new Set(), ergebnis = [];
   for (const u of kandidaten) {
@@ -195,7 +204,7 @@ router.get('/setup', auth, adminOnly, async (req, res) => {
       geraete: (await geraeteVon(u.id)).map(d => ({ id: d.id, alias: d.alias, typ: d.type, online: !!d.online })),
     })));
     const [crm] = await db.query(
-      `SELECT id, full_name, role, sipgate_user, sipgate_device, sipgate_nummer FROM users
+      `SELECT id, full_name, role, sipgate_user, sipgate_device, sipgate_nummer, sipgate_handy FROM users
        WHERE is_active=1 ORDER BY role='admin' DESC, full_name`);
     res.json({
       verbunden: true, webhookUrl, firmennummer: cfg.firmennummer || null,
@@ -280,13 +289,18 @@ router.put('/zuordnung/:userId', auth, adminOnly, async (req, res) => {
   const geraet = kurz(req.body.sipgate_device, /^[a-z]\d+$/);
   const nummer = req.body.sipgate_nummer ? sgNummer(req.body.sipgate_nummer) : null;
   if (req.body.sipgate_nummer && !nummer) return res.status(400).json({ error: 'Ungültige Nummer' });
-  const [[vorher]] = await db.query('SELECT sipgate_user FROM users WHERE id=?', [id]);
+  // Ohne eigenen Zugang: Handy, das zuerst klingelt (nur wenn kein sipgate-Zugang gewählt ist)
+  const handy = !sUser && req.body.sipgate_handy ? toE164(req.body.sipgate_handy) : null;
+  if (!sUser && req.body.sipgate_handy && !handy) return res.status(400).json({ error: 'Die Handynummer sieht ungültig aus, z. B. 0171 1234567.' });
+  const [[vorher]] = await db.query('SELECT sipgate_user, sipgate_handy FROM users WHERE id=?', [id]);
   if (!vorher) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
-  await db.query('UPDATE users SET sipgate_user=?, sipgate_device=?, sipgate_nummer=? WHERE id=?', [sUser, geraet, nummer, id]);
+  await db.query('UPDATE users SET sipgate_user=?, sipgate_device=?, sipgate_nummer=?, sipgate_handy=? WHERE id=?',
+    [sUser, sUser ? geraet : null, sUser || handy ? nummer : null, handy, id]);
   // Neu bei sipgate und noch keine Nummer gewählt: freie Nummer aus dem Pool
   let auto = null;
-  if (sUser && !vorher.sipgate_user && !nummer) auto = (await verteilen(id).catch(() => []))[0] || null;
-  await log(req.user.id, 'sipgate_zuordnung', 'user', id, { sUser, geraet, nummer: nummer || auto?.nummer || null }, req.ip);
+  const neu = (sUser && !vorher.sipgate_user) || (handy && !vorher.sipgate_handy);
+  if (neu && !nummer) auto = (await verteilen(id).catch(() => []))[0] || null;
+  await log(req.user.id, 'sipgate_zuordnung', 'user', id, { sUser, geraet, handy: !!handy, nummer: nummer || auto?.nummer || null }, req.ip);
   res.json({ ok: true, nummer: auto?.nummer || nummer || null, automatisch: !!auto?.nummer });
 });
 
@@ -330,20 +344,21 @@ router.post('/nummern/verteilen', auth, adminOnly, async (req, res) => {
 // Kurzinfo für den Benutzer-Dialog (ohne Abfrage bei sipgate)
 router.get('/benutzer/:userId', auth, adminOnly, async (req, res) => {
   if (!istAktiv()) return res.json({ aktiv: false });
-  const [[u]] = await db.query('SELECT sipgate_user, sipgate_device, sipgate_nummer FROM users WHERE id=?', [parseInt(req.params.userId)]);
+  const [[u]] = await db.query('SELECT sipgate_user, sipgate_device, sipgate_nummer, sipgate_handy FROM users WHERE id=?', [parseInt(req.params.userId)]);
   const nummer = await aktuelleNummer(parseInt(req.params.userId));
   const eigene = !!(u && u.sipgate_nummer && u.sipgate_nummer === nummer);
-  res.json({ aktiv: true, zugang: (u && u.sipgate_user) || null, geraet: (u && u.sipgate_device) || null,
+  res.json({ aktiv: true, zugang: (u && u.sipgate_user) || null, geraet: (u && u.sipgate_device) || null, handy: (u && u.sipgate_handy) || null,
     nummer, eigeneNummer: eigene, abgelaufen: !!(u && u.sipgate_nummer && !eigene), testnummer: istTestnummer(nummer) });
 });
 
 // ── Für alle: kann ich über sipgate anrufen? ────────────────────
 router.get('/config', auth, async (req, res) => {
   if (!istAktiv()) return res.json({ aktiv: false });
-  const [[u]] = await db.query('SELECT sipgate_user, sipgate_device, sipgate_nummer FROM users WHERE id=?', [req.user.id]);
+  const [[u]] = await db.query('SELECT sipgate_user, sipgate_device, sipgate_nummer, sipgate_handy FROM users WHERE id=?', [req.user.id]);
   res.json({
     aktiv: true,
-    bereit: !!(u && (u.sipgate_device || u.sipgate_user)),
+    bereit: !!(u && (u.sipgate_device || u.sipgate_user || u.sipgate_handy)),
+    handy: !!(u && !u.sipgate_user && u.sipgate_handy),
     nummer: await aktuelleNummer(req.user.id),
   });
 });
@@ -359,13 +374,17 @@ router.post('/anrufen', auth, async (req, res) => {
     if (!sicht.darfSehen(req.user, lead)) return res.status(403).json({ error: 'Kein Zugriff auf diesen Lead' });
     const ziel = toE164(lead.phone);
     if (!ziel) return res.status(400).json({ error: 'Die Telefonnummer des Leads ist ungültig' });
-    const [[u]] = await db.query('SELECT sipgate_user, sipgate_device, sipgate_nummer FROM users WHERE id=?', [req.user.id]);
-    let geraet = u && u.sipgate_device;
+    const [[u]] = await db.query('SELECT sipgate_user, sipgate_device, sipgate_nummer, sipgate_handy FROM users WHERE id=?', [req.user.id]);
+    let geraet = u && u.sipgate_device, erst = null;
     if (!geraet && u && u.sipgate_user) {
       const su = (await sipgateBenutzer()).find(x => x.id === u.sipgate_user);
       geraet = su && su.defaultDevice;
     }
-    if (!geraet) return res.status(400).json({ error: 'Dir ist noch kein sipgate-Telefon zugeordnet. Ein Admin kann das unter Integrationen → sipgate erledigen.' });
+    // Ohne eigenen Zugang: über das Gerät des Hauptzugangs, zuerst klingelt das Handy des Closers
+    if (!geraet && u && u.sipgate_handy) { erst = u.sipgate_handy; geraet = await hauptGeraet(); }
+    if (!geraet) return res.status(400).json({ error: u && u.sipgate_handy
+      ? 'Für Anrufe ohne eigenen sipgate-Zugang braucht der Admin ein sipgate-Telefon. Ein Admin kann das unter Integrationen → sipgate erledigen.'
+      : 'Dir ist noch kein sipgate-Telefon zugeordnet. Ein Admin kann das unter Integrationen → sipgate erledigen.' });
 
     const [c] = await db.query(
       `INSERT INTO call_logs (lead_id, user_id, phone_number, direction, started_at, status)
@@ -373,7 +392,7 @@ router.post('/anrufen', auth, async (req, res) => {
     // Abgelaufene Nummer (laut Pool) nicht mehr senden, dann Firmennummer
     const absender = (await aktuelleNummer(req.user.id)) || undefined;
     try {
-      await sg('POST', 'sessions/calls', { caller: geraet, deviceId: geraet, callee: ziel, ...(absender ? { callerId: absender } : {}) });
+      await sg('POST', 'sessions/calls', { caller: erst || geraet, deviceId: geraet, callee: ziel, ...(absender ? { callerId: absender } : {}) });
     } catch (e) {
       await db.query("UPDATE call_logs SET status='failed', ended_at=NOW() WHERE id=?", [c.insertId]);
       throw e;
@@ -449,6 +468,15 @@ router.post('/webhook', express.raw({ type: '*/*', limit: '64kb' }), async (req,
           const [kand] = await db.query(
             `SELECT id, phone_number FROM call_logs WHERE user_id=? AND direction='outbound' AND sipgate_call_id IS NULL
                AND started_at > NOW() - INTERVAL 5 MINUTE ORDER BY id DESC LIMIT 10`, [crmUser]);
+          const k = kand.find(x => toE164(x.phone_number) === kunde);
+          if (k) { await db.query('UPDATE call_logs SET sipgate_call_id=? WHERE id=?', [callId, k.id]); zugeordnet = true; }
+        }
+        // Closer ohne eigenen Zugang telefonieren über den Hauptzugang: dann über die Nummer zuordnen
+        if (!zugeordnet && kunde) {
+          const [kand] = await db.query(
+            `SELECT c.id, c.phone_number FROM call_logs c JOIN users u ON u.id=c.user_id
+             WHERE u.sipgate_user IS NULL AND u.sipgate_handy IS NOT NULL AND c.direction='outbound' AND c.sipgate_call_id IS NULL
+               AND c.started_at > NOW() - INTERVAL 5 MINUTE ORDER BY c.id DESC LIMIT 10`);
           const k = kand.find(x => toE164(x.phone_number) === kunde);
           if (k) { await db.query('UPDATE call_logs SET sipgate_call_id=? WHERE id=?', [callId, k.id]); zugeordnet = true; }
         }
