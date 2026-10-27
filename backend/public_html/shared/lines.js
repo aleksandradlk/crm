@@ -29,7 +29,7 @@ const Lines = {
             <div class="line-main"><b class="mono">${sg.nummer ? escHtml(this.fmt(sg.nummer)) : 'Standardnummer von sipgate'}</b>
               <span>über sipgate · ${sg.handy && !sg.zugang ? `klingelt auf ${escHtml(fmtPhoneDE(sg.handy))} (ohne eigenen Zugang) · ` : ''}${sg.eigeneNummer ? 'eigene Nummer' : sg.abgelaufen ? '<em style="color:var(--red);font-style:normal;font-weight:600">eigene Nummer abgelaufen</em>, telefoniert mit der Firmennummer' : 'Firmennummer'}${sg.testnummer ? ' · <em style="color:var(--copper);font-style:normal;font-weight:600">Testnummer, läuft ab</em>' : ''}. ${sg.zugang ? `„Anrufen“ klingelt zuerst in ${vorname}s sipgate-App bzw. Web-Telefon.` : `„Anrufen“ klingelt zuerst auf ${vorname}s Handy, Kunden sehen nur die Nummer oben.`}</span></div>
             <button type="button" class="btn btn-ghost btn-sm" onclick="closeUserModal();showTab('integrationen')">Ändern</button></div>`
-        : `<div class="line-hint"><i class="fas fa-info-circle"></i> ${vorname} hat noch keinen sipgate-Zugang und kann im CRM noch nicht anrufen.
+        : `<div class="line-hint"><i class="fas fa-info-circle"></i> ${vorname} hat noch keinen sipgate-Zugang. „Anrufen“ läuft bis dahin im Browser (Twilio, mit Firmennummer) oder über die Telefon-App.
             <a href="#" onclick="closeUserModal();showTab('integrationen');return false">Unter Integrationen → sipgate zuordnen</a>.</div>`;
       return;
     }

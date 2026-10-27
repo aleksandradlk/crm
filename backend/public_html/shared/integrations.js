@@ -86,7 +86,7 @@ const Integrationen = {
       mitTest.length || testNr.has(s.firmennummer) ? `<b>Testnummern laufen ab</b> (sipgate zeigt das Datum unter Rufnummern, z. B. „Nutzbar bis 20.11.2026“). Betroffen: ${escHtml([...(testNr.has(s.firmennummer) ? ['Firmennummer'] : []), ...mitTest.map(u => u.full_name)].join(', '))}. Rechtzeitig feste Nummern buchen und hier zuordnen.` : '',
       doppelt.length ? `<b>Gleiche Nummer bei mehreren:</b> ${doppelt.map(([n, l]) => `${escHtml(fmtPhoneDE(n))} (${escHtml(l.join(', '))})`).join('; ')}. Rückrufe auf diese Nummer klingeln nur dort, wo sie in sipgate als Ziel eingestellt ist.` : '',
       eigen.length ? `<b>Mit eigenem Telefon:</b> ${eigen.map(u => `${escHtml(u.full_name)} (${escHtml(fmtPhoneDE(u.eigenes_telefon))})`).join(', ')} – „Anrufen“ öffnet bei ihnen die Telefon-App, Kunden sehen diese Nummer. Ausschalten kann man das unter Einstellungen.` : '',
-      ohne.length ? `<b>Noch ohne sipgate-Zugang:</b> ${escHtml(ohne.map(u => u.full_name).join(', '))} – diese Closer können im CRM noch nicht anrufen.` : '',
+      ohne.length ? `<b>Noch ohne sipgate-Zugang:</b> ${escHtml(ohne.map(u => u.full_name).join(', '))} – „Anrufen“ läuft bei ihnen nicht über sipgate, sondern im Browser (Twilio, mit Firmennummer) oder über die Telefon-App.` : '',
     ].filter(Boolean);
     el.innerHTML = head + `<div class="ig-body">
       <div class="ig-facts">
