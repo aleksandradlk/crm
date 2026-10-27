@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf45">
+<link rel="stylesheet" href="/shared/style.css?v=nf46">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -633,28 +633,28 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf45"></script>
-<script src="/shared/bedarf-regeln.js?v=nf45"></script>
-<script src="/shared/bedarf.js?v=nf45"></script>
-<script src="/shared/mailvorschlag.js?v=nf45"></script>
-<script src="/shared/seitenpanel.js?v=nf45"></script>
-<script src="/shared/dialer.js?v=nf45"></script>
-<script src="/shared/provision.js?v=nf45"></script>
-<script src="/shared/deals.js?v=nf45"></script>
-<script src="/shared/calllists.js?v=nf45"></script>
-<script src="/shared/today.js?v=nf45"></script>
-<script src="/shared/ziele.js?v=nf45"></script>
-<script src="/shared/auswertung.js?v=nf45"></script>
-<script src="/shared/termine.js?v=nf45"></script>
-<script src="/shared/duplicates.js?v=nf45"></script>
-<script src="/shared/markdown.js?v=nf45"></script>
-<script src="/shared/wiki.js?v=nf45"></script>
-<script src="/shared/wiki-artikel.js?v=nf45"></script>
-<script src="/shared/lines.js?v=nf45"></script>
-<script src="/shared/finder.js?v=nf45"></script>
-<script src="/shared/board.js?v=nf45"></script>
-<script src="/shared/integrations.js?v=nf45"></script>
-<script src="/shared/startklar.js?v=nf45"></script>
+<script src="/shared/api.js?v=nf46"></script>
+<script src="/shared/bedarf-regeln.js?v=nf46"></script>
+<script src="/shared/bedarf.js?v=nf46"></script>
+<script src="/shared/mailvorschlag.js?v=nf46"></script>
+<script src="/shared/seitenpanel.js?v=nf46"></script>
+<script src="/shared/dialer.js?v=nf46"></script>
+<script src="/shared/provision.js?v=nf46"></script>
+<script src="/shared/deals.js?v=nf46"></script>
+<script src="/shared/calllists.js?v=nf46"></script>
+<script src="/shared/today.js?v=nf46"></script>
+<script src="/shared/ziele.js?v=nf46"></script>
+<script src="/shared/auswertung.js?v=nf46"></script>
+<script src="/shared/termine.js?v=nf46"></script>
+<script src="/shared/duplicates.js?v=nf46"></script>
+<script src="/shared/markdown.js?v=nf46"></script>
+<script src="/shared/wiki.js?v=nf46"></script>
+<script src="/shared/wiki-artikel.js?v=nf46"></script>
+<script src="/shared/lines.js?v=nf46"></script>
+<script src="/shared/finder.js?v=nf46"></script>
+<script src="/shared/board.js?v=nf46"></script>
+<script src="/shared/integrations.js?v=nf46"></script>
+<script src="/shared/startklar.js?v=nf46"></script>
 <script>
 let allLeads = [], allUsers = [], editingUserId = null;
 let panelDirty = false;
@@ -2491,6 +2491,9 @@ async function openSettingsModal() {
     if (elGoal)   elGoal.value   = settings.daily_call_goal || '50';
     document.getElementById('settingZielGespraeche').value = settings.ziel_gespraeche || '10';
     document.getElementById('settingZielErgebnisse').value = settings.ziel_ergebnisse || '2';
+    const ein = String(settings.ziel_einarbeitung ?? '50,75').split(',');
+    document.getElementById('settingEinarbeitung1').value = ein[0] || '0';
+    document.getElementById('settingEinarbeitung2').value = ein[1] || (ein[0] === '0' ? '0' : '100');
     if (elScript) elScript.value = settings.call_script || '';
     const elFrei = document.getElementById('settingFreieLeads');
     if (elFrei) elFrei.checked = settings.closer_freie_leads !== '0';
@@ -2517,6 +2520,8 @@ async function saveNotifSettings() {
     await api('PATCH', '/settings/daily_call_goal', { value: goal });
     await api('PATCH', '/settings/ziel_gespraeche', { value: document.getElementById('settingZielGespraeche')?.value.trim() || '10' });
     await api('PATCH', '/settings/ziel_ergebnisse', { value: document.getElementById('settingZielErgebnisse')?.value.trim() || '2' });
+    const pr = id => Math.min(100, Math.max(0, parseInt(document.getElementById(id)?.value) || 0));
+    await api('PATCH', '/settings/ziel_einarbeitung', { value: pr('settingEinarbeitung1') ? `${pr('settingEinarbeitung1')},${pr('settingEinarbeitung2') || 100}` : '0' });
     await api('PATCH', '/settings/call_script',     { value: script });
     await api('PATCH', '/settings/closer_freie_leads', { value: document.getElementById('settingFreieLeads')?.checked ? '1' : '0' });
     const maintMode  = document.getElementById('settingMaintenanceMode')?.checked ? 'true' : 'false';
@@ -3415,7 +3420,14 @@ document.getElementById('addLeadModal').addEventListener('click', function(e){ i
         <div><div style="font-size:11px;color:var(--text3);margin-bottom:3px">Gespräche</div><input id="settingZielGespraeche" class="form-control" type="number" min="1" max="999" placeholder="10"></div>
         <div><div style="font-size:11px;color:var(--text3);margin-bottom:3px">Anfragen &amp; Termine</div><input id="settingZielErgebnisse" class="form-control" type="number" min="1" max="99" placeholder="2"></div>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:5px;line-height:1.5">Richtwerte pro Tag: 60–80 Anwahlen, 10–15 Gespräche, 2–3 Angebotsanfragen oder Termine. In der Einarbeitung 50–70 % davon.</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:5px;line-height:1.5">Richtwert pro Tag (ca. 3 Stunden): 60 Anwahlen → etwa 10 Gespräche → 2 Angebotsanfragen oder Termine. Zählt: selbst vereinbarte Termine und angeforderte Angebote, je Lead und Tag einmal. Wer nicht täglich arbeitet, bekommt unter Tracking → Ziele &amp; Woche besser ein Wochenziel.</div>
+    </div>
+    <div class="form-group">
+      <label>Einarbeitung <span style="font-size:11px;color:var(--text3);font-weight:400">(Anteil vom Standard-Ziel, gezählt ab dem ersten Anruf · 0 = aus)</span></label>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+        <div><div style="font-size:11px;color:var(--text3);margin-bottom:3px">Woche 1–2 in %</div><input id="settingEinarbeitung1" class="form-control" type="number" min="0" max="100" placeholder="50"></div>
+        <div><div style="font-size:11px;color:var(--text3);margin-bottom:3px">Woche 3–4 in %</div><input id="settingEinarbeitung2" class="form-control" type="number" min="0" max="100" placeholder="75"></div>
+      </div>
     </div>
     <button type="button" class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="Bedarf.openRegeln()"><i class="fas fa-sliders-h"></i> Vertriebsregeln: Preise, Rabatt, Fristen, Demo-Link</button>
     <div class="form-group" style="margin-top:8px">

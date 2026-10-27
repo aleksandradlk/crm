@@ -9,7 +9,7 @@ const Ziele = {
     ['gespraeche', 'Gespräche', 'fa-comments'],
     ['ergebnisse', 'Anfragen & Termine', 'fa-calendar-check'],
   ],
-  RICHTWERT: 'Richtwerte pro Tag: 60–80 Anwahlen, 10–15 Gespräche, 2–3 Angebotsanfragen oder Termine. In der Einarbeitung 50–70 % davon.',
+  RICHTWERT: 'Richtwerte pro Tag (ca. 3 Stunden): 60 Anwahlen → etwa 10 Gespräche → 2 Angebotsanfragen oder Termine. Neue Closer bekommen in der Einarbeitung automatisch weniger (siehe Einstellungen).',
   daten: null, team: null, woche: 0,
 
   async mein() {
@@ -28,7 +28,8 @@ const Ziele = {
     const woche = d.zeitraum === 'woche';
     const stand = woche ? d.diese_woche : d.heute;
     const alle = this.ARTEN.every(([k]) => stand[k] >= d.ziel[k]);
-    return `<div class="zl-head"><span>${woche ? 'Wochenziel' : 'Tagesziel'}</span>${alle ? '<b class="zl-yay">Ziel erreicht 🎉</b>' : ''}</div>
+    const ein = d.einarbeitung ? `<span class="zl-ein" title="In den ersten Wochen gilt ein Teil des normalen Ziels">Einarbeitung Woche ${d.einarbeitung.woche} · ${d.einarbeitung.prozent} %</span>` : '';
+    return `<div class="zl-head"><span>${woche ? 'Wochenziel' : 'Tagesziel'}</span>${ein}${alle ? '<b class="zl-yay">Ziel erreicht 🎉</b>' : ''}</div>
       <div class="zl-grid">${this.ARTEN.map(([k, label, icon]) => `
         <div class="zl-item">
           <div class="zl-top"><span><i class="fas ${icon}"></i>${label}</span><span class="zl-num"><b>${stand[k]}</b> / ${d.ziel[k]}</span></div>
@@ -69,7 +70,7 @@ const Ziele = {
         <thead><tr><th>Closer</th>${this.ARTEN.map(([, l]) => `<th>${l}</th>`).join('')}
           ${tage.map(({ d, i }) => `<th class="zl-day ${d === t.heute ? 'is-today' : ''}">${wt[i]}<span>${fmt(d)}</span></th>`).join('')}<th></th></tr></thead>
         <tbody>${t.closer.map(c => `<tr>
-          <td class="zl-name"><b>${escHtml(c.full_name)}</b><span>${c.zeitraum === 'woche' ? 'Wochenziel' : 'Tagesziel'}${c.eigen ? '' : ' · Standard'}</span></td>
+          <td class="zl-name"><b>${escHtml(c.full_name)}</b><span>${c.zeitraum === 'woche' ? 'Wochenziel' : 'Tagesziel'}${c.eigen ? '' : ' · Standard'}${c.einarbeitung ? ` · Einarbeitung ${c.einarbeitung.prozent} %` : ''}</span></td>
           ${this.ARTEN.map(([k]) => `<td class="zl-cell"><div class="zl-num"><b>${c.summe[k]}</b> / ${c.woche[k]}</div>${this._bar(c.summe[k], c.woche[k])}</td>`).join('')}
           ${tage.map(({ d }) => {
             const x = c.tage.find(y => y.tag === d);
