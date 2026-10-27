@@ -118,7 +118,24 @@ const WARN_TAGE = 14;
 const isoTag = (plus = 0) => { const d = new Date(); d.setDate(d.getDate() + plus); return d.toISOString().slice(0, 10); };
 const national = v => String(v || '').replace(/^\+49/, '0');
 
+// Einmalig: Die Testnummern des aktuellen sipgate-Testzugangs sind laut sipgate „Nutzbar bis 20.11.2026“.
+// Fehlt bei einer Testnummer das Datum, wird es einmal eingetragen (danach gilt, was im Pool steht).
+const TEST_BIS = '2026-11-20';
+async function testDatumEinmalig(sgNrn) {
+  if (!sgNrn || !sgNrn.length || isoTag() > TEST_BIS) return;
+  const [[schon]] = await db.query("SELECT 1 AS x FROM app_settings WHERE key_name='sipgate_testnummern_bis'").catch(() => [[{ x: 1 }]]);
+  if (schon) return;
+  for (const n of sgNrn.filter(x => istTestnummer(x.number))) {
+    const nr = sgNummer(n.number);
+    if (nr) await db.query(
+      `INSERT INTO telefonnummern (nummer, gueltig_bis) VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE gueltig_bis=COALESCE(gueltig_bis, VALUES(gueltig_bis))`, [nr, TEST_BIS]);
+  }
+  await db.query("INSERT INTO app_settings (key_name, value) VALUES ('sipgate_testnummern_bis', ?) ON DUPLICATE KEY UPDATE value=VALUES(value)", [TEST_BIS]);
+}
+
 async function pool(sgNrn) {
+  await testDatumEinmalig(sgNrn).catch(e => console.error('sipgate Testnummern-Datum:', e.message));
   const [meta] = await db.query("SELECT nummer, bezeichnung, DATE_FORMAT(gueltig_bis, '%Y-%m-%d') AS gueltig_bis, notiz, manuell FROM telefonnummern").catch(() => [[]]);
   const [users] = await db.query('SELECT id, full_name, role, sipgate_user, sipgate_nummer FROM users WHERE is_active=1');
   const map = new Map();
@@ -145,6 +162,11 @@ async function nummerGueltig(nr) {
   if (!nr) return false;
   const [[m]] = await db.query("SELECT DATE_FORMAT(gueltig_bis, '%Y-%m-%d') AS g FROM telefonnummern WHERE nummer=?", [nr]).catch(() => [[null]]);
   return !(m && m.g && m.g < isoTag());
+}
+
+async function webhookZuletzt() {
+  const [[r]] = await db.query("SELECT value FROM app_settings WHERE key_name='sipgate_webhook_zuletzt'").catch(() => [[null]]);
+  return r ? r.value : null;
 }
 
 // Gerät des Hauptzugangs (für Closer ohne eigenen Zugang): Admin-Zuordnung, sonst erster sipgate-Benutzer
@@ -215,6 +237,7 @@ router.get('/setup', auth, adminOnly, async (req, res) => {
       webhook: hooks ? { eingehend: hooks.incomingUrl === webhookUrl, ausgehend: hooks.outgoingUrl === webhookUrl, incomingUrl: hooks.incomingUrl || '', outgoingUrl: hooks.outgoingUrl || '' } : null,
       zuordnung: crm,
       pool: await pool(nrn),
+      webhook_zuletzt: await webhookZuletzt(),
     });
   } catch (e) {
     console.error('sipgate setup:', e.message);
@@ -463,6 +486,9 @@ router.post('/webhook', express.raw({ type: '*/*', limit: '64kb' }), async (req,
   if (!signaturOk(req)) { res.status(403); return res.send('<?xml version="1.0" encoding="UTF-8"?><Error message="invalid signature"/>'); }
   const p = new URLSearchParams(Buffer.isBuffer(req.body) ? req.body.toString('utf8') : '');
   const event = p.get('event');
+  // Merken, dass Meldungen ankommen (auch wenn die Adresse von Hand in sipgate eingetragen wurde)
+  db.query("INSERT INTO app_settings (key_name, value) VALUES ('sipgate_webhook_zuletzt', ?) ON DUPLICATE KEY UPDATE value=VALUES(value)",
+    [new Date().toISOString()]).catch(() => {});
   const callId = p.get('callId');
   try {
     if (event === 'newCall' && callId) {

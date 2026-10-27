@@ -2736,3 +2736,4 @@ tr.ds-flash td { background: color-mix(in srgb, var(--copper) 14%, transparent);
 }
 .zl-ein { text-transform: none; letter-spacing: 0; font-size: 11.5px; font-weight: 600; color: var(--copper); border: 1px solid color-mix(in srgb, var(--copper) 40%, transparent); border-radius: 999px; padding: 1px 8px; }
 .zl-head .zl-ein { margin: 0 auto 0 10px; }
+.ig-facts small { display: block; font-size: 11px; color: var(--text3); margin-top: 2px; }

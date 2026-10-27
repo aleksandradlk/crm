@@ -67,7 +67,9 @@ const Integrationen = {
         `<option value="${escHtml(d.id)}" ${d.id === aktuell ? 'selected' : ''}>${escHtml(d.alias || d.id)}${d.online ? ' · online' : ''}</option>`).join('');
     };
     const hook = s.webhook;
-    const hookOk = hook && hook.eingehend && hook.ausgehend;
+    // Meldungen kamen in den letzten 14 Tagen an → eingerichtet (z. B. von Hand in sipgate)
+    const zuletzt = s.webhook_zuletzt && (Date.now() - new Date(s.webhook_zuletzt).getTime() < 14 * 864e5) ? new Date(s.webhook_zuletzt) : null;
+    const hookOk = (hook && hook.eingehend && hook.ausgehend) || !!zuletzt;
     // Hinweise: Testnummern laufen ab, eine Nummer bei mehreren Closern, Closer ohne Zugang
     const testNr = new Set(nummern.filter(n => n.test).map(n => n.nummer));
     const zu = (s.zuordnung || []);
@@ -87,11 +89,13 @@ const Integrationen = {
       <div class="ig-facts">
         <div><span>Zugänge bei sipgate</span><b>${benutzer.length}</b></div>
         <div><span>Rufnummern</span><b>${nummern.length}</b></div>
-        <div><span>Anrufe automatisch erfassen</span><b>${hookOk ? 'Aktiv' : 'Nicht eingerichtet'}</b></div>
+        <div><span>Anrufe automatisch erfassen</span><b>${hookOk ? 'Aktiv' : 'Nicht eingerichtet'}</b>${zuletzt ? `<small>letzte Meldung ${zuletzt.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</small>` : ''}</div>
       </div>
       ${s.fehler ? `<div class="line-err"><i class="fas fa-exclamation-triangle"></i> ${escHtml(s.fehler)}</div>` : ''}
-      ${!hook && !s.fehler ? `<div class="line-err"><i class="fas fa-exclamation-triangle"></i> Das CRM kann bei sipgate nicht abfragen, wohin Anrufe gemeldet werden. Meist fehlt dem Token der Bereich für Webhooks (sipgate.io), dann einen neuen Token mit allen Bereichen anlegen. Ohne diese Meldungen werden Anrufe trotzdem gestartet, aber Dauer, Ergebnis und verpasste Rückrufe kommen nicht ins CRM.
-        <button class="btn btn-ghost btn-sm" style="margin-left:6px" onclick="Integrationen.sgWebhooks()">Jetzt eintragen</button></div>` : ''}
+      ${!hook && !s.fehler && !hookOk ? `<div class="line-err"><i class="fas fa-exclamation-triangle"></i> Das CRM darf die Anrufmeldungen nicht selbst einrichten (dem Token fehlt der Bereich für Webhooks). Ohne sie werden Anrufe trotzdem gestartet, aber Dauer, Ergebnis und verpasste Rückrufe kommen nicht ins CRM.
+        <b>So geht es ohne neuen Token:</b> in sipgate unter Webhooks (sipgate.io) diese Adresse bei <i>eingehend</i> und <i>ausgehend</i> eintragen: <span class="mono">${escHtml(s.webhookUrl)}</span>
+        <button class="btn btn-ghost btn-sm" style="margin-left:6px" onclick="navigator.clipboard.writeText('${escHtml(s.webhookUrl)}').then(() => showToast('Adresse kopiert ✓'))">Adresse kopieren</button>
+        Nach dem ersten Anruf steht hier „Aktiv“.</div>` : ''}
       ${hook && !hookOk ? `<div class="line-err"><i class="fas fa-exclamation-triangle"></i> Damit Anrufe automatisch beim Lead landen, muss sipgate sie an <span class="mono">${escHtml(s.webhookUrl)}</span> melden.
         ${hook.incomingUrl && !hook.eingehend ? ` Zurzeit ist dort eine andere Adresse eingetragen (<span class="mono">${escHtml(hook.incomingUrl)}</span>).` : ''}
         <button class="btn btn-ghost btn-sm" style="margin-left:6px" onclick="Integrationen.sgWebhooks()">Jetzt eintragen</button></div>` : ''}
