@@ -32,8 +32,12 @@ async function auth(req, res, next) {
   const header = req.headers['authorization'];
   if (!header) return res.status(401).json({ error: 'Kein Token' });
   const token = header.startsWith('Bearer ') ? header.slice(7) : header;
+  // Nur ein ungültiger/abgelaufener Token ist „nicht angemeldet“ (401 → Browser meldet ab).
+  // Ein kurzer Datenbankfehler darf niemanden rauswerfen → 503, der Browser bleibt angemeldet.
+  let payload;
+  try { payload = jwt.verify(token, process.env.JWT_SECRET); }
+  catch { return res.status(401).json({ error: 'Token ungültig oder abgelaufen' }); }
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
     const [[user]] = await db.query(
       'SELECT id, username, full_name, email, role, is_active, can_edit_contacts, can_archive_leads, can_reassign_leads, can_view_all_leads, can_create_users, can_generate_leads, can_manage_email_templates, can_abrechnung FROM users WHERE id = ?',
       [payload.id]
@@ -61,10 +65,11 @@ async function auth(req, res, next) {
       }
     }
 
-    next();
-  } catch {
-    return res.status(401).json({ error: 'Token ungültig oder abgelaufen' });
+  } catch (e) {
+    console.error('Anmeldung prüfen:', e.message);
+    return res.status(503).json({ error: 'Der Server ist gerade kurz nicht erreichbar. Bitte gleich noch einmal versuchen.' });
   }
+  next();
 }
 
 // Only allow admins

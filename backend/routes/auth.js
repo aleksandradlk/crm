@@ -86,17 +86,19 @@ router.post('/setup', async (req, res) => {
 router.post('/heartbeat', async (req, res) => {
   const header = req.headers['authorization'];
   if (!header) return res.status(401).json({ error: 'Kein Token' });
+  let payload;
+  try { payload = jwt.verify(header.startsWith('Bearer ') ? header.slice(7) : header, process.env.JWT_SECRET); }
+  catch { return res.status(401).json({ error: 'Token ungültig' }); }
   try {
-    const token = header.startsWith('Bearer ') ? header.slice(7) : header;
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
     const clicks = Math.max(0, Math.min(parseInt(req.body.clicks) || 0, 10000));
     await db.query(
       'UPDATE sessions SET last_active = NOW(), click_count = click_count + ? WHERE user_id = ?',
       [clicks, payload.id]
     );
     res.json({ ok: true });
-  } catch {
-    res.status(401).json({ error: 'Token ungültig' });
+  } catch (e) {
+    // Datenbank kurz weg: nicht abmelden
+    res.status(503).json({ error: 'Server kurz nicht erreichbar' });
   }
 });
 
@@ -117,7 +119,7 @@ router.patch('/password', async (req, res) => {
     if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
 
     const ok = await bcrypt.compare(current_password, user.password_hash);
-    if (!ok) return res.status(401).json({ error: 'Aktuelles Passwort falsch' });
+    if (!ok) return res.status(400).json({ error: 'Aktuelles Passwort falsch' });   // 400, nicht 401: sonst meldet der Browser ab
 
     const hash = await bcrypt.hash(new_password, 12);
     await db.query('UPDATE users SET password_hash = ? WHERE id = ?', [hash, payload.id]);
