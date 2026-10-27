@@ -152,12 +152,13 @@ const Termine = {
     } else if (a.status === 'abgelehnt') {
       unten = `<div class="tr-card-reply is-no"><i class="fas fa-times-circle"></i><span><b>${escHtml(a.closer_name)}</b> kann nicht${a.response_note ? ': „' + escHtml(a.response_note) + '“' : ''}</span></div>
         <div class="tr-card-actions">
-          <button class="btn btn-primary btn-sm" onclick="Termine.openEditor({ id: ${a.id} })"><i class="fas fa-user-friends"></i> Anderem Closer geben</button>
+          <button class="btn btn-primary btn-sm" onclick="Termine.openUebergeben(${a.id})"><i class="fas fa-user-friends"></i> Anderem Closer geben</button>
           <button class="btn btn-ghost btn-sm tr-nein" onclick="Termine.absagen(${a.id})"><i class="fas fa-ban"></i> Absagen</button>
         </div>`;
     } else {
       unten = `<div class="tr-card-actions">
           <button class="btn btn-ghost btn-sm" onclick="Termine.openEditor({ id: ${a.id} })"><i class="fas fa-edit"></i> Ändern</button>
+          <button class="btn btn-ghost btn-sm" onclick="Termine.openUebergeben(${a.id})"><i class="fas fa-user-friends"></i> Anderem Closer</button>
           <button class="btn btn-ghost btn-sm tr-nein" onclick="Termine.absagen(${a.id})"><i class="fas fa-ban"></i> Zurückziehen</button>
         </div>`;
     }
@@ -186,6 +187,7 @@ const Termine = {
         ${a.phone && !vergangen ? `<button class="btn btn-ghost btn-sm today-call" onclick="Termine.anrufen(${a.lead_id}, ${escHtml(JSON.stringify(a.phone))})" title="Anrufen ${escHtml(a.phone)}"><i class="fas fa-phone-alt"></i> <span class="mono">${escHtml(a.phone)}</span></button>` : ''}
         ${darfLead ? `<button class="btn btn-ghost btn-sm btn-icon" onclick="Termine.opts.openLead(${a.lead_id})" title="Lead öffnen"><i class="fas fa-external-link-alt"></i></button>` : ''}
         ${!vergangen ? `<button class="btn btn-ghost btn-sm btn-icon" onclick="Termine.ics(${a.id})" title="In meinen Kalender (.ics)"><i class="fas fa-calendar-plus"></i></button>` : ''}
+        ${!vergangen && admin ? `<button class="btn btn-ghost btn-sm tr-ueb-btn" onclick="Termine.openUebergeben(${a.id})" title="Diesen Termin einem Closer geben"><i class="fas fa-user-friends"></i><span class="tr-ueb-txt"> ${a.closer_id === ME?.id ? 'An Closer übergeben' : 'Anderem Closer'}</span></button>` : ''}
         ${!vergangen && (admin || eigen) ? `
           <button class="btn btn-ghost btn-sm btn-icon" onclick="Termine.erledigt(${a.id})" title="Erledigt"><i class="fas fa-check"></i></button>
           <button class="btn btn-ghost btn-sm btn-icon" onclick="Termine.openEditor({ id: ${a.id} })" title="Ändern"><i class="fas fa-edit"></i></button>
@@ -294,6 +296,47 @@ const Termine = {
        <button class="btn btn-primary btn-sm" onclick="Termine.antworten(${id}, 'ablehnen', { note: document.getElementById('trANote').value })">Ablehnen</button>`);
   },
 
+  // Vorhandenen Termin (z. B. selbst vereinbart) einem Closer geben: nur Closer, Thema,
+  // Painpoints und Notiz. Der Lead wandert sofort mit, der Closer nimmt an oder lehnt ab.
+  async openUebergeben(id) {
+    const a = this.rows.find(x => x.id === id);
+    if (!a) return;
+    const users = await this._users();
+    const closers = users.filter(u => u.role === 'closer' && u.id !== a.closer_id);
+    if (!closers.length) return showToast('Es gibt noch keinen anderen aktiven Closer. Zuerst unter „Benutzer“ anlegen.', 'err');
+    this._modal('An Closer übergeben', 'fa-user-friends', `
+      <div class="tr-lead"><i class="fas fa-building"></i><b>${escHtml(a.company || '')}</b>${a.ceo ? ' · ' + escHtml(a.ceo) : ''}
+        <span class="tr-lead-wann">${escHtml(this._wann(a))}</span></div>
+      <div class="form-group" style="margin:0"><label>An wen? <span class="tr-req">*</span></label>
+        <div class="tr-closer-pick" id="trUCloser">${closers.map(u => `<button type="button" class="qf-btn" data-id="${u.id}"
+          onclick="this.parentNode.querySelectorAll('.qf-btn').forEach(b => b.classList.toggle('active', b === this))">${escHtml(u.full_name)}</button>`).join('')}</div></div>
+      <div class="form-group" style="margin:0"><label>Thema <span class="tr-req">*</span></label><input type="text" id="trUTopic" class="form-control" value="${escHtml(a.topic || '')}" placeholder="eine Zeile, z. B. Anfragen über Instagram automatisieren"></div>
+      <div class="form-group" style="margin:0"><label>Painpoints <span class="tr-req">*</span> <span class="tr-opt">kurz, in Worten des Kunden</span></label>
+        <textarea id="trUPain" class="form-control" rows="2" placeholder="z. B. „Ich komme abends nicht hinterher mit den WhatsApp-Anfragen“">${escHtml(a.painpoints || '')}</textarea></div>
+      <div class="form-group" style="margin:0"><label>Notizen für den Closer <span class="tr-opt">(optional)</span></label><textarea id="trUNotes" class="form-control" rows="2" placeholder="Was weiß der Kunde schon? Worauf achten?">${escHtml(a.notes || '')}</textarea></div>
+      <label class="tr-check"><input type="checkbox" id="trUMail" checked> Closer zusätzlich per E-Mail benachrichtigen</label>
+      <p class="tr-hint">Der Lead gehört sofort dem Closer. Lehnt er ab, geht der Lead zurück und der Termin steht wieder bei dir unter „Übergaben“.</p>`,
+      `<button class="btn btn-ghost btn-sm" onclick="Termine._close()">Abbrechen</button>
+       <button class="btn btn-primary btn-sm" id="trUSave" onclick="Termine.uebergeben(${id})"><i class="fas fa-paper-plane"></i> Übergeben</button>`);
+    if (closers.length === 1) document.querySelector('#trUCloser .qf-btn').classList.add('active');
+  },
+  async uebergeben(id) {
+    const v = x => document.getElementById(x)?.value.trim() || '';
+    const closerId = parseInt(document.querySelector('#trUCloser .qf-btn.active')?.dataset.id);
+    if (!closerId) return this._err('Bitte einen Closer wählen.');
+    if (!v('trUTopic') || !v('trUPain')) return this._err('Bitte Thema und Painpoints eintragen, damit der Closer gut vorbereitet ist.');
+    const btn = document.getElementById('trUSave'); btn.disabled = true;
+    try {
+      await api('PATCH', `/termine/${id}`, { closer_id: closerId, topic: v('trUTopic'), painpoints: v('trUPain'), notes: v('trUNotes'),
+        notify_mail: document.getElementById('trUMail').checked });
+      const an = this.users.find(u => u.id === closerId);
+      showToast(`An ${an ? an.full_name : 'den Closer'} übergeben – wartet auf Antwort`);
+      this._close();
+      this.load();
+      if (typeof this.opts.onChange === 'function') this.opts.onChange();
+    } catch (e) { btn.disabled = false; this._err(escHtml(e.message)); }
+  },
+
   // Neuer Termin (mit vorhandenem oder neuem Lead) oder bestehenden ändern.
   // o.lead: Lead aus dem Panel · o.id: Termin bearbeiten
   // Admin → anderer Closer = warme Übergabe (Handbuch S. 4): mit Thema, Painpoints,
@@ -316,7 +359,7 @@ const Termine = {
     const R = window.BedarfRegeln;
     this._editLeadId = a ? a.lead_id : lead?.id || null;
     this._editId = a ? a.id : null;
-    this._art = a?.art || 'termin';
+    this._art = o.art || a?.art || 'termin';
     const voll = admin && !a;     // komplettes Übergabe-Formular
     const L = lead || {};
     const feld = (id, label, val, extra = '', req = false) => `<div class="form-group" style="margin:0"><label>${label}${req ? ' <span class="tr-req">*</span>' : ''}</label><input class="form-control" id="${id}" value="${escHtml(val || '')}" ${extra}></div>`;
@@ -351,8 +394,10 @@ const Termine = {
         </select></div>` : ''}
       ${admin ? `<div class="dl-chips" id="trArt">
         <button type="button" class="qf-btn ${this._art === 'termin' ? 'active' : ''}" data-art="termin" onclick="Termine._setArt('termin')">Fester Termin</button>
-        <button type="button" class="qf-btn ${this._art === 'anruf_bis' ? 'active' : ''}" data-art="anruf_bis" onclick="Termine._setArt('anruf_bis')">Anruf bis …</button></div>` : ''}
-      <div class="tr-grid3" id="trZeitTermin" ${this._art === 'anruf_bis' ? 'style="display:none"' : ''}>
+        <button type="button" class="qf-btn ${this._art === 'anruf_bis' ? 'active' : ''}" data-art="anruf_bis" onclick="Termine._setArt('anruf_bis')">Anruf bis …</button>
+        ${a ? '' : `<button type="button" class="qf-btn ${this._art === 'heute' ? 'active' : ''}" data-art="heute" onclick="Termine._setArt('heute')">Heute spontan anrufen</button>`}</div>
+        <p class="tr-hint" id="trHeuteHint" ${this._art === 'heute' ? '' : 'hidden'}>Kein fester Termin: Der Closer soll den Kunden heute noch anrufen. Er bekommt die Übergabe sofort, der Anruf steht bei ihm unter „Heute“.</p>` : ''}
+      <div class="tr-grid3" id="trZeitTermin" ${this._art !== 'termin' ? 'style="display:none"' : ''}>
         <div class="form-group" style="margin:0"><label>Datum</label><input type="date" id="trDate" class="form-control" value="${datum}"></div>
         <div class="form-group" style="margin:0"><label>Uhrzeit</label><input type="time" id="trTime" class="form-control" step="900" value="${uhr}"></div>
         <div class="form-group" style="margin:0"><label>Dauer</label><select id="trDur" class="form-control">
@@ -391,6 +436,7 @@ const Termine = {
     document.querySelectorAll('#trArt .qf-btn').forEach(b => b.classList.toggle('active', b.dataset.art === art));
     document.getElementById('trZeitTermin').style.display = art === 'termin' ? '' : 'none';
     document.getElementById('trZeitBis').style.display = art === 'anruf_bis' ? '' : 'none';
+    const h = document.getElementById('trHeuteHint'); if (h) h.hidden = art !== 'heute';
   },
   // Vorhandenen Lead im Übergabe-Formular suchen und übernehmen
   _suche(q) {
@@ -435,13 +481,14 @@ const Termine = {
   async speichern(force = false, leadId = null) {
     const v = id => document.getElementById(id)?.value.trim() || '';
     const admin = this.opts.isAdmin;
-    const bis = this._art === 'anruf_bis';
+    const heute = this._art === 'heute';
+    const bis = this._art === 'anruf_bis' || heute;
     const datum = v('trDate'), uhr = v('trTime');
-    if (bis ? !v('trBis') : (!datum || !uhr)) return this._err(bis ? 'Bis wann soll angerufen werden?' : 'Bitte Datum und Uhrzeit angeben.');
+    if (heute ? false : bis ? !v('trBis') : (!datum || !uhr)) return this._err(bis ? 'Bis wann soll angerufen werden?' : 'Bitte Datum und Uhrzeit angeben.');
     if (admin && !v('trCloser')) return this._err('Bitte einen Closer wählen.');
     const body = {
-      art: this._art,
-      ...(bis ? { anruf_bis: v('trBis') } : { starts_at: this._sql(datum, uhr) }),
+      art: bis ? 'anruf_bis' : 'termin',
+      ...(bis ? { anruf_bis: heute ? this._iso(new Date()) : v('trBis') } : { starts_at: this._sql(datum, uhr) }),
       duration_min: parseInt(v('trDur')) || 30,
       topic: v('trTopic'), notes: v('trNotes'),
       painpoints: document.getElementById('trPain') ? v('trPain') : undefined,

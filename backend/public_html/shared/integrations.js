@@ -89,14 +89,11 @@ const Integrationen = {
       <div class="ig-facts">
         <div><span>Zugänge bei sipgate</span><b>${benutzer.length}</b>${s.system ? `<small>${s.system === 'neo' ? 'neues sipgate (Neo)' : 'sipgate classic'}</small>` : ''}</div>
         <div><span>Rufnummern</span><b>${nummern.length}</b></div>
-        <div><span>Anrufe automatisch erfassen</span><b>${hookOk ? 'Aktiv' : 'Nicht eingerichtet'}</b>${zuletzt ? `<small>letzte Meldung ${zuletzt.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</small>` : ''}</div>
+        <div><span>Anrufe automatisch erfassen</span><b>${hookOk ? 'Aktiv' : 'Ohne Dauer'}</b>${!hookOk ? '<small>Ergebnis trägt der Closer ein</small>' : ''}${zuletzt ? `<small>letzte Meldung ${zuletzt.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</small>` : ''}</div>
       </div>
       ${s.fehler ? `<div class="line-err"><i class="fas fa-exclamation-triangle"></i> ${escHtml(s.fehler)}</div>` : ''}
       ${s.webhook_abgelehnt && !zuletzt && (Date.now() - new Date(s.webhook_abgelehnt).getTime() < 14 * 864e5) ? `<div class="line-err"><i class="fas fa-exclamation-triangle"></i> sipgate schickt Anrufmeldungen an das CRM (zuletzt ${new Date(s.webhook_abgelehnt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}), aber ihre Echtheitsprüfung schlägt fehl. Die Adresse stimmt also; die Prüfung muss im CRM angepasst werden.</div>` : ''}
-      ${!hook && !s.fehler && !hookOk ? `<div class="line-err"><i class="fas fa-exclamation-triangle"></i> Das CRM darf die Anrufmeldungen nicht selbst einrichten (dem Token fehlt der Bereich für Webhooks). Ohne sie werden Anrufe trotzdem gestartet, aber Dauer, Ergebnis und verpasste Rückrufe kommen nicht ins CRM.
-        <b>So geht es ohne neuen Token:</b> in sipgate unter Webhooks (sipgate.io) diese Adresse bei <i>eingehend</i> und <i>ausgehend</i> eintragen: <span class="mono">${escHtml(s.webhookUrl)}</span>
-        <button class="btn btn-ghost btn-sm" style="margin-left:6px" onclick="navigator.clipboard.writeText('${escHtml(s.webhookUrl)}').then(() => showToast('Adresse kopiert ✓'))">Adresse kopieren</button>
-        Nach dem ersten Anruf steht hier „Aktiv“.${s.system === 'neo' ? ' <br><b>Neues sipgate (seit 09/2025):</b> Die Webhooks stellst du in der sipgate-Weboberfläche pro Channel ein (dort, wo die Rufnummern und Channels verwaltet werden). Die Adresse muss genau so eingetragen werden, ohne Weiterleitung.' : ''}</div>` : ''}
+      ${!hook && !hookOk && !s.fehler ? this.sgAnrufHilfe(s) : ''}
       ${hook && !hookOk ? `<div class="line-err"><i class="fas fa-exclamation-triangle"></i> Damit Anrufe automatisch beim Lead landen, muss sipgate sie an <span class="mono">${escHtml(s.webhookUrl)}</span> melden.
         ${hook.incomingUrl && !hook.eingehend ? ` Zurzeit ist dort eine andere Adresse eingetragen (<span class="mono">${escHtml(hook.incomingUrl)}</span>).` : ''}
         <button class="btn btn-ghost btn-sm" style="margin-left:6px" onclick="Integrationen.sgWebhooks()">Jetzt eintragen</button></div>` : ''}
@@ -247,6 +244,25 @@ const Integrationen = {
     try { await api('PUT', '/sipgate/firmennummer', { nummer: document.getElementById('igSgFirma').value }); showToast('Firmennummer gespeichert ✓'); this.loadSipgate(); }
     catch (e) { showToast(e.message, 'err'); }
   },
+  // Anrufe automatisch erfassen: kein Fehler, nur eine Ergänzung. Zugeklappt, damit nichts rot leuchtet.
+  sgAnrufHilfe(s) {
+    const kopie = (url, txt) => `<span class="ig-url"><span class="mono">${escHtml(url)}</span>
+      <button class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText(${escHtml(JSON.stringify(url))}).then(() => showToast('Adresse kopiert ✓'))"><i class="fas fa-copy"></i> ${txt}</button></span>`;
+    const neo = `<li><b>Neues sipgate</b> (Vertrag ab 09/2025): in der sipgate App Web als Admin unter <i>Einstellungen → Conversation Intelligence → CI-Webhook</i>
+        oder in der sipgate Desktop-App unter <i>AI Assist → AI Assist Webhook</i> (Format „Standard JSON“) diese Adresse eintragen, für jeden Channel, über den telefoniert wird.
+        Nur <i>geteilte</i> Channels melden Anrufe.${s.neoUrl ? kopie(s.neoUrl, 'Kopieren') : ''}</li>`;
+    const klassisch = `<li><b>sipgate classic</b>: in der Konsole unter <i>Webhooks → URLs</i> bei <i>Incoming</i> und <i>Outgoing</i> eintragen.${kopie(s.webhookUrl, 'Kopieren')}</li>`;
+    return `<details class="ig-details" ${this._sgHilfeOffen ? 'open' : ''} ontoggle="Integrationen._sgHilfeOffen=this.open">
+      <summary><i class="fas fa-info-circle"></i> <span><b>Kein Fehler:</b> Anrufe aus dem CRM klappen auch so. Nur Gesprächsdauer und verpasste Rückrufe kommen noch nicht automatisch ins CRM.</span> <u>So richtest du es ein</u></summary>
+      <div class="ig-details-body">
+        <p>Bis dahin trägt der Closer nach jedem Anruf das Ergebnis selbst ein, die Anrufe zählen ganz normal für Ziele und Statistik.
+          Damit sipgate jeden Anruf selbst meldet, die passende Adresse einmal in sipgate eintragen:</p>
+        <ol>${s.system === 'classic' ? klassisch + neo : neo + klassisch}</ol>
+        <p class="ig-hint">Nach dem ersten Anruf steht oben „Aktiv“ und dieser Hinweis verschwindet. Die Adresse fürs neue sipgate enthält einen geheimen Schlüssel: nicht weitergeben.</p>
+      </div>
+    </details>`;
+  },
+
   async sgWebhooks() {
     if (this._sg && this._sg.webhook && (this._sg.webhook.incomingUrl || this._sg.webhook.outgoingUrl)
       && !await customConfirm('In sipgate ist schon eine andere Adresse für Anrufmeldungen eingetragen (z. B. für einen KI-Assistenten). Soll das CRM sie ersetzen?', { title: 'Adresse ersetzen?', okLabel: 'Ersetzen' })) return;

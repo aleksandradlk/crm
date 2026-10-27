@@ -77,6 +77,47 @@ router.patch('/:id', auth, async (req, res) => {
   } catch(e) { console.error('EmailTemplates PATCH:', e); res.status(500).json({ error: 'Fehler beim Aktualisieren' }); }
 });
 
+// POST /api/email-templates/import — Admin: mehrere Vorlagen aus einer JSON-Datei
+// { vorlagen: [{ name, subject, body, category, trigger_outcome }], alte_ausblenden }
+// Gleicher Name = wird ersetzt, neuer Name = wird angelegt. „alte_ausblenden“ blendet
+// Vorlagen aus, die nicht in der Datei stehen (nicht löschen, lässt sich wieder einschalten).
+router.post('/import', auth, adminOnly, async (req, res) => {
+  const liste = Array.isArray(req.body?.vorlagen) ? req.body.vorlagen : [];
+  const txt = (v, n) => String(v ?? '').trim().slice(0, n);
+  const ok = liste.map(v => ({ name: txt(v.name, 255), subject: txt(v.subject, 255), body: txt(v.body, 20000),
+    category: txt(v.category, 100) || null, trigger_outcome: trigger(v.trigger_outcome) })).filter(v => v.name && v.subject && v.body);
+  if (!ok.length) return res.status(400).json({ error: 'In der Datei stehen keine gültigen Vorlagen (Name, Betreff und Text nötig).' });
+  if (ok.length > 100) return res.status(400).json({ error: 'Höchstens 100 Vorlagen auf einmal.' });
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    let neu = 0, ersetzt = 0, ausgeblendet = 0;
+    for (const v of ok) {
+      const [[alt]] = await conn.query('SELECT id FROM email_templates WHERE name=? ORDER BY id LIMIT 1', [v.name]);
+      if (v.trigger_outcome) await conn.query('UPDATE email_templates SET trigger_outcome=NULL WHERE trigger_outcome=?', [v.trigger_outcome]);
+      if (alt) {
+        await conn.query('UPDATE email_templates SET subject=?, body=?, category=?, trigger_outcome=?, is_active=1, updated_by=? WHERE id=?',
+          [v.subject, v.body, v.category, v.trigger_outcome, req.user.id, alt.id]);
+        ersetzt++;
+      } else {
+        await conn.query('INSERT INTO email_templates (name, subject, body, category, trigger_outcome, created_by) VALUES (?,?,?,?,?,?)',
+          [v.name, v.subject, v.body, v.category, v.trigger_outcome, req.user.id]);
+        neu++;
+      }
+    }
+    if (req.body.alte_ausblenden) {
+      const [r] = await conn.query('UPDATE email_templates SET is_active=0, trigger_outcome=NULL WHERE is_active=1 AND name NOT IN (?)', [ok.map(v => v.name)]);
+      ausgeblendet = r.affectedRows;
+    }
+    await conn.commit();
+    await log(req.user.id, 'email_tmpl_import', 'template', null, { neu, ersetzt, ausgeblendet }, req.ip);
+    res.json({ ok: true, neu, ersetzt, ausgeblendet });
+  } catch (e) {
+    await conn.rollback().catch(() => {});
+    console.error('EmailTemplates Import:', e); res.status(500).json({ error: 'Import fehlgeschlagen, es wurde nichts geändert.' });
+  } finally { conn.release(); }
+});
+
 // DELETE /api/email-templates/:id — Admin löscht Vorlage
 router.delete('/:id', auth, adminOnly, async (req, res) => {
   const id = parseInt(req.params.id);

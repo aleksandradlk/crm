@@ -22,6 +22,11 @@ const zeit = v => {
 };
 // Zeiten stehen als Ortszeit in der Datenbank – ohne Zeitzonen-Umrechnung ausgeben
 const datumText = sql => new Date(String(sql).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', timeZone: 'UTC' });
+// „Anruf bis“: heute = spontan anrufen
+const anrufBisText = sql => {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  return String(sql).slice(0, 10) === `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}` ? 'Heute anrufen (spontan)' : `Anruf bis ${datumText(sql)}`;
+};
 const terminText = sql => {
   const d = new Date(String(sql).replace(' ', 'T').slice(0, 19) + 'Z');
   return d.toLocaleString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) + ' Uhr';
@@ -206,7 +211,7 @@ router.post('/', auth, async (req, res) => {
     const a = await laden(r.insertId);
     if (sofort) await bestaetigen(a, req.user.id, req.ip);
     else {
-      const wann = art === 'anruf_bis' ? `Anruf bis ${datumText(starts)}` : terminText(starts);
+      const wann = art === 'anruf_bis' ? anrufBisText(starts) : terminText(starts);
       await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',
         [leadId, req.user.id, `📅 Übergabe an ${closer.full_name}: ${wann}${topic ? ' – ' + topic : ''}`]);
       const offenTitel = await require('./bedarf').offeneFragen(leadId);
@@ -327,6 +332,14 @@ router.patch('/:id', auth, async (req, res) => {
     const topic = b.topic !== undefined ? String(b.topic || '').trim().slice(0, 200) || null : a.topic;
     const notes = b.notes !== undefined ? String(b.notes || '').trim().slice(0, 4000) || null : a.notes;
     const dauer = b.duration_min !== undefined ? Math.min(Math.max(parseInt(b.duration_min) || 30, 5), 480) : a.duration_min;
+    // Eigener Termin des Admins geht an einen Closer → wird zur warmen Übergabe (Thema + Painpoints Pflicht)
+    const wirdUebergabe = admin && !a.uebergabe && closerId !== a.closer_id && closerId !== req.user.id;
+    if (wirdUebergabe) {
+      const fehlt = [!topic && 'Thema', !painpoints && 'Painpoints'].filter(Boolean);
+      if (fehlt.length) return res.status(400).json({ error: `Bitte noch ausfüllen: ${fehlt.join(', ')}` });
+      const [[cl]] = await db.query('SELECT is_active FROM users WHERE id=?', [closerId]);
+      if (!cl || !cl.is_active) return res.status(400).json({ error: 'Diesen Closer gibt es nicht (mehr).' });
+    }
     // Neuer Closer oder neue Zeit für einen anderen → wieder als Vorschlag
     const neuVorschlag = closerId !== req.user.id
       && (closerId !== a.closer_id || starts !== a.starts_at || ['abgelehnt', 'gegenvorschlag'].includes(a.status));
@@ -338,21 +351,34 @@ router.patch('/:id', auth, async (req, res) => {
        WHERE id=?`,
       [starts, starts, closerId, topic, notes, dauer, status, neuVorschlag, neuVorschlag, art, painpoints, versprochen, a.id]);
     // Übergabe an einen anderen Closer: der Lead wandert sofort mit
-    if (a.uebergabe && closerId !== a.closer_id) {
+    if ((a.uebergabe || wirdUebergabe) && closerId !== a.closer_id) {
       const [[ld]] = await db.query('SELECT assigned_to FROM leads WHERE id=?', [a.lead_id]);
+      if (wirdUebergabe) {
+        await db.query('UPDATE appointments SET uebergabe=1, vorher_zugewiesen=? WHERE id=?', [ld ? ld.assigned_to : null, a.id]);
+        await db.query("UPDATE deals SET herkunft=COALESCE(herkunft, 'uebergabe_warm') WHERE lead_id=? AND status='open'", [a.lead_id]);
+      }
       if (ld && ld.assigned_to !== closerId) {
         await db.query('UPDATE leads SET assigned_to=? WHERE id=?', [closerId, a.lead_id]);
         await sicht.uebergeben(a.lead_id, ld.assigned_to, closerId);
         await db.query("UPDATE deals SET owner_id=? WHERE lead_id=? AND status='open'", [closerId, a.lead_id]);
+        await log(req.user.id, 'lead_assign', 'lead', a.lead_id, { assigned_to: closerId, via: 'uebergabe' }, req.ip);
       }
     }
     const neu = await laden(a.id);
     if (status === 'angenommen') await bestaetigen(neu, req.user.id, req.ip);
     else await db.query('UPDATE reminders SET done_at=NOW() WHERE appointment_id=? AND done_at IS NULL', [a.id]);
-    if (neuVorschlag) await mailAn(closerId, `📅 Termin für dich: ${neu.company}`, [
-      `${req.user.full_name || 'Der Admin'} schlägt dir einen Termin vor:`,
-      `<b>${terminText(starts)}</b> · ${dauer} Min.`, `<b>Kunde:</b> ${neu.company}`,
-      topic ? `<b>Thema:</b> ${topic}` : '', 'Bitte im CRM unter „Termine“ antworten.']);
+    if (neuVorschlag) {
+      const wann = art === 'anruf_bis' ? anrufBisText(starts) : `${terminText(starts)} · ${dauer} Min.`;
+      if (closerId !== a.closer_id) await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',
+        [a.lead_id, req.user.id, `📅 Übergabe an ${neu.closer_name || 'Closer'}: ${wann}${topic ? ' – ' + topic : ''}`]);
+      if (b.notify_mail !== false) await mailAn(closerId, `📅 ${closerId !== a.closer_id ? 'Neue Übergabe' : 'Termin'} für dich: ${neu.company}`, [
+        `${req.user.full_name || 'Der Admin'} ${closerId !== a.closer_id ? 'übergibt dir einen warmen Lead' : 'schlägt dir einen Termin vor'}:`,
+        `<b>${wann}</b>`,
+        `<b>Kunde:</b> ${neu.company}${neu.ceo ? ' (' + neu.ceo + ')' : ''}${neu.phone ? ' · ' + neu.phone : ''}`,
+        topic ? `<b>Thema:</b> ${topic}` : '', painpoints ? `<b>Painpoints:</b> ${painpoints}` : '',
+        neu.website ? `<b>Webseite:</b> ${neu.website}` : '', notes ? `<b>Notizen:</b> ${notes}` : '',
+        'Bitte im CRM unter „Termine“ annehmen, ablehnen oder eine andere Zeit vorschlagen.']);
+    }
     await log(req.user.id, 'termin_update', 'lead', a.lead_id, { appointment_id: a.id, status }, req.ip);
     res.json({ ok: true, status });
   } catch (e) { console.error('Termin PATCH:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }

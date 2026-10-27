@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf51">
+<link rel="stylesheet" href="/shared/style.css?v=nf52">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -633,29 +633,29 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf51"></script>
-<script src="/shared/datum.js?v=nf51"></script>
-<script src="/shared/bedarf-regeln.js?v=nf51"></script>
-<script src="/shared/bedarf.js?v=nf51"></script>
-<script src="/shared/mailvorschlag.js?v=nf51"></script>
-<script src="/shared/seitenpanel.js?v=nf51"></script>
-<script src="/shared/dialer.js?v=nf51"></script>
-<script src="/shared/provision.js?v=nf51"></script>
-<script src="/shared/deals.js?v=nf51"></script>
-<script src="/shared/calllists.js?v=nf51"></script>
-<script src="/shared/today.js?v=nf51"></script>
-<script src="/shared/ziele.js?v=nf51"></script>
-<script src="/shared/auswertung.js?v=nf51"></script>
-<script src="/shared/termine.js?v=nf51"></script>
-<script src="/shared/duplicates.js?v=nf51"></script>
-<script src="/shared/markdown.js?v=nf51"></script>
-<script src="/shared/wiki.js?v=nf51"></script>
-<script src="/shared/wiki-artikel.js?v=nf51"></script>
-<script src="/shared/lines.js?v=nf51"></script>
-<script src="/shared/finder.js?v=nf51"></script>
-<script src="/shared/board.js?v=nf51"></script>
-<script src="/shared/integrations.js?v=nf51"></script>
-<script src="/shared/startklar.js?v=nf51"></script>
+<script src="/shared/api.js?v=nf52"></script>
+<script src="/shared/datum.js?v=nf52"></script>
+<script src="/shared/bedarf-regeln.js?v=nf52"></script>
+<script src="/shared/bedarf.js?v=nf52"></script>
+<script src="/shared/mailvorschlag.js?v=nf52"></script>
+<script src="/shared/seitenpanel.js?v=nf52"></script>
+<script src="/shared/dialer.js?v=nf52"></script>
+<script src="/shared/provision.js?v=nf52"></script>
+<script src="/shared/deals.js?v=nf52"></script>
+<script src="/shared/calllists.js?v=nf52"></script>
+<script src="/shared/today.js?v=nf52"></script>
+<script src="/shared/ziele.js?v=nf52"></script>
+<script src="/shared/auswertung.js?v=nf52"></script>
+<script src="/shared/termine.js?v=nf52"></script>
+<script src="/shared/duplicates.js?v=nf52"></script>
+<script src="/shared/markdown.js?v=nf52"></script>
+<script src="/shared/wiki.js?v=nf52"></script>
+<script src="/shared/wiki-artikel.js?v=nf52"></script>
+<script src="/shared/lines.js?v=nf52"></script>
+<script src="/shared/finder.js?v=nf52"></script>
+<script src="/shared/board.js?v=nf52"></script>
+<script src="/shared/integrations.js?v=nf52"></script>
+<script src="/shared/startklar.js?v=nf52"></script>
 <script>
 let allLeads = [], allUsers = [], editingUserId = null;
 let panelDirty = false;
@@ -1382,7 +1382,8 @@ function renderPanelKeyInfo(l) {
     <div class="panel-actions">
       <button class="btn btn-ghost btn-sm" onclick="openCreateChatFromLead(${l.id})" title="Rücksprache erstellen"><i class="fas fa-comments"></i> Rücksprache</button>
       <button class="btn btn-ghost btn-sm" onclick="openEmailModal()"><i class="fas fa-envelope"></i> E-Mail</button>
-      <button class="btn btn-ghost btn-sm" onclick="Termine.openEditor({ lead: _panelLead })" title="Termin vereinbaren und einem Closer geben"><i class="fas fa-calendar-plus"></i> Termin</button>
+      <button class="btn btn-ghost btn-sm" onclick="Termine.openEditor({ lead: _panelLead })" title="Termin vereinbaren und einem Closer geben"><i class="fas fa-calendar-plus"></i> An Closer übergeben</button>
+      <button class="btn btn-ghost btn-sm" onclick="Termine.openEditor({ lead: _panelLead, art: 'heute' })" title="Ohne festen Termin: ein Closer ruft heute noch an"><i class="fas fa-bolt"></i> Heute anrufen lassen</button>
       <button class="btn btn-ghost btn-sm" onclick="Bedarf.open(${l.id}, { onClose: () => openLeadPanel(${l.id}) })"><i class="fas fa-clipboard-list"></i> Bedarfsanalyse</button>
       <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteLead(${l.id})" title="Lead löschen" style="color:var(--red);margin-left:auto"><i class="fas fa-trash"></i></button>
     </div>
@@ -2239,6 +2240,28 @@ function replacePlaceholders(text, lead) {
   return MailVorschlag.fuellen(text, lead);
 }
 
+// Mehrere Vorlagen aus einer JSON-Datei übernehmen (gleicher Name = ersetzen)
+async function importEmailTemplates(files) {
+  const f = files && files[0];
+  if (!f) return;
+  let vorlagen;
+  try {
+    const j = JSON.parse(await f.text());
+    vorlagen = Array.isArray(j) ? j : j.vorlagen;
+    if (!Array.isArray(vorlagen) || !vorlagen.length) throw new Error();
+  } catch (_) { return showToast('Die Datei ist keine gültige Vorlagen-Datei (JSON).', 'err'); }
+  const namen = new Set(vorlagen.map(v => String(v.name || '').trim()));
+  const weg = (_emailTemplates || []).filter(t => t.is_active && !namen.has(t.name));
+  if (!confirm(`${vorlagen.length} Vorlagen importieren? Vorlagen mit gleichem Namen werden ersetzt.`)) return;
+  const alte_ausblenden = weg.length ? confirm(`${weg.length} bisherige Vorlagen stehen nicht in der Datei (${weg.map(t => t.name).join(', ')}).\n\nOK = ausblenden (lässt sich jederzeit wieder einschalten)\nAbbrechen = behalten`) : false;
+  try {
+    const r = await api('POST', '/email-templates/import', { vorlagen, alte_ausblenden });
+    showToast(`Vorlagen importiert: ${r.neu} neu, ${r.ersetzt} ersetzt${r.ausgeblendet ? `, ${r.ausgeblendet} ausgeblendet` : ''}`);
+    if (typeof MailVorschlag !== 'undefined') MailVorschlag.reset();
+    loadEmailTemplatesForAdmin();
+  } catch (e) { showToast(e.message, 'err'); }
+}
+
 async function loadEmailTemplatesForAdmin() {
   try {
     _emailTemplates = await api('GET', '/email-templates');
@@ -2429,7 +2452,7 @@ function loadWiki() {
     title: 'Wissen für dein Team',
     sub: 'Alles, was deine Closer für Gespräche und Angebote brauchen, an einem Ort. Neue Unterlagen einfach hier hineinziehen.',
     templates: {
-      mode: 'manage', onNew: 'openTemplateMgmtModal()',
+      mode: 'manage', onNew: 'openTemplateMgmtModal()', onImport: 'importEmailTemplates(this.files)',
       slotHtml: '<div id="adminTemplateList" class="tpl-grid"></div>',
       hint: 'Platzhalter: <code>{{kunde}}</code> <code>{{firma}}</code> <code>{{closer}}</code> <code>{{telefon}}</code> <code>{{email}}</code>',
     },
