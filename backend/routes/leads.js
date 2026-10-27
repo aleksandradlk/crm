@@ -150,7 +150,31 @@ router.get('/dashboard', auth, adminOnly, async (req, res) => {
        GROUP BY u.id, u.full_name
        ORDER BY callsToday DESC`
     );
-    res.json({ callsToday, winsThisWeek, leadsTotal, leadsNew, perCloser });
+    // Verteilung aktiver Leads: wem zugewiesen und welche Branche (Zielgruppe).
+    // Branchen ohne Rücksicht auf Groß-/Kleinschreibung zusammengefasst, Anzeige in der häufigsten Schreibweise.
+    const [vRows] = await db.query(
+      `SELECT l.assigned_to AS id, u.full_name, TRIM(COALESCE(l.industry, '')) AS industry, COUNT(*) AS n
+       FROM leads l LEFT JOIN users u ON u.id = l.assigned_to
+       WHERE l.archived_at IS NULL
+       GROUP BY l.assigned_to, u.full_name, TRIM(COALESCE(l.industry, ''))`
+    );
+    const schreibweise = {};
+    vRows.forEach(r => {
+      const k = r.industry.toLowerCase();
+      (schreibweise[k] = schreibweise[k] || {})[r.industry] = (schreibweise[k][r.industry] || 0) + Number(r.n);
+    });
+    const branchenName = k => k ? Object.entries(schreibweise[k]).sort((a, b) => b[1] - a[1])[0][0] : null;
+    const personen = {};
+    vRows.forEach(r => {
+      const key = r.id && r.full_name ? r.id : 0;
+      const p = personen[key] = personen[key] || { id: key || null, full_name: key ? r.full_name : null, n: 0, branchen: {} };
+      const b = branchenName(r.industry.toLowerCase());
+      p.n += Number(r.n);
+      p.branchen[b || ''] = (p.branchen[b || ''] || 0) + Number(r.n);
+    });
+    const verteilung = Object.values(personen).sort((a, b) => b.n - a.n)
+      .map(p => ({ ...p, branchen: Object.entries(p.branchen).map(([name, n]) => ({ name: name || null, n })).sort((a, b) => b.n - a.n) }));
+    res.json({ callsToday, winsThisWeek, leadsTotal, leadsNew, perCloser, verteilung });
   } catch(e) {
     console.error('Dashboard error:', e);
     res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' });
