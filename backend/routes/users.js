@@ -3,6 +3,7 @@ const bcrypt   = require('bcryptjs');
 const db       = require('../db');
 const { auth, adminOnly } = require('../middleware/auth');
 const { log }  = require('../helpers/logger');
+const { toE164 } = require('../helpers/phone');
 
 const PERM_FIELDS = ['can_edit_contacts','can_archive_leads','can_reassign_leads','can_view_all_leads','can_create_users','can_generate_leads','can_manage_email_templates','can_abrechnung'];
 // Provision: zzgl. USt bzw. Sitz im Ausland (dann ohne USt)
@@ -187,6 +188,16 @@ router.patch('/:id', auth, adminOnly, async (req, res) => {
   delete logBody.password;
   await log(req.user.id, 'user_update', 'user', id, logBody, req.ip);
   res.json({ ok: true });
+});
+
+// PUT /api/users/me/eigenes-telefon — mit dem eigenen Telefon anrufen (Nummer) oder wieder aus (null)
+router.put('/me/eigenes-telefon', auth, async (req, res) => {
+  const roh = req.body.nummer ? String(req.body.nummer).trim() : '';
+  const nummer = roh ? toE164(roh) : null;
+  if (roh && !nummer) return res.status(400).json({ error: 'Die Nummer sieht ungültig aus, z. B. 0171 1234567.' });
+  await db.query('UPDATE users SET eigenes_telefon=? WHERE id=?', [nummer, req.user.id]);
+  await log(req.user.id, 'eigenes_telefon', 'user', req.user.id, { aktiv: !!nummer }, req.ip);
+  res.json({ ok: true, nummer });
 });
 
 // PATCH /api/users/:id/notify — Benachrichtigungs-Präferenzen speichern

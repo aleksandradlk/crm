@@ -80,10 +80,12 @@ const Integrationen = {
     const proNummer = {};
     zu.filter(u => telefoniert(u) && u.sipgate_nummer).forEach(u => { (proNummer[u.sipgate_nummer] = proNummer[u.sipgate_nummer] || []).push(u.full_name); });
     const doppelt = Object.entries(proNummer).filter(([, l]) => l.length > 1);
-    const ohne = zu.filter(u => u.role === 'closer' && !telefoniert(u));
+    const eigen = zu.filter(u => u.eigenes_telefon);
+    const ohne = zu.filter(u => u.role === 'closer' && !telefoniert(u) && !u.eigenes_telefon);
     const hinweise = [
       mitTest.length || testNr.has(s.firmennummer) ? `<b>Testnummern laufen ab</b> (sipgate zeigt das Datum unter Rufnummern, z. B. „Nutzbar bis 20.11.2026“). Betroffen: ${escHtml([...(testNr.has(s.firmennummer) ? ['Firmennummer'] : []), ...mitTest.map(u => u.full_name)].join(', '))}. Rechtzeitig feste Nummern buchen und hier zuordnen.` : '',
       doppelt.length ? `<b>Gleiche Nummer bei mehreren:</b> ${doppelt.map(([n, l]) => `${escHtml(fmtPhoneDE(n))} (${escHtml(l.join(', '))})`).join('; ')}. Rückrufe auf diese Nummer klingeln nur dort, wo sie in sipgate als Ziel eingestellt ist.` : '',
+      eigen.length ? `<b>Mit eigenem Telefon:</b> ${eigen.map(u => `${escHtml(u.full_name)} (${escHtml(fmtPhoneDE(u.eigenes_telefon))})`).join(', ')} – „Anrufen“ öffnet bei ihnen die Telefon-App, Kunden sehen diese Nummer. Ausschalten kann man das unter Einstellungen.` : '',
       ohne.length ? `<b>Noch ohne sipgate-Zugang:</b> ${escHtml(ohne.map(u => u.full_name).join(', '))} – diese Closer können im CRM noch nicht anrufen.` : '',
     ].filter(Boolean);
     el.innerHTML = head + `<div class="ig-body">

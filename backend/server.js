@@ -745,6 +745,9 @@ migrate(`CREATE TABLE IF NOT EXISTS provision_abschluesse (
 for (const col of ['provision_zzgl_ust TINYINT(1) NOT NULL DEFAULT 0', 'provision_ausland TINYINT(1) NOT NULL DEFAULT 0'])
   migrate(`ALTER TABLE users ADD COLUMN ${col}`).catch(() => {});
 
+// Mit eigenem Telefon anrufen (solange es keine Firmen-Telefonie gibt) – Rollback: db/rollback/2026-10-27_eigenes-telefon.sql
+migrate('ALTER TABLE users ADD COLUMN eigenes_telefon VARCHAR(30) NULL').catch(() => {});
+
 // ── Cron: Activity Log nach 7 Tagen bereinigen ───────────────
 cron.schedule('0 3 * * *', async () => {
   try {

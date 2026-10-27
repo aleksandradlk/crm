@@ -263,7 +263,7 @@ router.get('/setup', auth, adminOnly, async (req, res) => {
       geraete: (await geraeteVon(u.id)).map(d => ({ id: d.id, alias: d.alias, typ: d.type, online: !!d.online })),
     })));
     const [crm] = await db.query(
-      `SELECT id, full_name, role, sipgate_user, sipgate_device, sipgate_nummer, sipgate_handy FROM users
+      `SELECT id, full_name, role, sipgate_user, sipgate_device, sipgate_nummer, sipgate_handy, eigenes_telefon FROM users
        WHERE is_active=1 ORDER BY role='admin' DESC, full_name`);
     res.json({
       verbunden: true, webhookUrl, firmennummer: cfg.firmennummer || null,
@@ -426,11 +426,13 @@ router.get('/benutzer/:userId', auth, adminOnly, async (req, res) => {
 
 // ── Für alle: kann ich über sipgate anrufen? ────────────────────
 router.get('/config', auth, async (req, res) => {
-  if (!istAktiv()) return res.json({ aktiv: false });
-  const [[u]] = await db.query('SELECT sipgate_user, sipgate_device, sipgate_nummer, sipgate_handy FROM users WHERE id=?', [req.user.id]);
+  const [[u]] = await db.query('SELECT sipgate_user, sipgate_device, sipgate_nummer, sipgate_handy, eigenes_telefon FROM users WHERE id=?', [req.user.id]).catch(() => [[null]]);
+  // Mit eigenem Telefon: „Anrufen“ öffnet die Telefon-App, sipgate bleibt außen vor
+  const eigen = (u && u.eigenes_telefon) || null;
+  if (!istAktiv()) return res.json({ aktiv: false, eigen });
   res.json({
-    aktiv: true,
-    bereit: !!(u && (u.sipgate_device || u.sipgate_user || u.sipgate_handy)),
+    aktiv: true, eigen,
+    bereit: !eigen && !!(u && (u.sipgate_device || u.sipgate_user || u.sipgate_handy)),
     handy: !!(u && !u.sipgate_user && u.sipgate_handy),
     nummer: await aktuelleNummer(req.user.id),
   });

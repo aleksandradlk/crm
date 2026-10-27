@@ -854,6 +854,8 @@ const Sipgate = {
     return this.config;
   },
   bereit() { return !!(this.config && this.config.aktiv && this.config.bereit); },
+  // Eigene Nummer eingetragen: „Anrufen“ öffnet die Telefon-App (Handy, am PC z. B. Smartphone-Link)
+  eigen() { return (this.config && this.config.eigen) || null; },
   async anrufen(leadId, label) {
     const r = await api('POST', '/sipgate/anrufen', { leadId });
     showToast(`Dein sipgate-Telefon klingelt – nimm ab, dann wird ${label || 'der Kunde'} angerufen.`);
@@ -879,10 +881,15 @@ const Softphone = {
   // Nummern noch prüft, wählen alle über ihr Telefon – der Anruf wird trotzdem erfasst.
   canDial() {
     // Ist sipgate eingerichtet, telefoniert der Vertriebler darüber – nicht über Twilio
-    if (typeof Sipgate !== 'undefined' && Sipgate.bereit()) return false;
+    if (typeof Sipgate !== 'undefined' && (Sipgate.bereit() || Sipgate.eigen())) return false;
     return this.isEnabled() && this.hasCallerId();
   },
   hinweisOhneNummer() {
+    if (typeof Sipgate !== 'undefined' && Sipgate.eigen()) {
+      if (!this._hinweisGezeigt) showToast(`Anruf über dein eigenes Telefon – Kunden sehen ${fmtPhoneDE(Sipgate.eigen())}. Der Anruf wird erfasst.`);
+      this._hinweisGezeigt = true;
+      return;
+    }
     if (typeof Sipgate !== 'undefined' && Sipgate.config && Sipgate.config.aktiv && !Sipgate.config.bereit && !this._hinweisGezeigt) {
       this._hinweisGezeigt = true;
       showToast('Dir ist noch kein sipgate-Telefon zugeordnet – der Anruf läuft über dein Telefon und wird trotzdem erfasst.');
@@ -1135,11 +1142,46 @@ const Softphone = {
 async function renderCallerIdSettings(containerId) {
   const el = document.getElementById(containerId);
   if (!el) return;
-  const cfg = await Softphone.loadConfig();
-  if (!cfg.enabled) {
-    el.innerHTML = `<div class="callerid-hint"><i class="fas fa-info-circle"></i> Telefonie im Browser ist noch nicht eingerichtet. Bis dahin wird über dein Telefon gewählt.</div>`;
+  const [cfg, sg] = await Promise.all([Softphone.loadConfig(), Sipgate.loadConfig()]);
+  // Mit eigenem Telefon anrufen: gilt vor allem anderen
+  const eigen = sg.eigen || '';
+  const eigenHtml = `<div class="eigen-tel">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;margin-bottom:8px">
+        <input type="checkbox" id="eigenTelAn" ${eigen ? 'checked' : ''} style="accent-color:var(--accent);width:16px;height:16px"
+          onchange="document.getElementById('eigenTelBox').style.display=this.checked?'':'none';if(!this.checked)saveEigenesTelefon('${containerId}')">
+        <span>Mit meinem eigenen Telefon anrufen</span>
+      </label>
+      <div id="eigenTelBox" style="${eigen ? '' : 'display:none'}">
+        <div style="display:flex;gap:8px;margin-bottom:6px">
+          <input type="tel" id="eigenTelNr" class="form-control" placeholder="Meine Nummer, z. B. 0171 1234567" value="${escHtml(eigen ? fmtPhoneDE(eigen) : '')}">
+          <button class="btn btn-primary btn-sm" onclick="saveEigenesTelefon('${containerId}')" style="white-space:nowrap"><i class="fas fa-check"></i> Übernehmen</button>
+        </div>
+        <div class="callerid-hint"><i class="fas fa-info-circle"></i> „Anrufen“ öffnet die Telefon-App: am Handy direkt, am PC z. B. über Smartphone-Link (Windows) oder dein iPhone (Mac). Kunden sehen diese Nummer. Der Anruf wird im CRM erfasst, das Ergebnis trägst du danach ein.</div>
+      </div>
+    </div>`;
+  if (eigen || !cfg.enabled) {
+    el.innerHTML = eigenHtml + (eigen ? '' : `<div class="callerid-hint" style="margin-top:8px"><i class="fas fa-info-circle"></i> Telefonie im Browser ist noch nicht eingerichtet. Bis dahin wird über dein Telefon gewählt.</div>`);
     return;
   }
+  el.innerHTML = eigenHtml;
+  el.insertAdjacentHTML('beforeend', '<div id="' + containerId + '-tw" style="margin-top:12px"></div>');
+  renderTwilioSettings(containerId, cfg);
+}
+async function saveEigenesTelefon(containerId) {
+  const an = document.getElementById('eigenTelAn')?.checked;
+  const nr = an ? (document.getElementById('eigenTelNr')?.value || '').trim() : '';
+  if (an && !nr) return showToast('Bitte deine Nummer eintragen', 'err');
+  try {
+    await api('PUT', '/users/me/eigenes-telefon', { nummer: nr || null });
+    showToast(nr ? 'Gespeichert ✓ – „Anrufen“ läuft jetzt über dein Telefon' : 'Aus – „Anrufen“ läuft wieder über das CRM');
+    Softphone._hinweisGezeigt = false;
+    renderCallerIdSettings(containerId);
+  } catch (e) { showToast(e.message, 'err'); }
+}
+// Absendernummer für Twilio (Telefonie im Browser), unter dem Block „eigenes Telefon“
+async function renderTwilioSettings(containerId, cfg) {
+  const el = document.getElementById(containerId + '-tw');
+  if (!el) return;
   // Vom Admin zugeteilte NovaFlow-Nummer: nichts einzurichten
   if (cfg.phone_line) {
     el.innerHTML = `<div class="line-current"><span class="line-ic"><i class="fas fa-phone-volume"></i></span>
