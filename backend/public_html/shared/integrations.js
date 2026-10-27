@@ -90,14 +90,16 @@ const Integrationen = {
         <div><span>Anrufe automatisch erfassen</span><b>${hookOk ? 'Aktiv' : 'Nicht eingerichtet'}</b></div>
       </div>
       ${s.fehler ? `<div class="line-err"><i class="fas fa-exclamation-triangle"></i> ${escHtml(s.fehler)}</div>` : ''}
+      ${!hook && !s.fehler ? `<div class="line-err"><i class="fas fa-exclamation-triangle"></i> Das CRM kann bei sipgate nicht abfragen, wohin Anrufe gemeldet werden. Meist fehlt dem Token der Bereich für Webhooks (sipgate.io), dann einen neuen Token mit allen Bereichen anlegen. Ohne diese Meldungen werden Anrufe trotzdem gestartet, aber Dauer, Ergebnis und verpasste Rückrufe kommen nicht ins CRM.
+        <button class="btn btn-ghost btn-sm" style="margin-left:6px" onclick="Integrationen.sgWebhooks()">Jetzt eintragen</button></div>` : ''}
       ${hook && !hookOk ? `<div class="line-err"><i class="fas fa-exclamation-triangle"></i> Damit Anrufe automatisch beim Lead landen, muss sipgate sie an <span class="mono">${escHtml(s.webhookUrl)}</span> melden.
         ${hook.incomingUrl && !hook.eingehend ? ` Zurzeit ist dort eine andere Adresse eingetragen (<span class="mono">${escHtml(hook.incomingUrl)}</span>).` : ''}
         <button class="btn btn-ghost btn-sm" style="margin-left:6px" onclick="Integrationen.sgWebhooks()">Jetzt eintragen</button></div>` : ''}
       <div class="ig-row">
-        <select id="igSgFirma" class="form-control">${nummern.map(n => `<option value="${escHtml(n.nummer)}" ${n.nummer === s.firmennummer ? 'selected' : ''}>${escHtml(n.anzeige)}</option>`).join('') || '<option value="">Keine Nummer</option>'}</select>
+        <select id="igSgFirma" class="form-control">${nummern.length ? `<option value="" ${s.firmennummer ? '' : 'selected'}>– Firmennummer wählen –</option>` : ''}${nummern.map(n => `<option value="${escHtml(n.nummer)}" ${n.nummer === s.firmennummer ? 'selected' : ''}>${escHtml(n.anzeige)}${n.test ? ' · Testnummer' : ''}</option>`).join('') || '<option value="">Keine Nummer</option>'}</select>
         <button class="btn btn-ghost btn-sm" onclick="Integrationen.sgFirma()">Als Firmennummer</button>
       </div>
-      <p class="ig-hint">Die <b>Firmennummer</b> sehen Kunden, wenn ein Vertriebler keine eigene Nummer hat.</p>
+      <p class="ig-hint">Die <b>Firmennummer</b> sehen Kunden, wenn ein Vertriebler keine eigene Nummer hat. Am besten eine feste Nummer wählen, keine Testnummer.</p>
       ${hinweise.map(h => `<div class="line-err"><i class="fas fa-exclamation-triangle"></i> ${h}</div>`).join('')}
       ${this.poolHtml(pool)}
       <div class="modal-section-label" style="margin:4px 0 0">Wer telefoniert womit?</div>
@@ -161,6 +163,7 @@ const Integrationen = {
       </div>
       <div class="ig-row">
         <button class="btn btn-ghost btn-sm" onclick="Integrationen.poolVerteilen()"><i class="fas fa-random"></i> Freie Nummern an Closer ohne Nummer verteilen</button>
+        ${pool.some(n => n.ohne_datum) ? `<button class="btn btn-ghost btn-sm" onclick="Integrationen.poolTestDatum()"><i class="fas fa-calendar-alt"></i> Ablaufdatum für alle Testnummern setzen</button>` : ''}
       </div>
       <p class="ig-hint">Nummern aus sipgate erscheinen hier automatisch. Trag bei <b>Testnummern</b> das Datum aus sipgate ein („Nutzbar bis …“), dann erinnert dich „Heute → Fällig“ 14 Tage vorher. Neue Closer bekommen beim ersten Zuordnen automatisch eine freie Nummer, feste Nummern zuerst. Abgelaufene Nummern werden nicht mehr gesendet, dann sehen Kunden die Firmennummer. Selbst eingetragene Nummern müssen auch in sipgate gebucht sein.</p>`;
   },
@@ -186,6 +189,20 @@ const Integrationen = {
     if (!await customConfirm('Wer die Nummer nutzt, telefoniert danach mit der Firmennummer.', { title: 'Nummer aus dem Pool entfernen?', okLabel: 'Entfernen', danger: true })) return;
     try { const r = await api('DELETE', `/sipgate/nummern/${encodeURIComponent(nr)}`); showToast(r.freigegeben ? `Entfernt, ${r.freigegeben} Benutzer jetzt mit Firmennummer` : 'Entfernt'); this.loadSipgate(); }
     catch (e) { showToast(e.message, 'err'); }
+  },
+  async poolTestDatum() {
+    const ein = (prompt('Bis wann sind die Testnummern nutzbar? (steht in sipgate unter Rufnummern, z. B. 20.11.2026)', '') || '').trim();
+    if (!ein) return;
+    const m = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(ein);
+    if (!m) return showToast('Bitte als TT.MM.JJJJ eingeben, z. B. 20.11.2026', 'err');
+    const iso = `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+    try {
+      const { nummern } = await api('GET', '/sipgate/nummern');
+      const test = nummern.filter(n => n.test && !n.gueltig_bis);
+      for (const n of test) await api('PUT', `/sipgate/nummern/${encodeURIComponent(n.nummer)}`, { bezeichnung: n.bezeichnung, gueltig_bis: iso });
+      showToast(`${test.length} Testnummern: nutzbar bis ${ein} ✓`);
+      this.loadSipgate();
+    } catch (e) { showToast(e.message, 'err'); }
   },
   async poolVerteilen() {
     try {
