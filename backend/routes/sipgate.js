@@ -189,6 +189,31 @@ async function geraetVon(su) {
   return (g.find(d => d.online) || g[0] || {}).id || null;
 }
 
+// Zugang des Admins ohne Zuordnung: gleiche E-Mail, sonst der Zugang, dem der Token gehört,
+// sonst der einzige. Klappt das nicht, sagt grund, was sipgate gemeldet hat.
+async function adminZugang(email) {
+  let liste;
+  try { liste = await sipgateBenutzer(); }
+  catch (e) { return { grund: 'sipgate gibt die Zugänge nicht heraus: ' + e.message }; }
+  if (!liste.length) return { grund: 'sipgate meldet keinen Zugang (Benutzer). Bitte in sipgate prüfen, ob unter Benutzer jemand angelegt ist.' };
+  const mail = String(email || '').toLowerCase();
+  let su = mail && liste.find(x => x.email && x.email.toLowerCase() === mail);
+  if (!su) {
+    const info = await sg('GET', 'authorization/userinfo').catch(() => null);
+    su = info && info.sub && liste.find(x => x.id === info.sub);
+  }
+  if (!su && liste.length === 1) su = liste[0];
+  if (su) return { su };
+  const namen = liste.map(x => [x.firstname, x.lastname].filter(Boolean).join(' ') || x.email || x.id).join(', ');
+  return { grund: `sipgate meldet ${liste.length} Zugänge (${namen}). Unter Integrationen → sipgate → „Wer telefoniert womit?“ in deiner Zeile deinen Zugang wählen.` };
+}
+async function keinTelefon(su) {
+  const name = [su.firstname, su.lastname].filter(Boolean).join(' ') || su.email || su.id;
+  try { await sg('GET', `${su.id}/devices`); }
+  catch (e) { return `sipgate gibt die Telefone deines Zugangs „${name}“ nicht heraus: ${e.message}`; }
+  return `sipgate meldet für deinen Zugang „${name}“ kein Telefon. Öffne die sipgate App oder das Web-Telefon, melde dich dort an und versuch es nochmal.`;
+}
+
 // Nummer, die Kunden bei einem Benutzer sehen (abgelaufene eigene → Firmennummer)
 async function aktuelleNummer(userId) {
   const [[u]] = await db.query('SELECT sipgate_nummer FROM users WHERE id=?', [userId]);
@@ -456,24 +481,29 @@ router.post('/anrufen', auth, async (req, res) => {
     if (!sicht.darfSehen(req.user, lead)) return res.status(403).json({ error: 'Kein Zugriff auf diesen Lead' });
     const ziel = toE164(lead.phone);
     if (!ziel) return res.status(400).json({ error: 'Die Telefonnummer des Leads ist ungültig' });
-    const [[u]] = await db.query('SELECT sipgate_user, sipgate_device, sipgate_nummer, sipgate_handy FROM users WHERE id=?', [req.user.id]);
-    let geraet = u && u.sipgate_device, erst = null;
+    const [[u]] = await db.query('SELECT email, sipgate_user, sipgate_device, sipgate_nummer, sipgate_handy FROM users WHERE id=?', [req.user.id]);
+    let geraet = u && u.sipgate_device, erst = null, grund = null;
     if (!geraet && u && u.sipgate_user) {
       const su = (await sipgateBenutzer()).find(x => x.id === u.sipgate_user);
       geraet = await geraetVon(su);
+      if (!geraet) grund = su ? await keinTelefon(su) : 'Der zugeordnete sipgate-Zugang ist bei sipgate nicht mehr vorhanden. Unter Integrationen → sipgate → „Wer telefoniert womit?“ neu wählen.';
     }
-    // Admin ohne Zuordnung, und es gibt bei sipgate nur einen Zugang: das ist ihrer
+    // Admin ohne Zuordnung: der Zugang, dem der sipgate-Token gehört (wird gemerkt)
     if (!geraet && u && !u.sipgate_user && !u.sipgate_handy && req.user.role === 'admin') {
-      const liste = await sipgateBenutzer().catch(() => []);
-      if (liste.length === 1) geraet = await geraetVon(liste[0]);
+      const r = await adminZugang(u.email);
+      if (r.su) {
+        geraet = await geraetVon(r.su);
+        await db.query('UPDATE users SET sipgate_user=? WHERE id=? AND sipgate_user IS NULL', [r.su.id, req.user.id]);
+        if (!geraet) grund = await keinTelefon(r.su);
+      } else grund = r.grund;
     }
     // Ohne eigenen Zugang: über das Gerät des Hauptzugangs, zuerst klingelt das Handy des Closers
     if (!geraet && u && u.sipgate_handy) { erst = u.sipgate_handy; geraet = await hauptGeraet(); }
     if (!geraet) return res.status(400).json({ error: u && u.sipgate_handy
       ? 'Für Anrufe ohne eigenen sipgate-Zugang braucht der Admin ein sipgate-Telefon. Ein Admin kann das unter Integrationen → sipgate erledigen.'
-      : req.user.role === 'admin'
+      : grund || (req.user.role === 'admin'
         ? 'Dir ist noch kein sipgate-Telefon zugeordnet. Unter Integrationen → sipgate → „Wer telefoniert womit?“ in deiner Zeile deinen sipgate-Zugang und das Telefon wählen.'
-        : 'Dir ist noch kein sipgate-Telefon zugeordnet. Ein Admin kann das unter Integrationen → sipgate erledigen.' });
+        : 'Dir ist noch kein sipgate-Telefon zugeordnet. Ein Admin kann das unter Integrationen → sipgate erledigen.') });
 
     const [c] = await db.query(
       `INSERT INTO call_logs (lead_id, user_id, phone_number, direction, started_at, status)

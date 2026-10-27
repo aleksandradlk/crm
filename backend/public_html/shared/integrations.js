@@ -63,6 +63,7 @@ const Integrationen = {
     const geraetOpts = (sUser, aktuell) => {
       const b = benutzer.find(x => x.id === sUser);
       if (!b) return '<option value="">–</option>';
+      if (!b.geraete.length && !b.defaultDevice) return '<option value="">Kein Telefon gemeldet – sipgate App öffnen</option>';
       return `<option value="">Standard-Telefon</option>` + b.geraete.map(d =>
         `<option value="${escHtml(d.id)}" ${d.id === aktuell ? 'selected' : ''}>${escHtml(d.alias || d.id)}${d.online ? ' · online' : ''}</option>`).join('');
     };
