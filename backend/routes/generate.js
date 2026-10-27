@@ -1,7 +1,22 @@
 const router  = require('express').Router();
 const Anthropic = require('@anthropic-ai/sdk');
-const { auth } = require('../middleware/auth');
+const { auth, adminOnly } = require('../middleware/auth');
 const { log } = require('../helpers/logger');
+const db = require('../db');
+
+// Vorgaben für Closer (Admin stellt sie unter „Leads generieren“ ein, app_settings.finder_vorgaben):
+// erlaubte Branchen und feste Größe. Der Admin selbst sucht frei.
+const GROESSEN = { small: 'klein (bis 49 Mitarbeiter, auch inhabergeführte Kleinbetriebe)', medium: 'Mittelstand (50–250 Mitarbeiter)' };
+const VORGABEN_STANDARD = { branchen: ['Autohäuser', 'Maler', 'Autoaufbereiter', 'Badsanierer', 'Handwerksbetriebe'], groesse: 'small' };
+async function vorgaben() {
+  const [[r]] = await db.query("SELECT value FROM app_settings WHERE key_name='finder_vorgaben'").catch(() => [[null]]);
+  let v = {};
+  try { v = r ? JSON.parse(r.value) : {}; } catch (_) {}
+  return {
+    branchen: Array.isArray(v.branchen) ? v.branchen : VORGABEN_STANDARD.branchen,
+    groesse: v.groesse !== undefined ? v.groesse : VORGABEN_STANDARD.groesse,
+  };
+}
 
 const FIELD_LABELS = {
   company:   'Unternehmensname',
@@ -58,13 +73,40 @@ Antworte NUR mit diesem JSON-Array:
 [{"company":"Name","ceo":null,"email":null,"phone":null,"location":"Stadt","website":null,"linkedin_url":null,"industry":"Branche","employees":null,"revenue":null,"source":"web","confidence":70,"notes":null}]`;
 }
 
+// GET /api/generate/vorgaben — Vorgaben für Closer (alle mit Zugriff auf die Suche)
+router.get('/vorgaben', auth, async (req, res) => {
+  res.json({ ...(await vorgaben()), groessen: GROESSEN });
+});
+// PUT /api/generate/vorgaben — Admin legt Branchen und Größe für Closer fest
+router.put('/vorgaben', auth, adminOnly, async (req, res) => {
+  const branchen = [...new Set((Array.isArray(req.body.branchen) ? req.body.branchen : String(req.body.branchen || '').split(','))
+    .map(b => String(b).trim().slice(0, 60)).filter(Boolean))].slice(0, 30);
+  const groesse = req.body.groesse in GROESSEN ? req.body.groesse : '';
+  await db.query("INSERT INTO app_settings (key_name, value) VALUES ('finder_vorgaben', ?) ON DUPLICATE KEY UPDATE value=VALUES(value)",
+    [JSON.stringify({ branchen, groesse })]);
+  await log(req.user.id, 'finder_vorgaben', 'system', null, { branchen, groesse }, req.ip);
+  res.json({ ok: true, branchen, groesse });
+});
+
 // POST /api/generate — KI-Lead-Generierung mit Live-Web-Suche (Admin oder can_generate_leads)
 router.post('/', auth, async (req, res) => {
   if (req.user.role !== 'admin' && !req.user.can_generate_leads)
     return res.status(403).json({ error: 'Keine Berechtigung für Lead-Generierung' });
 
-  const { query, location, size, max_leads, fields, extra } = req.body;
+  const { location, max_leads, fields, extra } = req.body;
+  let query = String(req.body.query || '').trim();
+  let size = req.body.size;
   if (!query) return res.status(400).json({ error: 'Suchbegriff fehlt' });
+  // Closer: nur freigegebene Branchen, Größe wie vom Admin festgelegt
+  if (req.user.role !== 'admin') {
+    const v = await vorgaben();
+    if (v.branchen.length) {
+      const treffer = v.branchen.find(b => b.toLowerCase() === query.toLowerCase());
+      if (!treffer) return res.status(400).json({ error: `Bitte eine dieser Branchen wählen: ${v.branchen.join(', ')}` });
+      query = treffer;
+    }
+    size = GROESSEN[v.groesse] || '';
+  } else if (GROESSEN[size]) size = GROESSEN[size];
 
   const apiKey = process.env.CLAUDE_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'Claude API Key nicht konfiguriert (.env)' });
@@ -74,6 +116,8 @@ router.post('/', auth, async (req, res) => {
   // aber gedeckelt, damit ein einzelner Generieren-Klick nie außer Kontrolle gerät.
   const maxSearches = Math.min(Math.max(maxL, 3), 20);
 
+  // Je Lead ca. 250 Token JSON – bei festen 4000 Token brach die Liste ab 15–20 Leads ab
+  const maxTokens = Math.min(16000, 2000 + maxL * 300);
   const client = new Anthropic({ apiKey });
   const tools  = [{ type: 'web_search_20250305', name: 'web_search', max_uses: maxSearches }];
 
@@ -81,7 +125,7 @@ router.post('/', auth, async (req, res) => {
     let messages = [{ role: 'user', content: buildUserPrompt({ query, location, size, maxL, extra, fields }) }];
     let response  = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 4000,
+      max_tokens: maxTokens,
       system: SYSTEM_PROMPT,
       tools,
       messages,
@@ -94,7 +138,7 @@ router.post('/', auth, async (req, res) => {
       messages = [...messages, { role: 'assistant', content: response.content }];
       response = await client.messages.create({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 4000,
+        max_tokens: maxTokens,
         system: SYSTEM_PROMPT,
         tools,
         messages,
