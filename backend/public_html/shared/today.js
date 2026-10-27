@@ -44,6 +44,10 @@ const Today = {
           </section>
         </div>
         <div class="today-col">
+          ${opts.isAdmin ? `<section class="card today-card is-faellig" id="todayFaelligCard" hidden>
+            <div class="card-header"><div class="card-title"><i class="fas fa-clipboard-check"></i> Fällig: Abrechnung &amp; Auszahlungen <span class="badge" id="todayFaelligCount">0</span></div></div>
+            <div class="today-list" id="todayFaellig"></div>
+          </section>` : ''}
           <section class="card today-card">
             <div class="card-header"><div class="card-title"><i class="fas fa-handshake"></i> Deals brauchen Aufmerksamkeit <span class="badge" id="todayDealCount">0</span></div></div>
             <div class="today-list" id="todayDeals"></div>
@@ -68,6 +72,51 @@ const Today = {
       this.render();
     } catch (e) { showToast(e.message, 'err'); }
     this.loadLists();
+    if (this.opts.isAdmin) this.loadFaellig();
+  },
+
+  // Admin: was in Abrechnung und Provision ansteht (Angebote anfordern stehen schon oben)
+  async loadFaellig() {
+    const card = document.getElementById('todayFaelligCard');
+    if (!card) return;
+    try { this.faellig = await api('GET', '/faellig'); } catch (e) { card.hidden = true; return; }
+    const punkte = (this.faellig.punkte || []).filter(p => p.aktion?.typ !== 'anfrage');
+    card.hidden = !punkte.length;
+    document.getElementById('todayFaelligCount').textContent = punkte.length;
+    const datum = iso => iso ? new Date(String(iso).slice(0, 10) + 'T12:00:00').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) : '';
+    const GR = { angebot: 'Angebot', rechnung: 'Rechnung', zahlung: 'Zahlung', betreuung: 'Betreuung', provision: 'Auszahlung' };
+    document.getElementById('todayFaellig').innerHTML = punkte.map((p, i) => {
+      const a = p.aktion || {};
+      const knopf = a.typ === 'auszahlung'
+        ? `<button class="btn btn-primary btn-sm" onclick="Today.ausgezahlt(${i})" title="Als ausgezahlt markieren"><i class="fas fa-check"></i> Ausgezahlt</button>`
+        : a.typ === 'abrechnung' ? `<button class="btn btn-ghost btn-sm" onclick="Today.zurAbrechnung('${escHtml(a.bereich || '')}')">Öffnen</button>` : '';
+      return `<div class="today-row ${p.dringend ? 'is-late' : ''}">
+        <div class="today-row-main">
+          <div class="today-row-title"><span class="today-tag">${GR[p.gruppe] || ''}</span> ${escHtml(p.titel)}</div>
+          <div class="today-row-sub">${escHtml(p.text)}</div>
+        </div>
+        <span class="today-row-meta">${p.dringend ? '⚠ ' : ''}${datum(p.datum)}</span>
+        <div class="today-row-actions">${knopf}</div>
+      </div>`;
+    }).join('');
+    this._faelligListe = punkte;
+  },
+
+  zurAbrechnung(bereich) {
+    const pfad = '/abrechnung' + (bereich ? '/' + bereich : '');
+    if (typeof oeffneAbrechnung === 'function') oeffneAbrechnung(pfad); else window.open(pfad, '_blank');
+  },
+
+  async ausgezahlt(i) {
+    const p = (this._faelligListe || [])[i];
+    if (!p) return;
+    const a = p.aktion;
+    if (!confirm(`${p.titel}\n\nAls ausgezahlt markieren?`)) return;
+    try {
+      await api('POST', '/provision/auszahlung', { schluessel: a.schluessel, user_id: a.user_id, betrag: a.betrag });
+      showToast('Als ausgezahlt markiert');
+      this.loadFaellig();
+    } catch (e) { showToast(e.message, 'err'); }
   },
 
   async loadLists() {

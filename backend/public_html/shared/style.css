@@ -2708,3 +2708,11 @@ tr.ds-flash td { background: color-mix(in srgb, var(--copper) 14%, transparent);
 .ds-bedarf .bd-row > label { padding-top: 0; }
 .ds-tabs button { white-space: normal; }
 .ds-tabs button span { line-height: 1.15; text-align: center; overflow: visible; }
+
+/* Heute: Fällig (Admin) */
+.today-card.is-faellig .card-title > i { color: var(--copper); }
+.today-card.is-faellig .today-row { cursor: default; }
+.today-tag { display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text3); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; margin-right: 4px; vertical-align: 1px; }
+.vr-grid .vr-inline { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; font-size: 13px; color: var(--text2); cursor: pointer; }
+.vr-grid .vr-inline input { width: 15px; height: 15px; accent-color: var(--accent); }
+.today-card.is-faellig .today-row-sub { white-space: normal; }

@@ -75,7 +75,9 @@ async function angebotStatusAnCrm(a) {
   // Wert: einmalige Summe (netto); reine Monats-Angebote mit Jahreswert
   const wert = a.summen.netto > 0 ? a.summen.netto : Math.round((a.monatlichSumme || 0) * 12 * 100) / 100;
   if (a.status === 'angenommen' && deal.status !== 'won') {
-    await markWon(deal, deal.owner_id || deal.created_by, wert || undefined);
+    // Als Admin gewonnen setzen (Angebot wurde in der Abrechnung angenommen) – der Closer bekommt dann einen Hinweis
+    const [[admin]] = await db.query("SELECT id FROM users WHERE role='admin' AND is_active=1 ORDER BY id LIMIT 1");
+    await markWon(deal, admin ? admin.id : deal.owner_id || deal.created_by, wert || undefined);
     await log(deal.owner_id || deal.created_by, 'deal_won', 'lead', deal.lead_id, { deal_id: deal.id, angebot: a.nummer }, null);
   } else if (a.status === 'abgelehnt' && deal.status === 'open') {
     await markLost(deal, deal.owner_id || deal.created_by, `Angebot ${a.nummer} abgelehnt`);
@@ -86,8 +88,14 @@ async function angebotStatusAnCrm(a) {
     if (st && (!cur || cur.sort_order < st.sort_order)) {
       await db.query('UPDATE deals SET stage_id=?, stage_changed_at=NOW(), value=IF(value=0, ?, value) WHERE id=?', [st.id, wert, deal.id]);
     }
-    await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',
-      [deal.lead_id, deal.owner_id || deal.created_by, `📄 Angebot ${a.nummer} versendet`]);
+    // Beim ersten Versand wie „Angebot verschickt“: Closer benachrichtigen, Nachfassen planen
+    if (!deal.angebot_gesendet_at) {
+      const [[admin]] = await db.query("SELECT id FROM users WHERE role='admin' AND is_active=1 ORDER BY id LIMIT 1");
+      await require('../routes/bedarf').angebotGesendet(deal.id, { id: admin ? admin.id : deal.created_by });
+    } else {
+      await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',
+        [deal.lead_id, deal.owner_id || deal.created_by, `📄 Angebot ${a.nummer} versendet`]);
+    }
   }
 }
 
@@ -149,6 +157,8 @@ function registriere(app, { ki } = {}) {
     onAngebotStatus: angebotStatusAnCrm,
   });
   status.aktiv = true;
+  try { const k = mandant.crm.katalogAktualisieren(); if (k) console.log(`Abrechnung: Artikelkatalog aktualisiert – ${k.neu} neu, ${k.alt} alte auf inaktiv`); }
+  catch (e) { console.error('Abrechnung: Katalog aktualisieren:', e.message); }
   // Kundenkonten (Betriebe) aus dem Angebotstool, nur zur Ansicht
   konten = require('./kundenkonten').erstelle(DATA_DIR);
 
@@ -214,8 +224,17 @@ function registriere(app, { ki } = {}) {
         if (a?.data?.paket_empfohlen) {
           const cfg = await bedarf.regeln();
           const zw = a.data.zahlungswunsch;
+          // Positionen mit Katalogartikel verknüpfen (Nummer, Beschreibung, Einheit)
+          const NR = { quickwin: ['AP-001', 'BE-001'], s: ['AP-002', 'BE-002'], m: ['AP-003', 'BE-003'], l: ['AP-004', 'BE-004'], software: ['ZU-003', 'BE-006'],
+            google: ['ZU-001', null], webseite: ['ZU-002', 'BE-005'], automation: ['ZU-004', null] };
+          const mitKatalog = p => {
+            const paar = NR[p.key]; const nr = paar && paar[p.abrechnung === 'monatlich' ? 1 : 0];
+            const art = nr && mandant.crm.artikel(nr);
+            return art ? { ...p, artikelNr: art.nr, titel: art.titel, beschreibung: [p.beschreibung, art.beschreibung].filter(Boolean).join(' · '), einheit: art.einheit, einheitMehrzahl: art.einheitMehrzahl } : p;
+          };
           vorlage = {
-            positionen: bedarf.R.positionen(a.data, cfg),
+            positionen: bedarf.R.positionen(a.data, cfg).map(mitKatalog),
+            gratismonat: a.data.gratismonat === 'ja',
             zahlung: zw === '5050' ? { art: 'anzahlung', anzahlungProzent: 50 } : /^raten(\d)/.test(zw || '') ? { art: 'raten', anzahl: parseInt(zw.slice(5)), ratenAnzahlung: 50 } : undefined,
           };
         }

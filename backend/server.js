@@ -142,6 +142,9 @@ const abrechnung = require('./abrechnung/crm').registriere(app, {
 const provisionRoutes = require('./routes/provision');
 provisionRoutes.verbinde(abrechnung.crm);
 app.use('/api/provision', provisionRoutes);
+const faelligRoutes = require('./routes/faellig');
+faelligRoutes.verbinde(abrechnung.crm);
+app.use('/api/faellig', faelligRoutes);
 
 // ── Gesundheits-Check ─────────────────────────────────────────
 app.get('/api/health', async (req, res) => {
@@ -652,6 +655,8 @@ for (const col of ['herkunft VARCHAR(30) NULL', 'paket VARCHAR(20) NULL', 'admin
   'angefordert_at DATETIME NULL', 'angebot_gesendet_at DATETIME NULL', 'hinweis_24h_at DATETIME NULL'])
   migrate(`ALTER TABLE deals ADD COLUMN ${col}`).catch(() => {});
 cron.schedule('*/10 * * * *', () => bedarfRoutes.fristen());
+// Morgens um 7:41 eine Mail mit allem, was ansteht (nur wenn etwas ansteht, einmal pro Tag)
+cron.schedule('41 7 * * *', () => faelligRoutes.morgenMail().catch(e => console.error('Fällig-Mail:', e.message)), { timezone: 'Europe/Berlin' });
 
 // ── Status „passt nicht“/„Keine Anrufe mehr“, Wählliste „nie erreicht“, Übergabe ──
 // (nur ergänzend; Rückweg: db/rollback/2026-10-27_status-uebergabe.sql)
@@ -688,6 +693,17 @@ migrate(`CREATE TABLE IF NOT EXISTS wiki_referenzen (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`).catch(e => console.error('Migration wiki_referenzen:', e.message));
 migrate('ALTER TABLE users ADD COLUMN wiki_gesehen_at DATETIME NULL').catch(() => {});
+
+// Provision ausgezahlt (je Zahlung des Kunden bzw. je Bonus-Monat) – Rollback: db/rollback/2026-10-27_faellig.sql
+migrate(`CREATE TABLE IF NOT EXISTS provision_auszahlungen (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  schluessel VARCHAR(120) NOT NULL UNIQUE,
+  user_id INT NOT NULL,
+  art VARCHAR(20) NOT NULL DEFAULT 'provision',
+  betrag DECIMAL(10,2) NOT NULL DEFAULT 0,
+  ausgezahlt_am DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  erstellt_von INT NULL
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`).catch(e => console.error('Migration provision_auszahlungen:', e.message));
 
 // Provision (§8): zzgl. USt am Benutzer, Sitz im Ausland (ohne USt) – Rollback: db/rollback/2026-10-27_provision.sql
 for (const col of ['provision_zzgl_ust TINYINT(1) NOT NULL DEFAULT 0', 'provision_ausland TINYINT(1) NOT NULL DEFAULT 0'])

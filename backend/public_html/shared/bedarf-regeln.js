@@ -22,6 +22,7 @@
     nachfass_tage: [2, 5, 10],
     anfrage_warte_std: 24,
     admin_mail: 'info@novaflowservices.de',
+    faellig_mail: true,                   // morgens eine Mail mit allem, was fällig ist
     demo_link: 'https://novaflowservices.de/#ausprobieren',   // Abschnitt „Nicht nur lesen. Ausprobieren.“
     regeln: { l_auftragswert: 5000, m_kanaele: 3, m_anfragen: 10 },
     // Provision und Bonus (§8): Basis = gezahlter Einmalpreis ohne Betreuung/Hosting
@@ -182,13 +183,14 @@
     const p = cfg.pakete[d.paket_empfohlen];
     if (!p) return [];
     const rabatt = Math.min(100, Math.max(0, Number(d.rabatt_prozent) || 0));
-    const out = [{ titel: `${p.name} – Einrichtung`, beschreibung: '', einzelpreis: p.einrichtung, rabatt, abrechnung: 'einmalig' }];
-    if (p.betreuung) out.push({ titel: `${p.name} – Betreuung`, beschreibung: d.gratismonat === 'ja' ? 'Erster Monat gratis' : '', einzelpreis: p.betreuung, abrechnung: 'monatlich', einheit: 'Monat', einheitMehrzahl: 'Monate' });
+    const key = d.paket_empfohlen;
+    const out = [{ key, titel: `${p.name} – Einrichtung`, beschreibung: '', einzelpreis: p.einrichtung, rabatt, abrechnung: 'einmalig' }];
+    if (p.betreuung) out.push({ key, titel: `${p.name} – Betreuung`, beschreibung: d.gratismonat === 'ja' ? 'Erster Monat gratis' : '', einzelpreis: p.betreuung, abrechnung: 'monatlich', einheit: 'Monat', einheitMehrzahl: 'Monate' });
     (d.zusatzleistungen || []).forEach(k => {
       const z = cfg.zusatz[k];
       if (!z) return;
-      if (z.einrichtung) out.push({ titel: z.name, einzelpreis: z.einrichtung, rabatt, abrechnung: 'einmalig' });
-      if (z.betreuung) out.push({ titel: `${z.name} – Hosting & Pflege`, einzelpreis: z.betreuung, abrechnung: 'monatlich', einheit: 'Monat', einheitMehrzahl: 'Monate' });
+      if (z.einrichtung) out.push({ key: k, titel: z.name, einzelpreis: z.einrichtung, rabatt, abrechnung: 'einmalig' });
+      if (z.betreuung) out.push({ key: k, titel: `${z.name} – Hosting & Pflege`, einzelpreis: z.betreuung, abrechnung: 'monatlich', einheit: 'Monat', einheitMehrzahl: 'Monate' });
     });
     return out;
   }

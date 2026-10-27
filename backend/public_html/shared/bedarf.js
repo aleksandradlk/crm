@@ -442,6 +442,7 @@ const Bedarf = {
           <label>Nachfassen nach dem Angebot (Tage)</label><div><input class="form-control" id="vr-tage" value="${escHtml((c.nachfass_tage || []).join(', '))}" style="width:140px"></div>
           <label>Hinweis, wenn Anfrage wartet seit</label><div>${num('vr-std', c.anfrage_warte_std, 70)} Std.</div>
           <label>Anfragen per E-Mail an</label><div><input class="form-control" id="vr-mail" type="email" value="${escHtml(c.admin_mail)}"></div>
+          <label>Morgens um 7:41 eine Mail mit allem, was fällig ist</label><div><label class="vr-inline"><input type="checkbox" id="vr-faellig" ${c.faellig_mail !== false ? 'checked' : ''}> an diese Adresse schicken</label></div>
           <label>Live-Demo-Link</label><div><input class="form-control" id="vr-demo" value="${escHtml(c.demo_link)}"></div>
           <label>Gesundheitsbranche erkennen an</label><div><textarea class="form-control" id="vr-gesund" rows="2">${escHtml((c.gesundheit || []).join(', '))}</textarea></div>
         </div>
@@ -482,6 +483,7 @@ const Bedarf = {
         nachfass_tage: o.querySelector('#vr-tage').value.split(/[,; ]+/).map(Number).filter(n => n > 0),
         anfrage_warte_std: val('vr-std') || 24,
         admin_mail: o.querySelector('#vr-mail').value.trim() || R.STANDARD.admin_mail,
+        faellig_mail: o.querySelector('#vr-faellig').checked,
         demo_link: o.querySelector('#vr-demo').value.trim() || R.STANDARD.demo_link,
         gesundheit: o.querySelector('#vr-gesund').value.split(',').map(s => s.trim()).filter(Boolean),
         provision: {

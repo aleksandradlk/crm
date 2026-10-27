@@ -52,7 +52,7 @@ const Integrationen = {
     const nummern = s.nummern || [], benutzer = s.benutzer || [];
     const firmaAnzeige = s.firmennummer ? ((nummern.find(n => n.nummer === s.firmennummer) || {}).anzeige || fmtPhoneDE(s.firmennummer)) : '';
     const nrOpts = (aktuell) => `<option value="">${s.firmennummer ? 'Firmennummer (' + escHtml(firmaAnzeige) + ')' : 'Standard von sipgate'}</option>`
-      + nummern.map(n => `<option value="${escHtml(n.nummer)}" ${n.nummer === aktuell ? 'selected' : ''}>${escHtml(n.anzeige)}${n.typ === 'MOBILE' ? ' (Handy)' : ''}</option>`).join('');
+      + nummern.map(n => `<option value="${escHtml(n.nummer)}" ${n.nummer === aktuell ? 'selected' : ''}>${escHtml(n.anzeige)}${n.typ === 'MOBILE' ? ' (Handy)' : ''}${n.test ? ' · Testnummer' : ''}</option>`).join('');
     const userOpts = (aktuell) => `<option value="">– nicht telefonieren –</option>`
       + benutzer.map(b => `<option value="${escHtml(b.id)}" ${b.id === aktuell ? 'selected' : ''}>${escHtml(b.name)}</option>`).join('');
     const geraetOpts = (sUser, aktuell) => {
@@ -63,6 +63,20 @@ const Integrationen = {
     };
     const hook = s.webhook;
     const hookOk = hook && hook.eingehend && hook.ausgehend;
+    // Hinweise: Testnummern laufen ab, eine Nummer bei mehreren Closern, Closer ohne Zugang
+    const testNr = new Set(nummern.filter(n => n.test).map(n => n.nummer));
+    const zu = (s.zuordnung || []);
+    const nutzt = u => u.sipgate_nummer || s.firmennummer;
+    const mitTest = zu.filter(u => u.sipgate_user && testNr.has(nutzt(u)));
+    const proNummer = {};
+    zu.filter(u => u.sipgate_user && u.sipgate_nummer).forEach(u => { (proNummer[u.sipgate_nummer] = proNummer[u.sipgate_nummer] || []).push(u.full_name); });
+    const doppelt = Object.entries(proNummer).filter(([, l]) => l.length > 1);
+    const ohne = zu.filter(u => u.role === 'closer' && !u.sipgate_user);
+    const hinweise = [
+      mitTest.length || testNr.has(s.firmennummer) ? `<b>Testnummern laufen ab</b> (sipgate zeigt das Datum unter Rufnummern, z. B. „Nutzbar bis 20.11.2026“). Betroffen: ${escHtml([...(testNr.has(s.firmennummer) ? ['Firmennummer'] : []), ...mitTest.map(u => u.full_name)].join(', '))}. Rechtzeitig feste Nummern buchen und hier zuordnen.` : '',
+      doppelt.length ? `<b>Gleiche Nummer bei mehreren:</b> ${doppelt.map(([n, l]) => `${escHtml(fmtPhoneDE(n))} (${escHtml(l.join(', '))})`).join('; ')}. Rückrufe auf diese Nummer klingeln nur dort, wo sie in sipgate als Ziel eingestellt ist.` : '',
+      ohne.length ? `<b>Noch ohne sipgate-Zugang:</b> ${escHtml(ohne.map(u => u.full_name).join(', '))} – diese Closer können im CRM noch nicht anrufen.` : '',
+    ].filter(Boolean);
     el.innerHTML = head + `<div class="ig-body">
       <div class="ig-facts">
         <div><span>Zugänge bei sipgate</span><b>${benutzer.length}</b></div>
@@ -78,6 +92,7 @@ const Integrationen = {
         <button class="btn btn-ghost btn-sm" onclick="Integrationen.sgFirma()">Als Firmennummer</button>
       </div>
       <p class="ig-hint">Die <b>Firmennummer</b> sehen Kunden, wenn ein Vertriebler keine eigene Nummer hat.</p>
+      ${hinweise.map(h => `<div class="line-err"><i class="fas fa-exclamation-triangle"></i> ${h}</div>`).join('')}
       <div class="modal-section-label" style="margin:4px 0 0">Wer telefoniert womit?</div>
       <div class="sg-map">
         <div class="sg-map-head"><span>CRM-Benutzer</span><span>sipgate-Zugang</span><span>Telefon, das klingelt</span><span>Nummer, die Kunden sehen</span></div>

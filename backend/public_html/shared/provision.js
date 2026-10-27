@@ -14,6 +14,7 @@ const Provision = {
   },
   teilStatus(t) {
     if (t.status === 'storniert') return ['', 'Rechnung storniert – dafür gibt es keine Provision'];
+    if (t.status === 'ausgezahlt') return ['ok', `ausgezahlt am ${this.datum(t.ausgezahlt_am)}`];
     if (t.status === 'faellig') return ['ok', `Kunde hat am ${this.datum(t.kunde_bezahlt_am)} bezahlt · fällig seit ${this.datum(t.faellig_am)}`];
     if (t.status === 'bezahlt') return ['ok', `Kunde hat am ${this.datum(t.kunde_bezahlt_am)} bezahlt · fällig am ${this.datum(t.faellig_am)}`];
     if (t.status === 'offen') return t.rechnung_status === 'entwurf' ? ['', 'Rechnung noch nicht verschickt'] : ['warn', 'wartet auf die Zahlung des Kunden'];

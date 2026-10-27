@@ -38,8 +38,9 @@ function gueltigeAdresse(s) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nurAdresse(s));
 }
 
-// anhaenge: [{ filename, content: Buffer }]
-async function sende({ an, betreff, text, anhaenge = [], antwortAn, kopie }) {
+// anhaenge: [{ filename, content: Buffer }] · html: optionale HTML-Fassung (Text bleibt als Alternative)
+// eingebettet: [{ cid, filename, content }] für Bilder im HTML (z. B. Logo der Signatur)
+async function sende({ an, betreff, text, html, anhaenge = [], eingebettet = [], antwortAn, kopie }) {
   const k = konfiguration();
   const empfaenger = String(an || '').split(/[;,]/).map(nurAdresse).filter(Boolean);
   if (!empfaenger.length || !empfaenger.every(gueltigeAdresse)) throw new Error('Bitte eine gültige Empfängeradresse angeben.');
@@ -51,7 +52,11 @@ async function sende({ an, betreff, text, anhaenge = [], antwortAn, kopie }) {
     replyTo: antwortAn || undefined,
     subject: betreff,
     text: text || '',
-    attachments: anhaenge.map(a => ({ filename: a.filename, content: a.content, contentType: a.contentType || TYPEN[path.extname(a.filename).toLowerCase()] || 'application/octet-stream' }))
+    ...(html ? { html } : {}),
+    attachments: [
+      ...anhaenge.map(a => ({ filename: a.filename, content: a.content, contentType: a.contentType || TYPEN[path.extname(a.filename).toLowerCase()] || 'application/octet-stream' })),
+      ...eingebettet.map(e => ({ filename: e.filename, content: e.content, cid: e.cid, contentDisposition: 'inline' })),
+    ]
   });
   return { an: empfaenger, messageId: info.messageId };
 }
