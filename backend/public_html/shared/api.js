@@ -892,7 +892,7 @@ const Softphone = {
     }
     if (typeof Sipgate !== 'undefined' && Sipgate.config && Sipgate.config.aktiv && !Sipgate.config.bereit && !this._hinweisGezeigt) {
       this._hinweisGezeigt = true;
-      showToast('Dir ist noch kein sipgate-Telefon zugeordnet – der Anruf läuft über dein Telefon und wird trotzdem erfasst.');
+      showToast('Der Anruf läuft über dein Telefon (Kunden sehen deine Nummer) und wird trotzdem erfasst.');
       return;
     }
     if (!this.isEnabled() || this.hasCallerId() || this._hinweisGezeigt) return;
@@ -1195,10 +1195,10 @@ async function renderTwilioSettings(containerId, cfg) {
         : `<span class="callerid-pending"><i class="fas fa-hourglass-half"></i> Noch nicht bestätigt</span>`)
     : (cfg.company_caller_id
         ? `<span class="callerid-hint-inline">Ohne eigene Nummer wird die Firmennummer <span class="mono">${escHtml(cfg.company_caller_id)}</span> angezeigt.</span>`
-        : `<span class="callerid-pending">Noch keine Nummer hinterlegt – Anrufe sind erst danach möglich.</span>`);
+        : `<span class="callerid-pending">Noch keine Nummer bestätigt – bis dahin öffnet „Anrufen“ die Telefon-App.</span>`);
   el.innerHTML = `
     <div class="form-group" style="margin-bottom:6px">
-      <label>Meine Anrufnummer <span style="font-size:11px;color:var(--text3);font-weight:400">— wird beim Kunden angezeigt</span></label>
+      <label>Oder im Browser telefonieren: meine Nummer <span style="font-size:11px;color:var(--text3);font-weight:400">— wird beim Kunden angezeigt, einmal per Anruf mit Code bestätigen</span></label>
       <div style="display:flex;gap:8px">
         <input type="tel" id="callerIdInput" class="form-control" placeholder="+49 171 1234567" value="${escHtml(cfg.caller_id || '')}">
         <button class="btn btn-primary btn-sm" id="callerIdSaveBtn" onclick="saveCallerId('${containerId}')" style="white-space:nowrap"><i class="fas fa-check"></i> Übernehmen</button>
