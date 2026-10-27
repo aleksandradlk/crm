@@ -4,10 +4,9 @@
 // über Finder.mount(). Treffer lassen sich vor dem Speichern abwählen.
 // ============================================================
 const Finder = {
-  opts: {}, leads: [], picked: new Set(), size: 'medium', max: 10, assign: null, busy: false,
+  opts: {}, leads: [], picked: new Set(), size: 'small', max: 10, assign: null, busy: false, vorgaben: null,
 
-  SIZES: [['', 'Egal'], ['small', 'Klein · 10–49'], ['medium', 'Mittelstand · 50–250']],
-  SIZE_TEXT: { small: 'klein (10–49 Mitarbeiter)', medium: 'Mittelstand (50–250 Mitarbeiter)' },
+  SIZES: [['', 'Egal'], ['small', 'Klein · bis 49'], ['medium', 'Mittelstand · 50–250']],
   FIELDS: [['company', 'Unternehmen', true], ['ceo', 'Geschäftsführer', true], ['email', 'E-Mail', true], ['phone', 'Telefon', true],
     ['location', 'Standort', true], ['linkedin', 'LinkedIn', false], ['revenue', 'Umsatz', false], ['employees', 'Mitarbeiter', false]],
   IDEEN: ['Handwerksbetriebe', 'Arztpraxen', 'Steuerberater', 'Immobilienmakler', 'Restaurants', 'Autohäuser', 'Fitnessstudios', 'Friseure'],
@@ -40,6 +39,14 @@ const Finder = {
           <div class="fd-opt"><span class="fd-opt-label">Größe</span><div class="kb-picks" id="fdSizes"></div></div>
           <div class="fd-opt"><span class="fd-opt-label">Anzahl</span><div class="kb-picks" id="fdMax"></div></div>
           ${opts.isAdmin ? '<div class="fd-opt"><span class="fd-opt-label">Zuweisen an</span><div class="kb-picks" id="fdAssign"></div></div>' : ''}
+          ${opts.isAdmin ? `<details class="fd-more">
+            <summary><i class="fas fa-user-lock"></i> Vorgaben für Closer</summary>
+            <div class="fd-opt fd-opt-wide"><span class="fd-opt-label">Branchen</span>
+              <input id="fdVBranchen" class="form-control" placeholder="z. B. Maler, Autohäuser, Badsanierer (mit Komma trennen, leer = frei)"></div>
+            <div class="fd-opt"><span class="fd-opt-label">Größe</span><div class="kb-picks" id="fdVGroesse"></div></div>
+            <div class="fd-opt"><button type="button" class="btn btn-primary btn-sm" onclick="Finder.vorgabenSpeichern()"><i class="fas fa-save"></i> Vorgaben speichern</button></div>
+            <p class="ig-hint" style="margin:0">Closer können nur diese Branchen suchen, die Größe ist fest eingestellt. Du selbst suchst weiter frei.</p>
+          </details>` : ''}
           <details class="fd-more">
             <summary><i class="fas fa-sliders-h"></i> Mehr Optionen</summary>
             <div class="fd-opt"><span class="fd-opt-label">Felder</span><div class="kb-picks" id="fdFields"></div></div>
@@ -53,7 +60,41 @@ const Finder = {
       </div>`;
     this.renderOpts();
     this.renderIdeas();
+    this.ladeVorgaben();
   },
+
+  // Vorgaben für Closer: erlaubte Branchen und feste Größe (Admin stellt sie ein)
+  async ladeVorgaben() {
+    try { this.vorgaben = await api('GET', '/generate/vorgaben'); } catch { this.vorgaben = null; return; }
+    const v = this.vorgaben;
+    if (this.opts.isAdmin) {
+      document.getElementById('fdVBranchen').value = v.branchen.join(', ');
+      this._vGroesse = v.groesse;
+      this._picks('fdVGroesse', this.SIZES, v.groesse, 'setVGroesse');
+      return;
+    }
+    this.size = v.groesse;
+    if (v.branchen.length) {
+      const feld = document.getElementById('fdQuery');
+      const sel = document.createElement('select');
+      sel.id = 'fdQuery';
+      sel.innerHTML = '<option value="">Branche wählen …</option>' + v.branchen.map(b => `<option>${escHtml(b)}</option>`).join('');
+      feld.replaceWith(sel);
+    }
+    this.renderOpts();
+    this.renderIdeas();
+  },
+  setVGroesse(v) { this._vGroesse = v; this._picks('fdVGroesse', this.SIZES, v, 'setVGroesse'); },
+  async vorgabenSpeichern() {
+    try {
+      const r = await api('PUT', '/generate/vorgaben', { branchen: document.getElementById('fdVBranchen').value, groesse: this._vGroesse || '' });
+      this.vorgaben = { ...this.vorgaben, branchen: r.branchen, groesse: r.groesse };
+      document.getElementById('fdVBranchen').value = r.branchen.join(', ');
+      showToast('Vorgaben für Closer gespeichert ✓');
+    } catch (e) { showToast(e.message, 'err'); }
+  },
+  // Closer mit Vorgaben: Größe steht fest
+  _fest() { return !this.opts.isAdmin && this.vorgaben; },
 
   setUsers(users) { this.opts.users = users; this.renderOpts(); },
 
@@ -65,7 +106,10 @@ const Finder = {
   },
 
   renderOpts() {
-    this._picks('fdSizes', this.SIZES, this.size, 'setSize');
+    if (this._fest()) {
+      const el = document.getElementById('fdSizes');
+      if (el) el.innerHTML = `<span class="kb-pick on" title="Vom Admin festgelegt"><i class="fas fa-lock"></i>${escHtml((this.SIZES.find(([k]) => k === this.size) || [, 'Egal'])[1])}</span>`;
+    } else this._picks('fdSizes', this.SIZES, this.size, 'setSize');
     this._picks('fdMax', (this.opts.isAdmin ? [5, 10, 20, 50, 100] : [5, 10, 20, 50]).map(n => [n, String(n)]), this.max, 'setMax');
     if (this.opts.isAdmin) {
       const users = (this.opts.users || []).filter(u => u.is_active);
@@ -88,6 +132,13 @@ const Finder = {
     document.getElementById('fdIdeas').innerHTML = recent.length
       ? `<span class="fd-ideas-label">Zuletzt</span>${recent.map(r => chip(r.q, r.l, 'history')).join('')}`
       : `<span class="fd-ideas-label">Ideen</span>${this.IDEEN.slice(0, 6).map(q => chip(q, '', 'lightbulb')).join('')}`;
+    // Closer mit Branchen-Vorgabe: nur diese als Vorschläge, „Zuletzt“ nur mit erlaubten Branchen
+    const erlaubt = this._fest() && this.vorgaben.branchen.length ? this.vorgaben.branchen : null;
+    if (erlaubt) {
+      const zuletzt = recent.filter(r => erlaubt.some(b => b.toLowerCase() === String(r.q).toLowerCase()));
+      document.getElementById('fdIdeas').innerHTML = `<span class="fd-ideas-label">Branchen</span>${erlaubt.map(q => chip(q, '', 'briefcase')).join('')}`
+        + (zuletzt.length ? `<span class="fd-ideas-label">Zuletzt</span>${zuletzt.map(r => chip(r.q, r.l, 'history')).join('')}` : '');
+    }
   },
   fill(q, l) {
     document.getElementById('fdQuery').value = q;
@@ -120,7 +171,7 @@ const Finder = {
     const fields = [...document.querySelectorAll('#fdFields .kb-pick.on')].map(b => b.dataset.field);
     try {
       const data = await api('POST', '/generate', {
-        query, location, size: this.SIZE_TEXT[this.size] || '', max_leads: this.max,
+        query, location, size: this.size || '', max_leads: this.max,
         sources: ['google', 'web', 'maps'], fields: fields.length ? fields : ['company', 'phone'],
         extra: document.getElementById('fdExtra').value.trim(),
       });
