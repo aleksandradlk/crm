@@ -101,13 +101,14 @@ async function webhooksEinrichten(url, ersetzen = false) {
 
 async function sipgateBenutzer() {
   const r = await sg('GET', 'users');
-  return (r && r.items) || [];
+  return Array.isArray(r) ? r : (r && Array.isArray(r.items) ? r.items : []);
 }
 async function geraeteVon(userId) {
-  try { return (await sg('GET', `${userId}/devices`)) || []; } catch (_) { return []; }
+  // sipgate liefert { items: [...] } – ältere Antworten waren eine reine Liste
+  try { const r = await sg('GET', `${userId}/devices`); return Array.isArray(r) ? r : (r && Array.isArray(r.items) ? r.items : []); } catch (_) { return []; }
 }
 async function nummern() {
-  try { const r = await sg('GET', 'numbers'); return (r && r.items) || []; } catch (_) { return []; }
+  try { const r = await sg('GET', 'numbers'); return Array.isArray(r) ? r : (r && Array.isArray(r.items) ? r.items : []); } catch (_) { return []; }
 }
 
 // ── Nummern-Pool ──────────────────────────────────────────────
@@ -215,7 +216,15 @@ router.get('/setup', auth, adminOnly, async (req, res) => {
       zuordnung: crm,
       pool: await pool(nrn),
     });
-  } catch (e) { res.json({ verbunden: true, webhookUrl, fehler: e.message, zuordnung: [] }); }
+  } catch (e) {
+    console.error('sipgate setup:', e.message);
+    // Trotzdem die Zuordnung zeigen, damit nichts leer bleibt
+    const [crm] = await db.query(
+      `SELECT id, full_name, role, sipgate_user, sipgate_device, sipgate_nummer, sipgate_handy FROM users
+       WHERE is_active=1 ORDER BY role='admin' DESC, full_name`).catch(() => [[]]);
+    res.json({ verbunden: true, webhookUrl, firmennummer: cfg.firmennummer || null, fehler: e.message, zuordnung: crm,
+      benutzer: [], nummern: [], pool: await pool(null).catch(() => []) });
+  }
 });
 
 router.post('/setup', auth, adminOnly, async (req, res) => {
