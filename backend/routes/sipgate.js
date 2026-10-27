@@ -424,6 +424,24 @@ router.get('/benutzer/:userId', auth, adminOnly, async (req, res) => {
     nummer, eigeneNummer: eigene, abgelaufen: !!(u && u.sipgate_nummer && !eigene), testnummer: istTestnummer(nummer) });
 });
 
+// Hat der Benutzer bei sipgate wirklich ein Telefon? Ohne Telefon (z. B. Konto ohne
+// Telefonanlage) soll „Anrufen“ nicht an sipgate scheitern, sondern den anderen Weg nehmen
+// (Telefonie im Browser bzw. Telefon-App). Ergebnis 5 Minuten merken.
+const telefonCache = new Map();
+async function hatTelefon(userId, u) {
+  if (!u || !(u.sipgate_device || u.sipgate_user || u.sipgate_handy)) return false;
+  if (u.sipgate_device) return true;
+  const c = telefonCache.get(userId);
+  if (c && c.bis > Date.now() && c.key === `${u.sipgate_user}|${u.sipgate_handy}`) return c.ok;
+  let ok;
+  try {
+    if (u.sipgate_user) ok = !!(await geraetVon((await sipgateBenutzer()).find(x => x.id === u.sipgate_user)));
+    else ok = !!(await hauptGeraet());
+  } catch (_) { ok = true; }   // sipgate gerade nicht erreichbar: wie bisher, die Meldung kommt beim Anruf
+  telefonCache.set(userId, { ok, key: `${u.sipgate_user}|${u.sipgate_handy}`, bis: Date.now() + 5 * 60 * 1000 });
+  return ok;
+}
+
 // ── Für alle: kann ich über sipgate anrufen? ────────────────────
 router.get('/config', auth, async (req, res) => {
   const [[u]] = await db.query('SELECT sipgate_user, sipgate_device, sipgate_nummer, sipgate_handy, eigenes_telefon FROM users WHERE id=?', [req.user.id]).catch(() => [[null]]);
@@ -432,7 +450,7 @@ router.get('/config', auth, async (req, res) => {
   if (!istAktiv()) return res.json({ aktiv: false, eigen });
   res.json({
     aktiv: true, eigen,
-    bereit: !eigen && !!(u && (u.sipgate_device || u.sipgate_user || u.sipgate_handy)),
+    bereit: !eigen && await hatTelefon(req.user.id, u),
     handy: !!(u && !u.sipgate_user && u.sipgate_handy),
     nummer: await aktuelleNummer(req.user.id),
   });
