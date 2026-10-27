@@ -94,7 +94,8 @@ const Provision = {
   async meinModal(monat) {
     monat = monat || this.monat();
     let d;
-    try { d = await api('GET', `/provision/mein?monat=${monat}`); } catch (e) { showToast(e.message, 'err'); return; }
+    let ab = null;
+    try { [d, ab] = await Promise.all([api('GET', `/provision/mein?monat=${monat}`), api('GET', '/provision/abschluesse').catch(() => null)]); } catch (e) { showToast(e.message, 'err'); return; }
     document.getElementById('pvModal')?.remove();
     const o = document.createElement('div');
     o.id = 'pvModal'; o.className = 'modal-overlay open'; o.style.zIndex = 990;
@@ -119,8 +120,46 @@ const Provision = {
             <div class="pv-calc">${escHtml(x.text)} · gewonnen am ${fmtDate(x.won_at)}</div>
             <div class="pv-teile">${x.teile.map(t => { const [cls, txt] = this.teilStatus(t); return `<div class="pv-teil"><span>${this.teilName(t)}</span><b>${this.eur(t.auszahlung)}</b><em class="${cls}">${txt}</em></div>`; }).join('')}</div>
           </div>`).join('') : '<div class="au-empty">Noch keine gewonnenen Deals in den letzten 12 Monaten.</div>'}
+        ${ab ? this.abschlussListe(ab, { closer: false }) : ''}
       </div></div>`;
     document.body.appendChild(o);
+  },
+
+  // ── Alle Abschlüsse (dauerhaft gesichert) ───────────────────
+  abschlussListe(ab, { closer }) {
+    const g = ab.gesamt, j = ab.dieses_jahr;
+    const zeile = r => `<tr>
+      <td><b>${escHtml(r.firma || r.titel || '–')}</b>${closer ? `<div class="pv-sub">${escHtml(r.closer || '')}</div>` : ''}</td>
+      <td data-l="Gewonnen">${fmtDate(r.gewonnen_am)}</td>
+      <td data-l="Auftragswert">${this.eur(r.auftragswert)}</td>
+      <td data-l="Satz">${r.satz.toLocaleString('de-DE')} %${r.basis !== r.auftragswert ? `<div class="pv-sub">von ${this.eur(r.basis)}</div>` : ''}</td>
+      <td data-l="Provision"><b>${this.eur(r.provision)}</b>${r.geschaetzt ? ' <span class="pv-tag">Schätzung</span>' : ''}</td></tr>`;
+    return `<div class="modal-section-label" style="margin:18px 0 6px">${closer ? 'Alle Abschlüsse' : 'Alle meine Abschlüsse'}</div>
+      <div class="au-kpis pv-kpis">
+        <div><b>${g.anzahl}</b><span>Abschlüsse gesamt</span></div>
+        <div><b>${this.eur(g.auftragswert)}</b><span>Auftragswert gesamt (Einmalpreis netto)</span></div>
+        <div><b>${this.eur(g.provision)}</b><span>Provision gesamt</span></div>
+        <div><b>${this.eur(j.provision)}</b><span>davon ${new Date().getFullYear()} · ${j.anzahl} Abschlüsse</span></div>
+      </div>
+      ${ab.abschluesse.length ? `<table class="au-table"><thead><tr><th>${closer ? 'Kunde / Closer' : 'Kunde'}</th><th>Gewonnen</th><th>Auftragswert</th><th>Satz</th><th>Provision</th></tr></thead>
+        <tbody>${ab.abschluesse.map(zeile).join('')}</tbody></table>
+        <div class="au-muted" style="font-size:12px;margin-top:6px">Wird bei jedem Abschluss dauerhaft gespeichert. Der Satz bleibt der vom Tag des Abschlusses. Betreuung und Hosting zählen nicht zum Auftragswert.</div>`
+        : '<div class="au-empty">Noch keine Abschlüsse.</div>'}`;
+  },
+  async abschluesseAdmin(elId) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    let ab;
+    try { ab = await api('GET', '/provision/abschluesse'); } catch (e) { el.innerHTML = ''; return; }
+    el.innerHTML = `<div class="card au-card"><div class="au-h">Abschlüsse &amp; Provision (gesamt)</div>
+      ${(ab.closer || []).length ? `<table class="au-table"><thead><tr><th>Closer</th><th>Abschlüsse</th><th>Auftragswert</th><th>Provision</th></tr></thead><tbody>
+        ${ab.closer.map(c => `<tr><td><b>${escHtml(c.key)}</b></td><td data-l="Abschlüsse">${c.anzahl}</td><td data-l="Auftragswert">${this.eur(c.auftragswert)}</td><td data-l="Provision"><b>${this.eur(c.provision)}</b></td></tr>`).join('')}
+      </tbody></table>` : ''}
+      ${ab.monate.length ? `<table class="au-table" style="margin-top:10px"><thead><tr><th>Monat</th><th>Abschlüsse</th><th>Auftragswert</th><th>Provision</th></tr></thead><tbody>
+        ${ab.monate.slice(0, 12).map(m => `<tr><td><b>${escHtml(this.monatName(m.key))}</b></td><td data-l="Abschlüsse">${m.anzahl}</td><td data-l="Auftragswert">${this.eur(m.auftragswert)}</td><td data-l="Provision">${this.eur(m.provision)}</td></tr>`).join('')}
+      </tbody></table>` : ''}
+      ${this.abschlussListe(ab, { closer: true })}
+    </div>`;
   },
 
   // ── Team-Übersicht im Tracking (Admin) ──────────────────────

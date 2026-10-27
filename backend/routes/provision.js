@@ -1,7 +1,8 @@
 // ── Provision und Bonus (§8) ────────────────────────────────────────────────
-// Wird nicht gespeichert, sondern bei jedem Aufruf berechnet – aus dem Angebot
-// zum Deal und den daraus erstellten Rechnungen (Abrechnung). Gibt es noch kein
-// Angebot, wird aus der Bedarfsanalyse bzw. dem Deal-Wert geschätzt.
+// Wird bei jedem Aufruf berechnet – aus dem Angebot zum Deal und den daraus
+// erstellten Rechnungen (Abrechnung). Gibt es noch kein Angebot, wird aus der
+// Bedarfsanalyse bzw. dem Deal-Wert geschätzt. Jeder gewonnene Deal wird zusätzlich
+// dauerhaft in provision_abschluesse gesichert (Satz vom Tag des Abschlusses).
 //   Basis   = Einmalpreis (Einrichtung + Zusätze) netto, ohne Betreuung/Hosting
 //   Satz    = 20 %, mit Rabatt 15 % vom reduzierten Preis (Gratismonat zählt nicht)
 //   Upgrade = Quick-Win → Autopilot beim selben Kunden in 30 Tagen: Basis − Quick-Win-Preis
@@ -58,7 +59,7 @@ function planText(teile) {
 }
 
 // Provision eines Deals. deal braucht id, lead_id, owner_id, status, paket, value, won_at.
-async function berechne(deal, cfg, besitzer) {
+async function berechne(deal, cfg, besitzer, opts = {}) {
   const P = cfg.provision;
   if (deal.status === 'lost') return { keine: true, grund: 'Der Deal ist verloren – keine Provision.' };
   if (besitzer && besitzer.role === 'admin') return { keine: true, grund: 'Deal eines Admins – keine Provision.' };
@@ -112,7 +113,8 @@ async function berechne(deal, cfg, besitzer) {
     }
   }
   const basis = round2(Math.max(0, basisPreis - (upgrade ? upgrade.abzug : 0)));
-  const satz = rabatt ? Number(P.satz_rabatt) : Number(P.satz);
+  // Bei festgeschriebenen Abschlüssen gilt der Satz vom Tag des Abschlusses, auch wenn sich die Regeln ändern
+  const satz = opts.satzFest != null ? Number(opts.satzFest) : rabatt ? Number(P.satz_rabatt) : Number(P.satz);
   const netto = round2(basis * satz / 100);
   const mitUst = !!(besitzer && besitzer.provision_zzgl_ust && !besitzer.provision_ausland);
   const ustSatz = mitUst ? Number(P.ust) : 0;
@@ -208,9 +210,11 @@ async function uebersicht(userId, monat, cfg) {
      WHERE d.owner_id=? AND d.status='won' AND d.won_at >= NOW() - INTERVAL 365 DAY ORDER BY d.won_at DESC`, [userId]);
   const liste = [];
   let faelligMonat = 0, ausstehend = 0, verdient = 0;
+  const fest = await festeSaetze(deals.map(d => d.id));
   for (const d of deals) {
-    const p = await berechne(d, cfg, besitzer);
+    const p = await berechne(d, cfg, besitzer, { satzFest: fest[d.id] });
     if (p.keine) continue;
+    await speichereAbschluss(d, p, besitzer).catch(e => console.error('Abschluss sichern:', e.message));
     p.teile.forEach(t => {
       if (t.faellig_am && t.faellig_am.slice(0, 7) === monat) faelligMonat += t.auszahlung;
       if (t.kunde_bezahlt_am) verdient += t.auszahlung; else ausstehend += t.auszahlung;
@@ -223,13 +227,83 @@ async function uebersicht(userId, monat, cfg) {
 }
 
 // GET /api/provision/deal/:id – Provision eines Deals (Closer: nur eigene)
+// ── Abschlüsse dauerhaft sichern ───────────────────────────────
+// Jeder gewonnene Deal eines Closers wird mit Auftragswert, Satz und Provision in
+// provision_abschluesse festgehalten. Der Satz bleibt der vom Tag des Abschlusses;
+// Beträge werden nachgezogen, sobald Angebot und Rechnungen da sind. Verloren oder
+// wieder geöffnet → Zeile bleibt (Status), damit die Statistik vollständig ist.
+async function festeSaetze(ids) {
+  if (!ids.length) return {};
+  const [rows] = await db.query('SELECT deal_id, satz FROM provision_abschluesse WHERE deal_id IN (?)', [ids]).catch(() => [[]]);
+  return Object.fromEntries(rows.map(r => [r.deal_id, Number(r.satz)]));
+}
+async function speichereAbschluss(d, p, besitzer) {
+  await db.query(
+    `INSERT INTO provision_abschluesse (deal_id, user_id, lead_id, firma, titel, paket, gewonnen_am, auftragswert, basis, satz, provision_netto, ust_satz, provision, geschaetzt, status)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'gewonnen')
+     ON DUPLICATE KEY UPDATE user_id=VALUES(user_id), firma=VALUES(firma), titel=VALUES(titel), paket=VALUES(paket), gewonnen_am=VALUES(gewonnen_am),
+       auftragswert=VALUES(auftragswert), basis=VALUES(basis), provision_netto=VALUES(provision_netto), ust_satz=VALUES(ust_satz),
+       provision=VALUES(provision), geschaetzt=VALUES(geschaetzt), status='gewonnen', aktualisiert_am=NOW()`,
+    [d.id, d.owner_id, d.lead_id, d.company || null, d.title || null, p.paket || d.paket || null, d.won_at || new Date(),
+     p.basis_preis, p.basis, p.satz, p.netto, p.ust.satz, p.auszahlung, p.geschaetzt ? 1 : 0]);
+}
+// Nach Gewonnen/Verloren/Wieder öffnen (aus deals.js)
+async function festschreiben(dealId) {
+  const [[d]] = await db.query(
+    `SELECT d.id, d.title, d.lead_id, d.owner_id, d.status, d.paket, d.value, d.won_at, l.company
+     FROM deals d LEFT JOIN leads l ON l.id=d.lead_id WHERE d.id=?`, [dealId]);
+  if (!d) return;
+  if (d.status !== 'won') {
+    await db.query("UPDATE provision_abschluesse SET status=?, aktualisiert_am=NOW() WHERE deal_id=?", [d.status === 'lost' ? 'verloren' : 'wieder_offen', d.id]);
+    return;
+  }
+  const besitzer = d.owner_id ? await besitzerLaden(d.owner_id) : null;
+  if (!besitzer || besitzer.role === 'admin') return;
+  const cfg = await bedarf.regeln();
+  const p = await berechne(d, cfg, besitzer, { satzFest: (await festeSaetze([d.id]))[d.id] });
+  if (!p.keine) await speichereAbschluss(d, p, besitzer);
+}
+// Beim Start: gewonnene Deals ohne Eintrag nachtragen (z. B. aus der Zeit vor dieser Funktion)
+async function nachtragen() {
+  const [ids] = await db.query(
+    `SELECT d.id FROM deals d JOIN users u ON u.id=d.owner_id LEFT JOIN provision_abschluesse a ON a.deal_id=d.id
+     WHERE d.status='won' AND u.role<>'admin' AND a.deal_id IS NULL`).catch(() => [[]]);
+  for (const r of ids) await festschreiben(r.id).catch(e => console.error('Abschluss nachtragen:', e.message));
+  return ids.length;
+}
+
+// Abschlüsse (alle Zeit): Closer sehen ihre eigenen, Admin alle oder einen Closer
+router.get('/abschluesse', auth, async (req, res) => {
+  try {
+    const admin = req.user.role === 'admin';
+    const uid = admin ? (parseInt(req.query.user_id) || null) : req.user.id;
+    const [rows] = await db.query(
+      `SELECT a.deal_id, a.user_id, u.full_name AS closer, a.firma, a.titel, a.paket, a.gewonnen_am, a.auftragswert, a.basis, a.satz,
+              a.provision_netto, a.ust_satz, a.provision, a.geschaetzt, a.status
+       FROM provision_abschluesse a LEFT JOIN users u ON u.id=a.user_id
+       WHERE a.status='gewonnen' ${uid ? 'AND a.user_id=?' : ''} ORDER BY a.gewonnen_am DESC`, uid ? [uid] : []);
+    const num = v => Number(v) || 0;
+    const liste = rows.map(r => ({ ...r, auftragswert: num(r.auftragswert), basis: num(r.basis), satz: num(r.satz), provision_netto: num(r.provision_netto),
+      ust_satz: num(r.ust_satz), provision: num(r.provision), geschaetzt: !!r.geschaetzt,
+      monat: new Date(r.gewonnen_am).toISOString().slice(0, 7) }));
+    const summe = l => ({ anzahl: l.length, auftragswert: round2(l.reduce((s, r) => s + r.auftragswert, 0)),
+      provision_netto: round2(l.reduce((s, r) => s + r.provision_netto, 0)), provision: round2(l.reduce((s, r) => s + r.provision, 0)) });
+    const gruppe = (key) => Object.values(liste.reduce((m, r) => { const k = key(r); (m[k] = m[k] || { key: k, l: [] }).l.push(r); return m; }, {}))
+      .map(g => ({ key: g.key, ...summe(g.l) }));
+    const jahr = String(new Date().getFullYear());
+    res.json({ abschluesse: liste, gesamt: summe(liste), dieses_jahr: summe(liste.filter(r => r.monat.startsWith(jahr))),
+      monate: gruppe(r => r.monat).sort((a, b) => b.key.localeCompare(a.key)),
+      ...(admin && !uid ? { closer: gruppe(r => r.closer || '–').sort((a, b) => b.provision - a.provision) } : {}) });
+  } catch (e) { console.error('Abschlüsse:', e); res.status(500).json({ error: 'Abschlüsse konnten nicht geladen werden.' }); }
+});
+
 router.get('/deal/:id', auth, async (req, res) => {
   try {
     const [[deal]] = await db.query('SELECT id, lead_id, owner_id, status, paket, value, won_at FROM deals WHERE id=?', [parseInt(req.params.id)]);
     if (!deal) return res.status(404).json({ error: 'Deal nicht gefunden' });
     if (req.user.role !== 'admin' && deal.owner_id !== req.user.id) return res.status(403).json({ error: 'Kein Zugriff' });
     const cfg = await bedarf.regeln();
-    res.json(await berechne(deal, cfg, await besitzerLaden(deal.owner_id)));
+    res.json(await berechne(deal, cfg, await besitzerLaden(deal.owner_id), { satzFest: (await festeSaetze([deal.id]))[deal.id] }));
   } catch (e) { console.error('Provision Deal:', e); res.status(500).json({ error: 'Provision konnte nicht berechnet werden.' }); }
 });
 
@@ -307,4 +381,6 @@ router.delete('/auszahlung/:schluessel', auth, adminOnly, async (req, res) => {
 router.faelligeAuszahlungen = faelligeAuszahlungen;
 router.berechne = berechne;
 router.bonus = bonus;
+router.festschreiben = festschreiben;
+router.nachtragen = nachtragen;
 module.exports = router;

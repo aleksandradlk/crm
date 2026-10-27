@@ -110,6 +110,74 @@ async function nummern() {
   try { const r = await sg('GET', 'numbers'); return (r && r.items) || []; } catch (_) { return []; }
 }
 
+// ── Nummern-Pool ──────────────────────────────────────────────
+// Alle Nummern aus sipgate plus eigene Angaben (Bezeichnung, gültig bis, Notiz) aus
+// der Tabelle telefonnummern. Wer welche Nummer nutzt, steht in users.sipgate_nummer.
+const WARN_TAGE = 14;
+const isoTag = (plus = 0) => { const d = new Date(); d.setDate(d.getDate() + plus); return d.toISOString().slice(0, 10); };
+const national = v => String(v || '').replace(/^\+49/, '0');
+
+async function pool(sgNrn) {
+  const [meta] = await db.query("SELECT nummer, bezeichnung, DATE_FORMAT(gueltig_bis, '%Y-%m-%d') AS gueltig_bis, notiz, manuell FROM telefonnummern").catch(() => [[]]);
+  const [users] = await db.query('SELECT id, full_name, role, sipgate_user, sipgate_nummer FROM users WHERE is_active=1');
+  const map = new Map();
+  const dazu = (nr, x = {}) => { if (nr) map.set(nr, { nummer: nr, in_sipgate: sgNrn ? false : null, ...(map.get(nr) || {}), ...x }); };
+  (sgNrn || []).filter(n => n.type !== 'QUICKDIAL')
+    .forEach(n => dazu(sgNummer(n.number) || n.number, { anzeige: n.localized || null, typ: n.type, in_sipgate: true }));
+  meta.forEach(m => dazu(m.nummer, { bezeichnung: m.bezeichnung, gueltig_bis: m.gueltig_bis, notiz: m.notiz, manuell: !!m.manuell }));
+  users.forEach(u => dazu(u.sipgate_nummer));
+  dazu(cfg.firmennummer);
+  const heute = isoTag(), bald = isoTag(WARN_TAGE);
+  return [...map.values()].map(n => {
+    const an = users.filter(u => u.sipgate_nummer === n.nummer).map(u => ({ id: u.id, name: u.full_name }));
+    const g = n.gueltig_bis || null;
+    const test = istTestnummer(n.nummer);
+    const status = g && g < heute ? 'abgelaufen' : g && g <= bald ? 'laeuft_ab' : n.in_sipgate === false ? 'fehlt' : (an.length || n.nummer === cfg.firmennummer) ? 'vergeben' : 'frei';
+    return { nummer: n.nummer, anzeige: n.anzeige || national(n.nummer), typ: n.typ || null, in_sipgate: n.in_sipgate,
+      bezeichnung: n.bezeichnung || '', gueltig_bis: g, notiz: n.notiz || '', manuell: !!n.manuell,
+      test, ohne_datum: test && !g, firma: n.nummer === cfg.firmennummer, vergeben_an: an, status };
+  }).sort((a, b) => (b.firma - a.firma) || a.nummer.localeCompare(b.nummer));
+}
+
+// Noch nutzbar? (kein Ablaufdatum oder Ablaufdatum heute oder später)
+async function nummerGueltig(nr) {
+  if (!nr) return false;
+  const [[m]] = await db.query("SELECT DATE_FORMAT(gueltig_bis, '%Y-%m-%d') AS g FROM telefonnummern WHERE nummer=?", [nr]).catch(() => [[null]]);
+  return !(m && m.g && m.g < isoTag());
+}
+
+// Nummer, die Kunden bei einem Benutzer sehen (abgelaufene eigene → Firmennummer)
+async function aktuelleNummer(userId) {
+  const [[u]] = await db.query('SELECT sipgate_nummer FROM users WHERE id=?', [userId]);
+  if (u && u.sipgate_nummer && await nummerGueltig(u.sipgate_nummer)) return u.sipgate_nummer;
+  return (await nummerGueltig(cfg.firmennummer)) ? cfg.firmennummer : null;
+}
+
+// Freie Nummer aus dem Pool: feste Nummern vor Testnummern, länger gültige zuerst
+function freieAus(liste, vergeben = new Set()) {
+  return liste.filter(n => n.status === 'frei' && n.in_sipgate !== false && !vergeben.has(n.nummer))
+    .sort((a, b) => (a.test - b.test) || String(b.gueltig_bis || '9999').localeCompare(String(a.gueltig_bis || '9999')))[0] || null;
+}
+
+// Closer mit sipgate-Zugang, aber ohne (oder mit abgelaufener) eigener Nummer bekommen eine freie
+async function verteilen(userId = null) {
+  const liste = await pool(istAktiv() ? await nummern() : null);
+  const ab = new Set(liste.filter(n => n.status === 'abgelaufen').map(n => n.nummer));
+  const [kandidaten] = await db.query(
+    `SELECT id, full_name, sipgate_nummer FROM users WHERE is_active=1 AND role='closer' AND sipgate_user IS NOT NULL ${userId ? 'AND id=?' : ''} ORDER BY id`,
+    userId ? [userId] : []);
+  const vergeben = new Set(), ergebnis = [];
+  for (const u of kandidaten) {
+    if (u.sipgate_nummer && !ab.has(u.sipgate_nummer)) continue;
+    const frei = freieAus(liste, vergeben);
+    if (!frei) { ergebnis.push({ id: u.id, name: u.full_name, nummer: null }); continue; }
+    vergeben.add(frei.nummer);
+    await db.query('UPDATE users SET sipgate_nummer=? WHERE id=?', [frei.nummer, u.id]);
+    ergebnis.push({ id: u.id, name: u.full_name, nummer: frei.nummer, anzeige: frei.anzeige });
+  }
+  return ergebnis;
+}
+
 // ── Admin: Status, Verbinden, Trennen ──────────────────────────
 router.get('/setup', auth, adminOnly, async (req, res) => {
   const webhookUrl = baseUrl(req) + WEBHOOK_PFAD;
@@ -136,6 +204,7 @@ router.get('/setup', auth, adminOnly, async (req, res) => {
       nummern: nrn.filter(n => n.type !== 'QUICKDIAL').map(n => ({ nummer: sgNummer(n.number) || n.number, anzeige: n.localized || n.number, typ: n.type, ziel: n.endpointAlias || '', test: istTestnummer(n.number) })),
       webhook: hooks ? { eingehend: hooks.incomingUrl === webhookUrl, ausgehend: hooks.outgoingUrl === webhookUrl, incomingUrl: hooks.incomingUrl || '', outgoingUrl: hooks.outgoingUrl || '' } : null,
       zuordnung: crm,
+      pool: await pool(nrn),
     });
   } catch (e) { res.json({ verbunden: true, webhookUrl, fehler: e.message, zuordnung: [] }); }
 });
@@ -162,6 +231,7 @@ router.post('/setup', auth, adminOnly, async (req, res) => {
         || (u.role === 'admin' && users.length === 1 ? users[0] : null);
       if (treffer) await db.query('UPDATE users SET sipgate_user=?, sipgate_device=? WHERE id=?', [treffer.id, treffer.defaultDevice || null, u.id]);
     }
+    await verteilen().catch(e => console.error('sipgate Nummern verteilen:', e.message));
     let webhook = null, hinweis = null;
     try {
       webhook = await webhooksEinrichten(baseUrl(req) + WEBHOOK_PFAD);
@@ -210,19 +280,61 @@ router.put('/zuordnung/:userId', auth, adminOnly, async (req, res) => {
   const geraet = kurz(req.body.sipgate_device, /^[a-z]\d+$/);
   const nummer = req.body.sipgate_nummer ? sgNummer(req.body.sipgate_nummer) : null;
   if (req.body.sipgate_nummer && !nummer) return res.status(400).json({ error: 'Ungültige Nummer' });
-  const [r] = await db.query('UPDATE users SET sipgate_user=?, sipgate_device=?, sipgate_nummer=? WHERE id=?', [sUser, geraet, nummer, id]);
-  if (!r.affectedRows) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
-  await log(req.user.id, 'sipgate_zuordnung', 'user', id, { sUser, geraet, nummer }, req.ip);
-  res.json({ ok: true });
+  const [[vorher]] = await db.query('SELECT sipgate_user FROM users WHERE id=?', [id]);
+  if (!vorher) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+  await db.query('UPDATE users SET sipgate_user=?, sipgate_device=?, sipgate_nummer=? WHERE id=?', [sUser, geraet, nummer, id]);
+  // Neu bei sipgate und noch keine Nummer gewählt: freie Nummer aus dem Pool
+  let auto = null;
+  if (sUser && !vorher.sipgate_user && !nummer) auto = (await verteilen(id).catch(() => []))[0] || null;
+  await log(req.user.id, 'sipgate_zuordnung', 'user', id, { sUser, geraet, nummer: nummer || auto?.nummer || null }, req.ip);
+  res.json({ ok: true, nummer: auto?.nummer || nummer || null, automatisch: !!auto?.nummer });
+});
+
+// ── Nummern-Pool: ansehen, bearbeiten, eigene Nummern, verteilen ──
+router.get('/nummern', auth, adminOnly, async (req, res) => {
+  try { res.json({ nummern: await pool(istAktiv() ? await nummern() : null), warn_tage: WARN_TAGE }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+async function nummerSpeichern(req, res, nr, neu) {
+  if (!nr) return res.status(400).json({ error: 'Ungültige Nummer' });
+  const b = req.body || {};
+  const g = b.gueltig_bis ? String(b.gueltig_bis).slice(0, 10) : null;
+  if (g && !/^\d{4}-\d{2}-\d{2}$/.test(g)) return res.status(400).json({ error: 'Datum bitte als TT.MM.JJJJ' });
+  const txt = (v, n) => (v == null ? null : String(v).trim().slice(0, n) || null);
+  await db.query(
+    `INSERT INTO telefonnummern (nummer, bezeichnung, gueltig_bis, notiz, manuell) VALUES (?,?,?,?,?)
+     ON DUPLICATE KEY UPDATE bezeichnung=VALUES(bezeichnung), gueltig_bis=VALUES(gueltig_bis), notiz=VALUES(notiz), updated_at=NOW()`,
+    [nr, txt(b.bezeichnung, 100), g, txt(b.notiz, 255), neu ? 1 : 0]);
+  await log(req.user.id, neu ? 'sipgate_nummer_neu' : 'sipgate_nummer_bearbeitet', null, null, { nummer: nr, gueltig_bis: g }, req.ip);
+  res.json({ ok: true, nummer: nr });
+}
+router.post('/nummern', auth, adminOnly, (req, res) => nummerSpeichern(req, res, sgNummer(req.body.nummer), true));
+router.put('/nummern/:nummer', auth, adminOnly, (req, res) => nummerSpeichern(req, res, sgNummer(req.params.nummer), false));
+router.delete('/nummern/:nummer', auth, adminOnly, async (req, res) => {
+  const nr = sgNummer(req.params.nummer);
+  if (!nr) return res.status(400).json({ error: 'Ungültige Nummer' });
+  // Wer sie nutzt, telefoniert danach mit der Firmennummer
+  const [r] = await db.query('UPDATE users SET sipgate_nummer=NULL WHERE sipgate_nummer=?', [nr]);
+  await db.query('DELETE FROM telefonnummern WHERE nummer=?', [nr]);
+  await log(req.user.id, 'sipgate_nummer_entfernt', null, null, { nummer: nr, freigegeben: r.affectedRows }, req.ip);
+  res.json({ ok: true, freigegeben: r.affectedRows });
+});
+router.post('/nummern/verteilen', auth, adminOnly, async (req, res) => {
+  try {
+    const erg = await verteilen();
+    await log(req.user.id, 'sipgate_nummern_verteilt', null, null, { anzahl: erg.filter(e => e.nummer).length }, req.ip);
+    res.json({ ok: true, verteilt: erg });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // Kurzinfo für den Benutzer-Dialog (ohne Abfrage bei sipgate)
 router.get('/benutzer/:userId', auth, adminOnly, async (req, res) => {
   if (!istAktiv()) return res.json({ aktiv: false });
   const [[u]] = await db.query('SELECT sipgate_user, sipgate_device, sipgate_nummer FROM users WHERE id=?', [parseInt(req.params.userId)]);
-  const nummer = (u && u.sipgate_nummer) || cfg.firmennummer || null;
+  const nummer = await aktuelleNummer(parseInt(req.params.userId));
+  const eigene = !!(u && u.sipgate_nummer && u.sipgate_nummer === nummer);
   res.json({ aktiv: true, zugang: (u && u.sipgate_user) || null, geraet: (u && u.sipgate_device) || null,
-    nummer, eigeneNummer: !!(u && u.sipgate_nummer), testnummer: istTestnummer(nummer) });
+    nummer, eigeneNummer: eigene, abgelaufen: !!(u && u.sipgate_nummer && !eigene), testnummer: istTestnummer(nummer) });
 });
 
 // ── Für alle: kann ich über sipgate anrufen? ────────────────────
@@ -232,7 +344,7 @@ router.get('/config', auth, async (req, res) => {
   res.json({
     aktiv: true,
     bereit: !!(u && (u.sipgate_device || u.sipgate_user)),
-    nummer: (u && u.sipgate_nummer) || cfg.firmennummer || null,
+    nummer: await aktuelleNummer(req.user.id),
   });
 });
 
@@ -258,7 +370,8 @@ router.post('/anrufen', auth, async (req, res) => {
     const [c] = await db.query(
       `INSERT INTO call_logs (lead_id, user_id, phone_number, direction, started_at, status)
        VALUES (?, ?, ?, 'outbound', NOW(), 'started')`, [lead.id, req.user.id, lead.phone]);
-    const absender = (u && u.sipgate_nummer) || cfg.firmennummer || undefined;
+    // Abgelaufene Nummer (laut Pool) nicht mehr senden, dann Firmennummer
+    const absender = (await aktuelleNummer(req.user.id)) || undefined;
     try {
       await sg('POST', 'sessions/calls', { caller: geraet, deviceId: geraet, callee: ziel, ...(absender ? { callerId: absender } : {}) });
     } catch (e) {
@@ -428,8 +541,9 @@ module.exports.ladeKonfiguration = ladeKonfiguration;
 module.exports.istAktiv = istAktiv;
 module.exports.status = status;
 // Nummer, unter der ein Benutzer nach außen anruft (eigene sipgate-Nummer, sonst Firmennummer)
-module.exports.nummerFuer = async userId => {
-  if (!istAktiv()) return null;
-  const [[u]] = await db.query('SELECT sipgate_nummer FROM users WHERE id=?', [userId]);
-  return (u && u.sipgate_nummer) || cfg.firmennummer || null;
+// Für „Fällig“: Nummern, die bald ablaufen, abgelaufen sind oder als Testnummer kein Datum haben (nur genutzte)
+module.exports.nummernWarnungen = async () => {
+  if (!istAktiv()) return [];
+  return (await pool(null)).filter(n => (n.vergeben_an.length || n.firma) && (['abgelaufen', 'laeuft_ab'].includes(n.status) || n.ohne_datum));
 };
+module.exports.nummerFuer = async userId => (istAktiv() ? aktuelleNummer(userId) : null);
