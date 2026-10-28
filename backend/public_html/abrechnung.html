@@ -598,16 +598,16 @@ function angebotEditor(a) {
 function anhaengeHtml(a) {
   const liste = (a.anhaenge || []).map(n => `<div class="sub" style="margin-bottom:6px">📎 <a href="${API}/angebote/${a.id}/anhang/${encodeURIComponent(n)}" target="_blank">${esc(n)}</a> · <a href="#" onclick="anhangLoeschen('${a.id}','${esc(n)}');return false" style="color:var(--rot)">entfernen</a></div>`).join('');
   return `${liste || '<div class="sub" style="margin-bottom:6px">Noch kein Anhang.</div>'}
-    <div class="btn-zeile" style="margin:4px 0 12px"><input type="file" id="ag-anhang-datei" accept="application/pdf,.pdf" style="font-size:0.85rem"><button class="btn klein sekundaer" onclick="anhangHochladen('${a.id}')">PDF anhängen</button><span class="status-text" id="ag-anhang-status"></span></div>`;
+    <div class="btn-zeile" style="margin:4px 0 12px"><input type="file" id="ag-anhang-datei" accept="application/pdf,.pdf" style="font-size:0.85rem" onchange="anhangHochladen('${a.id}')"><button class="btn klein sekundaer" onclick="anhangHochladen('${a.id}')">PDF anhängen</button><span class="status-text" id="ag-anhang-status"></span></div>`;
 }
 async function anhangHochladen(id) {
   const el = $('ag-anhang-status'); el.className = 'status-text'; el.textContent = '';
   const datei = $('ag-anhang-datei').files[0];
-  if (!datei) { el.textContent = 'Bitte zuerst eine PDF auswählen.'; el.className = 'status-text fehler'; return; }
+  if (!datei) { el.textContent = 'Bitte zuerst eine PDF auswählen.'; el.className = 'status-text fehler'; return false; }
   el.textContent = 'Lade hoch …';
   const daten = await new Promise((ok, nein) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = nein; r.readAsDataURL(datei); });
-  try { const d = await api(`/angebote/${id}/anhang`, 'POST', { name: datei.name, daten }); $('ag-anhaenge').innerHTML = anhaengeHtml(d.angebot); toast('Anhang gespeichert.'); }
-  catch (e) { el.textContent = e.message; el.className = 'status-text fehler'; }
+  try { const d = await api(`/angebote/${id}/anhang`, 'POST', { name: datei.name, daten }); $('ag-anhaenge').innerHTML = anhaengeHtml(d.angebot); toast('Anhang gespeichert.'); return true; }
+  catch (e) { el.textContent = e.message; el.className = 'status-text fehler'; return false; }
 }
 async function anhangLoeschen(id, name) {
   try { const d = await api(`/angebote/${id}/anhang/${encodeURIComponent(name)}`, 'DELETE'); $('ag-anhaenge').innerHTML = anhaengeHtml(d.angebot); } catch (e) { toast(e.message, true); }
@@ -657,6 +657,12 @@ function ratenVorschau(gesamt) {
     : `Ratenplan im PDF: ${n} × ${euro(rate)} monatlich ab ${datumDe($('ag-raten-erste').value)}${letzte !== rate ? ` (letzte Rate ${euro(letzte)} wegen Rundung)` : ''}.`;
 }
 async function angebotSpeichern(id) {
+  // Ausgewählte, aber noch nicht hochgeladene PDF zuerst anhängen – sonst ginge sie beim Speichern verloren
+  if (id && $('ag-anhang-datei') && $('ag-anhang-datei').files[0] && !(await anhangHochladen(id))) {
+    $('ag-status').textContent = 'Der Anhang konnte nicht gespeichert werden (siehe oben). Das Angebot ist noch nicht gespeichert.';
+    $('ag-status').className = 'status-text fehler';
+    return;
+  }
   const body = {
     kundeId: $('ag-kunde').value, datum: $('ag-datum').value, gueltigBis: $('ag-gueltig').value, betreff: $('ag-betreff').value,
     anrede: $('ag-anrede').value, einleitung: $('ag-einleitung').value, schlusstext: $('ag-schluss').value, gruss: $('ag-gruss').value,
