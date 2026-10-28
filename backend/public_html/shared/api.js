@@ -98,7 +98,8 @@ function showToast(msg, type = 'ok') {
   t.innerHTML = `<span style="color:${color};font-weight:700">${icon}</span> ${escHtml(msg)}`;
   t.style.display = 'flex';
   clearTimeout(t._timer);
-  t._timer = setTimeout(() => { t.style.display = 'none'; }, 3500);
+  // Lange Hinweise (z. B. Mikrofon-Anleitung) länger stehen lassen
+  t._timer = setTimeout(() => { t.style.display = 'none'; }, Math.min(12000, Math.max(3500, String(msg).length * 60)));
 }
 
 // ── Custom Confirm Dialog ─────────────────────────────────────
@@ -930,7 +931,7 @@ const Softphone = {
     // Fehler nur während eines Gesprächs anzeigen – Verbindungsprobleme im Leerlauf
     // (z.B. Anmeldung für eingehende Anrufe) sollen nicht bei jedem Seitenaufruf stören
     device.on('error', err => {
-      if (this.call || this._incoming) showToast('Telefonie: ' + (err.message || err), 'err');
+      if (this.call || this._incoming) showToast(this._fehlerText(err, 'Telefonie: '), 'err');
       else console.warn('Telefonie:', err.message || err);
     });
     this.device = device;
@@ -982,14 +983,22 @@ const Softphone = {
       call.on('disconnect', finish);
       call.on('cancel', finish);
       call.on('reject', finish);
-      call.on('error', err => { showToast('Anruf-Fehler: ' + (err.message || err), 'err'); finish(); });
+      call.on('error', err => { showToast(this._fehlerText(err, 'Anruf-Fehler: '), 'err'); finish(); });
     } catch (e) {
-      const msg = /permission|NotAllowed/i.test(String(e && (e.name || e.message)))
-        ? 'Mikrofon-Zugriff wurde verweigert. Bitte im Browser erlauben.'
-        : (e.message || 'Anruf konnte nicht gestartet werden');
-      showToast(msg, 'err');
+      showToast(this._fehlerText(e, '') || 'Anruf konnte nicht gestartet werden', 'err');
       finish();
     }
+  },
+
+  // Twilio-Fehler verständlich auf Deutsch (31401/31208 = Mikrofon verweigert, 31402 = Mikrofon nicht verfügbar)
+  _fehlerText(err, praefix) {
+    const code = Number(err && err.code);
+    const name = String(err && (err.name || '')) + ' ' + String(err && (err.message || ''));
+    if (code === 31401 || code === 31208 || /permission|NotAllowed/i.test(name))
+      return 'Mikrofon ist für das CRM gesperrt. Bitte im Browser erlauben (iPhone/Safari: links in der Adresszeile „aA“ → Website-Einstellungen → Mikrofon → Erlauben; Android/Chrome: Symbol links neben der Adresse → Berechtigungen → Mikrofon) und die Seite neu laden.';
+    if (code === 31402 || /NotFound|NotReadable|AcquisitionFailed/i.test(name))
+      return 'Mikrofon nicht verfügbar. Läuft gerade ein anderes Telefonat oder eine App, die das Mikrofon nutzt? Diese beenden und erneut anrufen.';
+    return praefix + ((err && err.message) || err || '');
   },
 
   // ── Eingehende Anrufe (Firmennummer klingelt im Browser) ──

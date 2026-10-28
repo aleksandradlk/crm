@@ -93,7 +93,10 @@ app.get(['/', ...PAGES.map(p => '/' + p)], (req, res) => {
 app.use(express.static(path.join(__dirname, 'public_html'), {
   setHeaders(res, filePath) {
     if (filePath.endsWith('.html') || filePath.endsWith('.js') || filePath.endsWith('.css')) {
-      res.set('Cache-Control', 'no-cache, must-revalidate');
+      // Mit Cache-Tag (?v=nfXX) ändert sich die Adresse bei jeder neuen Version → darf im Browser bleiben.
+      // Spart beim Neuladen ~25 Rückfragen an den Server (vor allem am Handy spürbar).
+      const versioniert = !filePath.endsWith('.html') && /[?&]v=/.test(res.req?.originalUrl || '');
+      res.set('Cache-Control', versioniert ? 'public, max-age=31536000, immutable' : 'no-cache, must-revalidate');
     }
   },
 }));
