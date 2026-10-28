@@ -59,7 +59,10 @@ router.post('/testmail', auth, async (req, res) => {
     res.json({ ok: true, email: u.email });
   } catch (e) {
     console.error('Test-Mail:', e.message);
-    res.status(500).json({ error: 'Die Test-Mail konnte nicht verschickt werden. Bitte Aleksa Bescheid geben.' });
+    // Admin sieht den Grund vom Mailserver, Closer einen verständlichen Hinweis
+    res.status(500).json({ error: req.user.role === 'admin'
+      ? `Die Test-Mail konnte nicht verschickt werden. Grund vom Mailserver: ${e.message}`
+      : 'Die Test-Mail konnte nicht verschickt werden. Bitte Aleksa Bescheid geben.' });
   }
 });
 

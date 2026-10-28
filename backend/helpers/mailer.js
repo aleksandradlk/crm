@@ -8,10 +8,15 @@ require('dotenv').config();
 const LOGO_PATH = path.join(__dirname, '../public_html/LogoKomplett-klein.PNG');
 const LOGO_CID  = 'novaflow-logo@crm';
 
+// Port 465 braucht eine verschlüsselte Verbindung von Anfang an. Fehlt SMTP_SECURE in Hostinger,
+// richtet sich das nach dem Port (wie in abrechnung/mail.js) – sonst scheitert jede Mail.
+const SMTP_PORT = parseInt(process.env.SMTP_PORT) || 465;
+const SMTP_SECURE = process.env.SMTP_SECURE ? process.env.SMTP_SECURE !== 'false' : SMTP_PORT === 465;
+
 const transporter = nodemailer.createTransport({
   host:   process.env.SMTP_HOST,
-  port:   parseInt(process.env.SMTP_PORT) || 465,
-  secure: process.env.SMTP_SECURE === 'true',
+  port:   SMTP_PORT,
+  secure: SMTP_SECURE,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
@@ -131,4 +136,4 @@ async function sendHtmlMail({ to, subject, html }) {
   });
 }
 
-module.exports = { sendReminder, sendLeadEmail, sendInfoMail, sendHtmlMail };
+module.exports = { sendReminder, sendLeadEmail, sendInfoMail, sendHtmlMail, SMTP_PORT, SMTP_SECURE };
