@@ -67,9 +67,19 @@ async function nurBerechtigte(req, res, next) {
 }
 
 // ── Angebotsstatus → Deal im CRM ─────────────────────────────
-async function angebotStatusAnCrm(a) {
-  const dealId = a.crm && a.crm.dealId;
-  if (!dealId) return;
+let mandantRef = null;
+async function angebotStatusAnCrm(a, vorherStatus, kunde) {
+  let dealId = a.crm && a.crm.dealId;
+  // Angebot ohne Deal-Verknüpfung (z. B. direkt in „Angebote & Rechnungen“ angelegt):
+  // offenen Deal des Leads nehmen und fest verknüpfen (auch für die Provision)
+  if (!dealId) {
+    const lead = await leadZumAngebot(a, kunde);
+    if (!lead) return;
+    const [[d]] = await db.query("SELECT id FROM deals WHERE lead_id=? AND status='open' ORDER BY updated_at DESC, id DESC LIMIT 1", [lead.id]);
+    if (!d) return;
+    dealId = d.id;
+    if (mandantRef) mandantRef.crm.dealVerknuepfen(a.id, lead.id, dealId);
+  }
   const { markWon, markLost } = require('../routes/deals');
   const [[deal]] = await db.query('SELECT * FROM deals WHERE id=?', [dealId]);
   if (!deal) return;
@@ -102,7 +112,17 @@ async function angebotStatusAnCrm(a) {
 
 // Lead zu einem Angebot: aus dem CRM angelegt (crm.leadId) oder über den verknüpften Kunden
 async function leadZumAngebot(a, kunde) {
-  const id = (a.crm && a.crm.leadId) || (kunde && kunde.crmLeadId);
+  let id = (a.crm && a.crm.leadId) || (kunde && kunde.crmLeadId);
+  // Kunde von Hand angelegt: über E-Mail oder Firmenname zuordnen, aber nur bei eindeutigem Treffer
+  if (!id && kunde) {
+    const mail = String(kunde.email || '').trim().toLowerCase(), firma = String(kunde.firma || '').trim().toLowerCase();
+    if (mail || firma) {
+      const [treffer] = await db.query(
+        `SELECT id FROM leads WHERE archived_at IS NULL AND ((? <> '' AND LOWER(TRIM(email))=?) OR (? <> '' AND LOWER(TRIM(company))=?)) LIMIT 2`,
+        [mail, mail, firma, firma]);
+      if (treffer.length === 1) id = treffer[0].id;
+    }
+  }
   if (!id) return null;
   const [[l]] = await db.query('SELECT l.id, l.company, l.assigned_to, u.full_name AS closer FROM leads l LEFT JOIN users u ON u.id = l.assigned_to WHERE l.id=?', [id]);
   return l || null;
@@ -119,7 +139,9 @@ async function angebotVersandAnCrm(a, eintrag, kunde, user) {
   const vonId = (user && user.id) || lead.assigned_to;
   await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)', [lead.id, vonId,
     `📨 Angebot ${a.nummer} per E-Mail an ${an} verschickt${dateien ? ` · Anhänge: ${dateien}` : ''} · Mailtext und PDFs unter „Angebote & Rechnungen“`]);
-  if (!(a.crm && a.crm.dealId) && lead.assigned_to && lead.assigned_to !== vonId)
+  // Mit Deal kommt der Hinweis über angebotStatusAnCrm („Angebot verschickt“), nicht doppelt
+  const [[offen]] = await db.query("SELECT id FROM deals WHERE lead_id=? AND status='open' LIMIT 1", [lead.id]);
+  if (!(a.crm && a.crm.dealId) && !offen && lead.assigned_to && lead.assigned_to !== vonId)
     await db.query("INSERT INTO reminders (lead_id, user_id, remind_at, note, kind, sent) VALUES (?,?,NOW(),?, 'info', 1)",
       [lead.id, lead.assigned_to, `Angebot ${a.nummer} an ${lead.company} ist raus. Jetzt nachfassen.`]);
 }
@@ -198,6 +220,7 @@ function registriere(app, { ki } = {}) {
     onAngebotVersand: angebotVersandAnCrm,
     angebotKontext,
   });
+  mandantRef = mandant;
   status.aktiv = true;
   try { const k = mandant.crm.katalogAktualisieren(); if (k) console.log(`Abrechnung: Artikelkatalog aktualisiert – ${k.neu} neu, ${k.alt} alte auf inaktiv`); }
   catch (e) { console.error('Abrechnung: Katalog aktualisieren:', e.message); }

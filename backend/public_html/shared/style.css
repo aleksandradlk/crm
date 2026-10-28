@@ -2805,3 +2805,12 @@ tr.ds-flash td { background: color-mix(in srgb, var(--copper) 14%, transparent);
 .dok-anh { display: flex; flex-wrap: wrap; gap: 6px; }
 .dok-mail summary { cursor: pointer; font-size: 12px; color: var(--text2); }
 .dok-mail-text { white-space: pre-line; font-size: 12.5px; line-height: 1.5; color: var(--text); background: var(--bg3); border-radius: 8px; padding: 10px 12px; margin-top: 6px; overflow-wrap: anywhere; }
+
+/* Angeheftete Notizen oben im Lead */
+.panel-pins { margin-top: 12px; padding: 9px 12px; border-radius: 10px; background: rgba(194,105,30,0.08); border-left: 3px solid var(--copper); }
+.panel-pins .panel-note-label { color: var(--copper); }
+.panel-pin + .panel-pin { border-top: 1px solid color-mix(in srgb, var(--copper) 25%, transparent); margin-top: 6px; padding-top: 6px; }
+.panel-pin-text { font-size: 13px; color: var(--text); line-height: 1.45; white-space: pre-line; overflow-wrap: anywhere; }
+.panel-pin-meta { font-size: 11px; color: var(--text3); display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.panel-pin-meta .panel-icon-btn { margin-left: auto; }
+.panel-icon-btn.is-pinned { color: var(--copper); }

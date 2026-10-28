@@ -1430,3 +1430,24 @@ document.addEventListener('click', e => {
   clearTimeout(b._klickTimer);
   b._klickTimer = setTimeout(() => { delete b.dataset.klick; }, 4000);
 }, true);
+
+// ── Angeheftete Notizen im Lead (wichtige Infos ganz oben, z. B. „Google-Profil hat er selbst gemacht“) ──
+function pinnedHtml(l) {
+  const pins = (l.comments || []).filter(c => c.pinned_at).sort((a, b) => String(b.pinned_at).localeCompare(String(a.pinned_at)));
+  if (!pins.length) return '';
+  return `<div class="panel-pins"><div class="panel-note-label"><i class="fas fa-thumbtack"></i> Angeheftet</div>${pins.map(c => `
+    <div class="panel-pin"><div class="panel-pin-text">${escHtml(c.text)}</div>
+      <div class="panel-pin-meta">${escHtml(c.full_name || '')} · ${fmtDate(c.created_at)}${c.pinned_by_name && c.pinned_by_name !== c.full_name ? ` · angeheftet von ${escHtml(c.pinned_by_name)}` : ''}
+        <button type="button" class="panel-icon-btn" onclick="notizAnheften(${l.id},${c.id},false)" title="Lösen"><i class="fas fa-times"></i></button></div></div>`).join('')}</div>`;
+}
+function pinBtn(l, c) {
+  return `<button type="button" class="panel-icon-btn${c.pinned_at ? ' is-pinned' : ''}" onclick="notizAnheften(${l.id},${c.id},${c.pinned_at ? 'false' : 'true'})" title="${c.pinned_at ? 'Lösen' : 'Oben anheften'}"><i class="fas fa-thumbtack"></i></button>`;
+}
+async function notizAnheften(leadId, cid, an) {
+  try {
+    await api('POST', `/leads/${leadId}/comments/${cid}/pin`, { pinned: an });
+    showToast(an ? 'Oben im Lead angeheftet' : 'Nicht mehr angeheftet');
+    const neu = window.openPanel || window.openLeadPanel;
+    if (neu) neu(leadId);
+  } catch (e) { showToast(e.message, 'err'); }
+}

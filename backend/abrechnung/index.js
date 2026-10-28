@@ -197,7 +197,7 @@ function bauMandant(app, ctx) {
     const vorher = sammlung === 'angebote' && ctx.onAngebotStatus ? db.eins(sammlung, obj.id) : null;
     db.setze(sammlung, obj.id, obj);
     if (ctx.onAngebotStatus && sammlung === 'angebote' && obj.status !== (vorher ? vorher.status : 'entwurf')) {
-      Promise.resolve().then(() => ctx.onAngebotStatus(angebotAnsicht(obj), vorher ? vorher.status : null))
+      Promise.resolve().then(() => ctx.onAngebotStatus(angebotAnsicht(obj), vorher ? vorher.status : null, ladeKunden().find(k => k.id === obj.kundeId) || obj.kunde || null))
         .catch(e => console.error('Abrechnung → CRM:', e.message));
     }
     return obj;
@@ -800,39 +800,65 @@ function bauMandant(app, ctx) {
 
   // Standard-Text fürs Angebot: das Wichtigste aus dem Angebot als Liste (Betrag, Zahlung,
   // Betreuung, kostenlose Extras), Projektvereinbarung zurückschicken, Gültigkeit
-  function angebotMailText(a, kunde, stamm) {
+  // Aufbau wie Aleksas Vorlage: Bezug aufs Gespräch, „Kurz zusammengefasst“, Preis in einem
+  // Absatz, was jetzt zu tun ist, Einladung zu Fragen. Persönlicher geht es mit „Mit KI formulieren“.
+  function angebotMailText(a, kunde, stamm, extra = {}) {
     const du = kunde && kunde.anrede === 'du';
     const v = angebotAnsicht(a);
     const eur = n => (Math.round(n * 100) % 100 ? euroText(n) : round2(n).toLocaleString('de-DE') + ' €');
     const z = v.zahlung, brutto = v.summen.brutto;
-    const punkte = [];
+    const pv = (a.anhaenge || []).length > 0;
+    const closer = String(extra.closer || '').trim();
+    const einstieg = du
+      ? `${closer ? `wie mit ${closer} besprochen` : 'wie besprochen'}, bekommst du hier dein Angebot${pv ? ' und die Projektvereinbarung' : ''}.`
+      : `${closer ? `wie mit ${closer} besprochen` : 'wie besprochen'}, erhalten Sie hier Ihr Angebot${pv ? ' und die Projektvereinbarung' : ''}.`;
+    // Leistungen als Stichpunkte in Kundensprache, ohne Paketnamen (bei NovaFlow), sonst Titel ohne „– Einrichtung“
+    const dein = du ? 'Dein' : 'Ihr', rausfahren = du ? 'bevor du rausfährst' : 'bevor Sie rausfahren';
+    const S_PUNKTE = ['Anfragen landen in einem Postfach und werden sofort beantwortet', `Fotos, Maße oder Wünsche werden automatisch abgefragt, ${rausfahren}`];
+    const M_PUNKTE = [...S_PUNKTE, 'Terminvorschläge, Erinnerungen und das Nachfassen offener Angebote laufen automatisch'];
+    const klartext = t => ctx.id !== 'novaflow' ? null
+      : /quick-?win/i.test(t) ? ['Jede neue Anfrage kommt sofort aufs Handy, der Kunde bekommt automatisch eine Eingangsbestätigung']
+      : /autopilot\s*S\b/i.test(t) ? S_PUNKTE
+      : /autopilot\s*M\b/i.test(t) ? M_PUNKTE
+      : /autopilot\s*L\b/i.test(t) ? [...M_PUNKTE, 'Angebotsentwürfe, Zahlungserinnerungen und Erinnerungen an Bestandskunden laufen automatisch']
+      : /google/i.test(t) ? [`${dein} Google-Profil auf Stand`]
+      : /webseite/i.test(t) ? ['Fertige Webseite mit Anfrageformular'] : null;
+    const leistungen = [...new Set(v.positionen.filter(p => p.abrechnung === 'einmalig' && p.titel).flatMap(p => {
+      const titel = String(p.titel).replace(/\s*[–-]\s*Einrichtung\s*$/i, '').trim();
+      const punkte = klartext(titel) || [titel];
+      return Number(p.einzelpreis) === 0 ? punkte.map(x => `${x} (${du ? 'bekommst du kostenlos dazu' : 'kostenlos dazu'})`) : punkte;
+    }))];
+    let preis = '';
     if (brutto > 0) {
-      let p = `${eur(brutto)} einmalig`;
-      if (z.art === 'anzahlung') p += `: ${menge(z.anzahlungProzent)} % (${eur(z.anzahlungBetrag)}) ${z.anzahlungText}, der Rest (${eur(z.restBetrag)}) ${z.restText}.`;
+      preis = `Einmalig ${eur(brutto)}`;
+      const komma = t => (/^(wenn|sobald|sowie|nachdem)\b/i.test(t) ? ', ' : ' ') + t;
+      if (z.art === 'anzahlung') preis += Number(z.anzahlungProzent) === 50
+        ? `: die Hälfte ${z.anzahlungText}, die andere Hälfte${komma(z.restText)}.`
+        : `: ${menge(z.anzahlungProzent)} % (${eur(z.anzahlungBetrag)}) ${z.anzahlungText}, der Rest ${z.restText}.`;
       else if (z.art === 'raten' && z.raten.length) {
         const anz = z.raten.find(r => r.anzahlung), raten = z.raten.filter(r => !r.anzahlung);
-        p += anz ? `: ${menge(z.ratenAnzahlung)} % (${eur(anz.betrag)}) bei Auftrag, dann ${raten.length} × ${eur(raten[0].betrag)} monatlich ab ${datumDe(raten[0].faelligAm)}.`
+        preis += anz ? `: ${menge(z.ratenAnzahlung)} % (${eur(anz.betrag)}) bei Auftrag, dann ${raten.length} × ${eur(raten[0].betrag)} monatlich ab ${datumDe(raten[0].faelligAm)}.`
           : ` in ${raten.length} Monatsraten à ${eur(raten[0].betrag)} ab ${datumDe(raten[0].faelligAm)}.`;
-      } else p += `, zahlbar innerhalb von ${stamm.zahlungszielTage || 14} Tagen nach Rechnung.`;
-      if (ctx.id === 'novaflow' && z.art !== 'raten' && brutto >= 1490) p += du ? ' Lieber in Raten? Sag mir einfach Bescheid.' : ' Lieber in Raten? Sagen Sie mir einfach Bescheid.';
-      punkte.push(p);
+      } else preis += `, zahlbar innerhalb von ${stamm.zahlungszielTage || 14} Tagen nach Rechnung.`;
     }
     if (v.monatlichPositionen.length) {
       const start = a.monatlichStart || plusMonate(monatsAnfang(monatVon(heute())), 1);
       const gratis = v.monatlichPositionen.some(p => /gratis|kostenlos/i.test(`${p.titel} ${p.beschreibung || ''}`));
-      const liste = v.monatlichPositionen.map(p => `${p.titel} ${eur(positionGesamt(p))}`).join(', ');
-      punkte.push(`${du ? 'Deine' : 'Ihre'} laufende Betreuung: ${liste} im Monat${gratis ? ', der erste Monat ist kostenlos' : ''}. Abrechnung ab ${datumDe(start)}, monatlich kündbar.`);
+      // „Betreuung und Webseite kosten danach …“ statt Paketnamen
+      const namen = [...new Set(v.monatlichPositionen.map(p => ctx.id === 'novaflow'
+        ? (/^betreuung/i.test(p.titel) ? 'Betreuung' : /webseite/i.test(p.titel) ? 'Webseite' : p.titel) : p.titel))];
+      preis += `${preis ? ' ' : ''}${namen.join(' und ')} ${namen.length > 1 ? 'kosten' : 'kostet'} danach ${eur(v.monatlichSumme)} im Monat${gratis ? ', der erste Monat ist kostenlos' : ''}, abgerechnet ab ${datumDe(start)} und monatlich kündbar.`;
     }
-    v.positionen.filter(p => p.abrechnung === 'einmalig' && Number(p.einzelpreis) === 0 && p.titel)
-      .forEach(p => punkte.push(`${p.titel} ${du ? 'bekommst du' : 'bekommen Sie'} kostenlos dazu.`));
-    const pv = (a.anhaenge || []).length > 0;
+    if (ctx.id === 'novaflow' && brutto >= 1490 && z.art !== 'raten') preis += du ? ' Lieber in Raten? Sag mir einfach Bescheid.' : ' Lieber in Raten? Sagen Sie mir einfach Bescheid.';
     const teile = [
       kundeAnrede(kunde),
-      `${du ? 'wie besprochen findest du im Anhang dein Angebot' : 'wie besprochen finden Sie im Anhang Ihr Angebot'}${a.betreff ? ` „${a.betreff}“` : ` ${a.nummer}`}${pv ? ' und die Projektvereinbarung' : ''}.`,
-      punkte.length ? `${du ? 'Kurz das Wichtigste für dich:' : 'Kurz das Wichtigste für Sie:'}\n${punkte.map(p => '- ' + p).join('\n')}` : '',
-      pv ? (du ? 'Wenn für dich alles passt, unterschreib die Vereinbarung bitte und schick sie mir zurück. Ein Scan oder Foto reicht.' : 'Wenn für Sie alles passt, unterschreiben Sie die Vereinbarung bitte und schicken Sie sie mir zurück. Ein Scan oder Foto reicht.')
-        : (du ? 'Wenn für dich alles passt, gib mir einfach kurz Bescheid, dann lege ich los.' : 'Wenn für Sie alles passt, geben Sie mir einfach kurz Bescheid, dann lege ich los.'),
-      `Das Angebot gilt bis ${datumDe(a.gueltigBis)}. ${du ? 'Bei Fragen schreib mir einfach.' : 'Bei Fragen melden Sie sich gern.'}`,
+      einstieg,
+      leistungen.length ? `Kurz zusammengefasst:\n${leistungen.map(p => '- ' + p).join('\n')}` : '',
+      preis,
+      pv ? (du ? 'Wenn alles passt, unterschreib die Vereinbarung und schick sie mir als Scan oder Foto zurück. Dann geht’s direkt los.'
+               : 'Wenn alles passt, unterschreiben Sie die Vereinbarung und schicken Sie sie mir als Scan oder Foto zurück. Dann geht’s direkt los.')
+         : (du ? 'Wenn alles passt, gib mir kurz Bescheid. Dann geht’s direkt los.' : 'Wenn alles passt, geben Sie mir kurz Bescheid. Dann geht’s direkt los.'),
+      du ? 'Fragen kannst du einfach hier drunter schreiben 😊' : 'Bei Fragen antworten Sie einfach auf diese Mail.',
       kundeGruss(kunde),
     ];
     return teile.filter(Boolean).join('\n\n');
@@ -845,7 +871,7 @@ function bauMandant(app, ctx) {
     let betreff, text;
     if (typ === 'angebot') {
       betreff = `${du ? 'Dein' : 'Ihr'} Angebot: ${dok.betreff || dok.nummer}`;
-      text = angebotMailText(dok, kunde, stamm);
+      text = angebotMailText(dok, kunde, stamm, extra);
     } else if (typ === 'mahnung') {
       const m = extra.mahnung;
       betreff = `${MAHN_TITEL[m.stufe]} zu Rechnung ${dok.nummer}`;
@@ -918,13 +944,14 @@ function bauMandant(app, ctx) {
     res.send(fs.readFileSync(anhangPfad(a, name)));
   });
 
-  app.get('/api/abrechnung/angebote/:id/email', (req, res) => {
+  app.get('/api/abrechnung/angebote/:id/email', asyncRoute(async (req, res) => {
     const a = ladeEins(ANGEBOTE_DIR, req.params.id);
     if (!a) return fehler(res, 404, 'Angebot nicht gefunden.');
     const kunde = ladeKunden().find(k => k.id === a.kundeId) || a.kunde;
-    ok(res, { signatur: signaturText(ladeStammdaten()), signaturLogo: !!signaturLogo(ladeStammdaten()), vorlage: emailVorlage('angebot', a, kunde, ladeStammdaten()), versand: a.versand || [],
+    const kontext = ctx.angebotKontext ? await Promise.resolve(ctx.angebotKontext(a, kunde)).catch(() => null) : null;
+    ok(res, { signatur: signaturText(ladeStammdaten()), signaturLogo: !!signaturLogo(ladeStammdaten()), vorlage: emailVorlage('angebot', a, kunde, ladeStammdaten(), { closer: kontext && kontext.closer }), versand: a.versand || [],
       dateien: [pdfDateiname(a.nummer, kunde, 'Angebot'), ...(a.anhaenge || [])], ki: !!(ctx.ki && ctx.ki.client) });
-  });
+  }));
   app.post('/api/abrechnung/angebote/:id/email', asyncRoute(async (req, res) => {
     const a = ladeEins(ANGEBOTE_DIR, req.params.id);
     if (!a) throw new Error('Angebot nicht gefunden.');
@@ -1183,8 +1210,9 @@ ${fakten}
 
 Regeln:
 - ${du ? 'Du-Form' : 'Sie-Form'}, warm, persönlich, kurz und klar. Der Kunde soll merken, dass sich jemand wirklich kümmert.
-- Betreff persönlich, beginnt mit "${du ? 'Dein' : 'Ihr'} Angebot:" und nennt in wenigen Worten, worum es geht.
-- Text OHNE Anrede am Anfang und OHNE Gruß/Signatur am Ende (beides setzt das System).
+- Betreff persönlich, beginnt mit "${du ? 'Dein' : 'Ihr'} Angebot:" und nennt in wenigen Worten, was der Kunde davon hat (z. B. "Dein Angebot: Zeit sparen, ohne für jedes Angebot rauszufahren"). Am besten aufgreifen, was ihn laut Gespräch stört.
+- NIE Paket- oder Produktnamen nennen (z. B. "Anfragen-Autopilot S/M/L", "Quick-Win", "Einrichtung", Artikelnummern), weder im Betreff noch im Text. Stattdessen beschreiben, was passiert und was der Kunde davon hat. Webseite und Google-Profil dürfen so heißen.
+- Text OHNE Anrede am Anfang und OHNE Gruß/Signatur am Ende (beides setzt das System). Der letzte Satz lädt zu Fragen ein und endet mit einem passenden Emoji wie 😊.
 - Wenn bekannt, wer das Gespräch geführt hat, im ersten Satz darauf beziehen.
 - "Kurz zusammengefasst:" mit 3 bis 5 Stichpunkten (Zeilen beginnen mit "- "), Nutzen für den Kunden in seinen Worten.
 - Preise und Zahlungsweise in einem kurzen Absatz, genau wie in den Fakten.
@@ -1789,6 +1817,12 @@ Antworte NUR mit gültigem JSON, kein Text davor oder danach:
       return k;
     },
     // Neuen Angebotsentwurf für einen Deal anlegen
+    dealVerknuepfen(angebotId, leadId, dealId) {
+      const a = ladeEins(ANGEBOTE_DIR, angebotId);
+      if (!a || (a.crm && a.crm.dealId)) return;
+      a.crm = { ...(a.crm || {}), leadId: (a.crm && a.crm.leadId) || leadId, dealId };
+      db.setze(ANGEBOTE_DIR, a.id, a);   // ohne Statusmeldung (Status unverändert)
+    },
     angebotEntwurf({ lead, deal, positionen, zahlung, gratismonat }) {
       const kunde = crm.kundeFuerLead(lead);
       const datum = heute();

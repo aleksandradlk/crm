@@ -704,8 +704,9 @@ router.get('/:id', auth, async (req, res) => {
   if (!canView(req.user, lead)) return res.status(403).json({ error: 'Dieser Lead wird von einem Kollegen betreut.' });
 
   const [comments] = await db.query(
-    `SELECT c.*, u.full_name, u.username FROM comments c
+    `SELECT c.*, u.full_name, u.username, pu.full_name AS pinned_by_name FROM comments c
      JOIN users u ON u.id = c.user_id
+     LEFT JOIN users pu ON pu.id = c.pinned_by
      WHERE c.lead_id = ? ORDER BY c.created_at ASC`, [id]
   );
   const [reminders] = await db.query(
@@ -870,6 +871,23 @@ router.patch('/:id/comments/:cid', auth, async (req, res) => {
     await log(req.user.id, 'comment_edit', 'lead', parseInt(req.params.id), { cid }, req.ip);
     res.json({ ok: true });
   } catch(e) { console.error('Comment edit error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
+});
+
+// ── POST /api/leads/:id/comments/:cid/pin — Notiz anheften/lösen ──
+// Jeder, der den Lead sieht, darf anheften (z. B. „Google-Profil hat er selbst gemacht“)
+router.post('/:id/comments/:cid/pin', auth, async (req, res) => {
+  const leadId = parseInt(req.params.id), cid = parseInt(req.params.cid);
+  try {
+    const [[lead]] = await db.query('SELECT assigned_to FROM leads WHERE id=?', [leadId]);
+    if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
+    if (!canView(req.user, lead)) return res.status(403).json({ error: 'Kein Zugriff' });
+    const an = req.body && req.body.pinned !== false;
+    const [r] = await db.query('UPDATE comments SET pinned_at=?, pinned_by=? WHERE id=? AND lead_id=?',
+      [an ? new Date() : null, an ? req.user.id : null, cid, leadId]);
+    if (!r.affectedRows) return res.status(404).json({ error: 'Notiz nicht gefunden' });
+    await log(req.user.id, an ? 'comment_pin' : 'comment_unpin', 'lead', leadId, { cid }, req.ip);
+    res.json({ ok: true, pinned: an });
+  } catch (e) { console.error('Comment pin error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 // ── DELETE /api/leads/:id/comments/:cid — Kommentar löschen ──
