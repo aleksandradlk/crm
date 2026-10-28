@@ -100,6 +100,45 @@ async function angebotStatusAnCrm(a) {
   }
 }
 
+// Lead zu einem Angebot: aus dem CRM angelegt (crm.leadId) oder über den verknüpften Kunden
+async function leadZumAngebot(a, kunde) {
+  const id = (a.crm && a.crm.leadId) || (kunde && kunde.crmLeadId);
+  if (!id) return null;
+  const [[l]] = await db.query('SELECT l.id, l.company, l.assigned_to, u.full_name AS closer FROM leads l LEFT JOIN users u ON u.id = l.assigned_to WHERE l.id=?', [id]);
+  return l || null;
+}
+
+// Angebot per E-Mail aus „Angebote & Rechnungen“ verschickt: im Lead-Verlauf festhalten,
+// damit der Vertrieb sieht, was wann an wen ging. Ohne Deal zusätzlich ein Hinweis an den
+// Closer (mit Deal übernimmt das angebotStatusAnCrm / „Angebot verschickt“).
+async function angebotVersandAnCrm(a, eintrag, kunde, user) {
+  const lead = await leadZumAngebot(a, kunde);
+  if (!lead) return;
+  const an = Array.isArray(eintrag.an) ? eintrag.an.join(', ') : eintrag.an;
+  const dateien = (eintrag.anhaenge || []).join(', ');
+  const vonId = (user && user.id) || lead.assigned_to;
+  await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)', [lead.id, vonId,
+    `📨 Angebot ${a.nummer} per E-Mail an ${an} verschickt${dateien ? ` · Anhänge: ${dateien}` : ''} · Mailtext und PDFs unter „Angebote & Rechnungen“`]);
+  if (!(a.crm && a.crm.dealId) && lead.assigned_to && lead.assigned_to !== vonId)
+    await db.query("INSERT INTO reminders (lead_id, user_id, remind_at, note, kind, sent) VALUES (?,?,NOW(),?, 'info', 1)",
+      [lead.id, lead.assigned_to, `Angebot ${a.nummer} an ${lead.company} ist raus. Jetzt nachfassen.`]);
+}
+
+// Kontext für die KI-Mail: wer das Gespräch geführt hat und was den Kunden stört
+async function angebotKontext(a, kunde) {
+  const lead = await leadZumAngebot(a, kunde);
+  if (!lead) return null;
+  const bedarf = await require('../routes/bedarf').analyseLaden(lead.id).catch(() => null);
+  const d = (bedarf && bedarf.data) || {};
+  const [[t]] = await db.query("SELECT painpoints FROM appointments WHERE lead_id=? AND painpoints IS NOT NULL ORDER BY id DESC LIMIT 1", [lead.id]).catch(() => [[null]]);
+  const vorname = String(lead.closer || '').trim().split(/\s+/)[0] || null;
+  return {
+    closer: vorname,
+    problem: [d.groesstes_problem, t && t.painpoints].filter(Boolean).join(' / ').slice(0, 600) || null,
+    notizen: [d.ablauf_heute, d.sonderwuensche].filter(Boolean).join(' / ').slice(0, 600) || null,
+  };
+}
+
 // ── Einhängen in die CRM-App ──────────────────────────────────
 function registriere(app, { ki } = {}) {
   let sqlite;
@@ -156,6 +195,8 @@ function registriere(app, { ki } = {}) {
     basis: path.join(DATA_DIR, 'abrechnung'), buchhaltung: path.join(DATA_DIR, 'Buchhaltung'),
     stammdatenStandard: { marke: 'novaflow' },
     onAngebotStatus: angebotStatusAnCrm,
+    onAngebotVersand: angebotVersandAnCrm,
+    angebotKontext,
   });
   status.aktiv = true;
   try { const k = mandant.crm.katalogAktualisieren(); if (k) console.log(`Abrechnung: Artikelkatalog aktualisiert – ${k.neu} neu, ${k.alt} alte auf inaktiv`); }
