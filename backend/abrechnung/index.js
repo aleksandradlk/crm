@@ -59,14 +59,17 @@ const ARTIKEL_STANDARD = [
 // ── Hilfsfunktionen ───────────────────────────────────────────
 // Aktueller NovaFlow-Katalog laut Leistungsübersicht (Stand 26.10.2026). Wird einmalig ergänzt,
 // die alten Artikel (Automation Business, Hosting …) werden dabei nur auf „inaktiv“ gesetzt.
+// Webseite: Standard ist 1 Seite; aktuell bis 4 Seiten inkl. Impressum und Datenschutz (3 geschenkt).
+// Wenn Bewertungen da sind, wird das Geschenk kleiner (z. B. 2) – dann hier und im Katalog anpassen.
+const WEBSEITE_SEITEN = 4;
 const BETREUUNG_BASIS = 'Hosting auf Servern in Deutschland, Überwachung und Fehlerbehebung, Anpassung bei Änderungen von Meta, Google oder WhatsApp, tägliche Backups (30 Tage), Sicherheit mit 2FA und Vertrag zur Auftragsverarbeitung.';
 const KATALOG_2026_10 = [
   { nr: 'AP-001', titel: 'Quick-Win – Einrichtung', preis: 490, abrechnung: 'einmalig', beschreibung: 'Der Einstieg, in einer Woche fertig: Benachrichtigung aufs Handy bei jeder neuen Anfrage und automatische Eingangsbestätigung an den Kunden. Wird voll angerechnet, wenn Sie binnen 30 Tagen einen Anfragen-Autopiloten buchen.' },
   { nr: 'AP-002', titel: 'Anfragen-Autopilot S – Einrichtung', preis: 1490, abrechnung: 'einmalig', beschreibung: 'Bis 2 Kanäle in einem Postfach, sofortige Eingangsbestätigung, Vorqualifizierung mit Fotos, Maßen und Wunsch, Benachrichtigung aufs Handy, Übersicht aller Anfragen.' },
-  { nr: 'AP-003', titel: 'Anfragen-Autopilot M – Einrichtung', preis: 2490, abrechnung: 'einmalig', beschreibung: 'Alles aus S, dazu: bis 4 Kanäle in einem Postfach, KI-Antwortentwurf mit Ihrer Freigabe, Terminvorschlag und Erinnerung, Nachfassen offener Angebote, Bewertungsanfrage nach dem Auftrag.' },
-  { nr: 'AP-004', titel: 'Anfragen-Autopilot L – Einrichtung', preis: 3990, abrechnung: 'einmalig', beschreibung: 'Alles aus M, dazu: KI-Angebotsentwurf aus der Anfrage, Zahlungserinnerung, Wartungs- oder Pflegeerinnerung an Bestandskunden, Monatsübersicht mit Kennzahlen, Quartalsgespräch.' },
+  { nr: 'AP-003', titel: 'Anfragen-Autopilot M – Einrichtung', preis: 2490, abrechnung: 'einmalig', beschreibung: 'Alles aus S, dazu: bis 4 Kanäle in einem Postfach, KI-Antwortentwurf mit Ihrer Freigabe, KI-Angebotsentwurf aus der Anfrage, Terminvorschlag und Erinnerung, Nachfassen offener Angebote, Bewertungsanfrage nach dem Auftrag.' },
+  { nr: 'AP-004', titel: 'Anfragen-Autopilot L – Einrichtung', preis: 3990, abrechnung: 'einmalig', beschreibung: 'Alles aus M, dazu: Zahlungserinnerung, Wartungs- oder Pflegeerinnerung an Bestandskunden, Monatsübersicht mit Kennzahlen, Quartalsgespräch.' },
   { nr: 'ZU-001', titel: 'Google Business Profil', preis: 349, abrechnung: 'einmalig', beschreibung: 'Fragebogen, Keyword-Recherche für Ihre Region, Profil einrichten oder optimieren, Abgleich mit der Webseite, Eintrag bei Bing und Apple, Bewertungslink mit QR-Code, Report vorher und nachher.' },
-  { nr: 'ZU-002', titel: 'Webseite – Einrichtung', preis: 1200, abrechnung: 'einmalig', beschreibung: 'Eine Seite mit Leistungen, Preisrahmen und Anfrageformular, das direkt im Anfragen-Autopiloten landet.' },
+  { nr: 'ZU-002', titel: 'Webseite – Einrichtung', preis: 1200, abrechnung: 'einmalig', beschreibung: 'Webseite mit Leistungen, Preisrahmen und Anfrageformular, das direkt im Anfragen-Autopiloten landet. Standard ist eine Seite; aktuell bis zu 4 Seiten inklusive Impressum und Datenschutz, 3 Seiten davon geschenkt.' },
   { nr: 'ZU-003', titel: 'Individuelle Software – Einrichtung', preis: 2490, abrechnung: 'einmalig', beschreibung: 'Eigene Tools für interne Abläufe, z. B. Kalkulation oder Auftragsübersicht. Preis nach Umfang, ab 2.490 €.' },
   { nr: 'ZU-004', titel: 'Weitere Automation', preis: 0, abrechnung: 'einmalig', beschreibung: 'Erweiterung eines bestehenden Pakets, z. B. neue Kanäle oder Anbindung Ihrer Software. Festpreis nach Aufwand.' },
   { nr: 'BE-001', titel: 'Betreuung Quick-Win', preis: 59, abrechnung: 'monatlich', beschreibung: BETREUUNG_BASIS + ' Antwort auf Fragen am nächsten Werktag. Keine Mindestlaufzeit, monatlich kündbar mit einem Monat Frist zum Monatsende.' },
@@ -815,14 +818,14 @@ function bauMandant(app, ctx) {
     // Leistungen als Stichpunkte in Kundensprache, ohne Paketnamen (bei NovaFlow), sonst Titel ohne „– Einrichtung“
     const dein = du ? 'Dein' : 'Ihr', rausfahren = du ? 'bevor du rausfährst' : 'bevor Sie rausfahren';
     const S_PUNKTE = ['Anfragen landen in einem Postfach und werden sofort beantwortet', `Fotos, Maße oder Wünsche werden automatisch abgefragt, ${rausfahren}`];
-    const M_PUNKTE = [...S_PUNKTE, 'Terminvorschläge, Erinnerungen und das Nachfassen offener Angebote laufen automatisch'];
+    const M_PUNKTE = [...S_PUNKTE, 'Angebotsentwürfe entstehen automatisch aus der Anfrage, Terminvorschläge, Erinnerungen und das Nachfassen laufen von selbst'];
     const klartext = t => ctx.id !== 'novaflow' ? null
       : /quick-?win/i.test(t) ? ['Jede neue Anfrage kommt sofort aufs Handy, der Kunde bekommt automatisch eine Eingangsbestätigung']
       : /autopilot\s*S\b/i.test(t) ? S_PUNKTE
       : /autopilot\s*M\b/i.test(t) ? M_PUNKTE
-      : /autopilot\s*L\b/i.test(t) ? [...M_PUNKTE, 'Angebotsentwürfe, Zahlungserinnerungen und Erinnerungen an Bestandskunden laufen automatisch']
+      : /autopilot\s*L\b/i.test(t) ? [...M_PUNKTE, 'Zahlungserinnerungen und Erinnerungen an Bestandskunden laufen automatisch']
       : /google/i.test(t) ? [`${dein} Google-Profil auf Stand`]
-      : /webseite/i.test(t) ? ['Fertige Webseite mit Anfrageformular'] : null;
+      : /webseite/i.test(t) ? [`Fertige Webseite mit Anfrageformular, bis zu ${WEBSEITE_SEITEN} Seiten inklusive Impressum und Datenschutz (${WEBSEITE_SEITEN - 1} Seiten davon ${du ? 'schenke ich dir' : 'gibt es geschenkt'})`] : null;
     const leistungen = [...new Set(v.positionen.filter(p => p.abrechnung === 'einmalig' && p.titel).flatMap(p => {
       const titel = String(p.titel).replace(/\s*[–-]\s*Einrichtung\s*$/i, '').trim();
       const punkte = klartext(titel) || [titel];
@@ -1193,6 +1196,8 @@ Fragen kannst du einfach hier drunter schreiben 😊`;
       v.monatlichSumme ? `Monatlich: ${eur(v.monatlichSumme)}, Abrechnung ab ${datumDe(a.monatlichStart || plusTage(heute(), 30))}, monatlich kündbar` : '',
       `Zahlung: ${zahlung}`,
       `Gültig bis: ${datumDe(a.gueltigBis)}`,
+      v.positionen.some(p => /webseite/i.test(p.titel) && p.abrechnung === 'einmalig') && ctx.id === 'novaflow'
+        ? `Webseite: Standard ist eine Seite. Der Kunde bekommt aktuell bis zu ${WEBSEITE_SEITEN} Seiten inklusive Impressum und Datenschutz, ${WEBSEITE_SEITEN - 1} Seiten davon geschenkt – das als Geschenk erwähnen.` : '',
       (a.anhaenge || []).length ? 'Projektvereinbarung liegt bei und soll unterschrieben zurückkommen (Scan oder Foto reicht).' : 'Keine Projektvereinbarung angehängt: Kunde gibt einfach kurz Bescheid, wenn alles passt.',
       kontext && kontext.closer ? `Das Gespräch mit dem Kunden hat ${kontext.closer} geführt (Vertrieb).` : '',
       kontext && kontext.problem ? `Was den Kunden laut Gespräch stört: ${kontext.problem}` : '',
@@ -1885,6 +1890,19 @@ Antworte NUR mit gültigem JSON, kein Text davor oder danach:
     },
     // Einmalig: aktuellen Katalog ergänzen, alte Artikel inaktiv (nur NovaFlow)
     katalogAktualisieren() {
+      // Okt. 2026: KI-Angebotsentwurf gehört zu M (nicht erst L), Webseite bis 4 Seiten (3 geschenkt).
+      // Nur Texte ersetzen, die noch genau dem alten Standard entsprechen – eigene Änderungen bleiben.
+      if (!db.einstellung('katalog_2026_10b', null)) {
+        const ALT_NEU = { 'AP-003': ['Alles aus S, dazu: bis 4 Kanäle in einem Postfach, KI-Antwortentwurf mit Ihrer Freigabe, Terminvorschlag und Erinnerung, Nachfassen offener Angebote, Bewertungsanfrage nach dem Auftrag.', 'Alles aus S, dazu: bis 4 Kanäle in einem Postfach, KI-Antwortentwurf mit Ihrer Freigabe, KI-Angebotsentwurf aus der Anfrage, Terminvorschlag und Erinnerung, Nachfassen offener Angebote, Bewertungsanfrage nach dem Auftrag.'],
+          'AP-004': ['Alles aus M, dazu: KI-Angebotsentwurf aus der Anfrage, Zahlungserinnerung, Wartungs- oder Pflegeerinnerung an Bestandskunden, Monatsübersicht mit Kennzahlen, Quartalsgespräch.', 'Alles aus M, dazu: Zahlungserinnerung, Wartungs- oder Pflegeerinnerung an Bestandskunden, Monatsübersicht mit Kennzahlen, Quartalsgespräch.'],
+          'ZU-002': ['Eine Seite mit Leistungen, Preisrahmen und Anfrageformular, das direkt im Anfragen-Autopiloten landet.', 'Webseite mit Leistungen, Preisrahmen und Anfrageformular, das direkt im Anfragen-Autopiloten landet. Standard ist eine Seite; aktuell bis zu 4 Seiten inklusive Impressum und Datenschutz, 3 Seiten davon geschenkt.'] };
+        let geaendert = 0;
+        db.transaktion(() => {
+          ladeArtikel().forEach(x => { const an = ALT_NEU[x.nr]; if (an && x.beschreibung === an[0]) { db.setze('artikel', x.nr, { ...x, beschreibung: an[1] }); geaendert++; } });
+          db.einstellungSetzen('katalog_2026_10b', { am: new Date().toISOString(), geaendert });
+        });
+        if (geaendert) console.log(`Abrechnung: ${geaendert} Paketbeschreibung(en) aktualisiert (M mit Angebotsentwurf, Webseite bis 4 Seiten)`);
+      }
       if (db.einstellung('katalog_2026_10', null)) return null;
       const vorhanden = new Map(ladeArtikel().map(x => [x.nr, x]));
       let neu = 0, alt = 0;
