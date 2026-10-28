@@ -10,6 +10,9 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   charset: 'utf8mb4',
+  // Datenbank-Zeiten sind UTC (wie NOW()) – unabhängig von der Zeitzone des Servers
+  timezone: 'Z',
 });
+pool.pool.on('connection', conn => conn.query("SET time_zone = '+00:00'"));
 
 module.exports = pool;

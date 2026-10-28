@@ -6,6 +6,7 @@ const { sendLeadEmail } = require('../helpers/mailer');
 const { createDeal, markWon, markLost, parseValue } = require('./deals');
 const { refreshNorm, findDuplicates, normFields } = require('../helpers/dedupe');
 const { buildQueue } = require('../helpers/queue');
+const { eingabeZuUtc } = require('../helpers/zeit');
 
 const VALID_STATUSES = ['neu','kontaktiert','nicht_erreicht','kein_interesse','rueckruf','kunde','passt_nicht','keine_anrufe'];
 const { grundPruefen } = require('../public_html/shared/bedarf-regeln');
@@ -401,7 +402,9 @@ router.post('/:id/outcome', auth, async (req, res) => {
   const o = OUTCOMES[outcome];
   if (!o) return res.status(400).json({ error: 'Ungültiges Ergebnis' });
   const noteClean = typeof note === 'string' ? note.trim().slice(0, 2000) : '';
-  if (follow_up_at && Number.isNaN(new Date(follow_up_at).getTime()))
+  // Wiedervorlage/Termin kommt in deutscher Zeit, gespeichert wird UTC
+  const folgeUtc = follow_up_at ? eingabeZuUtc(follow_up_at) : null;
+  if (follow_up_at && !folgeUtc)
     return res.status(400).json({ error: 'Ungültiger Termin für die Wiedervorlage' });
 
   try {
@@ -467,7 +470,7 @@ router.post('/:id/outcome', auth, async (req, res) => {
     if (follow_up_at) {
       const [r] = await db.query(
         'INSERT INTO reminders (lead_id, user_id, remind_at, note) VALUES (?,?,?,?)',
-        [leadId, req.user.id, follow_up_at, (follow_up_note || o.label).toString().slice(0, 500)]
+        [leadId, req.user.id, folgeUtc, (follow_up_note || o.label).toString().slice(0, 500)]
       );
       reminderId = r.insertId;
     }
@@ -477,7 +480,7 @@ router.post('/:id/outcome', auth, async (req, res) => {
       const [r] = await db.query(
         `INSERT INTO appointments (lead_id, closer_id, proposed_by, starts_at, topic, notes, status, responded_at)
          VALUES (?,?,?,?,?,?, 'angenommen', NOW())`,
-        [leadId, lead.assigned_to || req.user.id, req.user.id, follow_up_at,
+        [leadId, lead.assigned_to || req.user.id, req.user.id, folgeUtc,
          (follow_up_note && follow_up_note !== 'Termin' ? follow_up_note : 'Termin aus dem Telefonat').toString().slice(0, 200),
          noteClean || null]);
       appointmentId = r.insertId;
@@ -888,6 +891,8 @@ router.post('/:id/reminders', auth, async (req, res) => {
   const leadId = parseInt(req.params.id);
   const { remind_at, note } = req.body;
   if (!remind_at) return res.status(400).json({ error: 'remind_at fehlt' });
+  const remindUtc = eingabeZuUtc(remind_at);    // Eingabe in deutscher Zeit
+  if (!remindUtc) return res.status(400).json({ error: 'Ungültige Zeit für den Reminder' });
 
   const [[lead]] = await db.query('SELECT assigned_to FROM leads WHERE id=?', [leadId]);
   if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
@@ -896,7 +901,7 @@ router.post('/:id/reminders', auth, async (req, res) => {
 
   const [r] = await db.query(
     'INSERT INTO reminders (lead_id, user_id, remind_at, note) VALUES (?,?,?,?)',
-    [leadId, req.user.id, remind_at, note || null]
+    [leadId, req.user.id, remindUtc, note || null]
   );
   await log(req.user.id, 'reminder_set', 'lead', leadId, { remind_at, note }, req.ip);
   res.status(201).json({ ok: true, id: r.insertId });
