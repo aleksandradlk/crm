@@ -399,7 +399,7 @@ async function anmelden() {
 async function api(pfad, methode = 'GET', body) {
   const res = await fetch(API + pfad, { method: methode, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
   if (res.status === 401) { zumLogin(); throw new Error('Bitte im CRM anmelden.'); }
-  const data = await res.json().catch(() => ({ success: false, error: 'Unerwartete Antwort.' }));
+  const data = await res.json().catch(() => ({ success: false, error: res.status === 413 ? 'Die Daten sind zu groß für den Server.' : `Unerwartete Antwort vom Server (Status ${res.status}).` }));
   if (!data.success) throw new Error(data.error || 'Fehler');
   return data;
 }
@@ -605,9 +605,16 @@ async function anhangHochladen(id) {
   const datei = $('ag-anhang-datei').files[0];
   if (!datei) { el.textContent = 'Bitte zuerst eine PDF auswählen.'; el.className = 'status-text fehler'; return false; }
   el.textContent = 'Lade hoch …';
-  const daten = await new Promise((ok, nein) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = nein; r.readAsDataURL(datei); });
-  try { const d = await api(`/angebote/${id}/anhang`, 'POST', { name: datei.name, daten }); $('ag-anhaenge').innerHTML = anhaengeHtml(d.angebot); toast('Anhang gespeichert.'); return true; }
-  catch (e) { el.textContent = e.message; el.className = 'status-text fehler'; return false; }
+  try {
+    // Als reine PDF schicken (ohne Umweg über Base64, ein Viertel kleiner)
+    const res = await fetch(`${API}/angebote/${id}/anhang?name=${encodeURIComponent(datei.name)}`, { method: 'POST', headers: { 'Content-Type': 'application/pdf' }, body: datei });
+    if (res.status === 401) { zumLogin(); throw new Error('Bitte im CRM anmelden.'); }
+    if (res.status === 413) throw new Error(`Die Datei ist zu groß für den Server (${(datei.size / 1048576).toFixed(1)} MB). Bitte die PDF verkleinern, z. B. beim Speichern als „Minimale Dateigröße“.`);
+    const d = await res.json().catch(() => ({ success: false, error: `Unerwartete Antwort vom Server (Status ${res.status}).` }));
+    if (!d.success) throw new Error(d.error || 'Fehler');
+    $('ag-anhaenge').innerHTML = anhaengeHtml(d.angebot); toast('Anhang gespeichert.'); return true;
+  }
+  catch (e) { el.textContent = 'Nicht gespeichert: ' + e.message; el.className = 'status-text fehler'; toast('Anhang nicht gespeichert: ' + e.message, true); return false; }
 }
 async function anhangLoeschen(id, name) {
   try { const d = await api(`/angebote/${id}/anhang/${encodeURIComponent(name)}`, 'DELETE'); $('ag-anhaenge').innerHTML = anhaengeHtml(d.angebot); } catch (e) { toast(e.message, true); }
@@ -1038,6 +1045,6 @@ async function wiederherstellen() {
   wechsle(LADER[start] ? start : 'uebersicht', true);
 })();
 </script>
-<script src="/shared/datum.js?v=nf66"></script>
+<script src="/shared/datum.js?v=nf67"></script>
 </body>
 </html>

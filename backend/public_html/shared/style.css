@@ -2798,3 +2798,9 @@ tr.ds-flash td { background: color-mix(in srgb, var(--copper) 14%, transparent);
 .tr-closer-pick { display: flex; flex-wrap: wrap; gap: 6px; }
 .tr-ueb-btn { white-space: nowrap; }
 @media (max-width: 640px) { .tr-ueb-txt { display: none; } .tr-lead { flex-wrap: wrap; } .tr-lead-wann { margin-left: 0; width: 100%; } }
+
+/* Lead-Panel: Anhänge und verschickte Mail unter einem Angebot */
+.dok-extras { margin: -2px 0 10px 14px; padding-left: 10px; border-left: 2px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+.dok-anh { display: flex; flex-wrap: wrap; gap: 6px; }
+.dok-mail summary { cursor: pointer; font-size: 12px; color: var(--text2); }
+.dok-mail-text { white-space: pre-line; font-size: 12.5px; line-height: 1.5; color: var(--text); background: var(--bg3); border-radius: 8px; padding: 10px 12px; margin-top: 6px; max-height: 320px; overflow: auto; }

@@ -297,6 +297,17 @@ function registriere(app, { ki } = {}) {
       mandant.router(req, res, next);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
+  // Anhang eines Angebots (z. B. Projektvereinbarung) für den betreuenden Closer
+  app.get('/api/lead-dokumente/:id/angebote/:doc/anhang/:name', auth, async (req, res, next) => {
+    try {
+      const lead = await leadFuerBetreuer(req);
+      if (!lead) return res.status(lead === null ? 404 : 403).json({ error: 'Kein Zugriff' });
+      const a = mandant.crm.dokumenteFuerLead(lead).angebote.find(x => x.id === req.params.doc);
+      if (!a || !a.anhaenge.includes(req.params.name)) return res.status(404).json({ error: 'Anhang nicht gefunden' });
+      req.url = `/api/abrechnung/angebote/${req.params.doc}/anhang/${encodeURIComponent(req.params.name)}`;
+      mandant.router(req, res, next);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
 
   // Kundenkonten aus dem Angebotstool (nur Admin)
   crmApi.get('/kundenkonten', async (req, res) => {

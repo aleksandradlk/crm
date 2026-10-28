@@ -628,10 +628,26 @@ async function renderLeadDokumente(leadId, elId) {
         <span class="deal-mini-main"><b><i class="fas ${icon}" style="color:var(--text3);margin-right:6px"></i>${escHtml(nr)}</b>
         <span class="cell-sub">${escHtml(text || '')}</span><span class="abr-chip s-${escHtml(st)}">${escHtml(DOK_STATUS[st] || st)}</span></span>
         <span class="deal-mini-val">${betrag} <i class="fas fa-file-pdf" style="color:var(--text3);margin-left:4px"></i></span></button>`;
-    el.innerHTML = d.angebote.map(a => zeile('angebote', a, 'fa-file-signature', a.nummer, a.betreff, eur(a.brutto) + (a.monatlich ? ` <small>+ ${eur(a.monatlich)}/Mon.</small>` : ''), a.status)).join('')
+    // Unter jedem Angebot: Anhänge (z. B. Projektvereinbarung) und was per Mail rausging
+    const extras = a => {
+      const anh = (a.anhaenge || []).map(n => `<button type="button" class="btn btn-ghost btn-sm" onclick="oeffneLeadAnhang(${leadId}, '${escHtml(a.id)}', '${escHtml(n).replace(/'/g, '&#39;')}')"><i class="fas fa-paperclip"></i> ${escHtml(n)}</button>`).join('');
+      const mails = (a.versand || []).map(v => `<details class="dok-mail"><summary><i class="fas fa-paper-plane"></i> Per Mail an ${escHtml((v.an || []).join ? v.an.join(', ') : v.an || '')} · ${new Date(v.am).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}${v.anhaenge && v.anhaenge.length ? ` · ${v.anhaenge.length} ${v.anhaenge.length === 1 ? 'Anhang' : 'Anhänge'}` : ''}</summary>`
+        + `<div class="dok-mail-text"><b>${escHtml(v.betreff || '')}</b>\n\n${v.text ? escHtml(v.text) : '<i>Text wurde bei diesem Versand noch nicht gespeichert.</i>'}</div></details>`).join('');
+      return anh || mails ? `<div class="dok-extras">${anh ? `<div class="dok-anh">${anh}</div>` : ''}${mails}</div>` : '';
+    };
+    el.innerHTML = d.angebote.map(a => zeile('angebote', a, 'fa-file-signature', a.nummer, a.betreff, eur(a.brutto) + (a.monatlich ? ` <small>+ ${eur(a.monatlich)}/Mon.</small>` : ''), a.status) + extras(a)).join('')
       + d.rechnungen.map(r => zeile('rechnungen', r, 'fa-file-invoice', r.nummer, r.titel, eur(r.brutto), r.zahlungsstatus || 'offen')).join('')
       || '<div class="panel-empty">Noch kein Angebot. Schieb den Deal auf „Angebot anfordern“, dann schreibt Aleksandra es.</div>';
   } catch (e) { el.innerHTML = `<div class="panel-empty">${escHtml(e.message)}</div>`; }
+}
+async function oeffneLeadAnhang(leadId, docId, name) {
+  try {
+    const r = await fetch(`/api/lead-dokumente/${leadId}/angebote/${encodeURIComponent(docId)}/anhang/${encodeURIComponent(name)}`, { headers: { Authorization: 'Bearer ' + Auth.getToken() } });
+    if (!r.ok) throw new Error('Anhang nicht verfügbar');
+    const url = URL.createObjectURL(await r.blob());
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) { showToast(e.message, 'err'); }
 }
 async function oeffneLeadPdf(leadId, art, docId) {
   try {
