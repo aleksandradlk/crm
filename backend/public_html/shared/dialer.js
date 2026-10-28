@@ -97,6 +97,8 @@ const Dialer = {
   },
 
   _show() {
+    // Nach „Speichern & nächster Lead“ deutlich zeigen, dass jetzt ein anderer Kunde dran ist
+    const wechsel = this._wechsel; this._wechsel = false;
     this._header();
     this.outcome = null; this.followUp = null; this.callLogId = null; this.durationSec = null; this.mail = null;
     if (this.idx >= this.queue.length) {
@@ -135,6 +137,7 @@ const Dialer = {
     this._body(`
       <div class="dl-main">
         <div class="dl-card dl-lead">
+          ${wechsel ? `<div class="dl-wechsel"><i class="fas fa-arrow-right"></i><span>Nächster Lead: <b>${escHtml(l.company || '—')}</b> – bitte kurz prüfen, bevor du anrufst</span></div>` : ''}
           <div id="dlUeb" data-lead="${l.id}"></div>
           <div class="dl-reason ${reasonCls}"><i class="fas ${l.reminder_id ? 'fa-bell' : 'fa-circle'}"></i>${reasonText}</div>
           ${!l.assigned_to ? '<div class="dl-free"><i class="fas fa-hand-pointer"></i>Freier Lead – wird beim Speichern dir zugewiesen</div>' : ''}
@@ -188,6 +191,9 @@ const Dialer = {
           <div class="dl-error" id="dlError"></div>
           <button class="btn btn-primary dl-save" id="dlSaveBtn" onclick="Dialer.save()" disabled>
             <i class="fas fa-check"></i> <span id="dlSaveLabel">Speichern &amp; nächster Lead</span> <kbd>Strg</kbd>+<kbd>Enter</kbd>
+          </button>
+          <button class="btn btn-ghost dl-save-only" id="dlSaveOnlyBtn" onclick="Dialer.save(false)" disabled title="Speichern und den Anrufmodus schließen, ohne zum nächsten Lead zu wechseln">
+            <i class="fas fa-save"></i> Nur speichern
           </button>
         </div>
       </div>
@@ -468,15 +474,20 @@ const Dialer = {
     err.textContent = msg;
     const ok = !!o && !msg;
     btn.disabled = !ok || this.saving;
+    const nurBtn = document.getElementById('dlSaveOnlyBtn');
+    if (nurBtn) nurBtn.disabled = !ok || this.saving;
     return ok;
   },
 
-  async save() {
+  // weiter=false: „Nur speichern“ – Anrufmodus schließen statt zum nächsten Lead zu springen
+  async save(weiter = true) {
     if (!this._validate() || this.saving || !this.lead) return;
     if (Softphone.call) { showToast('Bitte zuerst auflegen', 'err'); return; }
     this.saving = true;
     const btn = document.getElementById('dlSaveBtn');
     btn.disabled = true;
+    const nurBtn = document.getElementById('dlSaveOnlyBtn');
+    if (nurBtn) nurBtn.disabled = true;
     const l = this.lead;
     try {
       await api('POST', `/leads/${l.id}/outcome`, {
@@ -506,8 +517,12 @@ const Dialer = {
           showToast(`Mail an ${l.company || 'den Kunden'} ging nicht raus: ${e.message} – bitte im Lead nachholen`, 'err');
         }
       }
-      showToast((o.key === 'kunde' ? 'Abschluss gespeichert 🎉' : `${o.label} gespeichert`) + mailInfo);
       this.idx++;
+      const naechster = weiter ? this.queue[this.idx] : null;
+      showToast((o.key === 'kunde' ? 'Abschluss gespeichert 🎉' : `${o.label} gespeichert`) + mailInfo
+        + (naechster ? ` · Weiter mit ${naechster.company || 'dem nächsten Lead'}` : ''));
+      if (!weiter) { this.close(); return; }
+      this._wechsel = true;
       this._show();
     } catch (e) {
       document.getElementById('dlError').textContent = e.message;

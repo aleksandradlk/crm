@@ -1689,6 +1689,10 @@ body.dark .dl-outcome.active { border-color: var(--accent2); }
 .dl-error { color: var(--red); font-size: 12.5px; min-height: 18px; margin: 4px 0 8px; }
 .dl-save { width: 100%; justify-content: center; padding: 12px; font-size: 14px; gap: 8px; }
 .dl-save kbd { font-family: var(--font-mono); font-size: 10.5px; padding: 1px 5px; border-radius: 5px; background: rgba(255,255,255,0.18); }
+.dl-save-only { width: 100%; justify-content: center; margin-top: 8px; gap: 8px; }
+.dl-wechsel { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding: 10px 12px; border-radius: 10px; font-size: 13px;
+  background: rgba(194,105,30,0.10); color: var(--copper); border: 1px solid var(--copper); animation: dlWechsel 1.2s ease 2; }
+@keyframes dlWechsel { 50% { box-shadow: 0 0 0 4px rgba(184,105,45,0.25); } }
 .dl-script summary { cursor: pointer; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 8px; }
 .dl-script div { white-space: pre-wrap; font-size: 13.5px; line-height: 1.6; color: var(--text); margin-top: 12px; }
 .dl-empty { text-align: center; padding: 64px 16px; color: var(--text3); display: flex; flex-direction: column; align-items: center; gap: 12px; }
