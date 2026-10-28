@@ -798,10 +798,12 @@ async function emailDialog(pfad, titel, danach) {
   const hinweis = st.konfiguriert ? `Absender: ${st.von}` : 'E-Mail-Versand ist noch nicht eingerichtet (siehe Stammdaten). Du kannst den Text kopieren und das PDF manuell anhängen.';
   const okk = await modal(titel, hinweis,
     `<div class="field"><label>An</label><input id="em-an" value="${esc(v.vorlage.an)}" placeholder="kunde@firma.de"></div>
+     ${v.ki ? `<div class="btn-zeile" style="margin:0 0 10px"><button type="button" class="btn klein" onclick="emailKi('${pfad}')">✨ Mit KI persönlich formulieren</button><span class="status-text" id="em-ki-status"></span></div>` : ''}
      <div class="field"><label>Betreff</label><input id="em-betreff" value="${esc(v.vorlage.betreff)}"></div>
      <div class="field"><label>Text</label><textarea id="em-text" style="min-height:260px;font-size:0.85rem">${esc(v.vorlage.text)}</textarea>
        <div class="hint">Zeilen mit „- “ am Anfang werden in der E-Mail zur Liste.</div></div>
      ${v.signatur || v.signaturLogo ? `<div class="field"><label>Wird automatisch angehängt</label><div class="sub" style="white-space:pre-line;border-left:3px solid var(--border);padding-left:10px">${esc(v.signatur || '')}${v.signaturLogo ? '\n[Logo]' : ''}</div><div class="hint">Ändern unter Stammdaten → E-Mail-Signatur.</div></div>` : ''}
+     ${v.dateien && v.dateien.length ? `<div class="field"><label>Wird mitgeschickt</label><div class="sub" style="border-left:3px solid var(--border);padding-left:10px">${v.dateien.map(n => '📎 ' + esc(n)).join('<br>')}</div></div>` : ''}
      <label class="check"><input type="checkbox" id="em-kopie" checked> Kopie an mich (BCC)</label>
      ${v.versand.length ? `<div class="sub">Bereits gesendet: ${v.versand.map(x => datumDe(x.am) + ' an ' + esc(x.an.join(', '))).join(' · ')}</div>` : ''}`);
   if (!okk) return;
@@ -810,6 +812,15 @@ async function emailDialog(pfad, titel, danach) {
     toast(`Gesendet an ${d.versand.an.join(', ')}.`);
     if (danach) danach();
   } catch (e) { toast(e.message, true); }
+}
+// KI-Vorschlag für Betreff und Text (nur Angebote) – überschreibt die Felder im Dialog, gesendet wird erst mit „OK“
+async function emailKi(pfad) {
+  const el = $('em-ki-status'); el.className = 'status-text'; el.textContent = 'Formuliere …';
+  try {
+    const d = await api(pfad + '-ki', 'POST', {});
+    $('em-betreff').value = d.betreff; $('em-text').value = d.text;
+    el.textContent = 'Fertig. Bitte kurz lesen und bei Bedarf anpassen.'; el.className = 'status-text ok';
+  } catch (e) { el.textContent = e.message; el.className = 'status-text fehler'; }
 }
 async function rechnungLoeschen(id) {
   if (!await modal('Entwurf löschen', 'Der Rechnungsentwurf wird gelöscht. Er hat noch keine Nummer, es entsteht keine Lücke.')) return;
@@ -1045,6 +1056,6 @@ async function wiederherstellen() {
   wechsle(LADER[start] ? start : 'uebersicht', true);
 })();
 </script>
-<script src="/shared/datum.js?v=nf67"></script>
+<script src="/shared/datum.js?v=nf68"></script>
 </body>
 </html>

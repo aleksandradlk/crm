@@ -239,7 +239,7 @@ function bauMandant(app, ctx) {
   // Grußformel aus den Stammdaten (leer = Standard)
   function kundeGruss(kunde) {
     const s = db.einstellung('stammdaten', null) || {};
-    return kunde && kunde.anrede === 'du' ? ((s.grussDu || '').trim() || 'Viele Grüße') : ((s.grussSie || '').trim() || 'Mit freundlichen Grüßen');
+    return kunde && kunde.anrede === 'du' ? ((s.grussDu || '').trim() || (ctx.id === 'novaflow' ? 'Beste Grüße' : 'Viele Grüße')) : ((s.grussSie || '').trim() || 'Mit freundlichen Grüßen');
   }
   function standardTexte(kunde) {
     const du = kunde && kunde.anrede === 'du';
@@ -844,7 +844,7 @@ function bauMandant(app, ctx) {
     const gruss = kundeGruss(kunde);   // Signatur hängt versende() an
     let betreff, text;
     if (typ === 'angebot') {
-      betreff = `Angebot ${dok.nummer} – ${dok.betreff || stamm.firma}`;
+      betreff = `${du ? 'Dein' : 'Ihr'} Angebot: ${dok.betreff || dok.nummer}`;
       text = angebotMailText(dok, kunde, stamm);
     } else if (typ === 'mahnung') {
       const m = extra.mahnung;
@@ -922,7 +922,8 @@ function bauMandant(app, ctx) {
     const a = ladeEins(ANGEBOTE_DIR, req.params.id);
     if (!a) return fehler(res, 404, 'Angebot nicht gefunden.');
     const kunde = ladeKunden().find(k => k.id === a.kundeId) || a.kunde;
-    ok(res, { signatur: signaturText(ladeStammdaten()), signaturLogo: !!signaturLogo(ladeStammdaten()), vorlage: emailVorlage('angebot', a, kunde, ladeStammdaten()), versand: a.versand || [] });
+    ok(res, { signatur: signaturText(ladeStammdaten()), signaturLogo: !!signaturLogo(ladeStammdaten()), vorlage: emailVorlage('angebot', a, kunde, ladeStammdaten()), versand: a.versand || [],
+      dateien: [pdfDateiname(a.nummer, kunde, 'Angebot'), ...(a.anhaenge || [])], ki: !!(ctx.ki && ctx.ki.client) });
   });
   app.post('/api/abrechnung/angebote/:id/email', asyncRoute(async (req, res) => {
     const a = ladeEins(ANGEBOTE_DIR, req.params.id);
@@ -936,6 +937,8 @@ function bauMandant(app, ctx) {
     a.versand = [...(a.versand || []), eintrag];
     a.geaendert = new Date().toISOString();
     speichere(ANGEBOTE_DIR, a);
+    if (ctx.onAngebotVersand) Promise.resolve().then(() => ctx.onAngebotVersand(angebotAnsicht(a), eintrag, kunde, req.user))
+      .catch(e => console.error('Angebot-Versand ans CRM:', e.message));
     ok(res, { angebot: angebotMitKunde(a), versand: eintrag });
   }));
 
@@ -1119,6 +1122,86 @@ function bauMandant(app, ctx) {
     }
     ok(res, { storno: rechnungMitKunde(storno), original: rechnungMitKunde(r), korrektur: korrektur && rechnungMitKunde(korrektur) });
   }));
+  // ── KI: persönliche Angebots-Mail (Betreff + Text) ─────────
+  // Zahlen kommen ausschließlich aus dem Angebot; Kontext (Problem des Kunden, wer das
+  // Gespräch geführt hat) liefert das CRM. Das Ergebnis landet nur im Dialog und wird
+  // vor dem Senden gelesen und ggf. angepasst.
+  const MAIL_BEISPIEL = `Betreff: Dein Angebot: Anfragen-Autopilot, Webseite & Google-Profil
+
+Hey Christoph,
+
+wie mit Nala besprochen, bekommst du hier dein Angebot und die Projektvereinbarung.
+
+Kurz zusammengefasst:
+- Anfragen über Webseite und WhatsApp landen in einem Postfach und werden sofort beantwortet
+- Fotos, Maße oder Grundriss werden automatisch abgefragt, bevor du rausfährst
+- Fertige Webseite mit bis zu 4 Seiten und Anfrageformular, dein Google-Profil auf Stand
+- Fertig ca. 2 Wochen, nachdem ich alles von dir habe
+
+Einmalig 3.039 €: die Hälfte bei Auftrag, die andere Hälfte, wenn alles fertig ist. Betreuung und Webseite kosten danach 128 € im Monat, bis Ende des Jahres kostenlos und monatlich kündbar.
+
+Wenn alles passt, unterschreib die Vereinbarung und schick sie mir als Scan oder Foto zurück. Dann geht's direkt los.
+
+Fragen kannst du einfach hier drunter schreiben 😊`;
+  app.post('/api/abrechnung/angebote/:id/email-ki', asyncRoute(async (req, res) => {
+    if (!ctx.ki || !ctx.ki.client) throw new Error('KI ist auf diesem Server nicht eingerichtet (ANTHROPIC_API_KEY fehlt).');
+    if (ctx.ki.rateLimit && !ctx.ki.rateLimit(req)) throw new Error(`Tageslimit erreicht (max. ${ctx.ki.limit} KI-Vorschläge pro Tag).`);
+    const a = ladeEins(ANGEBOTE_DIR, req.params.id);
+    if (!a) throw new Error('Angebot nicht gefunden.');
+    const kunde = ladeKunden().find(k => k.id === a.kundeId) || a.kunde;
+    const stamm = ladeStammdaten();
+    const v = angebotAnsicht(a);
+    const du = kunde && kunde.anrede === 'du';
+    const eur = n => round2(n).toLocaleString('de-DE', { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 }) + ' €';
+    const pos = v.positionen.map(p => `- ${p.titel} (${p.abrechnung}, ${eur(positionGesamt(p))})${p.beschreibung ? ': ' + p.beschreibung : ''}`).join('\n');
+    const z = v.zahlung;
+    const zahlung = z.art === 'anzahlung' ? `${z.anzahlungProzent} % ${z.anzahlungText}, Rest ${z.restText}`
+      : z.art === 'raten' ? `${a.zahlung.ratenAnzahlung ? a.zahlung.ratenAnzahlung + ' % Anzahlung bei Auftrag, dann ' : ''}${z.anzahl} Raten` : 'Einmalzahlung';
+    const kontext = ctx.angebotKontext ? await Promise.resolve(ctx.angebotKontext(a, kunde)).catch(() => null) : null;
+    const fakten = [
+      `Kunde: ${kunde ? (kunde.firma || '') : ''}${kunde && kunde.ansprechpartner ? ', Ansprechpartner ' + kunde.ansprechpartner : ''} (Anrede: ${du ? 'du' : 'Sie'})`,
+      `Angebot: ${a.nummer}, Betreff im Angebot: ${a.betreff || '-'}`,
+      `Positionen:\n${pos}`,
+      `Einmalig gesamt: ${eur(v.summen.brutto)}${stamm.kleinunternehmer ? ' (Kleinunternehmer, keine USt)' : ''}`,
+      v.monatlichSumme ? `Monatlich: ${eur(v.monatlichSumme)}, Abrechnung ab ${datumDe(a.monatlichStart || plusTage(heute(), 30))}, monatlich kündbar` : '',
+      `Zahlung: ${zahlung}`,
+      `Gültig bis: ${datumDe(a.gueltigBis)}`,
+      (a.anhaenge || []).length ? 'Projektvereinbarung liegt bei und soll unterschrieben zurückkommen (Scan oder Foto reicht).' : 'Keine Projektvereinbarung angehängt: Kunde gibt einfach kurz Bescheid, wenn alles passt.',
+      kontext && kontext.closer ? `Das Gespräch mit dem Kunden hat ${kontext.closer} geführt (Vertrieb).` : '',
+      kontext && kontext.problem ? `Was den Kunden laut Gespräch stört: ${kontext.problem}` : '',
+      kontext && kontext.notizen ? `Weitere Notizen aus dem Gespräch: ${kontext.notizen}` : '',
+    ].filter(Boolean).join('\n');
+    const prompt = `Du schreibst für ${stamm.inhaberin || 'die Inhaberin'} von "${stamm.firma}" die E-Mail, mit der ein Angebot an einen Kunden geht.
+
+So soll es klingen (Beispiel einer fertigen Mail, Stil und Aufbau übernehmen, Inhalt NICHT):
+---
+${MAIL_BEISPIEL}
+---
+
+Fakten zu diesem Angebot (nur diese Zahlen und Leistungen verwenden, nichts erfinden, keine Rabatte oder Fristen dazudichten):
+${fakten}
+
+Regeln:
+- ${du ? 'Du-Form' : 'Sie-Form'}, warm, persönlich, kurz und klar. Der Kunde soll merken, dass sich jemand wirklich kümmert.
+- Betreff persönlich, beginnt mit "${du ? 'Dein' : 'Ihr'} Angebot:" und nennt in wenigen Worten, worum es geht.
+- Text OHNE Anrede am Anfang und OHNE Gruß/Signatur am Ende (beides setzt das System).
+- Wenn bekannt, wer das Gespräch geführt hat, im ersten Satz darauf beziehen.
+- "Kurz zusammengefasst:" mit 3 bis 5 Stichpunkten (Zeilen beginnen mit "- "), Nutzen für den Kunden in seinen Worten.
+- Preise und Zahlungsweise in einem kurzen Absatz, genau wie in den Fakten.
+- Zum Schluss: was der Kunde jetzt tun soll, und dass er bei Fragen einfach antworten kann.
+
+Antworte NUR mit gültigem JSON: {"betreff": "...", "text": "..."}`;
+    const antwort = await ctx.ki.client.messages.create({ model: ctx.ki.model || 'claude-haiku-4-5', max_tokens: 1200, messages: [{ role: 'user', content: prompt }] });
+    const roh = (antwort.content && antwort.content[0] && antwort.content[0].text || '').trim();
+    const i0 = roh.indexOf('{'), i1 = roh.lastIndexOf('}');
+    let ki;
+    try { ki = JSON.parse(roh.slice(i0, i1 + 1)); } catch (e) { throw new Error('Die KI-Antwort war nicht lesbar, bitte noch einmal versuchen.'); }
+    const text = String(ki.text || '').trim();
+    if (!text) throw new Error('Die KI hat keinen Text geliefert, bitte noch einmal versuchen.');
+    ok(res, { betreff: String(ki.betreff || '').trim() || emailVorlage('angebot', a, kunde, stamm).betreff,
+      text: `${kundeAnrede(kunde)}\n\n${text}\n\n${kundeGruss(kunde)}` });
+  }));
+
   // ── KI-Vorschlag für ein Angebot ──────────────────────────
   // Aus einer freien Auftragsbeschreibung macht die KI Betreff, Einleitung,
   // Positionen (bevorzugt aus dem eigenen Artikelkatalog) und Schlusstext.
