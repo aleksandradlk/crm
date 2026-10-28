@@ -13,8 +13,8 @@ async function smtpPruefen() {
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) return { stand: 'fehlt', grund: 'nicht eingetragen' };
   try {
     const t = require('nodemailer').createTransport({
-      host: process.env.SMTP_HOST, port: parseInt(process.env.SMTP_PORT) || 465,
-      secure: process.env.SMTP_SECURE === 'true', auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+      host: process.env.SMTP_HOST, port: require('../helpers/mailer').SMTP_PORT,
+      secure: require('../helpers/mailer').SMTP_SECURE, auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
     });
     await mitFrist(t.verify());
     return { stand: 'ok' };
