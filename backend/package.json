@@ -27,7 +27,8 @@
     "node-cron": "^4.6.0",
     "nodemailer": "^10.0.15",
     "pdfkit": "^0.20.2",
-    "twilio": "^5.13.1"
+    "twilio": "^5.13.1",
+    "web-push": "^3.6.7"
   },
   "engines": {
     "node": ">=20"

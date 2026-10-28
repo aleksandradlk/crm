@@ -10,6 +10,7 @@ const { log } = require('../helpers/logger');
 const { refreshNorm, findDuplicates } = require('../helpers/dedupe');
 const sicht = require('../helpers/sichtbarkeit');
 const { sendInfoMail } = require('../helpers/mailer');
+const { sendePush } = require('../helpers/push');
 const { ortZuUtc, utcZuOrt } = require('../helpers/zeit');
 
 const STATUS = ['vorgeschlagen', 'gegenvorschlag', 'angenommen', 'abgelehnt', 'abgesagt', 'erledigt'];
@@ -51,7 +52,11 @@ async function laden(id) {
 }
 
 // Benachrichtigung per Mail (nur wenn der Empfänger eine Adresse hat und Mails möchte)
-async function mailAn(userId, subject, zeilen) {
+// und zusätzlich als Handy-Benachrichtigung (kommt immer, auch ohne Mail-Adresse)
+async function mailAn(userId, subject, zeilen, leadId, mitMail = true) {
+  const text = zeilen.filter(Boolean).map(z => String(z).replace(/<[^>]+>/g, '')).join(' · ');
+  await sendePush(userId, { title: subject, body: text.slice(0, 300), leadId });
+  if (!mitMail) return false;
   try {
     const [[u]] = await db.query('SELECT email, full_name, notify_email FROM users WHERE id=?', [userId]);
     if (!u?.email || !u.notify_email) return false;
@@ -219,7 +224,7 @@ router.post('/', auth, async (req, res) => {
       await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',
         [leadId, req.user.id, `📅 Übergabe an ${closer.full_name}: ${wann}${topic ? ' – ' + topic : ''}`]);
       const offenTitel = await require('./bedarf').offeneFragen(leadId);
-      if (b.notify_mail !== false) await mailAn(closerId, `📅 Neue Übergabe für dich: ${a.company}`, [
+      await mailAn(closerId, `📅 Neue Übergabe für dich: ${a.company}`, [
         `${req.user.full_name || 'Der Admin'} übergibt dir einen warmen Lead:`,
         `<b>${wann}</b>${art === 'termin' ? ` · ${dauer} Min.` : ''}`,
         `<b>Kunde:</b> ${a.company}${a.ceo ? ' (' + a.ceo + ')' : ''}${a.phone ? ' · ' + a.phone : ''}`,
@@ -230,7 +235,7 @@ router.post('/', auth, async (req, res) => {
         versprochen ? `<b>Bereits versprochen:</b> ${versprochen}` : '',
         notes ? `<b>Notizen:</b> ${notes}` : '',
         'Bitte im CRM unter „Termine“ annehmen, ablehnen oder eine andere Zeit vorschlagen.',
-      ]);
+      ], a.lead_id, b.notify_mail !== false);
     }
     await log(req.user.id, uebergabe ? 'termin_uebergabe' : 'termin_create', 'lead', leadId, { appointment_id: a.id, closer_id: closerId, starts_at: starts, art }, req.ip);
     res.status(201).json({ ok: true, id: a.id, lead_id: leadId, status: a.status });
@@ -273,9 +278,9 @@ router.post('/:id/antwort', auth, async (req, res) => {
       a.status = 'angenommen';
       await bestaetigen(a, req.user.id, req.ip);
       if (alsCloser) await mailAn(a.proposed_by, `✅ ${a.closer_name} übernimmt den Termin: ${a.company}`,
-        [`${a.closer_name} hat den Termin am <b>${terminText(a.starts_at)}</b> mit ${a.company} angenommen.`, note ? `Notiz: ${note}` : '']);
+        [`${a.closer_name} hat den Termin am <b>${terminText(a.starts_at)}</b> mit ${a.company} angenommen.`, note ? `Notiz: ${note}` : ''], a.lead_id);
       else await mailAn(a.closer_id, `✅ Dein Zeitvorschlag passt: ${a.company}`,
-        [`Der Termin mit ${a.company} steht am <b>${terminText(a.starts_at)}</b>.`]);
+        [`Der Termin mit ${a.company} steht am <b>${terminText(a.starts_at)}</b>.`], a.lead_id);
     } else if (aktion === 'ablehnen') {
       await db.query("UPDATE appointments SET status='abgelehnt', response_note=?, responded_at=NOW() WHERE id=?", [note, a.id]);
       // Übergabe abgelehnt: Lead geht zurück, bis der Admin ihn neu vergibt
@@ -286,7 +291,7 @@ router.post('/:id/antwort', auth, async (req, res) => {
       await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',
         [a.lead_id, req.user.id, `📅 Termin abgelehnt von ${a.closer_name}${note ? ': ' + note : ''}`]);
       await mailAn(a.proposed_by, `❌ ${a.closer_name} kann den Termin nicht: ${a.company}`,
-        [`${a.closer_name} hat den Termin am ${terminText(a.starts_at)} abgelehnt.`, note ? `Grund: ${note}` : '', 'Unter „Termine“ kannst du ihn einem anderen Closer geben.']);
+        [`${a.closer_name} hat den Termin am ${terminText(a.starts_at)} abgelehnt.`, note ? `Grund: ${note}` : '', 'Unter „Termine“ kannst du ihn einem anderen Closer geben.'], a.lead_id);
     } else if (aktion === 'gegenvorschlag') {
       const counter = zeit(req.body.starts_at);
       if (!counter || new Date(counter.replace(' ', 'T')).getTime() < Date.now()) return res.status(400).json({ error: 'Bitte eine Zeit in der Zukunft vorschlagen.' });
@@ -294,7 +299,7 @@ router.post('/:id/antwort', auth, async (req, res) => {
       await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',
         [a.lead_id, req.user.id, `📅 ${a.closer_name} schlägt stattdessen ${terminText(counter)} vor${note ? ': ' + note : ''}`]);
       await mailAn(a.proposed_by, `🔁 Anderer Zeitvorschlag für ${a.company}`,
-        [`${a.closer_name} kann am ${terminText(a.starts_at)} nicht und schlägt <b>${terminText(counter)}</b> vor.`, note ? `Notiz: ${note}` : '', 'Unter „Termine“ mit einem Klick annehmen.']);
+        [`${a.closer_name} kann am ${terminText(a.starts_at)} nicht und schlägt <b>${terminText(counter)}</b> vor.`, note ? `Notiz: ${note}` : '', 'Unter „Termine“ mit einem Klick annehmen.'], a.lead_id);
     } else return res.status(400).json({ error: 'Unbekannte Antwort' });
 
     await log(req.user.id, 'termin_' + aktion, 'lead', a.lead_id, { appointment_id: a.id }, req.ip);
@@ -320,7 +325,7 @@ router.patch('/:id', auth, async (req, res) => {
         await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',
           [a.lead_id, req.user.id, `📅 Termin am ${terminText(a.starts_at)} abgesagt`]);
         if (a.closer_id !== req.user.id && a.status === 'angenommen')
-          await mailAn(a.closer_id, `Termin abgesagt: ${a.company}`, [`Der Termin am ${terminText(a.starts_at)} mit ${a.company} fällt aus.`]);
+          await mailAn(a.closer_id, `Termin abgesagt: ${a.company}`, [`Der Termin am ${terminText(a.starts_at)} mit ${a.company} fällt aus.`], a.lead_id);
       }
       await log(req.user.id, 'termin_' + b.status, 'lead', a.lead_id, { appointment_id: a.id }, req.ip);
       return res.json({ ok: true });
@@ -376,13 +381,13 @@ router.patch('/:id', auth, async (req, res) => {
       const wann = art === 'anruf_bis' ? anrufBisText(starts) : `${terminText(starts)} · ${dauer} Min.`;
       if (closerId !== a.closer_id) await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',
         [a.lead_id, req.user.id, `📅 Übergabe an ${neu.closer_name || 'Closer'}: ${wann}${topic ? ' – ' + topic : ''}`]);
-      if (b.notify_mail !== false) await mailAn(closerId, `📅 ${closerId !== a.closer_id ? 'Neue Übergabe' : 'Termin'} für dich: ${neu.company}`, [
+      await mailAn(closerId, `📅 ${closerId !== a.closer_id ? 'Neue Übergabe' : 'Termin'} für dich: ${neu.company}`, [
         `${req.user.full_name || 'Der Admin'} ${closerId !== a.closer_id ? 'übergibt dir einen warmen Lead' : 'schlägt dir einen Termin vor'}:`,
         `<b>${wann}</b>`,
         `<b>Kunde:</b> ${neu.company}${neu.ceo ? ' (' + neu.ceo + ')' : ''}${neu.phone ? ' · ' + neu.phone : ''}`,
         topic ? `<b>Thema:</b> ${topic}` : '', painpoints ? `<b>Painpoints:</b> ${painpoints}` : '',
         neu.website ? `<b>Webseite:</b> ${neu.website}` : '', notes ? `<b>Notizen:</b> ${notes}` : '',
-        'Bitte im CRM unter „Termine“ annehmen, ablehnen oder eine andere Zeit vorschlagen.']);
+        'Bitte im CRM unter „Termine“ annehmen, ablehnen oder eine andere Zeit vorschlagen.'], neu.lead_id, b.notify_mail !== false);
     }
     await log(req.user.id, 'termin_update', 'lead', a.lead_id, { appointment_id: a.id, status }, req.ip);
     res.json({ ok: true, status });
@@ -401,7 +406,7 @@ async function erinnern() {
         `In Kürze steht dein Termin an: <b>${terminText(a.starts_at)}</b>`,
         `<b>Kunde:</b> ${a.company}${a.ceo ? ' (' + a.ceo + ')' : ''}${a.phone ? ' · ' + a.phone : ''}`,
         a.topic ? `<b>Thema:</b> ${a.topic}` : '', a.notes ? `<b>Notizen:</b> ${a.notes}` : '',
-      ]);
+      ], a.lead_id);
     }
   } catch (e) { if (!/appointments/.test(e.message)) console.error('Termin-Erinnerung:', e.message); }
 }

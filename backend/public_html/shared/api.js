@@ -1000,7 +1000,7 @@ const Softphone = {
     const code = Number(err && err.code);
     const name = String(err && (err.name || '')) + ' ' + String(err && (err.message || ''));
     if (code === 31401 || code === 31208 || /permission|NotAllowed/i.test(name))
-      return 'Mikrofon ist für das CRM gesperrt. Bitte im Browser erlauben (iPhone/Safari: links in der Adresszeile „aA“ → Website-Einstellungen → Mikrofon → Erlauben; Android/Chrome: Symbol links neben der Adresse → Berechtigungen → Mikrofon) und die Seite neu laden.';
+      return 'Mikrofon ist für das CRM gesperrt. iPhone mit Brave: iPhone-Einstellungen → Apps → Brave → Mikrofon einschalten, dann Brave ganz schließen, neu öffnen und beim Anruf „Erlauben“ tippen. iPhone mit Safari: links in der Adresszeile „aA“ → Website-Einstellungen → Mikrofon → Erlauben. Android/Chrome: Symbol links neben der Adresse → Berechtigungen → Mikrofon. Danach die Seite neu laden.';
     if (code === 31402 || /NotFound|NotReadable|AcquisitionFailed/i.test(name))
       return 'Mikrofon nicht verfügbar. Läuft gerade ein anderes Telefonat oder eine App, die das Mikrofon nutzt? Diese beenden und erneut anrufen.';
     return praefix + ((err && err.message) || err || '');
@@ -1319,3 +1319,88 @@ async function saveCallerId(containerId) {
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();
+
+// ── Handy-/Browser-Benachrichtigungen (Web Push) und Test-Mail ──
+// Einstellungen → „Handy-Benachrichtigungen“. Am iPhone nur aus der Home-Bildschirm-App (iOS 16.4+).
+const Benachrichtigungen = {
+  unterstuetzt: () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window,
+  istIphone: () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
+  alsApp: () => navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches),
+
+  // Beim Laden registrieren, damit ein bereits eingeschaltetes Gerät erreichbar bleibt
+  registrieren() {
+    if (!this.unterstuetzt()) return Promise.resolve(null);
+    return navigator.serviceWorker.register('/sw.js').catch(() => null);
+  },
+
+  async _abo() {
+    if (!this.unterstuetzt()) return null;
+    const reg = await navigator.serviceWorker.getRegistration('/');
+    return reg ? reg.pushManager.getSubscription() : null;
+  },
+
+  _schluessel(b64) {
+    const s = (b64 + '='.repeat((4 - b64.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/');
+    return Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  },
+
+  async render(id) {
+    const box = document.getElementById(id);
+    if (!box) return;
+    const hinweis = t => `<div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:10px">${t}</div>`;
+    const testMail = `<button type="button" class="btn btn-ghost btn-sm" onclick="Benachrichtigungen.testMail()"><i class="fas fa-envelope"></i> Test-Mail an mich</button>`;
+    let html = '';
+    if (!this.unterstuetzt()) {
+      html = this.istIphone() && !this.alsApp()
+        ? hinweis('Am iPhone kommen Benachrichtigungen nur, wenn das CRM als App auf dem Home-Bildschirm liegt:<br>1. Das CRM in <b>Safari</b> öffnen<br>2. Unten auf das Teilen-Symbol (Quadrat mit Pfeil) tippen<br>3. „Zum Home-Bildschirm“ wählen und „Hinzufügen“ tippen<br>4. Die neue App „NovaFlow“ öffnen, anmelden und hier einschalten')
+        : hinweis('Dieser Browser unterstützt keine Benachrichtigungen. Bitte Chrome, Edge, Brave, Firefox oder am iPhone die Home-Bildschirm-App nutzen.');
+    } else if (Notification.permission === 'denied') {
+      html = hinweis('Benachrichtigungen sind für das CRM auf diesem Gerät blockiert. Bitte in den Browser- bzw. Handy-Einstellungen für diese Seite erlauben und die Seite neu laden.');
+    } else {
+      const abo = await this._abo().catch(() => null);
+      html = abo
+        ? `<div style="font-size:13px;margin-bottom:10px;color:var(--green)"><i class="fas fa-check-circle"></i> Auf diesem Gerät eingeschaltet</div>`
+          + `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><button type="button" class="btn btn-primary btn-sm" onclick="Benachrichtigungen.test()"><i class="fas fa-bell"></i> Test-Benachrichtigung</button>`
+          + `<button type="button" class="btn btn-ghost btn-sm" onclick="Benachrichtigungen.aus('${id}')"><i class="fas fa-bell-slash"></i> Ausschalten</button></div>`
+        : hinweis('Erinnerungen, Termine und verpasste Anrufe kommen dann als Meldung aufs Gerät, auch wenn das CRM geschlossen oder das Handy gesperrt ist.')
+          + `<div style="margin-bottom:8px"><button type="button" class="btn btn-primary btn-sm" onclick="Benachrichtigungen.ein('${id}')"><i class="fas fa-bell"></i> Auf diesem Gerät einschalten</button></div>`;
+    }
+    box.innerHTML = html + testMail;
+  },
+
+  async ein(id) {
+    try {
+      const erlaubt = await Notification.requestPermission();
+      if (erlaubt !== 'granted') { showToast('Benachrichtigungen wurden nicht erlaubt', 'err'); return this.render(id); }
+      const status = await api('GET', '/push/status');
+      if (!status.key) throw new Error('Benachrichtigungen sind auf dem Server noch nicht eingerichtet');
+      await this.registrieren();
+      const reg = await navigator.serviceWorker.ready;
+      const abo = await reg.pushManager.getSubscription()
+        || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: this._schluessel(status.key) });
+      await api('POST', '/push/subscribe', { subscription: abo.toJSON() });
+      showToast('Benachrichtigungen eingeschaltet ✓');
+      await api('POST', '/push/test').catch(() => {});
+    } catch (e) { showToast('Einschalten hat nicht geklappt: ' + (e.message || e), 'err'); }
+    this.render(id);
+  },
+
+  async aus(id) {
+    try {
+      const abo = await this._abo();
+      if (abo) { await api('POST', '/push/unsubscribe', { endpoint: abo.endpoint }).catch(() => {}); await abo.unsubscribe(); }
+      showToast('Benachrichtigungen auf diesem Gerät ausgeschaltet');
+    } catch (e) { showToast(e.message, 'err'); }
+    this.render(id);
+  },
+
+  async test() {
+    try { const r = await api('POST', '/push/test'); showToast(`Test-Benachrichtigung verschickt (${r.geraete === 1 ? '1 Gerät' : r.geraete + ' Geräte'})`); }
+    catch (e) { showToast(e.message, 'err'); }
+  },
+
+  async testMail() {
+    try { const r = await api('POST', '/push/testmail'); showToast(`Test-Mail an ${r.email} verschickt. Falls sie nicht ankommt, bitte auch im Spam-Ordner nachsehen.`); }
+    catch (e) { showToast(e.message, 'err'); }
+  },
+};

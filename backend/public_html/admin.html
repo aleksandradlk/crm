@@ -5,9 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NovaFlow CRM · Administrator</title>
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/app-icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="NovaFlow">
+<meta name="theme-color" content="#2c3a55">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf63">
+<link rel="stylesheet" href="/shared/style.css?v=nf64">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -632,29 +637,29 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf63"></script>
-<script src="/shared/datum.js?v=nf63"></script>
-<script src="/shared/bedarf-regeln.js?v=nf63"></script>
-<script src="/shared/bedarf.js?v=nf63"></script>
-<script src="/shared/mailvorschlag.js?v=nf63"></script>
-<script src="/shared/seitenpanel.js?v=nf63"></script>
-<script src="/shared/dialer.js?v=nf63"></script>
-<script src="/shared/provision.js?v=nf63"></script>
-<script src="/shared/deals.js?v=nf63"></script>
-<script src="/shared/calllists.js?v=nf63"></script>
-<script src="/shared/today.js?v=nf63"></script>
-<script src="/shared/ziele.js?v=nf63"></script>
-<script src="/shared/auswertung.js?v=nf63"></script>
-<script src="/shared/termine.js?v=nf63"></script>
-<script src="/shared/duplicates.js?v=nf63"></script>
-<script src="/shared/markdown.js?v=nf63"></script>
-<script src="/shared/wiki.js?v=nf63"></script>
-<script src="/shared/wiki-artikel.js?v=nf63"></script>
-<script src="/shared/lines.js?v=nf63"></script>
-<script src="/shared/finder.js?v=nf63"></script>
-<script src="/shared/board.js?v=nf63"></script>
-<script src="/shared/integrations.js?v=nf63"></script>
-<script src="/shared/startklar.js?v=nf63"></script>
+<script src="/shared/api.js?v=nf64"></script>
+<script src="/shared/datum.js?v=nf64"></script>
+<script src="/shared/bedarf-regeln.js?v=nf64"></script>
+<script src="/shared/bedarf.js?v=nf64"></script>
+<script src="/shared/mailvorschlag.js?v=nf64"></script>
+<script src="/shared/seitenpanel.js?v=nf64"></script>
+<script src="/shared/dialer.js?v=nf64"></script>
+<script src="/shared/provision.js?v=nf64"></script>
+<script src="/shared/deals.js?v=nf64"></script>
+<script src="/shared/calllists.js?v=nf64"></script>
+<script src="/shared/today.js?v=nf64"></script>
+<script src="/shared/ziele.js?v=nf64"></script>
+<script src="/shared/auswertung.js?v=nf64"></script>
+<script src="/shared/termine.js?v=nf64"></script>
+<script src="/shared/duplicates.js?v=nf64"></script>
+<script src="/shared/markdown.js?v=nf64"></script>
+<script src="/shared/wiki.js?v=nf64"></script>
+<script src="/shared/wiki-artikel.js?v=nf64"></script>
+<script src="/shared/lines.js?v=nf64"></script>
+<script src="/shared/finder.js?v=nf64"></script>
+<script src="/shared/board.js?v=nf64"></script>
+<script src="/shared/integrations.js?v=nf64"></script>
+<script src="/shared/startklar.js?v=nf64"></script>
 <script>
 let allLeads = [], allUsers = [], editingUserId = null;
 let panelDirty = false;
@@ -2532,6 +2537,7 @@ async function openSettingsModal() {
       : '';
   } catch {}
   renderCallerIdSettings('callerIdSettings');
+  Benachrichtigungen.render('pushSettings');
   document.getElementById('settingsModal').classList.add('open');
 }
 function closeSettingsModal() { clearInterval(_callerIdPoll); document.getElementById('settingsModal').classList.remove('open'); }
@@ -2770,15 +2776,17 @@ Termine.mount({
   onChange: () => { if (_panelLead && document.getElementById('leadPanel').classList.contains('open')) openLeadPanel(_panelLead.id); },
 });
 Termine.startBadge();
+Benachrichtigungen.registrieren();
 // Links aus Mails: ?deal=… öffnet den Deal, ?angebot_deal=…&lead=… legt das Angebot vorbefüllt an
 (() => {
   const q = new URLSearchParams(location.search);
   const deal = parseInt(q.get('deal')), aDeal = parseInt(q.get('angebot_deal')), lead = parseInt(q.get('lead'));
-  if (!deal && !aDeal) return;
+  if (!deal && !aDeal && !lead) return;
   history.replaceState(null, '', location.pathname);
   setTimeout(() => {
     if (aDeal && lead) angebotErstellen(lead, aDeal);
     else if (deal) { showTab('deals'); Deals.open(deal); }
+    else openLeadPanel(lead);  // Link aus einer Handy-Benachrichtigung
   }, 600);
 })();
 Dupes.init({
@@ -3518,6 +3526,9 @@ document.getElementById('addLeadModal').addEventListener('click', function(e){ i
       <label>Meine E-Mail <span style="font-size:11px;color:var(--text3);font-weight:400">(für Closer sichtbar)</span></label>
       <input id="adminEmail" class="form-control" type="email" placeholder="name@beispiel.de">
     </div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+    <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)"><i class="fas fa-bell" style="color:var(--accent);margin-right:6px"></i>Handy-Benachrichtigungen</div>
+    <div id="pushSettings"></div>
     <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
     <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)"><i class="fas fa-headset" style="color:var(--accent);margin-right:6px"></i>Telefonie</div>
     <div id="callerIdSettings"></div>
