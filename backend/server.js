@@ -837,6 +837,10 @@ migrate("SELECT value FROM app_settings WHERE key_name='finder_folierung_v1'").t
   await db.query("INSERT INTO app_settings (key_name, value) VALUES ('finder_folierung_v1', '1') ON DUPLICATE KEY UPDATE value='1'");
 }).catch(e => console.error('Folierung-Vorgabe:', e.message));
 
+// Angeheftete Notizen im Lead (wichtige Infos ganz oben) – Rollback: db/rollback/2026-10-28_notiz-anheften.sql
+migrate('ALTER TABLE comments ADD COLUMN pinned_at DATETIME NULL').catch(() => {});
+migrate('ALTER TABLE comments ADD COLUMN pinned_by INT NULL').catch(() => {});
+
 // ── Start ─────────────────────────────────────────────────────
 // Erst starten, wenn alle Migrationen durch sind (sonst schlagen Logins fehl,
 // solange Spalten noch fehlen)
