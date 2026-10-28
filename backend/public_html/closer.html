@@ -5,9 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NovaFlow CRM · Closer</title>
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/app-icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="NovaFlow">
+<meta name="theme-color" content="#2c3a55">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf63">
+<link rel="stylesheet" href="/shared/style.css?v=nf64">
 <style>
 .notif-panel{position:fixed;top:0;right:0;bottom:0;width:340px;background:var(--bg2);border-left:1px solid var(--border2);z-index:150;transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;padding:20px}
 .notif-panel.open{transform:translateX(0)}
@@ -457,25 +462,25 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf63"></script>
-<script src="/shared/datum.js?v=nf63"></script>
-<script src="/shared/bedarf-regeln.js?v=nf63"></script>
-<script src="/shared/bedarf.js?v=nf63"></script>
-<script src="/shared/mailvorschlag.js?v=nf63"></script>
-<script src="/shared/seitenpanel.js?v=nf63"></script>
-<script src="/shared/dialer.js?v=nf63"></script>
-<script src="/shared/provision.js?v=nf63"></script>
-<script src="/shared/deals.js?v=nf63"></script>
-<script src="/shared/calllists.js?v=nf63"></script>
-<script src="/shared/today.js?v=nf63"></script>
-<script src="/shared/ziele.js?v=nf63"></script>
-<script src="/shared/termine.js?v=nf63"></script>
-<script src="/shared/duplicates.js?v=nf63"></script>
-<script src="/shared/markdown.js?v=nf63"></script>
-<script src="/shared/wiki.js?v=nf63"></script>
-<script src="/shared/wiki-artikel.js?v=nf63"></script>
-<script src="/shared/finder.js?v=nf63"></script>
-<script src="/shared/board.js?v=nf63"></script>
+<script src="/shared/api.js?v=nf64"></script>
+<script src="/shared/datum.js?v=nf64"></script>
+<script src="/shared/bedarf-regeln.js?v=nf64"></script>
+<script src="/shared/bedarf.js?v=nf64"></script>
+<script src="/shared/mailvorschlag.js?v=nf64"></script>
+<script src="/shared/seitenpanel.js?v=nf64"></script>
+<script src="/shared/dialer.js?v=nf64"></script>
+<script src="/shared/provision.js?v=nf64"></script>
+<script src="/shared/deals.js?v=nf64"></script>
+<script src="/shared/calllists.js?v=nf64"></script>
+<script src="/shared/today.js?v=nf64"></script>
+<script src="/shared/ziele.js?v=nf64"></script>
+<script src="/shared/termine.js?v=nf64"></script>
+<script src="/shared/duplicates.js?v=nf64"></script>
+<script src="/shared/markdown.js?v=nf64"></script>
+<script src="/shared/wiki.js?v=nf64"></script>
+<script src="/shared/wiki-artikel.js?v=nf64"></script>
+<script src="/shared/finder.js?v=nf64"></script>
+<script src="/shared/board.js?v=nf64"></script>
 <script>
 const ME = Auth.getUser();
 const CAN = {
@@ -2034,6 +2039,7 @@ async function openSettingsModal() {
     document.getElementById('sett-phone').value          = me.phone || '';
   } catch {}
   renderCallerIdSettings('callerIdSettings');
+  Benachrichtigungen.render('pushSettings');
   document.getElementById('settingsModal').classList.add('open');
 }
 function closeSettingsModal() { clearInterval(_callerIdPoll); document.getElementById('settingsModal').classList.remove('open'); }
@@ -2468,6 +2474,14 @@ setInterval(() => WikiNeu.pruefen(), 10 * 60 * 1000);
 setInterval(loadReminders, 5 * 60 * 1000);
 checkReminderNotifications();
 setInterval(checkReminderNotifications, 2 * 60 * 1000);
+Benachrichtigungen.registrieren();
+// Link aus einer Handy-Benachrichtigung: ?lead=… öffnet den Lead
+(() => {
+  const lead = parseInt(new URLSearchParams(location.search).get('lead'));
+  if (!lead) return;
+  history.replaceState(null, '', location.pathname);
+  setTimeout(() => openPanel(lead), 600);
+})();
 
 // ── BENUTZER ANLEGEN (Closer mit can_create_users) ────────────
 async function submitCreateUser() {
@@ -2564,6 +2578,10 @@ async function submitCreateUser() {
         <span>E-Mail Benachrichtigung (Reminder)</span>
       </label>
       <div class="form-group" style="margin-bottom:0"><label>Meine Telefonnummer</label><input type="tel" id="sett-phone" class="form-control" placeholder="+49 ..."></div>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:16px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:12px">Handy-Benachrichtigungen</div>
+      <div id="pushSettings"></div>
     </div>
     <div style="border-top:1px solid var(--border);padding-top:16px;margin-bottom:12px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:12px">Telefonie</div>

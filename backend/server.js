@@ -151,6 +151,8 @@ app.use('/api/provision', provisionRoutes);
 const faelligRoutes = require('./routes/faellig');
 faelligRoutes.verbinde(abrechnung.crm);
 app.use('/api/faellig', faelligRoutes);
+// Handy-Benachrichtigungen (Web Push) und Test-Mail
+app.use('/api/push', require('./routes/push'));
 
 // ── Gesundheits-Check ─────────────────────────────────────────
 app.get('/api/health', async (req, res) => {
@@ -802,6 +804,38 @@ async function zeitNachUtc() {
   console.log(`Zeit-Umstellung: ${n} Termin-/Wiedervorlage-Zeiten nach UTC umgerechnet`);
 }
 _migChain = _migChain.then(zeitNachUtc).catch(e => console.error('Zeit-Umstellung fehlgeschlagen:', e.message));
+
+// ── Handy-Benachrichtigungen (Web Push) – Rollback: db/rollback/2026-10-28_push.sql ──
+migrate(`CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  user_id    INT NOT NULL,
+  endpoint   VARCHAR(600) CHARACTER SET ascii NOT NULL,
+  p256dh     VARCHAR(200) NOT NULL,
+  auth       VARCHAR(100) NOT NULL,
+  geraet     VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_ok_at DATETIME NULL,
+  UNIQUE KEY uq_push_endpoint (endpoint),
+  INDEX idx_push_user (user_id),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+)`).catch(e => console.error('Migration push_subscriptions:', e.message));
+// Reminder bekommt die Handy-Benachrichtigung nur einmal (unabhängig davon, ob die Mail klappt)
+migrate('ALTER TABLE reminders ADD COLUMN push_at DATETIME NULL').catch(() => {});
+
+// Folierer in die Closer-Suche aufnehmen (einmalig; danach entscheidet der Admin unter „Vorgaben für Closer“)
+migrate("SELECT value FROM app_settings WHERE key_name='finder_folierung_v1'").then(async ([[done]]) => {
+  if (done) return;
+  const [[row]] = await db.query("SELECT value FROM app_settings WHERE key_name='finder_vorgaben'");
+  let v = null;
+  try { v = row ? JSON.parse(row.value) : { branchen: ['Autohäuser', 'Maler', 'Autoaufbereiter', 'Badsanierer', 'Handwerksbetriebe'], groesse: 'small' }; } catch (_) {}
+  // Leere Liste = Closer suchen frei → nichts ergänzen
+  if (v && Array.isArray(v.branchen) && v.branchen.length && !v.branchen.some(b => /folier/i.test(b))) {
+    v.branchen.push('Fahrzeugfolierung');
+    await db.query("INSERT INTO app_settings (key_name, value) VALUES ('finder_vorgaben', ?) ON DUPLICATE KEY UPDATE value=VALUES(value)", [JSON.stringify(v)]);
+    console.log('Closer-Suche: Branche „Fahrzeugfolierung“ ergänzt');
+  }
+  await db.query("INSERT INTO app_settings (key_name, value) VALUES ('finder_folierung_v1', '1') ON DUPLICATE KEY UPDATE value='1'");
+}).catch(e => console.error('Folierung-Vorgabe:', e.message));
 
 // ── Start ─────────────────────────────────────────────────────
 // Erst starten, wenn alle Migrationen durch sind (sonst schlagen Logins fehl,
