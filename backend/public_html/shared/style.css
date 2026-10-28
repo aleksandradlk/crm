@@ -77,6 +77,9 @@
 }
 
 html { -webkit-text-size-adjust: 100%; }
+/* Handy: Schrift 15 % größer (nur Text, Layout bleibt). Gilt in jedem Browser – am iPhone
+   nutzen Safari, Brave und Chrome dieselbe WebKit-Technik. */
+@media (max-width: 800px) { html { -webkit-text-size-adjust: 115%; text-size-adjust: 115%; } }
 
 body {
   background: var(--bg);
