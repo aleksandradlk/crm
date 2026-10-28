@@ -1404,3 +1404,13 @@ const Benachrichtigungen = {
     catch (e) { showToast(e.message, 'err'); }
   },
 };
+
+// Nach einem Klick ist ein Knopf kurz gesperrt, solange gespeichert wird. Statt des roten
+// „Verboten“-Zeigers dann den Lade-Zeiger zeigen – sonst sieht es aus, als hätte der Klick nicht geklappt.
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('button');
+  if (!b || b.disabled) return;
+  b.dataset.klick = '1';
+  clearTimeout(b._klickTimer);
+  b._klickTimer = setTimeout(() => { delete b.dataset.klick; }, 4000);
+}, true);
