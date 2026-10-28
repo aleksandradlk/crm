@@ -163,6 +163,9 @@
     feld.placeholder = orig.dataset.nfZeit ? 'TT.MM.JJJJ hh:mm' : 'TT.MM.JJJJ';
     feld.autocomplete = 'off';
     feld.inputMode = 'numeric';
+    // Handy: nur Kalender, keine Tastatur. Die Zifferntastatur hat am iPhone keinen Punkt,
+    // und beim Öffnen scrollt iOS das Fenster – das schloss den Kalender sofort wieder.
+    if (window.matchMedia && matchMedia('(pointer: coarse)').matches) feld.readOnly = true;
     if (orig.title) feld.title = orig.title;
     feld.disabled = orig.disabled;
     orig._nfFeld = feld;

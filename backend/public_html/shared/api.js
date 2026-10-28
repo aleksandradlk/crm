@@ -532,6 +532,11 @@ function initTheme() {
   api('GET', '/auth/me').then(me => {
     if (!me) return;
     const u = Auth.getUser() || {};
+    // Vom Admin geänderten Namen übernehmen, ohne neu einloggen (wirkt ab dem nächsten Laden überall)
+    if (me.full_name && me.full_name !== u.full_name) {
+      u.full_name = me.full_name;
+      localStorage.setItem('lh_user', JSON.stringify(u));
+    }
     if (me.theme) {
       u.theme = me.theme;
       localStorage.setItem('lh_user', JSON.stringify(u));
