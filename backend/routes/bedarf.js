@@ -9,6 +9,7 @@ const { log } = require('../helpers/logger');
 const sicht = require('../helpers/sichtbarkeit');
 const R = require('../public_html/shared/bedarf-regeln');
 const { sendHtmlMail } = require('../helpers/mailer');
+const { ortZuUtc } = require('../helpers/zeit');
 
 // Erlaubte Felder (alles andere wird verworfen)
 const FELDER = ['ansprechpartner_rolle', 'branche', 'branche_text', 'email_angebot', 'webseite', 'instagram', 'teamgroesse', 'buero_vorhanden',
@@ -112,7 +113,7 @@ const sqlZeit = v => {
 
 // Nachfass-Termin aus der Analyse = eine offene Wiedervorlage des Closers
 async function nachfassReminder(leadId, userId, termin, company) {
-  const at = sqlZeit(termin);
+  const at = ortZuUtc(sqlZeit(termin));          // Eingabe deutsche Zeit → UTC
   if (!at || !userId) return;
   const [[r]] = await db.query("SELECT id FROM reminders WHERE lead_id=? AND user_id=? AND kind='nachfass' AND done_at IS NULL", [leadId, userId]);
   if (r) await db.query('UPDATE reminders SET remind_at=?, sent=0 WHERE id=?', [at, r.id]);
@@ -183,7 +184,7 @@ router.post('/lead/:id/kurzcheck', auth, async (req, res) => {
     // Im Anrufmodus legt das Speichern des Ergebnisses den Rückruf an (reminder=false)
     if (b.reminder !== false) {
       await db.query("INSERT INTO reminders (lead_id, user_id, remind_at, note) VALUES (?,?,?,?)",
-        [lead.id, lead.assigned_to || req.user.id, at, `Rückruf nach Kurz-Check · Vorschlag ${vorschlag.name}`]);
+        [lead.id, lead.assigned_to || req.user.id, ortZuUtc(at), `Rückruf nach Kurz-Check · Vorschlag ${vorschlag.name}`]);
       await db.query("UPDATE leads SET status='rueckruf' WHERE id=?", [lead.id]);
     }
     await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',

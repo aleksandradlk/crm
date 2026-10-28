@@ -5,6 +5,7 @@ const router = require('express').Router();
 const db     = require('../db');
 const { auth } = require('../middleware/auth');
 const { buildQueue } = require('../helpers/queue');
+const { utcZuOrt } = require('../helpers/zeit');
 
 router.get('/', auth, async (req, res) => {
   const uid = req.user.id;
@@ -82,7 +83,7 @@ router.get('/', auth, async (req, res) => {
       replies,
       deals: dealsAttention,
       angebot_anfragen: anfragen,
-      termin_anfragen: terminAnfragen,
+      termin_anfragen: terminAnfragen.map(a => ({ ...a, starts_at: utcZuOrt(a.starts_at) })),
     });
   } catch (e) {
     console.error('Today error:', e);

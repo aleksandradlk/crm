@@ -8,6 +8,7 @@
 // Eine Wählliste (gespeicherter Filter) schränkt die Leads zusätzlich ein.
 const db = require('../db');
 const { siehtAlles, freieLeadsSichtbar } = require('./sichtbarkeit');
+const { utcZuOrt } = require('./zeit');
 
 const STATUSES = ['neu', 'kontaktiert', 'nicht_erreicht', 'kein_interesse', 'rueckruf', 'kunde'];
 // Nie im Anrufmodus: „Keine Anrufe mehr“ (gesperrt) und „passt nicht“
@@ -78,7 +79,7 @@ async function buildQueue(user, rawFilters) {
      LEFT JOIN (
        SELECT lead_id, MAX(started_at) AS last_call_at, COUNT(*) AS call_count,
               SUM(status IN ('reached','completed') OR outcome IN ('rueckruf','interesse','termin','kein_interesse','kunde')) AS gespraeche,
-              GROUP_CONCAT(DATE_FORMAT(started_at, '%H:%i') ORDER BY started_at SEPARATOR ',') AS versuch_zeiten
+              GROUP_CONCAT(DATE_FORMAT(started_at, '%Y-%m-%d %H:%i:%s') ORDER BY started_at SEPARATOR ',') AS versuch_zeiten
        FROM call_logs WHERE direction IS NULL OR direction <> 'inbound' GROUP BY lead_id
      ) lc ON lc.lead_id = l.id
      LEFT JOIN (
@@ -90,6 +91,11 @@ async function buildQueue(user, rawFilters) {
     params
   );
 
+  // Anrufzeiten stehen in UTC → als deutsche Uhrzeit „HH:MM“ (für die besten Anrufzeiten)
+  rows.forEach(l => {
+    if (l.versuch_zeiten) l.versuch_zeiten = String(l.versuch_zeiten).split(',')
+      .map(t => utcZuOrt(t)).filter(t => /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(t || '')).map(t => t.slice(11, 16)).join(',');
+  });
   const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
   const STATUS_RANK = { rueckruf: 1, neu: 2, nicht_erreicht: 3, kontaktiert: 4 };
   const queue = [];

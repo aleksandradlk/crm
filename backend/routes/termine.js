@@ -10,6 +10,7 @@ const { log } = require('../helpers/logger');
 const { refreshNorm, findDuplicates } = require('../helpers/dedupe');
 const sicht = require('../helpers/sichtbarkeit');
 const { sendInfoMail } = require('../helpers/mailer');
+const { ortZuUtc, utcZuOrt } = require('../helpers/zeit');
 
 const STATUS = ['vorgeschlagen', 'gegenvorschlag', 'angenommen', 'abgelehnt', 'abgesagt', 'erledigt'];
 const QUELLEN = ['Instagram', 'LinkedIn', 'Facebook', 'Empfehlung', 'Website', 'Telefon', 'Sonstiges'];
@@ -20,7 +21,9 @@ const zeit = v => {
   const d = new Date(String(v).replace(' ', 'T'));
   return Number.isNaN(d.getTime()) ? null : String(v).replace('T', ' ').slice(0, 16) + ':00';
 };
-// Zeiten stehen als Ortszeit in der Datenbank – ohne Zeitzonen-Umrechnung ausgeben
+// starts_at/counter_at stehen in UTC in der Datenbank. In dieser Datei wird mit deutscher
+// Zeit als Text gerechnet ('YYYY-MM-DD HH:MM:SS'): ortZuUtc beim Schreiben, lokal() beim Lesen.
+const lokal = a => a && { ...a, starts_at: utcZuOrt(a.starts_at), counter_at: utcZuOrt(a.counter_at) };
 const datumText = sql => new Date(String(sql).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', timeZone: 'UTC' });
 // „Anruf bis“: heute = spontan anrufen
 const anrufBisText = sql => {
@@ -44,7 +47,7 @@ const SELECT = `
 
 async function laden(id) {
   const [[a]] = await db.query(SELECT + ' WHERE a.id=?', [id]);
-  return a;
+  return lokal(a);
 }
 
 // Benachrichtigung per Mail (nur wenn der Empfänger eine Adresse hat und Mails möchte)
@@ -71,7 +74,7 @@ async function bestaetigen(a, userId, ip) {
   const bis = a.art === 'anruf_bis';
   await db.query(
     "INSERT INTO reminders (lead_id, user_id, remind_at, note, kind, sent, appointment_id) VALUES (?,?,?,?, 'termin', ?, ?)",
-    [a.lead_id, a.closer_id, a.starts_at, (bis ? `Anruf bis heute${a.topic ? ': ' + a.topic : ''}` : `Termin${a.topic ? ': ' + a.topic : ''}`).slice(0, 500), bis ? 0 : 1, a.id]);
+    [a.lead_id, a.closer_id, ortZuUtc(a.starts_at), (bis ? `Anruf bis heute${a.topic ? ': ' + a.topic : ''}` : `Termin${a.topic ? ': ' + a.topic : ''}`).slice(0, 500), bis ? 0 : 1, a.id]);
   await db.query("UPDATE leads SET status='kontaktiert' WHERE id=? AND status IN ('neu','nicht_erreicht')", [a.lead_id]);
   await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',
     [a.lead_id, userId, `📅 ${bis ? 'Anruf bis ' + datumText(a.starts_at) : 'Termin am ' + terminText(a.starts_at)}${a.topic ? ' – ' + a.topic : ''} (${a.closer_name || 'Closer'})`]);
@@ -85,7 +88,7 @@ router.get('/', auth, async (req, res) => {
     if (!istAdmin(req.user)) { where.push('a.closer_id = ?'); params.push(req.user.id); where.push("a.status <> 'abgelehnt'"); }
     else if (parseInt(req.query.closer)) { where.push('a.closer_id = ?'); params.push(parseInt(req.query.closer)); }
     const [rows] = await db.query(`${SELECT} WHERE ${where.join(' AND ')} AND l.archived_at IS NULL ORDER BY a.starts_at ASC LIMIT 500`, params);
-    res.json(rows);
+    res.json(rows.map(lokal));
   } catch (e) { console.error('Termine GET:', e); res.status(500).json({ error: 'Termine konnten nicht geladen werden.' }); }
 });
 
@@ -98,6 +101,7 @@ router.get('/badge', auth, async (req, res) => {
     const [bald] = await db.query(
       `${SELECT} WHERE a.closer_id=? AND a.status='angenommen' AND a.art='termin'
          AND a.starts_at BETWEEN NOW() - INTERVAL 5 MINUTE AND NOW() + INTERVAL 15 MINUTE`, [req.user.id]);
+    bald.forEach((a, i) => { bald[i] = lokal(a); });
     const [[{ heute }]] = await db.query(
       "SELECT COUNT(*) AS heute FROM appointments WHERE closer_id=? AND status='angenommen' AND DATE(starts_at)=CURDATE() AND starts_at >= NOW() - INTERVAL 1 HOUR",
       [req.user.id]);
@@ -206,7 +210,7 @@ router.post('/', auth, async (req, res) => {
       `INSERT INTO appointments (lead_id, closer_id, proposed_by, starts_at, duration_min, topic, notes, status, responded_at,
          art, painpoints, versprochen, offene_fragen, uebergabe, vorher_zugewiesen)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [leadId, closerId, req.user.id, starts, dauer, topic, notes, sofort ? 'angenommen' : 'vorgeschlagen', sofort ? new Date() : null,
+      [leadId, closerId, req.user.id, ortZuUtc(starts), dauer, topic, notes, sofort ? 'angenommen' : 'vorgeschlagen', sofort ? new Date() : null,
        art, painpoints, versprochen, offen, uebergabe ? 1 : 0, uebergabe ? vorher : null]);
     const a = await laden(r.insertId);
     if (sofort) await bestaetigen(a, req.user.id, req.ip);
@@ -240,8 +244,9 @@ router.get('/uebergabe/:leadId', auth, async (req, res) => {
     const [[lead]] = await db.query('SELECT id, assigned_to, website, instagram_url FROM leads WHERE id=?', [leadId]);
     if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
     if (!istAdmin(req.user) && !sicht.darfSehen(req.user, lead)) return res.status(403).json({ error: 'Kein Zugriff' });
-    const [[a]] = await db.query(`${SELECT} WHERE a.lead_id=? AND a.uebergabe=1 AND a.status NOT IN ('abgesagt') ORDER BY a.id DESC LIMIT 1`, [leadId]);
-    if (!a) return res.json(null);
+    const [[roh]] = await db.query(`${SELECT} WHERE a.lead_id=? AND a.uebergabe=1 AND a.status NOT IN ('abgesagt') ORDER BY a.id DESC LIMIT 1`, [leadId]);
+    if (!roh) return res.json(null);
+    const a = lokal(roh);
     res.json({ id: a.id, art: a.art, starts_at: a.starts_at, status: a.status, topic: a.topic, painpoints: a.painpoints, versprochen: a.versprochen,
       notes: a.notes, proposed_name: a.proposed_name, website: lead.website, instagram: lead.instagram_url,
       noch_klaeren: await require('./bedarf').offeneFragen(leadId) });
@@ -264,7 +269,7 @@ router.post('/:id/antwort', auth, async (req, res) => {
     if (aktion === 'annehmen') {
       if (alsAdmin) a.starts_at = a.counter_at;
       await db.query("UPDATE appointments SET status='angenommen', starts_at=?, response_note=COALESCE(?, response_note), responded_at=NOW() WHERE id=?",
-        [a.starts_at, note, a.id]);
+        [ortZuUtc(a.starts_at), note, a.id]);
       a.status = 'angenommen';
       await bestaetigen(a, req.user.id, req.ip);
       if (alsCloser) await mailAn(a.proposed_by, `✅ ${a.closer_name} übernimmt den Termin: ${a.company}`,
@@ -285,7 +290,7 @@ router.post('/:id/antwort', auth, async (req, res) => {
     } else if (aktion === 'gegenvorschlag') {
       const counter = zeit(req.body.starts_at);
       if (!counter || new Date(counter.replace(' ', 'T')).getTime() < Date.now()) return res.status(400).json({ error: 'Bitte eine Zeit in der Zukunft vorschlagen.' });
-      await db.query("UPDATE appointments SET status='gegenvorschlag', counter_at=?, response_note=?, responded_at=NOW() WHERE id=?", [counter, note, a.id]);
+      await db.query("UPDATE appointments SET status='gegenvorschlag', counter_at=?, response_note=?, responded_at=NOW() WHERE id=?", [ortZuUtc(counter), note, a.id]);
       await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',
         [a.lead_id, req.user.id, `📅 ${a.closer_name} schlägt stattdessen ${terminText(counter)} vor${note ? ': ' + note : ''}`]);
       await mailAn(a.proposed_by, `🔁 Anderer Zeitvorschlag für ${a.company}`,
@@ -349,7 +354,7 @@ router.patch('/:id', auth, async (req, res) => {
          duration_min=?, status=?, counter_at=IF(?, NULL, counter_at), response_note=IF(?, NULL, response_note)
          , art=?, painpoints=?, versprochen=?
        WHERE id=?`,
-      [starts, starts, closerId, topic, notes, dauer, status, neuVorschlag, neuVorschlag, art, painpoints, versprochen, a.id]);
+      [ortZuUtc(starts), ortZuUtc(starts), closerId, topic, notes, dauer, status, neuVorschlag, neuVorschlag, art, painpoints, versprochen, a.id]);
     // Übergabe an einen anderen Closer: der Lead wandert sofort mit
     if ((a.uebergabe || wirdUebergabe) && closerId !== a.closer_id) {
       const [[ld]] = await db.query('SELECT assigned_to FROM leads WHERE id=?', [a.lead_id]);
@@ -390,7 +395,7 @@ async function erinnern() {
     const [rows] = await db.query(
       `${SELECT} WHERE a.status='angenommen' AND a.erinnert=0 AND a.art='termin'
          AND a.starts_at BETWEEN NOW() - INTERVAL 5 MINUTE AND NOW() + INTERVAL 15 MINUTE`);
-    for (const a of rows) {
+    for (const a of rows.map(lokal)) {
       await db.query('UPDATE appointments SET erinnert=1 WHERE id=?', [a.id]);
       await mailAn(a.closer_id, `⏰ Gleich: Termin mit ${a.company} um ${a.starts_at.slice(11, 16)} Uhr`, [
         `In Kürze steht dein Termin an: <b>${terminText(a.starts_at)}</b>`,

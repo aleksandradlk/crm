@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/LogoOB.PNG">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf62">
+<link rel="stylesheet" href="/shared/style.css?v=nf63">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -632,29 +632,29 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf62"></script>
-<script src="/shared/datum.js?v=nf62"></script>
-<script src="/shared/bedarf-regeln.js?v=nf62"></script>
-<script src="/shared/bedarf.js?v=nf62"></script>
-<script src="/shared/mailvorschlag.js?v=nf62"></script>
-<script src="/shared/seitenpanel.js?v=nf62"></script>
-<script src="/shared/dialer.js?v=nf62"></script>
-<script src="/shared/provision.js?v=nf62"></script>
-<script src="/shared/deals.js?v=nf62"></script>
-<script src="/shared/calllists.js?v=nf62"></script>
-<script src="/shared/today.js?v=nf62"></script>
-<script src="/shared/ziele.js?v=nf62"></script>
-<script src="/shared/auswertung.js?v=nf62"></script>
-<script src="/shared/termine.js?v=nf62"></script>
-<script src="/shared/duplicates.js?v=nf62"></script>
-<script src="/shared/markdown.js?v=nf62"></script>
-<script src="/shared/wiki.js?v=nf62"></script>
-<script src="/shared/wiki-artikel.js?v=nf62"></script>
-<script src="/shared/lines.js?v=nf62"></script>
-<script src="/shared/finder.js?v=nf62"></script>
-<script src="/shared/board.js?v=nf62"></script>
-<script src="/shared/integrations.js?v=nf62"></script>
-<script src="/shared/startklar.js?v=nf62"></script>
+<script src="/shared/api.js?v=nf63"></script>
+<script src="/shared/datum.js?v=nf63"></script>
+<script src="/shared/bedarf-regeln.js?v=nf63"></script>
+<script src="/shared/bedarf.js?v=nf63"></script>
+<script src="/shared/mailvorschlag.js?v=nf63"></script>
+<script src="/shared/seitenpanel.js?v=nf63"></script>
+<script src="/shared/dialer.js?v=nf63"></script>
+<script src="/shared/provision.js?v=nf63"></script>
+<script src="/shared/deals.js?v=nf63"></script>
+<script src="/shared/calllists.js?v=nf63"></script>
+<script src="/shared/today.js?v=nf63"></script>
+<script src="/shared/ziele.js?v=nf63"></script>
+<script src="/shared/auswertung.js?v=nf63"></script>
+<script src="/shared/termine.js?v=nf63"></script>
+<script src="/shared/duplicates.js?v=nf63"></script>
+<script src="/shared/markdown.js?v=nf63"></script>
+<script src="/shared/wiki.js?v=nf63"></script>
+<script src="/shared/wiki-artikel.js?v=nf63"></script>
+<script src="/shared/lines.js?v=nf63"></script>
+<script src="/shared/finder.js?v=nf63"></script>
+<script src="/shared/board.js?v=nf63"></script>
+<script src="/shared/integrations.js?v=nf63"></script>
+<script src="/shared/startklar.js?v=nf63"></script>
 <script>
 let allLeads = [], allUsers = [], editingUserId = null;
 let panelDirty = false;
@@ -1567,10 +1567,12 @@ function closeRueckrufPopup() {
   _rueckrufLeadId = null;
 }
 
-async function setQuickReminder(offsetHours) {
+// In X Tagen um 9:00 (deutsche Zeit, wie im Knopf beschriftet)
+async function setQuickReminder(tage) {
   if (!_rueckrufLeadId) return;
-  const dt = new Date(Date.now() + offsetHours * 3600 * 1000);
-  const remind_at = dt.toISOString().slice(0, 16);
+  const dt = new Date(); dt.setDate(dt.getDate() + tage); dt.setHours(9, 0, 0, 0);
+  const p = n => String(n).padStart(2, '0');
+  const remind_at = `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}T09:00`;
   try {
     await api('POST', `/leads/${_rueckrufLeadId}/reminders`, { remind_at, note: 'Rückruf' });
     showToast('Reminder gesetzt ✓');
@@ -2526,7 +2528,7 @@ async function openSettingsModal() {
     const elMaintUntil = document.getElementById('settingMaintenanceUntil');
     if (elMaint) elMaint.checked = settings.maintenance_mode === 'true';
     if (elMaintUntil) elMaintUntil.value = settings.maintenance_until
-      ? new Date(settings.maintenance_until).toISOString().slice(0,16)
+      ? String(settings.maintenance_until).replace(' ', 'T').slice(0,16)
       : '';
   } catch {}
   renderCallerIdSettings('callerIdSettings');
@@ -3460,9 +3462,9 @@ async function permanentDeleteLead(id, name) {
   </div>
   <div style="font-size:12px;color:var(--text2)">Status auf <b>Rückruf</b> gesetzt — wann zurückrufen?</div>
   <div style="display:flex;flex-direction:column;gap:6px">
-    <button class="btn btn-ghost btn-sm" style="justify-content:flex-start" onclick="setQuickReminder(20)"><i class="fas fa-clock" style="width:16px"></i> Morgen 9:00 Uhr</button>
-    <button class="btn btn-ghost btn-sm" style="justify-content:flex-start" onclick="setQuickReminder(44)"><i class="fas fa-clock" style="width:16px"></i> Übermorgen 9:00 Uhr</button>
-    <button class="btn btn-ghost btn-sm" style="justify-content:flex-start" onclick="setQuickReminder(164)"><i class="fas fa-clock" style="width:16px"></i> In einer Woche</button>
+    <button class="btn btn-ghost btn-sm" style="justify-content:flex-start" onclick="setQuickReminder(1)"><i class="fas fa-clock" style="width:16px"></i> Morgen 9:00 Uhr</button>
+    <button class="btn btn-ghost btn-sm" style="justify-content:flex-start" onclick="setQuickReminder(2)"><i class="fas fa-clock" style="width:16px"></i> Übermorgen 9:00 Uhr</button>
+    <button class="btn btn-ghost btn-sm" style="justify-content:flex-start" onclick="setQuickReminder(7)"><i class="fas fa-clock" style="width:16px"></i> In einer Woche, 9:00 Uhr</button>
     <button class="btn btn-ghost btn-sm" style="justify-content:flex-start;color:var(--text3)" onclick="closeRueckrufPopup()"><i class="fas fa-times" style="width:16px"></i> Kein Reminder</button>
   </div>
 </div>

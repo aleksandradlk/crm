@@ -1,3 +1,6 @@
+// Server rechnet in deutscher Zeit (Erinnerungen, „heute“, Mails). Die Datenbank bleibt
+// in UTC, siehe db.js und helpers/zeit.js.
+process.env.TZ = 'Europe/Berlin';
 require('dotenv').config();
 if (!process.env.JWT_SECRET) {
   console.error('FATAL: JWT_SECRET ist nicht gesetzt.');
@@ -760,6 +763,45 @@ cron.schedule('0 3 * * *', async () => {
     console.log(`Activity cleanup: ${r.affectedRows} Einträge gelöscht`);
   } catch(e) { console.error('Activity cleanup error:', e.message); }
 });
+
+// ── Zeit-Umstellung (28.10.2026) ─────────────────────────────
+// Eingetippte Termin- und Wiedervorlage-Zeiten standen bisher in deutscher Zeit in der
+// Datenbank, alles andere (NOW()) in UTC – Anzeige und Erinnerungen lagen 1–2 Std. daneben.
+// Einmalig nach UTC umrechnen; alte Werte bleiben in zeit_umstellung_alt.
+// Rückweg: db/rollback/2026-10-28_zeit-utc.sql
+migrate(`CREATE TABLE IF NOT EXISTS zeit_umstellung_alt (
+  tabelle VARCHAR(30) NOT NULL, zeile_id INT NOT NULL, spalte VARCHAR(30) NOT NULL, alt DATETIME NULL,
+  PRIMARY KEY (tabelle, zeile_id, spalte)) ENGINE=InnoDB`).catch(e => console.error('Migration zeit_umstellung_alt:', e.message));
+async function zeitNachUtc() {
+  const [[schon]] = await db.query("SELECT 1 AS x FROM app_settings WHERE key_name='zeit_utc_umgestellt'");
+  if (schon) return;
+  const { ortZuUtc } = require('./helpers/zeit');
+  const F = "'%Y-%m-%d %H:%i:%s'";
+  const ziele = [
+    ['appointments', 'starts_at', `SELECT id, DATE_FORMAT(starts_at, ${F}) AS v FROM appointments`],
+    ['appointments', 'counter_at', `SELECT id, DATE_FORMAT(counter_at, ${F}) AS v FROM appointments WHERE counter_at IS NOT NULL`],
+    // Nur eingetippte Wiedervorlagen. Automatische (NOW(), Nachfass-Automatik) und die alten
+    // Schnell-Knöpfe „Morgen/Übermorgen/In einer Woche“ (jetzt + 20/44/164 Std.) waren schon UTC.
+    ['reminders', 'remind_at', `SELECT id, DATE_FORMAT(remind_at, ${F}) AS v FROM reminders
+      WHERE (kind IS NULL OR kind IN ('termin','nachfass'))
+        AND NOT (kind IS NULL AND note='Rückruf'
+                 AND TIMESTAMPDIFF(MINUTE, created_at, remind_at) IN (1198,1199,1200,2638,2639,2640,9838,9839,9840))`],
+  ];
+  let n = 0;
+  for (const [tabelle, spalte, sql] of ziele) {
+    const [rows] = await db.query(sql);
+    for (const r of rows) {
+      const neu = ortZuUtc(r.v);
+      if (!neu) continue;
+      await db.query('INSERT IGNORE INTO zeit_umstellung_alt (tabelle, zeile_id, spalte, alt) VALUES (?,?,?,?)', [tabelle, r.id, spalte, r.v]);
+      await db.query(`UPDATE ${tabelle} SET ${spalte}=? WHERE id=?`, [neu, r.id]);
+      n++;
+    }
+  }
+  await db.query("INSERT INTO app_settings (key_name, value) VALUES ('zeit_utc_umgestellt', ?)", [String(n)]);
+  console.log(`Zeit-Umstellung: ${n} Termin-/Wiedervorlage-Zeiten nach UTC umgerechnet`);
+}
+_migChain = _migChain.then(zeitNachUtc).catch(e => console.error('Zeit-Umstellung fehlgeschlagen:', e.message));
 
 // ── Start ─────────────────────────────────────────────────────
 // Erst starten, wenn alle Migrationen durch sind (sonst schlagen Logins fehl,
