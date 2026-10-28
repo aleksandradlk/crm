@@ -137,16 +137,16 @@
     let paket, grund;
     if (d.reaktion_preis === 'zu_teuer' || /testen/i.test(notiz)) {
       paket = 'quickwin'; grund = d.reaktion_preis === 'zu_teuer' ? 'Der Preis war zu hoch – mit einem kleinen Einstieg testen.' : 'Will erst testen – Einstieg mit Quick-Win.';
-    } else if (['6-20', '20+'].includes(d.teamgroesse) || wert >= r.l_auftragswert || hat(d.zuerst_weg, ['angebote', 'zahlungen', 'bestandskunden'])) {
+    } else if (['6-20', '20+'].includes(d.teamgroesse) || wert >= r.l_auftragswert || hat(d.zuerst_weg, ['zahlungen', 'bestandskunden'])) {
       paket = 'l';
       grund = ['6-20', '20+'].includes(d.teamgroesse) ? 'Größeres Team – lohnt sich mit allen Abläufen.'
         : wert >= r.l_auftragswert ? `Hohe Auftragswerte (ab ${r.l_auftragswert.toLocaleString('de-DE')} €) – jeder gewonnene Auftrag zählt.`
-          : 'Will Angebote, Zahlungen oder Bestandskunden automatisieren.';
-    } else if (kanaele >= r.m_kanaele || anfragen >= r.m_anfragen || hat(d.zuerst_weg, ['terminabstimmung', 'nachfassen', 'bewertungen'])) {
+          : 'Will Zahlungen oder Bestandskunden automatisieren.';
+    } else if (kanaele >= r.m_kanaele || anfragen >= r.m_anfragen || hat(d.zuerst_weg, ['angebote', 'terminabstimmung', 'nachfassen', 'bewertungen'])) {
       paket = 'm';
       grund = kanaele >= r.m_kanaele ? `${kanaele} Kanäle – alles an einem Ort bündeln.`
         : anfragen >= r.m_anfragen ? `${anfragen} Anfragen pro Woche – automatisch vorsortieren spart viel Zeit.`
-          : 'Will Termine, Nachfassen oder Bewertungen automatisieren.';
+          : 'Will Angebote, Termine, Nachfassen oder Bewertungen automatisieren.';
     } else {
       paket = 's'; grund = 'Überschaubare Anfragen – der solide Einstieg in den Autopiloten.';
     }
