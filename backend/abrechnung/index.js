@@ -866,8 +866,10 @@ function bauMandant(app, ctx) {
     const sig = signaturText(stamm);
     const logo = signaturLogo(stamm);
     const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1A2330;max-width:620px">${textZuHtml(text)}${sig || logo ? signaturHtml(sig, logo) : ''}</div>`;
-    const ergebnis = await mail.sende({ an, betreff, text: sig ? `${text}\n\n${sig}` : text, html, eingebettet: logo ? [logo] : [], anhaenge, antwortAn: stamm.email || undefined, kopie: !!(body || {}).kopie });
-    return { am: new Date().toISOString(), an: ergebnis.an, betreff };
+    const volltext = sig ? `${text}\n\n${sig}` : text;
+    const ergebnis = await mail.sende({ an, betreff, text: volltext, html, eingebettet: logo ? [logo] : [], anhaenge, antwortAn: stamm.email || undefined, kopie: !!(body || {}).kopie });
+    // Text und Dateinamen mit ablegen: Der betreuende Closer sieht im Lead, was genau rausging
+    return { am: new Date().toISOString(), an: ergebnis.an, betreff, text: volltext, anhaenge: (anhaenge || []).map(x => x.filename) };
   }
 
   // ── Anhänge am Angebot (z. B. Projektvereinbarung als PDF) ──
@@ -878,14 +880,15 @@ function bauMandant(app, ctx) {
   function angebotAnhaenge(a) {
     return (a.anhaenge || []).map(n => ({ filename: n, content: fs.readFileSync(anhangPfad(a, n)) })).filter(x => x.content);
   }
-  app.post('/api/abrechnung/angebote/:id/anhang', express.json({ limit: '25mb' }), asyncRoute(async (req, res) => {
+  app.post('/api/abrechnung/angebote/:id/anhang', express.raw({ type: 'application/pdf', limit: '20mb' }), express.json({ limit: '25mb' }), asyncRoute(async (req, res) => {
     const a = ladeEins(ANGEBOTE_DIR, req.params.id);
     if (!a) throw new Error('Angebot nicht gefunden.');
     if (a.umgewandelt) throw new Error('Angebot ist bereits umgewandelt und gesperrt.');
-    const b = req.body || {};
-    const name = String(b.name || '').replace(/[^A-Za-z0-9äöüÄÖÜß ._-]/g, '_').trim();
-    if (!/\.pdf$/i.test(name)) throw new Error('Bitte eine PDF-Datei anhängen.');
-    const daten = Buffer.from(String(b.daten || '').replace(/^data:.*?;base64,/, ''), 'base64');
+    const roh = Buffer.isBuffer(req.body);
+    const b = roh ? {} : (req.body || {});
+    const name = String(roh ? req.query.name || '' : b.name || '').replace(/[^A-Za-z0-9äöüÄÖÜß ._-]/g, '_').trim();
+    if (!/\.pdf$/i.test(name)) throw new Error('Bitte eine PDF-Datei anhängen (Dateiname muss auf .pdf enden).');
+    const daten = roh ? req.body : Buffer.from(String(b.daten || '').replace(/^data:.*?;base64,/, ''), 'base64');
     if (!daten.length || daten.slice(0, 4).toString() !== '%PDF') throw new Error('Die Datei ist keine gültige PDF.');
     if (daten.length > 15 * 1024 * 1024) throw new Error('Die Datei ist zu groß (max. 15 MB).');
     fs.writeFileSync(anhangPfad(a, name), daten);
@@ -1718,7 +1721,9 @@ Antworte NUR mit gültigem JSON, kein Text davor oder danach:
       const kundenIds = new Set(ladeKunden().filter(passt).map(k => k.id));
       const angebote = ladeAlle(ANGEBOTE_DIR).filter(a => kundenIds.has(a.kundeId) || (a.crm && a.crm.leadId === leadId))
         .map(angebotAnsicht).map(a => ({ id: a.id, nummer: a.nummer, betreff: a.betreff, datum: a.datum, status: a.statusEffektiv || a.status,
-          netto: a.summen.netto, brutto: a.summen.brutto, monatlich: a.monatlichSumme || 0, dealId: a.crm ? a.crm.dealId : null }));
+          netto: a.summen.netto, brutto: a.summen.brutto, monatlich: a.monatlichSumme || 0, dealId: a.crm ? a.crm.dealId : null,
+          anhaenge: a.anhaenge || [],
+          versand: (a.versand || []).map(v => ({ am: v.am, an: v.an, betreff: v.betreff, text: v.text || null, anhaenge: v.anhaenge || null })) }));
       const rechnungen = ladeAlle(RECHNUNGEN_DIR).filter(r => kundenIds.has(r.kundeId)).map(rechnungAnsicht)
         .map(r => ({ id: r.id, nummer: r.nummer || '(Entwurf)', titel: r.titel, datum: r.datum, status: r.status, zahlungsstatus: r.zahlungsstatus, brutto: r.summen.brutto }));
       return { angebote: angebote.sort((x, y) => (y.nummer > x.nummer ? 1 : -1)), rechnungen: rechnungen.sort((x, y) => String(y.datum).localeCompare(String(x.datum))) };
