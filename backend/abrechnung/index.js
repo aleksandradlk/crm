@@ -252,7 +252,7 @@ function bauMandant(app, ctx) {
   }
   function kundeSnapshot(k) {
     if (!k) return null;
-    return { id: k.id, nummer: k.nummer, firma: k.firma, ansprechpartner: k.ansprechpartner, strasse: k.strasse, plz: k.plz, ort: k.ort, email: k.email, anrede: k.anrede };
+    return { id: k.id, nummer: k.nummer, firma: k.firma, ansprechpartner: k.ansprechpartner, strasse: k.strasse, plz: k.plz, ort: k.ort, email: k.email, telefon: k.telefon || '', anrede: k.anrede };
   }
   function absenderSnapshot(s) {
     return { firma: s.firma, inhaberin: s.inhaberin, inhaberLabel: s.inhaberLabel || 'Inhaberin', marke: s.marke || null, logo: s.logo || null, strasse: s.strasse, plz: s.plz, ort: s.ort, steuernummer: s.steuernummer, telefon: s.telefon, email: s.email, website: s.website, bank: { ...s.bank } };
@@ -581,7 +581,9 @@ function bauMandant(app, ctx) {
       plz: String(b.plz ?? alt.plz ?? '').trim(),
       ort: String(b.ort ?? alt.ort ?? '').trim(),
       email: String(b.email ?? alt.email ?? '').trim(),
-      anrede: (b.anrede ?? alt.anrede) === 'du' ? 'du' : 'sie'
+      telefon: String(b.telefon ?? alt.telefon ?? '').trim().slice(0, 40),
+      // NovaFlow duzt alle Kunden: ohne Angabe „du“, sonst wie bisher „Sie“
+      anrede: (b.anrede ?? alt.anrede ?? (ctx.id === 'novaflow' ? 'du' : 'sie')) === 'du' ? 'du' : 'sie'
     };
     if (!k.firma && !k.ansprechpartner) throw new Error('Firma oder Ansprechpartner angeben.');
     if (!k.firma) k.firma = k.ansprechpartner;
@@ -1681,17 +1683,23 @@ Antworte NUR mit gültigem JSON, kein Text davor oder danach:
       let k = kunden.find(x => x.crmLeadId === lead.id)
         || (mail && kunden.find(x => String(x.email || '').trim().toLowerCase() === mail))
         || (firma && kunden.find(x => String(x.firma || '').trim().toLowerCase() === firma));
+      // Kontaktdaten aus dem Lead: „Musterstr. 5, 12345 Ort“, „12345 Ort“ oder nur „Ort“
+      const loc = String(lead.location || '').trim();
+      const adr = loc.match(/^(?:(.+?)[,\s]+)?(\d{5})\s+(.+)$/);
+      const ausLead = {
+        firma: lead.company || '', ansprechpartner: lead.ceo || '', email: lead.email || '', telefon: lead.phone || '',
+        strasse: adr && adr[1] ? adr[1].trim() : '', plz: adr ? adr[2] : '', ort: adr ? adr[3].trim() : loc,
+      };
       if (k) {
-        if (k.crmLeadId !== lead.id) { k = { ...k, crmLeadId: lead.id }; speichere('kunden', k); }
+        // Vorhandenen Kunden nur ergänzen, nie überschreiben
+        const neu = { ...k, crmLeadId: lead.id };
+        for (const f of ['ansprechpartner', 'email', 'telefon', 'strasse', 'plz', 'ort']) if (!String(neu[f] || '').trim() && ausLead[f]) neu[f] = ausLead[f];
+        if (JSON.stringify(neu) !== JSON.stringify(k)) { k = neu; speichere('kunden', k); }
         return k;
       }
-      const plzOrt = String(lead.location || '').trim().match(/^(\d{5})\s+(.+)$/);
       k = {
         id: neueId(), nummer: naechsteKundennummer(),
-        ...kundeAusBody({
-          firma: lead.company || '', ansprechpartner: lead.ceo || '', email: lead.email || '',
-          plz: plzOrt ? plzOrt[1] : '', ort: plzOrt ? plzOrt[2] : (lead.location || ''), strasse: '', anrede: 'sie',
-        }),
+        ...kundeAusBody({ ...ausLead, anrede: 'du' }),
         crmLeadId: lead.id, angelegt: new Date().toISOString(),
       };
       speichere('kunden', k);
