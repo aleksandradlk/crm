@@ -315,6 +315,21 @@ const Wiki = {
     return o;
   },
 
+  // Word-Vorschau-Bibliothek (~640 KB) erst laden, wenn wirklich ein Dokument geöffnet wird
+  _loadMammoth() {
+    if (window.mammoth) return Promise.resolve();
+    if (!this._mammothPromise) {
+      this._mammothPromise = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
+        s.onload = resolve;
+        s.onerror = () => { this._mammothPromise = null; reject(new Error('Vorschau konnte nicht geladen werden')); };
+        document.head.appendChild(s);
+      });
+    }
+    return this._mammothPromise;
+  },
+
   async _docxPreview(f) {
     const o = this._modal('kbPreview', `
       <div class="modal-header"><div class="modal-heading"><span class="modal-icon"><i class="fas fa-file-word"></i></span>
@@ -323,6 +338,7 @@ const Wiki = {
       <div class="modal-body"><div class="kb-docx" id="kbDocx"><i class="fas fa-spinner fa-spin"></i></div></div>
       <div class="modal-footer"><button class="btn btn-primary" onclick="Wiki.download(${f.id})"><i class="fas fa-download"></i> Herunterladen</button></div>`, true);
     try {
+      await this._loadMammoth();
       const res = await mammoth.convertToHtml({ arrayBuffer: await (await this._blob(f.filename)).arrayBuffer() });
       o.querySelector('#kbDocx').innerHTML = res.value || '<p>Das Dokument ist leer.</p>';
     } catch {
