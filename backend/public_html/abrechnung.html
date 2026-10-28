@@ -867,13 +867,13 @@ async function zeigeKunden() {
   const rows = S.kunden.map(k => `<tr>
     <td><span class="mono">${esc(k.nummer)}</span></td>
     <td><span class="name">${esc(k.firma)}</span><div class="sub">${esc(k.ansprechpartner || '')}${k.anrede === 'du' ? ' · Du' : ' · Sie'}</div></td>
-    <td class="sub">${esc(k.strasse)}<br>${esc(k.plz)} ${esc(k.ort)}<br>${esc(k.email)}</td>
+    <td class="sub">${esc(k.strasse)}<br>${esc(k.plz)} ${esc(k.ort)}<br>${esc(k.email)}${k.telefon ? '<br>' + esc(k.telefon) : ''}</td>
     <td class="sub">${k.statistik.angebote} Angebote · ${k.statistik.rechnungen} Rechnungen · ${k.statistik.abos} Abos${k.statistik.offenerBetrag ? '<br>offen: ' + euro(k.statistik.offenerBetrag) : ''}</td>
     <td class="aktionen"><button class="btn klein sekundaer" onclick="kundeBearbeiten('${k.id}')">Bearbeiten</button>${!k.statistik.angebote && !k.statistik.rechnungen && !k.statistik.abos ? `<button class="btn klein gefahr" onclick="kundeLoeschen('${k.id}')">Löschen</button>` : ''}</td>
   </tr>`).join('');
   $('kunden-liste').innerHTML = rows ? `<table><thead><tr><th>Nr.</th><th>Kunde</th><th>Kontakt</th><th>Dokumente</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="leer">Noch keine Kunden.</div>';
 }
-function kundeNeu() { kundeEditor({ anrede: 'sie' }); }
+function kundeNeu() { kundeEditor({ anrede: KONTEXT.mandant === 'novaflow' ? 'du' : 'sie' }); }
 function kundeBearbeiten(id) { kundeEditor(S.kunden.find(x => x.id === id)); }
 function kundeEditor(k) {
   $('kunde-editor').style.display = 'block';
@@ -882,11 +882,11 @@ function kundeEditor(k) {
     <div class="row"><div class="field"><label>Firma</label><input id="ku-firma" value="${esc(k.firma || '')}"></div><div class="field"><label>Ansprechpartner</label><input id="ku-ap" value="${esc(k.ansprechpartner || '')}"></div>
       <div class="field klein"><label>Anrede</label><select id="ku-anrede"><option value="sie" ${k.anrede !== 'du' ? 'selected' : ''}>Sie</option><option value="du" ${k.anrede === 'du' ? 'selected' : ''}>Du</option></select></div></div>
     <div class="row"><div class="field"><label>Straße</label><input id="ku-strasse" value="${esc(k.strasse || '')}"></div><div class="field klein"><label>PLZ</label><input id="ku-plz" value="${esc(k.plz || '')}"></div><div class="field"><label>Ort</label><input id="ku-ort" value="${esc(k.ort || '')}"></div></div>
-    <div class="row"><div class="field"><label>E-Mail</label><input id="ku-email" value="${esc(k.email || '')}"></div></div>
+    <div class="row"><div class="field"><label>E-Mail</label><input id="ku-email" value="${esc(k.email || '')}"></div><div class="field"><label>Telefon</label><input id="ku-telefon" type="tel" value="${esc(k.telefon || '')}"></div></div>
     <div class="btn-zeile"><button class="btn" onclick="kundeSpeichern('${k.id || ''}')">${k.id ? 'Speichern' : 'Kunde anlegen'}</button><span class="status-text" id="ku-status"></span></div>`;
 }
 async function kundeSpeichern(id) {
-  const body = { firma: $('ku-firma').value, ansprechpartner: $('ku-ap').value, anrede: $('ku-anrede').value, strasse: $('ku-strasse').value, plz: $('ku-plz').value, ort: $('ku-ort').value, email: $('ku-email').value };
+  const body = { firma: $('ku-firma').value, ansprechpartner: $('ku-ap').value, anrede: $('ku-anrede').value, strasse: $('ku-strasse').value, plz: $('ku-plz').value, ort: $('ku-ort').value, email: $('ku-email').value, telefon: $('ku-telefon').value };
   try { const d = await api(id ? '/kunden/' + id : '/kunden', id ? 'PUT' : 'POST', body); toast(`${d.kunde.nummer} gespeichert.`); $('kunde-editor').style.display = 'none'; zeigeKunden(); } catch (e) { $('ku-status').textContent = e.message; $('ku-status').className = 'status-text fehler'; }
 }
 async function kundeLoeschen(id) {
