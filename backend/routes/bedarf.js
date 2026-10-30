@@ -18,8 +18,14 @@ const FELDER = ['ansprechpartner_rolle', 'branche', 'branche_text', 'email_angeb
   'webseite_status', 'google_profil', 'entscheider', 'entscheider_text', 'paket_empfohlen', 'zusatzleistungen', 'preis_genannt', 'reaktion_preis',
   'rabatt_prozent', 'rabatt_begruendung', 'gratismonat', 'zahlungswunsch', 'sonderwuensche', 'nachfass_termin', 'notiz'];
 const LISTEN = ['kanaele', 'nachfragen', 'zuerst_weg', 'zusatzleistungen'];
+// Große Textfelder (Limit aus den Vertriebsregeln, Standard 10.000), alle anderen Textfelder 300 Zeichen.
+// Zu lange Eingaben werden abgelehnt, nie still abgeschnitten.
+const LANG = ['ablauf_heute', 'groesstes_problem', 'sonderwuensche', 'notiz', 'rabatt_begruendung'];
+const KURZ_LIMIT = 300;
 
-function bereinigen(data) {
+function fehler400(text) { const e = new Error(text); e.status = 400; return e; }
+
+function bereinigen(data, limit = R.STANDARD.textlimit) {
   const out = {};
   for (const k of FELDER) {
     let v = data?.[k];
@@ -29,7 +35,11 @@ function bereinigen(data) {
       const n = parseFloat(String(v).replace(',', '.'));
       if (!Number.isFinite(n) || n < 0) continue;
       v = k === 'rabatt_prozent' ? Math.min(100, n) : n;
-    } else v = String(v).slice(0, k === 'ablauf_heute' || k === 'groesstes_problem' || k === 'sonderwuensche' || k === 'notiz' ? 3000 : 300);
+    } else {
+      v = String(v);
+      const max = LANG.includes(k) ? limit : KURZ_LIMIT;
+      if (v.length > max) throw fehler400(`„${R.FELDNAME?.[k] || k}“ ist zu lang (${v.length.toLocaleString('de-DE')} von höchstens ${max.toLocaleString('de-DE')} Zeichen). Bitte kürzen, es wurde nichts gespeichert.`);
+    }
     out[k] = v;
   }
   if (out.kanal_wichtigster && !(out.kanaele || []).includes(out.kanal_wichtigster)) delete out.kanal_wichtigster;
@@ -87,17 +97,65 @@ function auswertung(data, lead, cfg) {
   return { pruefung: R.pruefen(d, cfg), vorschlag: R.vorschlag(d, cfg), deal_wert: R.dealWert(d, cfg) };
 }
 
-async function speichern(leadId, data, userId) {
-  const [[alt]] = await db.query('SELECT id FROM bedarfsanalysen WHERE lead_id=?', [leadId]);
+// Speichern mit Versionsprüfung: Wer mit einem veralteten Stand speichert (version passt nicht),
+// bekommt { konflikt, alt } zurück statt fremden Text zu überschreiben. Ohne version (alte Seiten,
+// Kurz-Check, Wiederherstellen) wird wie bisher gespeichert.
+async function speichern(leadId, data, userId, { version = null, anlass = 'autosave' } = {}) {
+  const alt = await analyseLaden(leadId);
   const [[lead]] = await db.query('SELECT industry FROM leads WHERE id=?', [leadId]);
   const cfg = await regeln();
   const { pruefung, vorschlag } = auswertung(data, lead || {}, cfg);
   const json = JSON.stringify(data);
-  if (alt) await db.query('UPDATE bedarfsanalysen SET data=?, angebotsreif=?, fragen_ok=?, paket_vorschlag=?, updated_by=? WHERE id=?',
-    [json, pruefung.angebotsreif ? 1 : 0, pruefung.fragen_ok, vorschlag.paket, userId, alt.id]);
-  else await db.query('INSERT INTO bedarfsanalysen (lead_id, data, angebotsreif, fragen_ok, paket_vorschlag, created_by, updated_by) VALUES (?,?,?,?,?,?,?)',
-    [leadId, json, pruefung.angebotsreif ? 1 : 0, pruefung.fragen_ok, vorschlag.paket, userId, userId]);
-  return analyseLaden(leadId);
+  const pruefen = version !== null && version !== undefined && Number.isFinite(Number(version));
+  if (alt) {
+    const [r] = await db.query(`UPDATE bedarfsanalysen SET data=?, angebotsreif=?, fragen_ok=?, paket_vorschlag=?, updated_by=?, version=version+1
+      WHERE id=?${pruefen ? ' AND version=?' : ''}`,
+      [json, pruefung.angebotsreif ? 1 : 0, pruefung.fragen_ok, vorschlag.paket, userId, alt.id, ...(pruefen ? [Number(version)] : [])]);
+    if (!r.affectedRows) return { konflikt: true, alt };
+  } else {
+    try {
+      await db.query('INSERT INTO bedarfsanalysen (lead_id, data, angebotsreif, fragen_ok, paket_vorschlag, created_by, updated_by, version) VALUES (?,?,?,?,?,?,?,1)',
+        [leadId, json, pruefung.angebotsreif ? 1 : 0, pruefung.fragen_ok, vorschlag.paket, userId, userId]);
+    } catch (e) {
+      if (e.code !== 'ER_DUP_ENTRY') throw e;
+      return { konflikt: true, alt: await analyseLaden(leadId) };   // gleichzeitig angelegt
+    }
+  }
+  const neu = await analyseLaden(leadId);
+  await versionMerken(neu, alt, userId, anlass).catch(e => console.error('Bedarf-Version:', e.message));
+  return { a: neu, alt };
+}
+
+// Versionsverlauf in bedarfsanalyse_snapshots. Jeder Stand bleibt wiederherstellbar:
+// - der Stand vor einer Änderung wird gesichert, falls er noch in keiner Version steht,
+// - Autosave fasst die Änderungen einer Person innerhalb von 10 Minuten zu einer Version zusammen,
+// - wird ein Text deutlich kürzer (≥ 20 Zeichen weg), beginnt immer eine neue Version.
+function gekuerzt(alt, neu) {
+  return LANG.some(k => String(alt?.[k] || '').length - String(neu?.[k] || '').length >= 20);
+}
+async function versionMerken(neu, alt, userId, anlass) {
+  const [[letzte]] = await db.query(
+    `SELECT id, anlass, data, created_by, created_at > NOW() - INTERVAL 10 MINUTE AS frisch
+     FROM bedarfsanalyse_snapshots WHERE analyse_id=? ORDER BY id DESC LIMIT 1`, [neu.id]);
+  let zusammenfassen = !!letzte;
+  if (alt && (!letzte || letzte.data !== JSON.stringify(alt.data))) {
+    await db.query('INSERT INTO bedarfsanalyse_snapshots (analyse_id, lead_id, deal_id, anlass, data, created_by) VALUES (?,?,?,?,?,?)',
+      [alt.id, alt.lead_id, alt.deal_id || null, 'stand_vorher', JSON.stringify(alt.data), alt.updated_by || null]);
+    zusammenfassen = false;
+  }
+  const json = JSON.stringify(neu.data);
+  if (zusammenfassen && letzte.anlass === 'autosave' && anlass === 'autosave' && letzte.created_by === userId
+      && Number(letzte.frisch) === 1 && !gekuerzt(alt?.data, neu.data))
+    await db.query('UPDATE bedarfsanalyse_snapshots SET data=? WHERE id=?', [json, letzte.id]);
+  else
+    await db.query('INSERT INTO bedarfsanalyse_snapshots (analyse_id, lead_id, deal_id, anlass, data, created_by) VALUES (?,?,?,?,?,?)',
+      [neu.id, neu.lead_id, neu.deal_id || null, anlass, json, userId]);
+}
+
+async function nameVon(userId) {
+  if (!userId) return '';
+  const [[u]] = await db.query('SELECT full_name, username FROM users WHERE id=?', [userId]);
+  return u ? (u.full_name || u.username) : '';
 }
 
 async function snapshot(a, anlass, userId) {
@@ -149,6 +207,7 @@ router.get('/lead/:id', auth, async (req, res) => {
       `SELECT d.id, d.title, d.value, d.stage_id, s.name AS stage_name, d.angefordert_at, d.angebot_gesendet_at FROM deals d
        LEFT JOIN deal_stages s ON s.id = d.stage_id WHERE d.lead_id=? AND d.status='open' ORDER BY d.id DESC LIMIT 1`, [lead.id]);
     res.json({ lead, data, id: a?.id || null, angefordert_am: a?.angefordert_am || null, updated_at: a?.updated_at || null,
+      version: a?.version || 0, updated_von: await nameVon(a?.updated_by), textlimit: cfg.textlimit,
       deal: deal || null, ...auswertung(data, lead, cfg) });
   } catch (e) { console.error('Bedarf GET:', e); res.status(500).json({ error: 'Bedarfsanalyse konnte nicht geladen werden.' }); }
 });
@@ -158,13 +217,86 @@ router.put('/lead/:id', auth, async (req, res) => {
   try {
     const { lead, fehler } = await leadFuer(req, parseInt(req.params.id), true);
     if (fehler) return res.status(fehler[0]).json({ error: fehler[1] });
-    const data = bereinigen(req.body?.data || {});
-    const alt = await analyseLaden(lead.id);
-    const a = await speichern(lead.id, data, req.user.id);
+    const cfg = await regeln();
+    const data = bereinigen(req.body?.data || {}, cfg.textlimit);
+    const anlass = req.body?.anlass === 'speichern' ? 'speichern' : 'autosave';
+    const erg = await speichern(lead.id, data, req.user.id, { version: req.body?.version, anlass });
+    if (erg.konflikt) {
+      const a = erg.alt;
+      return res.status(409).json({ error: 'Die Bedarfsanalyse wurde inzwischen geändert.', konflikt: true,
+        data: vorbelegt(lead, a?.data || {}), version: a?.version || 0, updated_at: a?.updated_at || null, updated_von: await nameVon(a?.updated_by) });
+    }
+    const { a, alt } = erg;
     if (data.nachfass_termin && data.nachfass_termin !== alt?.data?.nachfass_termin)
       await nachfassReminder(lead.id, lead.assigned_to || req.user.id, data.nachfass_termin, lead.company);
-    res.json({ ok: true, id: a.id, updated_at: a.updated_at, ...auswertung(data, lead, await regeln()) });
-  } catch (e) { console.error('Bedarf PUT:', e); res.status(500).json({ error: 'Speichern fehlgeschlagen.' }); }
+    res.json({ ok: true, id: a.id, updated_at: a.updated_at, version: a.version, updated_von: req.user.full_name || req.user.username,
+      ...auswertung(data, lead, cfg) });
+  } catch (e) {
+    if (e.status === 400) return res.status(400).json({ error: e.message });
+    console.error('Bedarf PUT:', e); res.status(500).json({ error: 'Speichern fehlgeschlagen.' });
+  }
+});
+
+// ── Versionsverlauf ──
+// GET /api/bedarf/lead/:id/versionen — Liste (neueste zuerst)
+router.get('/lead/:id/versionen', auth, async (req, res) => {
+  try {
+    const { lead, fehler } = await leadFuer(req, parseInt(req.params.id));
+    if (fehler) return res.status(fehler[0]).json({ error: fehler[1] });
+    const [rows] = await db.query(
+      `SELECT s.id, s.anlass, s.created_at, s.data, COALESCE(u.full_name, u.username) AS von
+       FROM bedarfsanalyse_snapshots s LEFT JOIN users u ON u.id = s.created_by
+       WHERE s.lead_id=? ORDER BY s.id DESC LIMIT 300`, [lead.id]);
+    res.json({ versionen: rows.map(r => {
+      let d = {}; try { d = JSON.parse(r.data || '{}'); } catch (_) {}
+      const zeichen = LANG.reduce((n, k) => n + String(d[k] || '').length, 0);
+      return { id: r.id, anlass: r.anlass, created_at: r.created_at, von: r.von || '', zeichen,
+        vorschau: String(d.groesstes_problem || d.ablauf_heute || d.sonderwuensche || '').slice(0, 120) };
+    }) });
+  } catch (e) { console.error('Bedarf Versionen:', e); res.status(500).json({ error: 'Verlauf konnte nicht geladen werden.' }); }
+});
+
+// GET /api/bedarf/lead/:id/versionen/:vid — ein Stand
+router.get('/lead/:id/versionen/:vid', auth, async (req, res) => {
+  try {
+    const { lead, fehler } = await leadFuer(req, parseInt(req.params.id));
+    if (fehler) return res.status(fehler[0]).json({ error: fehler[1] });
+    const [[v]] = await db.query(
+      `SELECT s.id, s.anlass, s.created_at, s.data, COALESCE(u.full_name, u.username) AS von FROM bedarfsanalyse_snapshots s
+       LEFT JOIN users u ON u.id = s.created_by WHERE s.id=? AND s.lead_id=?`, [parseInt(req.params.vid), lead.id]);
+    if (!v) return res.status(404).json({ error: 'Version nicht gefunden' });
+    let data = {}; try { data = JSON.parse(v.data || '{}'); } catch (_) {}
+    res.json({ id: v.id, anlass: v.anlass, created_at: v.created_at, von: v.von || '', data });
+  } catch (e) { console.error('Bedarf Version:', e); res.status(500).json({ error: 'Version konnte nicht geladen werden.' }); }
+});
+
+// POST /api/bedarf/lead/:id/versionen/:vid/wiederherstellen — der aktuelle Stand bleibt als Version erhalten
+router.post('/lead/:id/versionen/:vid/wiederherstellen', auth, async (req, res) => {
+  try {
+    const { lead, fehler } = await leadFuer(req, parseInt(req.params.id), true);
+    if (fehler) return res.status(fehler[0]).json({ error: fehler[1] });
+    const [[v]] = await db.query('SELECT data FROM bedarfsanalyse_snapshots WHERE id=? AND lead_id=?', [parseInt(req.params.vid), lead.id]);
+    if (!v) return res.status(404).json({ error: 'Version nicht gefunden' });
+    let data = {}; try { data = JSON.parse(v.data || '{}'); } catch (_) {}
+    const cfg = await regeln();
+    const { a } = await speichern(lead.id, bereinigen(data, Math.max(cfg.textlimit, 100000)), req.user.id, { anlass: 'wiederherstellung' });
+    await log(req.user.id, 'bedarf_wiederherstellen', 'lead', lead.id, { version: parseInt(req.params.vid) }, req.ip);
+    res.json({ ok: true, version: a.version });
+  } catch (e) { console.error('Bedarf wiederherstellen:', e); res.status(500).json({ error: 'Wiederherstellen fehlgeschlagen.' }); }
+});
+
+// POST /api/bedarf/lead/:id/versionen — eigenen Stand nur als Version ablegen (z. B. bei einem Konflikt)
+router.post('/lead/:id/versionen', auth, async (req, res) => {
+  try {
+    const { lead, fehler } = await leadFuer(req, parseInt(req.params.id));
+    if (fehler) return res.status(fehler[0]).json({ error: fehler[1] });
+    const a = await analyseLaden(lead.id);
+    if (!a) return res.json({ ok: false });
+    const data = bereinigen(req.body?.data || {}, Math.max((await regeln()).textlimit, 100000));
+    await db.query('INSERT INTO bedarfsanalyse_snapshots (analyse_id, lead_id, deal_id, anlass, data, created_by) VALUES (?,?,?,?,?,?)',
+      [a.id, lead.id, a.deal_id || null, 'konflikt', JSON.stringify(data), req.user.id]);
+    res.json({ ok: true });
+  } catch (e) { console.error('Bedarf Version ablegen:', e); res.status(500).json({ error: 'Version konnte nicht abgelegt werden.' }); }
 });
 
 // ── POST /api/bedarf/lead/:id/kurzcheck — „Keine Zeit“: 3 Fragen + Rückruftermin ──
@@ -177,9 +309,8 @@ router.post('/lead/:id/kurzcheck', auth, async (req, res) => {
     const { lead, fehler } = await leadFuer(req, parseInt(req.params.id), true);
     if (fehler) return res.status(fehler[0]).json({ error: fehler[1] });
     const alt = await analyseLaden(lead.id);
-    const data = bereinigen({ ...vorbelegt(lead, alt?.data || {}), kanaele: b.kanaele, anfragen_pro_woche: b.anfragen_pro_woche, groesstes_problem: b.groesstes_problem });
-    const a = await speichern(lead.id, data, req.user.id);
-    await snapshot(a, 'kurzcheck', req.user.id);
+    const data = bereinigen({ ...vorbelegt(lead, alt?.data || {}), kanaele: b.kanaele, anfragen_pro_woche: b.anfragen_pro_woche, groesstes_problem: b.groesstes_problem }, (await regeln()).textlimit);
+    await speichern(lead.id, data, req.user.id, { anlass: 'kurzcheck' });
     const { vorschlag } = auswertung(data, lead, await regeln());
     // Im Anrufmodus legt das Speichern des Ergebnisses den Rückruf an (reminder=false)
     if (b.reminder !== false) {
@@ -191,7 +322,10 @@ router.post('/lead/:id/kurzcheck', auth, async (req, res) => {
       [lead.id, req.user.id, `⚡ Kurz-Check: ${(data.kanaele || []).map(k => R.label('kanaele', k)).join(', ') || '–'} · ${data.anfragen_pro_woche ?? '?'} Anfragen/Woche · Vorschlag ${vorschlag.name}`]);
     await log(req.user.id, 'bedarf_kurzcheck', 'lead', lead.id, { paket: vorschlag.paket }, req.ip);
     res.json({ ok: true, vorschlag });
-  } catch (e) { console.error('Kurzcheck:', e); res.status(500).json({ error: 'Kurz-Check konnte nicht gespeichert werden.' }); }
+  } catch (e) {
+    if (e.status === 400) return res.status(400).json({ error: e.message });
+    console.error('Kurzcheck:', e); res.status(500).json({ error: 'Kurz-Check konnte nicht gespeichert werden.' });
+  }
 });
 
 // ── Angebot anfordern (Knopf und Drag & Drop in die Phase) ──
@@ -356,9 +490,10 @@ async function vorbefuellen(leadId, antworten, userId) {
   if (!lead) return null;
   const alt = await analyseLaden(leadId);
   const data = vorbelegt(lead, alt?.data || {});
-  const neu = bereinigen(antworten || {});
+  const limit = (await regeln()).textlimit;
+  const neu = bereinigen(antworten || {}, limit);
   for (const [k, v] of Object.entries(neu)) if (R.leer(data[k])) data[k] = v;
-  await speichern(leadId, bereinigen(data), userId);
+  await speichern(leadId, bereinigen(data, limit), userId, { anlass: 'uebergabe' });
   return R.pruefen({ ...data, _industry: lead.industry || '' }, await regeln());
 }
 // Offene Pflichtfragen eines Leads (für „Noch klären“)

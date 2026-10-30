@@ -84,6 +84,15 @@ async function api(method, path, body) {
   return data;
 }
 
+// ── Fenster schließen nur über das X ──────────────────────────
+// Ein Klick auf den abgedunkelten Hintergrund neben einem Fenster (Modal, Lead-Panel) schließt
+// nichts mehr, damit keine Eingaben durch einen Fehlklick verloren gehen. Greift für alle
+// Fenster auf einmal, bevor deren eigene „Klick daneben“-Handler laufen.
+['mousedown', 'click'].forEach(typ => document.addEventListener(typ, e => {
+  const z = e.target;
+  if (z instanceof Element && (z.classList.contains('modal-overlay') || z.classList.contains('slide-overlay'))) e.stopPropagation();
+}, true));
+
 // ── Toast ─────────────────────────────────────────────────────
 function showToast(msg, type = 'ok') {
   let t = document.getElementById('globalToast');

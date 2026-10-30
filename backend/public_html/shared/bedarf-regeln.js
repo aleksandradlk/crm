@@ -20,6 +20,7 @@
     },
     rabatt_grenze: 20,
     nachfass_tage: [2, 5, 10],
+    textlimit: 10000,          // max. Zeichen in großen Textfeldern der Bedarfsanalyse
     anfrage_warte_std: 24,
     admin_mail: 'info@novaflowservices.de',
     faellig_mail: true,                   // morgens eine Mail mit allem, was fällig ist
@@ -90,6 +91,7 @@
   const FELDNAME = {
     kanaele: 'Kanäle', kanal_wichtigster: 'wichtigster Kanal', anfragen_pro_woche: 'Anfragen pro Woche', ablauf_heute: 'Ablauf heute',
     groesstes_problem: 'größtes Problem', wunschstart: 'Wunschstart', entscheider: 'Entscheider', rabatt_begruendung: 'Begründung für den Rabatt',
+    sonderwuensche: 'Sonderwünsche', notiz: 'Notiz',
   };
 
   function cfgMit(cfg) {
@@ -195,7 +197,7 @@
     return out;
   }
 
-  const api = { GRUENDE, grundPruefen, STATUS, STANDARD, W, FRAGEN, ERGEBNIS, label, pruefen, vorschlag, dealWert, positionen, gesundheit, cfgMit, eur, leer };
+  const api = { GRUENDE, grundPruefen, STATUS, STANDARD, W, FELDNAME, FRAGEN, ERGEBNIS, label, pruefen, vorschlag, dealWert, positionen, gesundheit, cfgMit, eur, leer };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.BedarfRegeln = api;
 })(typeof window !== 'undefined' ? window : globalThis);
