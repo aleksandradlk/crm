@@ -1309,7 +1309,8 @@ function renderPanelKeyInfo(l) {
   const contactItems = [
     l.ceo ? `<div class="panel-contact-row"><i class="fas fa-user"></i><span>${escHtml(l.ceo)}</span></div>` : '',
     `<div class="panel-contact-row"><i class="fas fa-phone"></i>${l.phone ? `<a href="tel:${escHtml(l.phone)}" class="mono">${escHtml(l.phone)}</a><button class="panel-icon-btn" onclick="copyPhone('${escHtml(l.phone||'')}')" title="Nummer kopieren"><i class="fas fa-copy"></i></button>` : empty}${editBtnCl('phone', l.phone)}${callBtnCl}</div>`,
-    `<div class="panel-contact-row"><i class="fas fa-envelope"></i>${l.email ? `<a href="mailto:${escHtml(l.email)}">${escHtml(l.email)}</a>` : empty}${editBtnCl('email', l.email)}</div>`,
+    `<div class="panel-contact-row"><i class="fas fa-envelope"></i>${l.email ? `<a href="mailto:${escHtml(l.email)}">${escHtml(l.email)}</a>` : empty}${editBtnCl('email', l.email)}</div>`
+      + (domainHinweis(l.email, l.website) ? `<div class="panel-domain-hinweis"><i class="fas fa-exclamation-triangle"></i>${escHtml(domainHinweis(l.email, l.website))}</div>` : ''),
   ].filter(Boolean).join('');
   const avatar = document.getElementById('panelAvatar');
   if (avatar) avatar.textContent = (l.company||'').trim().charAt(0).toUpperCase() || '?';
@@ -1362,7 +1363,7 @@ function renderDetail(l) {
   ).join('');
 
   // Kommentare mit Edit/Delete (nur eigene)
-  const commentsHtml = (l.comments||[]).map(c => {
+  const commentsHtml = kommentarListe((l.comments||[]).map(c => {
     const isOwn = c.user_id === ME.id;
     const editBtn   = isOwn ? `<button class="panel-icon-btn" onclick="editComment(${l.id},${c.id},${escHtml(JSON.stringify(c.text))})" title="Bearbeiten"><i class="fas fa-edit"></i></button>` : '';
     const deleteBtn = isOwn ? `<button class="panel-icon-btn" onclick="deleteComment(${l.id},${c.id},'panel')" title="Löschen"><i class="fas fa-trash"></i></button>` : '';
@@ -1373,7 +1374,7 @@ function renderDetail(l) {
         <div id="comment-text-${c.id}" class="comment-text">${escHtml(c.text)}</div>
       </div>
     </div>`;
-  }).join('') || '<div data-no-activity class="panel-empty">Noch keine Aktivität</div>';
+  })) || '<div data-no-activity class="panel-empty">Noch keine Aktivität</div>';
 
   const pendingReminders = l.reminders || [];
   const remindHtml = pendingReminders.map(r => `
@@ -1408,7 +1409,7 @@ function renderDetail(l) {
     <div class="panel-section">
       <div class="panel-section-title">Gesprächsnotiz</div>
       <div class="panel-row">
-        <input type="text" id="newComment" class="form-control" placeholder="Kommentar / Gesprächsnotiz …" onkeydown="if(event.key==='Enter')addComment(${l.id})">
+        <textarea id="newComment" class="form-control kommentar-eingabe" rows="1" placeholder="Kommentar / Gesprächsnotiz … (Enter senden, Shift+Enter neue Zeile)" onkeydown="kommentarTaste(event, () => addComment(${l.id}))" oninput="kommentarHoehe(this)"></textarea>
         <button class="btn btn-primary btn-sm btn-icon" onclick="addComment(${l.id})" title="Senden"><i class="fas fa-paper-plane"></i></button>
       </div>
     </div>` : `<div class="panel-section"><div class="panel-lock">
@@ -1476,6 +1477,7 @@ async function addComment(id) {
     const r = await api('POST', `/leads/${id}/comments`, { text });
     panelDirty = true;
     input.value = '';
+    input.style.height = '';
     // Kommentar lokal aufbauen (API gibt nur {ok, id} zurück)
     const newComment = { id: r.id, user_id: ME.id, full_name: ME.full_name, text, created_at: new Date().toISOString(), edited_at: null };
     if (!_panelLead.comments) _panelLead.comments = [];
@@ -2044,6 +2046,7 @@ async function openSettingsModal() {
   } catch {}
   renderCallerIdSettings('callerIdSettings');
   Benachrichtigungen.render('pushSettings');
+  signaturEinstellung('signaturSettings');
   document.getElementById('settingsModal').classList.add('open');
 }
 function closeSettingsModal() { clearInterval(_callerIdPoll); document.getElementById('settingsModal').classList.remove('open'); }
@@ -2582,6 +2585,10 @@ async function submitCreateUser() {
         <span>E-Mail Benachrichtigung (Reminder)</span>
       </label>
       <div class="form-group" style="margin-bottom:0"><label>Meine Telefonnummer</label><input type="tel" id="sett-phone" class="form-control" placeholder="+49 ..."></div>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:16px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:12px">Meine E-Mail-Signatur</div>
+      <div id="signaturSettings"></div>
     </div>
     <div style="border-top:1px solid var(--border);padding-top:16px;margin-bottom:12px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:12px">Handy-Benachrichtigungen</div>

@@ -22,6 +22,7 @@
     rabatt_grenze: 20,
     nachfass_tage: [2, 5, 10],
     textlimit: 10000,          // max. Zeichen in großen Textfeldern der Bedarfsanalyse
+    kommentare_anzahl: 10,     // so viele neueste Kommentare zeigt das Lead-Fenster, ältere über „Mehr laden“
     anfrage_warte_std: 24,
     admin_mail: 'info@novaflowservices.de',
     faellig_mail: true,                   // morgens eine Mail mit allem, was fällig ist

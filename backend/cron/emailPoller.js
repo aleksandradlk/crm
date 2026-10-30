@@ -1,6 +1,7 @@
 const { ImapFlow } = require('imapflow');
 const { simpleParser } = require('mailparser');
 const db = require('../db');
+const ruecklaeufer = require('../helpers/ruecklaeufer');
 
 // Verhindert, dass sich zwei Abrufe überlappen (Cron läuft alle 2 Minuten)
 let _running = false;
@@ -125,10 +126,16 @@ async function pollIncomingEmails() {
           // hier schon entscheiden, ob die Mail eine Antwort auf eine CRM-Mail ist.
           // Nur diese werden danach komplett geladen.
           const candidates = [];
+          const bounces = [];
           for await (const msg of client.fetch(uids, { envelope: true, headers: ['references'] }, { uid: true })) {
             const messageId = msg.envelope?.messageId;
             const from = (msg.envelope?.from?.[0]?.address || '').toLowerCase();
             if (!messageId || ownAddresses.includes(from)) continue;
+            // Rückläufer (Mail kam nicht an) gesondert behandeln
+            if (ruecklaeufer.istRuecklaeufer({ from, fromName: msg.envelope?.from?.[0]?.name || '', subject: msg.envelope?.subject || '' })) {
+              bounces.push({ uid: msg.uid, messageId, subject: msg.envelope?.subject || '', date: msg.envelope?.date });
+              continue;
+            }
             const refHeader = msg.headers ? msg.headers.toString().replace(/^references:\s*/i, '') : '';
             candidates.push({ uid: msg.uid, messageId, inReplyTo: msg.envelope?.inReplyTo, references: refHeader, subject: msg.envelope?.subject || '' });
           }
@@ -143,6 +150,21 @@ async function pollIncomingEmails() {
             newUids.push(c.uid);
           }
           newUids.sort((a, b) => a - b);
+
+          // Rückläufer: Fehlermeldung laden, Lead finden, melden (je Meldung nur einmal)
+          for (const bnc of bounces.slice(0, MAX_PER_RUN)) {
+            const [[schon]] = await db.query('SELECT 1 AS x FROM lead_emails WHERE message_id=? LIMIT 1', [bnc.messageId]);
+            if (schon) continue;
+            try {
+              const msg = await client.fetchOne(bnc.uid, { source: { maxLength: MAX_SOURCE_BYTES } }, { uid: true });
+              if (!msg || !msg.source) continue;
+              const parsed = await simpleParser(msg.source, { skipImageLinks: true, skipTextToHtml: true });
+              const teile = (parsed.attachments || []).filter(a => /^(text|message)\//i.test(a.contentType || '')).map(a => a.content.toString('utf8'));
+              const text = [parsed.text || htmlToText(parsed.html) || '', ...teile].join('\n').slice(0, 60000);
+              if (await ruecklaeufer.verarbeiten({ messageId: bnc.messageId, subject: bnc.subject, text, receivedAt: parsed.date || bnc.date, eigene: ownAddresses }))
+                stats.bounces = (stats.bounces || 0) + 1;
+            } catch (e) { console.error('[IMAP Poller] Rückläufer:', e.message); }
+          }
 
           // Schritt 2: neue Mails einzeln laden und sofort verarbeiten — nie alle
           // gleichzeitig im Speicher. Pro Lauf höchstens MAX_PER_RUN Mails, der Rest

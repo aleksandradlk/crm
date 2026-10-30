@@ -676,8 +676,9 @@ migrate(`CREATE TABLE IF NOT EXISTS bedarfsanalyse_snapshots (
 // (Rückweg: db/rollback/2026-10-30_deals.sql)
 migrate('ALTER TABLE deals ADD COLUMN aktionsrabatt TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
 migrate("UPDATE reminders SET done_at=NOW() WHERE kind='nachfass_auto' AND done_at IS NULL AND sent=0").catch(() => {});
-// Schriftgröße je Nutzer (A+/A−), 100 = normal (Rückweg: db/rollback/2026-10-30_ansicht.sql)
+// Schriftgröße je Nutzer (A+/A−), 100 = normal, und eigene E-Mail-Signatur (Rückweg: db/rollback/2026-10-30_ansicht.sql)
 migrate('ALTER TABLE users ADD COLUMN ui_schrift SMALLINT NULL').catch(() => {});
+migrate('ALTER TABLE users ADD COLUMN signatur TEXT NULL').catch(() => {});
 // Versionsnummer gegen gegenseitiges Überschreiben (Rückweg: db/rollback/2026-10-30_bedarf-versionen.sql)
 migrate('ALTER TABLE bedarfsanalysen ADD COLUMN version INT NOT NULL DEFAULT 0').catch(() => {});
 migrate('ALTER TABLE bedarfsanalyse_snapshots ADD INDEX idx_bsnap_analyse (analyse_id, id)').catch(() => {});

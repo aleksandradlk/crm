@@ -973,7 +973,7 @@ router.post('/:id/email', auth, async (req, res) => {
     if (!canView(req.user, lead))
       return res.status(403).json({ error: 'E-Mail nur bei eigenen oder unzugewiesenen Leads erlaubt' });
 
-    const [[user]] = await db.query('SELECT full_name, role FROM users WHERE id=?', [req.user.id]);
+    const [[user]] = await db.query('SELECT full_name, role, signatur FROM users WHERE id=?', [req.user.id]);
     const telefon = await require('./sipgate').nummerFuer(req.user.id).catch(() => null);
 
     // Letzte eingegangene Nachricht dieses Leads suchen — daran hängt die Antwort,
@@ -996,7 +996,7 @@ router.post('/:id/email', auth, async (req, res) => {
     }
 
     const realMessageId = await sendLeadEmail({
-      to, subject, body, leadId: id, senderName: user?.full_name, telefon,
+      to, subject, body, leadId: id, senderName: user?.full_name, telefon, signatur: user?.signatur,
       rolle: user?.role === 'admin' ? 'Founder | AI & Automation Consultant' : 'Vertrieb',
       inReplyTo:  lastInbound?.message_id || undefined,
       references: (priorIds || []).map(r => r.message_id),

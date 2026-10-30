@@ -152,7 +152,7 @@ const Bedarf = {
         ${row('Branche', chips('branche', W.branche) + `<div data-show="branche_text" ${d.branche === 'andere' ? '' : 'hidden'}>${inp('branche_text', 'text', 'Welche Branche?')}</div>`)}
         <div id="bdGesund"></div>
         ${row('E-Mail fürs Angebot', inp('email_angebot', 'email', 'name@betrieb.de'))}
-        ${row('Webseite', url('webseite', 'betrieb.de'))}
+        ${row('Webseite', url('webseite', 'betrieb.de') + '<div class="bd-hint bd-domain" id="bdDomain"></div>')}
         ${row('Instagram', url('instagram', 'instagram.com/…'))}
         ${row('Teamgröße', chips('teamgroesse', W.teamgroesse))}
         ${row('Büro vorhanden', chips('buero_vorhanden', W.janein))}`)}
@@ -206,6 +206,7 @@ const Bedarf = {
 
     this.el.querySelectorAll('input[data-f], textarea[data-f]').forEach(i => i.addEventListener('input', () => this._feld(i)));
     this.el.querySelectorAll('textarea[data-f]').forEach(i => this._zaehler(i));
+    this._domain();
     this.el.querySelectorAll('.bd-chips').forEach(c => c.addEventListener('click', e => {
       const b = e.target.closest('button[data-v]');
       if (b && !b.disabled) this._chip(c.dataset.f, b.dataset.v, c.dataset.multi === '1');
@@ -311,6 +312,10 @@ const Bedarf = {
   },
 
   // ── Eingaben ────────────────────────────────────────────────
+  _domain() {
+    const el = this.el && this.el.querySelector('#bdDomain');
+    if (el) el.textContent = typeof domainHinweis === 'function' ? domainHinweis(this.data.email_angebot, this.data.webseite) : '';
+  },
   _limit(f) { return BD_LANG.includes(f) ? (Number(this.cfg?.textlimit) || 10000) : BD_KURZ; },
   _zaehler(i) {
     const c = this.el.querySelector(`[data-count="${i.dataset.f}"]`);
@@ -326,6 +331,7 @@ const Bedarf = {
     let v = i.value;
     if (f === 'nachfass_termin') v = v ? v.replace('T', ' ') : '';
     if (v === '') delete this.data[f]; else this.data[f] = v;
+    if (f === 'email_angebot' || f === 'webseite') this._domain();
     if (i.closest('.bd-url')) {
       const a = this.el.querySelector(`[data-link="${f}"]`);
       if (a) { a.hidden = !v; if (v) a.href = absUrl(v); }
@@ -732,6 +738,7 @@ const Bedarf = {
           <label>Google-Profil, wenn es schon besteht (auch schwach) oder jemand anderes es macht</label><div>${num('vr-g-bestehend', c.zusatz.google.einrichtung_bestehend ?? 249)} €</div>
           <label>Hinweis, wenn Anfrage wartet seit</label><div>${num('vr-std', c.anfrage_warte_std, 70)} Std.</div>
           <label>Max. Zeichen in großen Textfeldern der Bedarfsanalyse</label><div>${num('vr-textlimit', c.textlimit, 100)}</div>
+          <label>Kommentare im Lead-Fenster (neueste, ältere über „Mehr laden“)</label><div>${num('vr-kommentare', c.kommentare_anzahl ?? 10, 70)}</div>
           <label>Anfragen per E-Mail an</label><div><input class="form-control" id="vr-mail" type="email" value="${escHtml(c.admin_mail)}"></div>
           <label>Morgens um 7:41 eine Mail mit allem, was fällig ist</label><div><label class="vr-inline"><input type="checkbox" id="vr-faellig" ${c.faellig_mail !== false ? 'checked' : ''}> an diese Adresse schicken</label></div>
           <label>Live-Demo-Link</label><div><input class="form-control" id="vr-demo" value="${escHtml(c.demo_link)}"></div>
@@ -774,6 +781,7 @@ const Bedarf = {
         regeln: { l_auftragswert: val('vr-l-wert'), m_kanaele: val('vr-m-kan'), m_anfragen: val('vr-m-anf'), l_wenig_anfragen: val('vr-l-wenig') },
         anfrage_warte_std: val('vr-std') || 24,
         textlimit: Math.max(1000, val('vr-textlimit') || R.STANDARD.textlimit),
+        kommentare_anzahl: Math.max(3, val('vr-kommentare') || 10),
         admin_mail: o.querySelector('#vr-mail').value.trim() || R.STANDARD.admin_mail,
         faellig_mail: o.querySelector('#vr-faellig').checked,
         demo_link: o.querySelector('#vr-demo').value.trim() || R.STANDARD.demo_link,

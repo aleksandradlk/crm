@@ -58,7 +58,10 @@ async function sendReminder({ to, toName, leadCompany, note, remindAt }) {
 // vorhanden — dann hängt die Antwort im Mailprogramm des Kunden am richtigen Thread
 // statt eine neue Konversation aufzumachen.
 // Signatur unter Lead-Mails: Name, Rolle, Rückrufnummer (sipgate), Website
-function leadSignatur({ senderName, rolle, telefon }) {
+function leadSignatur({ senderName, rolle, telefon, signatur }) {
+  // Eigene Signatur des Nutzers (Einstellungen) hat Vorrang
+  if (signatur && String(signatur).trim())
+    return `<p style="margin:0;font-size:13px;line-height:1.5;color:#1a2330">${esc(String(signatur).trim()).replace(/\n/g, '<br>')}</p>`;
   // Vorwahl abtrennen, wo sie bekannt ist (Krefeld, Düsseldorf), sonst Nummer am Stück
   const n = telefon ? String(telefon).replace(/^\+49/, '0') : '';
   const vw = ['02151', '0211'].find(v => n.startsWith(v));
@@ -67,7 +70,7 @@ function leadSignatur({ senderName, rolle, telefon }) {
     + `${rolle ? 'NovaFlow Services<br>' : ''}${tel ? `Telefon ${esc(tel)}<br>` : ''}<a href="https://www.novaflowservices.de" style="color:#2c3a55">www.novaflowservices.de</a></p>`;
 }
 
-async function sendLeadEmail({ to, subject, body, leadId, inReplyTo, references, senderName, rolle, telefon }) {
+async function sendLeadEmail({ to, subject, body, leadId, inReplyTo, references, senderName, rolle, telefon, signatur }) {
   const domain = (process.env.SMTP_USER || 'info@novaflowservices.de').split('@')[1] || 'novaflowservices.de';
   const msgId  = `<crm-lead-${leadId}-${Date.now()}@${domain}>`;
   const taggedSubject = subject.includes('[NF-') ? subject : `${subject} [NF-${leadId}]`;
@@ -94,7 +97,7 @@ async function sendLeadEmail({ to, subject, body, leadId, inReplyTo, references,
       <div style="font-family:Arial,sans-serif;max-width:580px;margin:0 auto;color:#1a2330">
         ${body.includes('<') ? body : body.split('\n').map(l => l.trim() ? `<p style="margin:0 0 12px">${l}</p>` : '<br>').join('')}
         <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
-        ${leadSignatur({ senderName, rolle, telefon })}
+        ${leadSignatur({ senderName, rolle, telefon, signatur })}
         <img src="cid:${LOGO_CID}" alt="NovaFlow Services" width="160" style="display:block;margin:14px 0 0">
       </div>
     `,

@@ -97,6 +97,61 @@ async function _api(method, path, body) {
   return data;
 }
 
+// ── Tippfehler-Hinweis: Domain der E-Mail ≠ Domain der Webseite ──
+// z. B. info@fliesen-moelder.de und www.fliesen-moeller.de. Freemail-Adressen (gmail, web.de …)
+// werden nicht verglichen. Gibt einen kurzen Hinweistext zurück oder ''.
+const FREEMAIL = /^(gmail|googlemail|web|gmx|t-online|outlook|hotmail|live|yahoo|icloud|me|aol|freenet|posteo|mail|arcor|online|vodafone|1und1|ionos|proton|protonmail)\./i;
+function domainVon(s) {
+  s = String(s || '').trim().toLowerCase();
+  if (!s) return '';
+  if (s.includes('@')) s = s.split('@').pop();
+  s = s.replace(/^[a-z]+:\/\//, '').replace(/^www\./, '').split(/[\/?#:]/)[0];
+  const teile = s.split('.').filter(Boolean);
+  return teile.length >= 2 ? teile.slice(-2).join('.') : s;
+}
+function domainHinweis(email, webseite) {
+  const e = domainVon(email), w = domainVon(webseite);
+  if (!e || !w || !String(email).includes('@') || FREEMAIL.test(e) || e === w) return '';
+  return `E-Mail (${e}) und Webseite (${w}) haben verschiedene Domains – Tippfehler?`;
+}
+
+// ── Eigene E-Mail-Signatur (Einstellungen) ─────────────────────
+// Steht unter jeder Mail, die der Nutzer aus dem Lead schreibt. Leer = automatisch (Name, Rolle, Telefon).
+async function signaturEinstellung(elId) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  let me = {};
+  try { me = await api('GET', '/auth/me'); } catch (_) {}
+  el.innerHTML = `<textarea id="sigText" class="form-control" rows="4" maxlength="1000" placeholder="z. B.\nBeste Grüße\n${escHtml(me.full_name || 'Vorname Nachname')}\nVertrieb · NovaFlow Services\nTelefon …">${escHtml(me.signatur || '')}</textarea>
+    <div style="font-size:11px;color:var(--text3);margin:5px 0 8px;line-height:1.5">Steht unter jeder E-Mail, die du aus einem Lead schreibst. Leer lassen = automatisch aus Name, Rolle und Telefonnummer.</div>
+    <button type="button" class="btn btn-ghost btn-sm" id="sigSave"><i class="fas fa-signature"></i> Signatur speichern</button>`;
+  el.querySelector('#sigSave').onclick = async () => {
+    try { await api('PATCH', '/auth/signatur', { signatur: el.querySelector('#sigText').value }); showToast('Signatur gespeichert ✓'); }
+    catch (e) { showToast(e.message, 'err'); }
+  };
+}
+
+// ── Kommentare: nur die neuesten zeigen, „Mehr laden“ für ältere ──
+// teile = HTML je Kommentar, älteste zuerst. Anzahl aus den Vertriebsregeln (Standard 10).
+function kommentarAnzahl() { return Number(typeof Bedarf !== 'undefined' && Bedarf.cfg && Bedarf.cfg.kommentare_anzahl) || 10; }
+function kommentarListe(teile, anzahl = kommentarAnzahl()) {
+  if (teile.length <= anzahl) return teile.join('');
+  const alt = teile.length - anzahl;
+  return `<button type="button" class="btn btn-ghost btn-sm kommentar-mehr" onclick="kommentareMehr(this)">Mehr laden (${alt} ältere)</button>`
+    + teile.map((t, i) => i < alt ? t.replace(/^(\s*<div)/, '$1 hidden data-alt="1"') : t).join('');
+}
+function kommentareMehr(btn) {
+  const alt = [...btn.parentElement.querySelectorAll('[data-alt]')];
+  alt.slice(-kommentarAnzahl()).forEach(x => { x.hidden = false; x.removeAttribute('data-alt'); });
+  const rest = alt.length - kommentarAnzahl();
+  if (rest > 0) btn.textContent = `Mehr laden (${rest} ältere)`; else btn.remove();
+}
+// Kommentarfeld: Enter sendet, Shift+Enter macht eine neue Zeile; wächst mit dem Text
+function kommentarTaste(e, senden) {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); senden(); }
+}
+function kommentarHoehe(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 220) + 'px'; }
+
 // ── Lead-Fenster: Breite ziehen und Vollbild ───────────────────
 // Am linken Rand ziehen ändert die Breite (wird auf dem Gerät gemerkt), der Knopf oben
 // schaltet Vollbild ein und aus.
@@ -132,7 +187,11 @@ function leadPanelAnsicht() {
     aktionen.prepend(b);
   }
 }
-document.addEventListener('DOMContentLoaded', leadPanelAnsicht);
+document.addEventListener('DOMContentLoaded', () => {
+  leadPanelAnsicht();
+  // Vertriebsregeln (u. a. Anzahl Kommentare) vorab laden
+  if (typeof Bedarf !== 'undefined' && Auth.getToken()) Bedarf.config().catch(() => {});
+});
 
 // ── Fenster schließen nur über das X ──────────────────────────
 // Ein Klick auf den abgedunkelten Hintergrund neben einem Fenster (Modal, Lead-Panel) schließt

@@ -1368,7 +1368,8 @@ function renderPanelKeyInfo(l) {
   const contactItems = [
     l.ceo ? `<div class="panel-contact-row"><i class="fas fa-user"></i><span>${escHtml(l.ceo)}</span></div>` : '',
     `<div class="panel-contact-row"><i class="fas fa-phone"></i>${l.phone ? `<a href="tel:${escHtml(l.phone)}" class="mono">${escHtml(l.phone)}</a>` : empty}${editBtn('phone', l.phone)}${callBtn}</div>`,
-    `<div class="panel-contact-row"><i class="fas fa-envelope"></i>${l.email ? `<a href="mailto:${escHtml(l.email)}">${escHtml(l.email)}</a>` : empty}${editBtn('email', l.email)}</div>`,
+    `<div class="panel-contact-row"><i class="fas fa-envelope"></i>${l.email ? `<a href="mailto:${escHtml(l.email)}">${escHtml(l.email)}</a>` : empty}${editBtn('email', l.email)}</div>`
+      + (domainHinweis(l.email, l.website) ? `<div class="panel-domain-hinweis"><i class="fas fa-exclamation-triangle"></i>${escHtml(domainHinweis(l.email, l.website))}</div>` : ''),
   ].filter(Boolean).join('');
   const avatar = document.getElementById('panelAvatar');
   if (avatar) avatar.textContent = (l.company||'').trim().charAt(0).toUpperCase() || '?';
@@ -1422,7 +1423,7 @@ function renderLeadDetail(l) {
     `<button class="status-chip s-${s} ${l.status===s?'active':''}" onclick="changeStatus(${l.id},'${s}')">${statusLabels[s]}</button>`
   ).join('');
 
-  const commentsHtml = (l.comments||[]).map(c => {
+  const commentsHtml = kommentarListe((l.comments||[]).map(c => {
     const editBtn   = `<button class="panel-icon-btn" onclick="editComment(${l.id},${c.id},${escHtml(JSON.stringify(c.text))})" title="Bearbeiten"><i class="fas fa-edit"></i></button>`;
     const deleteBtn = `<button class="panel-icon-btn" onclick="deleteComment(${l.id},${c.id})" title="Löschen"><i class="fas fa-trash"></i></button>`;
     return `<div id="comment-wrap-${c.id}" class="comment">
@@ -1432,7 +1433,7 @@ function renderLeadDetail(l) {
         <div id="comment-text-${c.id}" class="comment-text">${escHtml(c.text)}</div>
       </div>
     </div>`;
-  }).join('') || '<div class="panel-empty">Noch keine Kommentare</div>';
+  })) || '<div class="panel-empty">Noch keine Kommentare</div>';
 
   const remindersHtml = (l.reminders||[]).map(r => `
     <div class="reminder">
@@ -1473,7 +1474,7 @@ function renderLeadDetail(l) {
       <div class="panel-section-title">Kommentare</div>
       <div class="panel-list">${commentsHtml}</div>
       <div class="panel-row" style="margin-top:10px">
-        <input type="text" id="newComment-${l.id}" class="form-control" placeholder="Kommentar schreiben …" onkeydown="if(event.key==='Enter')addComment(${l.id})">
+        <textarea id="newComment-${l.id}" class="form-control kommentar-eingabe" rows="1" placeholder="Kommentar schreiben … (Enter senden, Shift+Enter neue Zeile)" onkeydown="kommentarTaste(event, () => addComment(${l.id}))" oninput="kommentarHoehe(this)"></textarea>
         <button class="btn btn-primary btn-sm btn-icon" onclick="addComment(${l.id})" title="Senden"><i class="fas fa-paper-plane"></i></button>
       </div>
     </div>
@@ -2558,6 +2559,7 @@ async function openSettingsModal() {
   } catch {}
   renderCallerIdSettings('callerIdSettings');
   Benachrichtigungen.render('pushSettings');
+  signaturEinstellung('signaturSettings');
   document.getElementById('settingsModal').classList.add('open');
 }
 function closeSettingsModal() { clearInterval(_callerIdPoll); document.getElementById('settingsModal').classList.remove('open'); }
@@ -3553,6 +3555,9 @@ document.getElementById('addLeadModal').addEventListener('click', function(e){ i
     <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)"><i class="fas fa-box-archive" style="color:var(--accent);margin-right:6px"></i>Datensicherung</div>
     <button type="button" class="btn btn-secondary btn-sm" id="crmSicherungBtn" onclick="crmSicherungLaden()"><i class="fas fa-download"></i> CRM-Sicherung herunterladen (ZIP)</button>
     <div style="font-size:11px;color:var(--text3);margin-top:5px;line-height:1.5">Alle Leads, Deals, Notizen, Bedarfsanalysen, Termine usw. als komplette Datenbank-Sicherung, dazu die Leads als Excel-Liste. Angebote und Rechnungen sichert das Gesamtarchiv unter Angebote &amp; Rechnungen. Datei sicher aufbewahren (enthält Zugangsdaten).</div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+    <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)"><i class="fas fa-signature" style="color:var(--accent);margin-right:6px"></i>Meine E-Mail-Signatur</div>
+    <div id="signaturSettings"></div>
     <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
     <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)"><i class="fas fa-bell" style="color:var(--accent);margin-right:6px"></i>Handy-Benachrichtigungen</div>
     <div id="pushSettings"></div>

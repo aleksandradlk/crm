@@ -627,7 +627,12 @@ body.dark .modal-overlay { background: rgba(0,0,0,0.55); }
 .comment-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 2px; font-size: 11px; color: var(--text3); }
 .comment-meta b { color: var(--text2); font-weight: 600; }
 .comment-actions { display: flex; gap: 2px; flex-shrink: 0; }
-.comment-text { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.panel-domain-hinweis { font-size: 12px; color: var(--copper); display: flex; gap: 6px; align-items: center; padding: 2px 0 6px 26px; }
+.bd-domain { color: var(--copper); }
+.bd-domain:empty { display: none; }
+.comment-text { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
+.kommentar-eingabe { resize: none; min-height: 38px; line-height: 1.45; overflow-y: auto; }
+.kommentar-mehr { align-self: center; margin-bottom: 6px; }
 
 .reminder { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; background: color-mix(in srgb, var(--copper) 8%, transparent); border: 1px solid color-mix(in srgb, var(--copper) 25%, transparent); border-radius: 12px; }
 .reminder-when { font-size: 12.5px; font-weight: 600; color: var(--copper); display: flex; align-items: center; gap: 6px; }
