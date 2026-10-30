@@ -1,7 +1,7 @@
 // ============================================================
 // Deals — Pipeline mit Werten (Pipedrive-Prinzip)
 // Board: Spalten = Phasen, Summe pro Phase, Karten per Drag & Drop
-// verschieben, beim Ziehen erscheinen „Gewonnen“ / „Verloren“.
+// verschieben, beim Ziehen erscheinen „Gewonnen“ / „Abgelehnt“.
 // Eingebunden in closer.html und admin.html über Deals.mount().
 // ============================================================
 const Deals = {
@@ -32,7 +32,7 @@ const Deals = {
     root.dataset.mounted = '1';
     root.innerHTML = `
       <div class="page-header">
-        <div><h1 data-eyebrow="Vertrieb">Deals</h1><p class="page-desc">Deine Verkaufschancen mit Wert. Karten in die nächste Phase ziehen, zum Abschließen auf „Gewonnen“ oder „Verloren“.</p></div>
+        <div><h1 data-eyebrow="Vertrieb">Deals</h1><p class="page-desc">Deine Verkaufschancen mit Wert. Karten in die nächste Phase ziehen, zum Abschließen auf „Gewonnen“ oder „Abgelehnt“.</p></div>
         <div class="page-actions">
           ${opts.isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="Deals.openStageEditor()"><i class="fas fa-sliders-h"></i> Phasen bearbeiten</button>` : ''}
           <button class="btn btn-primary btn-sm" onclick="Deals.openNew()"><i class="fas fa-plus"></i> Deal</button>
@@ -48,7 +48,7 @@ const Deals = {
         </div>
         ${opts.isAdmin ? `<select id="dealOwner" class="form-control deal-owner-sel" onchange="Deals.setOwner(this.value || 'all')"><option value="">Person …</option></select>` : ''}` : ''}
         <div class="chip-row" id="dealStatusChips" style="display:none">
-          ${[['open', 'Offen'], ['won', 'Gewonnen'], ['lost', 'Verloren'], ['all', 'Alle']].map(([k, l]) =>
+          ${[['open', 'Offen'], ['won', 'Gewonnen'], ['lost', 'Abgelehnt'], ['all', 'Alle']].map(([k, l]) =>
             `<button class="qf-btn${k === 'open' ? ' active' : ''}" data-st="${k}" onclick="Deals.setStatus('${k}')">${l}</button>`).join('')}
         </div>
         <div class="toolbar-spacer"></div>
@@ -127,6 +127,7 @@ const Deals = {
         api('GET', `/deals/summary?owner=${encodeURIComponent(this.owner)}`),
       ]);
       this.deals = deals;
+      if (!this._prov) this._prov = await api('GET', '/bedarf/config').then(c => c.provision).catch(() => null);
       this.renderKpis(summary);
       this.render();
       if (!this.opts.isAdmin && typeof Provision !== 'undefined') Provision.bonusLeiste('dealBonus');
@@ -160,7 +161,7 @@ const Deals = {
       kpi('', 'fa-funnel-dollar', 'Offene Pipeline', this.fmtShort(s.open.value), `<b>${s.open.count}</b> offene Deals`, "Deals.setView('board')") +
       kpi('c-ink', 'fa-balance-scale', 'Gewichtete Prognose', this.fmtShort(s.open.weighted), 'Wert × Wahrscheinlichkeit der Phase') +
       kpi('c-green', 'fa-trophy', 'Gewonnen diesen Monat', this.fmtShort(s.won_month.value), `<b>${s.won_month.count}</b> Abschlüsse`, "Deals.setView('list');Deals.setStatus('won')") +
-      kpi('c-copper', 'fa-calendar-check', 'Abschluss geplant', this.fmtShort(s.closing_month.value), `<b>${s.closing_month.count}</b> Deals bis Monatsende · <b>${s.lost_month.count}</b> verloren`);
+      kpi('c-copper', 'fa-calendar-check', 'Abschluss geplant', this.fmtShort(s.closing_month.value), `<b>${s.closing_month.count}</b> Deals bis Monatsende · <b>${s.lost_month.count}</b> abgelehnt`);
   },
 
   render() {
@@ -168,8 +169,28 @@ const Deals = {
   },
 
   // ── Pipeline-Board ──────────────────────────────────────────
+  // Provision des zuständigen Vertrieblers auf den einmaligen Wert (Betreuung zählt nicht):
+  // voller Satz, mit eigenem Rabatt der reduzierte Satz, mit Häkchen „Aktionsrabatt“ wieder der volle.
+  provision(d) {
+    if (d.provision_betrag != null) return Number(d.provision_betrag);   // vom Server, wie im Deal-Fenster
+    if (!this._prov || !d.value || d.owner_role === 'admin' || !d.owner_id) return null;
+    const rabatt = Number(d.bedarf_rabatt) > 0 && !Number(d.aktionsrabatt);
+    const satz = Number(rabatt ? this._prov.satz_rabatt : this._prov.satz) || 0;
+    return Math.round(Number(d.value) * satz) / 100;
+  },
+  // „Angebot gesendet am …“ und ob der Kunde seitdem geantwortet hat (eingehende Mail)
+  angebotInfo(d, kurz = false) {
+    if (!d.angebot_gesendet_at) return '';
+    const antwort = d.letzte_antwort && new Date(d.letzte_antwort) > new Date(d.angebot_gesendet_at);
+    const tag = x => fmtDateShort(x).slice(0, 6);
+    return kurz
+      ? `<div class="dc-angebot"><i class="fas fa-paper-plane"></i>Angebot ${tag(d.angebot_gesendet_at)} · ${antwort ? `<b>Antwort ${tag(d.letzte_antwort)}</b>` : 'noch keine Antwort'}</div>`
+      : `<div class="deal-angebot-info"><div><span>Angebot gesendet am</span><b>${fmtDate(d.angebot_gesendet_at)}</b></div>
+          <div><span>Kunde hat geantwortet</span><b>${antwort ? `ja, zuletzt am ${fmtDate(d.letzte_antwort)}` : 'nein'}</b></div></div>`;
+  },
   nextStep(d) {
-    if (!d.next_reminder_at) return `<span class="dc-next ns-none" title="Kein nächster Schritt geplant"><i class="fas fa-exclamation-triangle"></i></span>`;
+    // Kein Warnzeichen mehr ohne Termin: der Vertriebler entscheidet selbst, wann er nachfasst
+    if (!d.next_reminder_at) return '';
     const t = new Date(d.next_reminder_at);
     const endToday = new Date(); endToday.setHours(23, 59, 59, 999);
     const cls = t < new Date() ? 'ns-overdue' : t <= endToday ? 'ns-today' : 'ns-future';
@@ -187,8 +208,9 @@ const Deals = {
         <div class="dc-sub">${escHtml(d.company || '')}${d.ceo ? ' · ' + escHtml(d.ceo) : ''}</div>
         ${rotten ? `<div class="dc-rot"><i class="fas fa-hourglass-end"></i>${d.days_in_stage} Tage in dieser Phase</div>` : ''}
         ${d.admin_flag ? `<div class="dc-flag" title="${escHtml(d.admin_flag)}"><i class="fas fa-exclamation-triangle"></i>${escHtml(d.admin_flag)}</div>` : ''}
+        ${this.angebotInfo(d, true)}
         <div class="dc-foot">
-          <span class="dc-value">${this.fmt(d.value)}</span>
+          <span class="dc-value">${this.fmt(d.value)}${this.provision(d) != null ? ` <small class="dc-prov" title="Provision ${escHtml(d.owner_name || '')} (ca., einmaliger Betrag)">(${this.fmt(this.provision(d))})</small>` : ''}</span>
           ${d.expected_close_date ? `<span class="dc-close${overdueClose ? ' is-late' : ''}" title="Erwarteter Abschluss"><i class="fas fa-flag-checkered"></i>${fmtDateShort(d.expected_close_date + 'T12:00:00').slice(0, 6)}</span>` : ''}
           <span class="dc-spacer"></span>
           ${this.nextStep(d)}
@@ -269,7 +291,7 @@ const Deals = {
     if (!deals.length) { el.innerHTML = '<div class="card"><div class="wiki-empty" style="margin:10px 0"><i class="fas fa-handshake"></i>Keine Deals für diese Auswahl.</div></div>'; return; }
     const total = deals.reduce((a, d) => a + Number(d.value || 0), 0);
     const stCell = d => d.status === 'won' ? `<span class="deal-status won"><i class="fas fa-trophy"></i>Gewonnen ${fmtDateShort(d.won_at)}</span>`
-      : d.status === 'lost' ? `<span class="deal-status lost" title="${escHtml(d.lost_reason || '')}"><i class="fas fa-times-circle"></i>Verloren · ${escHtml(d.lost_reason || '')}</span>`
+      : d.status === 'lost' ? `<span class="deal-status lost" title="${escHtml(d.lost_reason || '')}"><i class="fas fa-times-circle"></i>Abgelehnt · ${escHtml(d.lost_reason || '')}</span>`
       : `<span class="deal-status open">${escHtml(d.stage_name || '—')}</span>`;
     el.innerHTML = `
       <div class="card">
@@ -294,7 +316,7 @@ const Deals = {
     if (document.getElementById('dealModal')) return;
     document.body.insertAdjacentHTML('beforeend', `
       <div class="deal-dropbar" id="dealDropBar">
-        <div class="deal-drop lost" ondragover="Deals.dragOver(event)" ondragleave="this.classList.remove('drag-over')" ondrop="Deals.dropOutcome(event,'lost')"><i class="fas fa-times-circle"></i> Verloren</div>
+        <div class="deal-drop lost" ondragover="Deals.dragOver(event)" ondragleave="this.classList.remove('drag-over')" ondrop="Deals.dropOutcome(event,'lost')"><i class="fas fa-times-circle"></i> Abgelehnt</div>
         <div class="deal-drop won" ondragover="Deals.dragOver(event)" ondragleave="this.classList.remove('drag-over')" ondrop="Deals.dropOutcome(event,'won')"><i class="fas fa-trophy"></i> Gewonnen</div>
       </div>
 
@@ -318,6 +340,8 @@ const Deals = {
             <div class="form-group" id="dmOwnerGroup" style="display:none"><label>Verantwortlich</label><select id="dmOwner" class="form-control"></select></div>
           </div>
           <div class="form-group"><label>Notizen</label><textarea id="dmNotes" class="form-control" rows="3" placeholder="Umfang, Ansprechpartner, Besonderheiten …"></textarea></div>
+          <div id="dmAngebot"></div>
+          ${this.opts.isAdmin ? `<label class="deal-aktion"><input type="checkbox" id="dmAktion"> Aktionsrabatt von mir (Provision bleibt beim vollen Satz)</label>` : ''}
           <div id="dmProvision"></div>
           <div class="deal-modal-err" id="dmErr"></div>
           <div class="deal-modal-actions" id="dmActions"></div>
@@ -327,11 +351,11 @@ const Deals = {
       <div class="modal-overlay" id="dealLostModal" onclick="if(event.target===this)this.classList.remove('open')">
         <div class="modal" style="max-width:440px">
           <button class="modal-close" onclick="document.getElementById('dealLostModal').classList.remove('open')"><i class="fas fa-times"></i></button>
-          <div class="modal-title">Deal als verloren markieren</div>
-          <div class="form-group"><label>Warum verloren? *</label><div class="chip-row deal-reasons" id="dlReasons"></div></div>
+          <div class="modal-title">Deal als abgelehnt markieren</div>
+          <div class="form-group"><label>Warum abgelehnt? *</label><div class="chip-row deal-reasons" id="dlReasons"></div></div>
           <div class="form-group"><label>Details (optional)</label><input type="text" id="dlReasonText" class="form-control" placeholder="z.B. hat sich für Agentur XY entschieden"></div>
           <div class="deal-modal-err" id="dlErr"></div>
-          <button class="btn btn-danger" style="width:100%;justify-content:center" onclick="Deals.confirmLost()"><i class="fas fa-times-circle"></i> Als verloren markieren</button>
+          <button class="btn btn-danger" style="width:100%;justify-content:center" onclick="Deals.confirmLost()"><i class="fas fa-times-circle"></i> Als abgelehnt markieren</button>
         </div>
       </div>
 
@@ -367,6 +391,7 @@ const Deals = {
     document.getElementById('dmTitle').textContent = 'Neuer Deal';
     document.getElementById('dmStatusBar').innerHTML = '';
     document.getElementById('dmProvision').innerHTML = '';
+    document.getElementById('dmAngebot').innerHTML = '';
     document.getElementById('dmLeadGroup').style.display = leadId ? 'none' : '';
     document.getElementById('dmLeadSearch').value = '';
     document.getElementById('dmLeadResults').innerHTML = '';
@@ -424,6 +449,10 @@ const Deals = {
     document.getElementById('dmClose').value = d.expected_close_date || '';
     document.getElementById('dmNotes').value = d.notes || '';
     document.getElementById('dmErr').textContent = '';
+    const listenDeal = (this.deals || []).find(x => x.id === d.id) || {};
+    document.getElementById('dmAngebot').innerHTML = this.angebotInfo({ ...listenDeal, ...d, letzte_antwort: d.letzte_antwort || listenDeal.letzte_antwort });
+    const akt = document.getElementById('dmAktion');
+    if (akt) akt.checked = !!Number(d.aktionsrabatt);
     this._fillStageSelect(d.stage_id);
     await this._fillOwnerSelect(d.owner_id);
 
@@ -432,7 +461,7 @@ const Deals = {
     const steps = d.status === 'open' ? `<div class="deal-steps">${this.stages.map((s, i) =>
       `<button type="button" class="deal-step${i <= idx ? ' done' : ''}${i === idx ? ' current' : ''}" onclick="Deals.moveTo(${s.id})" title="${escHtml(s.name)}">${escHtml(s.name)}</button>`).join('')}</div>` : '';
     const banner = d.status === 'won' ? `<div class="deal-banner won"><i class="fas fa-trophy"></i>Gewonnen am ${fmtDate(d.won_at)}</div>`
-      : d.status === 'lost' ? `<div class="deal-banner lost"><i class="fas fa-times-circle"></i>Verloren am ${fmtDate(d.lost_at)} · ${escHtml(d.lost_reason || '')}</div>` : '';
+      : d.status === 'lost' ? `<div class="deal-banner lost"><i class="fas fa-times-circle"></i>Abgelehnt am ${fmtDate(d.lost_at)} · ${escHtml(d.lost_reason || '')}</div>` : '';
     document.getElementById('dmStatusBar').innerHTML = banner + steps;
 
     const angebotBtn = typeof this.opts.onAngebot === 'function' && d.status === 'open'
@@ -448,7 +477,7 @@ const Deals = {
       ? `<button class="btn btn-primary" onclick="Deals.save()"><i class="fas fa-check"></i> Speichern</button>
          <span class="dc-spacer"></span>
          <button class="btn deal-btn-won" onclick="Deals.markWon(${d.id})"><i class="fas fa-trophy"></i> Gewonnen</button>
-         <button class="btn deal-btn-lost" onclick="Deals.askLost(${d.id})"><i class="fas fa-times-circle"></i> Verloren</button>
+         <button class="btn deal-btn-lost" onclick="Deals.askLost(${d.id})"><i class="fas fa-times-circle"></i> Abgelehnt</button>
          ${gesendetBtn}${angebotBtn}${bedarfBtn}${leadBtn}${del}`
       : `<button class="btn btn-primary" onclick="Deals.save()"><i class="fas fa-check"></i> Speichern</button>
          <button class="btn btn-ghost" onclick="Deals.reopen(${d.id})"><i class="fas fa-undo"></i> Wieder öffnen</button>
@@ -469,6 +498,8 @@ const Deals = {
       notes: document.getElementById('dmNotes').value.trim(),
     };
     if (this.opts.isAdmin) body.owner_id = parseInt(document.getElementById('dmOwner').value) || null;
+    const akt = document.getElementById('dmAktion');
+    if (akt && this._current) body.aktionsrabatt = akt.checked;
     return body;
   },
 
@@ -541,7 +572,7 @@ const Deals = {
       await api('POST', `/deals/${this._lostId}/lost`, { grund: this._lostReason, text: detail });
       document.getElementById('dealLostModal').classList.remove('open');
       this.close();
-      showToast('Deal als verloren markiert');
+      showToast('Deal als abgelehnt markiert');
       this._afterChange();
     } catch (e) { document.getElementById('dlErr').textContent = e.message; }
   },
@@ -569,7 +600,7 @@ const Deals = {
     const deals = l.deals || [];
     const rows = deals.map(d => {
       const st = d.status === 'won' ? '<span class="deal-status won"><i class="fas fa-trophy"></i>Gewonnen</span>'
-        : d.status === 'lost' ? `<span class="deal-status lost"><i class="fas fa-times-circle"></i>Verloren</span>`
+        : d.status === 'lost' ? `<span class="deal-status lost"><i class="fas fa-times-circle"></i>Abgelehnt</span>`
         : `<span class="deal-status open">${escHtml(d.stage_name || '')}</span>`;
       return `<button type="button" class="deal-mini" onclick="Deals.open(${d.id})">
         <span class="deal-mini-main"><b>${escHtml(d.title)}</b>${st}</span><span class="deal-mini-val">${this.fmt(d.value)}</span></button>`;

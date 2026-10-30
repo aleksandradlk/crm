@@ -188,9 +188,11 @@ router.get('/', auth, async (req, res) => {
     `SELECT d.id, d.lead_id, d.title, d.value, d.stage_id, d.status, d.owner_id,
             DATE_FORMAT(d.expected_close_date, '%Y-%m-%d') AS expected_close_date,
             d.won_at, d.lost_at, d.lost_reason, d.notes, d.admin_flag, d.paket, d.herkunft, d.angefordert_at, d.angebot_gesendet_at,
-            d.stage_changed_at, d.created_at, d.updated_at,
+            d.stage_changed_at, d.created_at, d.updated_at, d.aktionsrabatt,
             l.company, l.ceo, l.phone, l.assigned_to AS lead_assigned_to,
-            u.full_name AS owner_name, s.name AS stage_name, s.probability,
+            u.full_name AS owner_name, u.role AS owner_role, s.name AS stage_name, s.probability,
+            JSON_UNQUOTE(JSON_EXTRACT(b.data, '$.rabatt_prozent')) AS bedarf_rabatt,
+            (SELECT MAX(e.received_at) FROM lead_emails e WHERE e.lead_id = d.lead_id AND e.direction = 'inbound') AS letzte_antwort,
             DATEDIFF(NOW(), d.stage_changed_at) AS days_in_stage,
             (SELECT MIN(r.remind_at) FROM reminders r
               WHERE r.lead_id = d.lead_id AND r.done_at IS NULL) AS next_reminder_at
@@ -198,9 +200,26 @@ router.get('/', auth, async (req, res) => {
      JOIN leads l ON l.id = d.lead_id
      LEFT JOIN users u ON u.id = d.owner_id
      LEFT JOIN deal_stages s ON s.id = d.stage_id
+     LEFT JOIN bedarfsanalysen b ON b.lead_id = d.lead_id
      WHERE ${where.join(' AND ')}
      ORDER BY ${status === 'open' ? 'd.stage_changed_at ASC' : 'COALESCE(d.won_at, d.lost_at, d.updated_at) DESC'}
      LIMIT 2000`, params);
+  // Provision des zuständigen Vertrieblers für die Karten (gleiche Rechnung wie im Deal-Fenster),
+  // nur für offene Deals und überschaubare Mengen
+  if (status === 'open' && rows.length <= 300) {
+    try {
+      const prov = require('./provision');
+      const cfg = await require('./bedarf').regeln();
+      const fest = await prov.festeSaetze(rows.map(r => r.id));
+      const besitzer = {};
+      for (const d of rows) {
+        if (!d.owner_id || d.owner_role === 'admin') continue;
+        besitzer[d.owner_id] = besitzer[d.owner_id] || await prov.besitzerLaden(d.owner_id);
+        const p = await prov.berechne(d, cfg, besitzer[d.owner_id], { satzFest: fest[d.id] }).catch(() => null);
+        if (p && !p.keine) { d.provision_betrag = p.auszahlung != null ? p.auszahlung : p.netto; d.provision_satz = p.satz; }
+      }
+    } catch (e) { console.error('Deals Provision:', e.message); }
+  }
   res.json(rows);
 });
 
@@ -298,6 +317,9 @@ router.patch('/:id', auth, async (req, res) => {
   if (Number.isNaN(close)) return res.status(400).json({ error: 'Ungültiges Datum' });
   if (close !== undefined) { updates.push('expected_close_date=?'); params.push(close); }
   if (req.body.notes !== undefined) { updates.push('notes=?'); params.push(String(req.body.notes || '').slice(0, 5000) || null); }
+  if (req.body.aktionsrabatt !== undefined && req.user.role === 'admin') {
+    updates.push('aktionsrabatt=?'); params.push(req.body.aktionsrabatt ? 1 : 0);
+  }
   if (req.body.owner_id !== undefined && req.user.role === 'admin') {
     updates.push('owner_id=?'); params.push(parseInt(req.body.owner_id) || null);
   }

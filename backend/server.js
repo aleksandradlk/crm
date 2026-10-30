@@ -672,6 +672,10 @@ migrate(`CREATE TABLE IF NOT EXISTS bedarfsanalyse_snapshots (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_bsnap_lead (lead_id)
 )`).catch(() => {});
+// Deals: Häkchen „Aktionsrabatt“ (Provision bleibt beim vollen Satz); keine Auto-Nachfass-Reminder mehr
+// (Rückweg: db/rollback/2026-10-30_deals.sql)
+migrate('ALTER TABLE deals ADD COLUMN aktionsrabatt TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
+migrate("UPDATE reminders SET done_at=NOW() WHERE kind='nachfass_auto' AND done_at IS NULL AND sent=0").catch(() => {});
 // Schriftgröße je Nutzer (A+/A−), 100 = normal (Rückweg: db/rollback/2026-10-30_ansicht.sql)
 migrate('ALTER TABLE users ADD COLUMN ui_schrift SMALLINT NULL').catch(() => {});
 // Versionsnummer gegen gegenseitiges Überschreiben (Rückweg: db/rollback/2026-10-30_bedarf-versionen.sql)

@@ -2551,6 +2551,14 @@ body.dark .ob-icon.is-accent { color: var(--accent2); }
   .bd-foot-btns { justify-content: flex-start; }
 }
 .bd-fehlt { margin: 0; padding-left: 18px; font-size: 13.5px; line-height: 1.7; color: var(--text); }
+.dc-prov { font-size: 11px; font-weight: 600; color: var(--text3); }
+.dc-angebot { font-size: 11px; color: var(--text3); margin-top: 4px; display: flex; gap: 5px; align-items: center; }
+.dc-angebot b { color: var(--green); font-weight: 600; }
+.deal-angebot-info { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0 12px; }
+.deal-angebot-info > div { background: var(--bg3); border-radius: 10px; padding: 8px 10px; }
+.deal-angebot-info span { display: block; font-size: 11px; color: var(--text3); }
+.deal-angebot-info b { font-size: 13px; color: var(--text); }
+.deal-aktion { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--text2); margin: 0 0 10px; cursor: pointer; }
 .dc-flag { font-size: 11px; color: var(--copper); margin-top: 4px; display: flex; gap: 5px; align-items: center; }
 .dl-bedarf { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--text2); background: var(--bg3); border-radius: 10px; padding: 7px 10px; margin-top: 10px; }
 .dl-bedarf b { color: var(--text); }

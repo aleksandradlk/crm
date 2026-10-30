@@ -2089,7 +2089,7 @@ async function loadActivityFeed() {
     const rows = await api('GET', '/leads/activity-feed');
     if (!rows.length) { list.innerHTML = '<div class="wiki-empty" style="margin-top:12px"><i class="fas fa-stream"></i>Noch keine Aktivitäten.</div>'; return; }
     const ACTION_ICONS = { status_change:'exchange-alt', comment_add:'sticky-note', lead_create_manual:'plus', leads_bulk_create:'plus', leads_csv_import:'file-import', lead_assign:'user-tag', lead_update:'pen', lead_archive:'archive', lead_restore:'undo', lead_email_sent:'envelope', email_assigned:'envelope-open', call_started:'phone', call_logged:'phone', reminder_set:'bell', login:'sign-in-alt', logout:'sign-out-alt', deal_create:'handshake', deal_stage_change:'arrow-right', deal_update:'pen', deal_won:'trophy', deal_lost:'times-circle', deal_reopen:'undo', deal_delete:'trash' };
-    const FEED_LABELS = { status_change:'Status geändert', comment_add:'Notiz hinzugefügt', lead_create_manual:'Lead angelegt', leads_bulk_create:'Leads angelegt', leads_csv_import:'CSV importiert', lead_assign:'Lead übernommen', lead_update:'Lead bearbeitet', lead_archive:'Lead archiviert', lead_restore:'Lead wiederhergestellt', lead_email_sent:'E-Mail gesendet', email_assigned:'E-Mail zugeordnet', call_started:'Anruf gestartet', call_logged:'Anruf dokumentiert', reminder_set:'Wiedervorlage gesetzt', login:'Angemeldet', logout:'Abgemeldet', deal_create:'Deal angelegt', deal_stage_change:'Deal verschoben', deal_update:'Deal bearbeitet', deal_won:'Deal gewonnen', deal_lost:'Deal verloren', deal_reopen:'Deal wieder geöffnet', deal_delete:'Deal gelöscht' };
+    const FEED_LABELS = { status_change:'Status geändert', comment_add:'Notiz hinzugefügt', lead_create_manual:'Lead angelegt', leads_bulk_create:'Leads angelegt', leads_csv_import:'CSV importiert', lead_assign:'Lead übernommen', lead_update:'Lead bearbeitet', lead_archive:'Lead archiviert', lead_restore:'Lead wiederhergestellt', lead_email_sent:'E-Mail gesendet', email_assigned:'E-Mail zugeordnet', call_started:'Anruf gestartet', call_logged:'Anruf dokumentiert', reminder_set:'Wiedervorlage gesetzt', login:'Angemeldet', logout:'Abgemeldet', deal_create:'Deal angelegt', deal_stage_change:'Deal verschoben', deal_update:'Deal bearbeitet', deal_won:'Deal gewonnen', deal_lost:'Deal abgelehnt', deal_reopen:'Deal wieder geöffnet', deal_delete:'Deal gelöscht' };
     list.innerHTML = rows.map(r => {
       const icon = ACTION_ICONS[r.action] || 'dot-circle';
       const dt = new Date(r.created_at);
@@ -3116,7 +3116,7 @@ function renderDashboard(data) {
       ${kpi('c-green', 'fa-euro-sign', 'Umsatz diesen Monat', Deals.fmtShort(dl.won_month.value), `<b>${dl.won_month.count}</b> gewonnene Deals`, "showTab('deals')")}
       ${kpi('', 'fa-funnel-dollar', 'Offene Pipeline', Deals.fmtShort(dl.open.value), `<b>${dl.open.count}</b> offene Deals`, "showTab('deals')")}
       ${kpi('c-ink', 'fa-balance-scale', 'Gewichtete Prognose', Deals.fmtShort(dl.open.weighted), 'Wert × Wahrscheinlichkeit', "showTab('deals')")}
-      ${kpi('c-copper', 'fa-calendar-check', 'Abschluss bis Monatsende', Deals.fmtShort(dl.closing_month.value), `<b>${dl.closing_month.count}</b> geplant · <b>${dl.lost_month.count}</b> verloren`, "showTab('deals')")}
+      ${kpi('c-copper', 'fa-calendar-check', 'Abschluss bis Monatsende', Deals.fmtShort(dl.closing_month.value), `<b>${dl.closing_month.count}</b> geplant · <b>${dl.lost_month.count}</b> abgelehnt`, "showTab('deals')")}
     </div>` : '';
 
   el.innerHTML = `${dealsHtml}

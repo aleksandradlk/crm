@@ -197,7 +197,7 @@ const Bedarf = {
         ${row('Sonderwünsche', area('sonderwuensche', 'Alles, was nicht im Handbuch steht'))}
         ${row('Für die Einleitung', area('einleitung_notiz', 'In 2–3 Sätzen, möglichst in seinen Worten: Was hat er dir erzählt, was soll anders werden? z. B. „Ich fahr für jedes Angebot raus und dann hör ich nie wieder was.“', 3)
           + '<div class="bd-hint">Daraus schreibt die KI die persönliche Einleitung im Angebot.</div>')}
-        ${row('Nachfass-Termin <span class="bd-star">★</span>', `<input type="datetime-local" class="form-control" data-f="nachfass_termin">` + '<div class="bd-hint">Legt automatisch eine Erinnerung für dich an.</div>')}`, 'bdErgebnis')}
+        ${row('Nachfass-Termin', `<input type="datetime-local" class="form-control" data-f="nachfass_termin">` + '<div class="bd-hint">Freiwillig. Legt eine Erinnerung für dich an.</div>')}`, 'bdErgebnis')}
       <div class="bd-foot" id="bdFoot"></div>`;
 
     // datetime-local braucht „YYYY-MM-DDTHH:MM“
@@ -730,7 +730,6 @@ const Bedarf = {
           <label>Paket M ab … Anfragen/Woche</label><div>${num('vr-m-anf', c.regeln.m_anfragen, 70)}</div>
           <label>Kein L unter … Anfragen/Woche (bei 1–2 Kanälen)</label><div>${num('vr-l-wenig', c.regeln.l_wenig_anfragen ?? 5, 70)}</div>
           <label>Google-Profil, wenn es schon besteht (auch schwach) oder jemand anderes es macht</label><div>${num('vr-g-bestehend', c.zusatz.google.einrichtung_bestehend ?? 249)} €</div>
-          <label>Nachfassen nach dem Angebot (Tage)</label><div><input class="form-control" id="vr-tage" value="${escHtml((c.nachfass_tage || []).join(', '))}" style="width:140px"></div>
           <label>Hinweis, wenn Anfrage wartet seit</label><div>${num('vr-std', c.anfrage_warte_std, 70)} Std.</div>
           <label>Max. Zeichen in großen Textfeldern der Bedarfsanalyse</label><div>${num('vr-textlimit', c.textlimit, 100)}</div>
           <label>Anfragen per E-Mail an</label><div><input class="form-control" id="vr-mail" type="email" value="${escHtml(c.admin_mail)}"></div>
@@ -773,7 +772,6 @@ const Bedarf = {
       speichern({
         pakete, zusatz, rabatt_grenze: val('vr-rabatt'),
         regeln: { l_auftragswert: val('vr-l-wert'), m_kanaele: val('vr-m-kan'), m_anfragen: val('vr-m-anf'), l_wenig_anfragen: val('vr-l-wenig') },
-        nachfass_tage: o.querySelector('#vr-tage').value.split(/[,; ]+/).map(Number).filter(n => n > 0),
         anfrage_warte_std: val('vr-std') || 24,
         textlimit: Math.max(1000, val('vr-textlimit') || R.STANDARD.textlimit),
         admin_mail: o.querySelector('#vr-mail').value.trim() || R.STANDARD.admin_mail,
