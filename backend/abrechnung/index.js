@@ -1270,8 +1270,6 @@ Antworte NUR mit gültigem JSON: {"betreff": "...", "text": "..."}`;
     const i0 = roh.indexOf('{'), i1 = roh.lastIndexOf('}');
     let ki;
     try { ki = JSON.parse(roh.slice(i0, i1 + 1)); } catch (e) { throw new Error('Die KI-Antwort war nicht lesbar, bitte noch einmal versuchen.'); }
-    // Sicherheitsnetz für die feste Regel: „wie mit Nala besprochen“ → „wie besprochen“
-    const ohneNamen = t => String(t || '').replace(/\b([Ww])ie (?:du |ihr |Sie )?(?:mit|bei) [A-ZÄÖÜ][\wäöüß-]+(?: [A-ZÄÖÜ][\wäöüß-]+)? besprochen(?: hast| habt| haben)?/g, '$1ie besprochen');
     const text = ohneNamen(ki.text).trim();
     if (!text) throw new Error('Die KI hat keinen Text geliefert, bitte noch einmal versuchen.');
     ok(res, { betreff: ohneNamen(ki.betreff).trim() || emailVorlage('angebot', a, kunde, stamm).betreff,
@@ -1285,8 +1283,17 @@ Antworte NUR mit gültigem JSON: {"betreff": "...", "text": "..."}`;
   // Bedarfsanalyse übernommen), bleiben Titel, Menge und Preis fest; die KI schreibt nur die
   // Beschreibungen der einmaligen Positionen passend zum Kunden. Der Katalog selbst bleibt
   // unverändert, ebenso die Beschreibung monatlicher Leistungen (Betreuung = Vertragsinhalt).
+  // Sicherheitsnetz für die feste Regel „keine Namen aus dem Vertrieb“:
+  // „wie mit Nala besprochen“ → „wie besprochen“, „Du hast Nala erzählt“ → „Du hast uns erzählt“
+  const NAME = '(?!Sie\\b|Ihnen\\b|Ihr\\b|Euch\\b)[A-ZÄÖÜ][\\wäöüß-]+(?: [A-ZÄÖÜ][\\wäöüß-]+)?';
+  const RE_BESPROCHEN = new RegExp(`\\b([Ww])ie (?:du |ihr |Sie )?(?:mit|bei) ${NAME} besprochen(?: hast| habt| haben)?`, 'g');
+  const RE_ERZAEHLT = new RegExp(`\\b(hast|habt|haben|du|ihr|Sie) ${NAME} (erzählt|gesagt)`, 'g');
+  function ohneNamen(t) {
+    return String(t || '').replace(RE_BESPROCHEN, '$1ie besprochen').replace(RE_ERZAEHLT, '$1 uns $2');
+  }
+
   // Vorbild für die Einleitung (Angebot an Reinheitswerk, von Aleksandra freigegeben)
-  const EINLEITUNG_VORBILD = 'Du hast Nala erzählt, dass du bei der Arbeit ständig aufs Handy schaust und manchmal nachts um 3 noch Anfragen beantwortest. Genau das nimmt dir der Anfragen-Autopilot ab: Jede Anfrage über Instagram, WhatsApp, E-Mail oder dein Formular bekommt sofort eine Antwort. Fahrzeug, Zustand, Fotos und Ort werden automatisch abgefragt, und der Kunde bekommt direkt einen Preis nach deiner Preisliste. Anfragen, die zu weit weg sind oder nicht zu dir passen, siehst du sofort und sagst mit einem Klick ab. So machst du nur noch die Autos, auf die du Lust hast, und hast nachts deine Ruhe.';
+  const EINLEITUNG_VORBILD = 'Du hast uns erzählt, dass du bei der Arbeit ständig aufs Handy schaust und manchmal nachts um 3 noch Anfragen beantwortest. Genau das nimmt dir der Anfragen-Autopilot ab: Jede Anfrage über Instagram, WhatsApp, E-Mail oder dein Formular bekommt sofort eine Antwort. Fahrzeug, Zustand, Fotos und Ort werden automatisch abgefragt, und der Kunde bekommt direkt einen Preis nach deiner Preisliste. Anfragen, die zu weit weg sind oder nicht zu dir passen, siehst du sofort und sagst mit einem Klick ab. So machst du nur noch die Autos, auf die du Lust hast, und hast nachts deine Ruhe.';
 
   // Für Angebote und Angebotsmails das stärkere Modell (persönlichere Texte); ist es nicht verfügbar,
   // automatisch das Standardmodell
@@ -1317,15 +1324,15 @@ Antworte NUR mit gültigem JSON: {"betreff": "...", "text": "..."}`;
     const form = du ? 'Du-Form' : 'Sie-Form';
     const vorhanden = (Array.isArray(b.positionen) ? b.positionen : []).filter(p => p && String(p.titel || '').trim()).slice(0, 20);
     const festePositionen = !!bedarf && vorhanden.length > 0;
-    const closer = bedarf && bedarf.closer;
 
     const einleitungRegeln = bedarf ? `- Einleitung nach fester Definition, ${form}, OHNE Anrede am Anfang (die setzt das Tool, z. B. „Hey ${(kunde && kunde.ansprechpartner || '').split(/\s+/)[0] || 'Vorname'},“):
-  1. Einstieg mit der konkreten Situation, die der Kunde ${closer || 'uns'} erzählt hat, möglichst in seinen eigenen Worten („Du hast ${closer || 'uns'} erzählt, dass …“ oder „Wie du ${closer || 'uns'} erzählt hast, …“). Nutze vor allem „Für die Einleitung“ und „Größtes Problem“.
+  1. Einstieg mit der konkreten Situation, die der Kunde uns erzählt hat, möglichst in seinen eigenen Worten („${du ? 'Du hast uns erzählt, dass …“ oder „Wie du uns erzählt hast, …' : 'Sie haben uns erzählt, dass …“ oder „Wie Sie uns erzählt haben, …'}“). Nutze vor allem „Für die Einleitung“ und „Größtes Problem“.
   2. „Genau das nimmt dir der Anfragen-Autopilot ab:“ oder „Das drehen wir um:“ und dann der konkrete Ablauf in 2–3 Sätzen: seine Kanäle, was automatisch abgefragt wird (passend zu seiner Branche), was der Kunde sofort bekommt.
   3. Das spürbare Ergebnis für ihn in einem Satz (z. B. „Du fährst erst raus, wenn der Kunde zugesagt hat.“).
   4. Falls vorhanden: Geschenk oder Bonus (erster Monat Betreuung gratis, zugesagte Aktion mit Frist) und Zusatzleistungen (Google-Profil, Webseite) in einem Satz.
   Persönlich heißt: mindestens zwei konkrete Details nur dieses Kunden (seine Worte, seine Zahlen wie Anfragen pro Woche, seine Kanäle, was er bei Anfragen nachfragen muss, wie er heute arbeitet, seine Branche mit ihren Fachbegriffen). Wer den Text liest, muss merken, dass er nur für ihn geschrieben ist.
   VERBOTEN (wirkt wie ein Serienbrief): „Danke für das (sympathische/nette) Gespräch“, „danke für dein Vertrauen“, „Vielen Dank für Ihr Interesse“, „wertvolle Zeit“, „Zeit und Geld sparen“, „die wichtigen Dinge“, „persönliche Note“, „Kundenflow“, „Mehrwert“, „nahtlos“, „effizient“, „auf das Wesentliche konzentrieren“, „wir freuen uns“. Keine Technikwörter (kein KI, Automatisierung, Workflow, Integration, Tool, generieren), keine Preise, keine Paketbuchstaben (S/M/L).
+  NIE den Namen einer Person aus dem Vertrieb oder Team nennen, immer „uns“ oder „wie besprochen“.
   VERTRAULICH: Nichts über Geld, Privates, Gesundheit, Familie, Mitarbeiterprobleme, Konkurrenten, Preisreaktion oder Rabattgründe erwähnen, auch wenn es irgendwo anklingt. Im Zweifel weglassen.
   Insgesamt 6–10 Sätze. Erfinde nichts, was nicht in der Bedarfsanalyse steht.
   Vorbild für Ton und Aufbau (nicht wörtlich übernehmen, die Fakten müssen von diesem Kunden kommen):
@@ -1334,7 +1341,7 @@ Antworte NUR mit gültigem JSON: {"betreff": "...", "text": "..."}`;
     const kopf = `Du hilfst dem Unternehmen "${stamm.firma}" (${stamm.kleinunternehmer ? 'Kleinunternehmer, Preise ohne USt' : 'Preise netto zzgl. 19 % USt'}), ein deutsches Angebot zu formulieren.
 
 ${kunde ? `KUNDE: ${kunde.firma}${kunde.ansprechpartner ? ', Ansprechpartner ' + kunde.ansprechpartner : ''} (Anrede: ${du ? 'Du' : 'Sie'})` : 'KUNDE: nicht angegeben (Sie-Form)'}
-${bedarf ? `\nBEDARFSANALYSE (Gespräch geführt von ${closer || 'unserem Vertrieb'}):\n${bedarf.text}\n` : ''}${beschreibung ? `\nZUSÄTZLICHE HINWEISE ZUM AUFTRAG:\n${beschreibung}\n` : ''}`;
+${bedarf ? `\nBEDARFSANALYSE (Gespräch mit unserem Vertrieb):\n${bedarf.text}\n` : ''}${beschreibung ? `\nZUSÄTZLICHE HINWEISE ZUM AUFTRAG:\n${beschreibung}\n` : ''}`;
 
     let prompt;
     if (festePositionen) {
@@ -1417,7 +1424,7 @@ Antworte NUR mit gültigem JSON, kein Text davor oder danach:
       positionen.forEach(p => { const art = p.artikelNr && artikel.find(a => a.nr === p.artikelNr); if (art && p.abrechnung === 'monatlich' && art.beschreibung) p.beschreibung = art.beschreibung; });
     }
     if (!positionen.length) throw new Error('Die KI hat keine Positionen vorgeschlagen, bitte die Beschreibung präzisieren.');
-    return { betreff: String(ki.betreff || '').trim(), einleitung: String(ki.einleitung || '').trim(), schlusstext: String(ki.schlusstext || '').trim(), positionen,
+    return { betreff: ohneNamen(ki.betreff).trim(), einleitung: ohneNamen(ki.einleitung).trim(), schlusstext: ohneNamen(ki.schlusstext).trim(), positionen,
       bedarf: bedarf ? { firma: bedarf.firma, closer: bedarf.closer } : null, festePositionen };
   }
   app.post('/api/abrechnung/ki/angebot', asyncRoute(async (req, res) => {
