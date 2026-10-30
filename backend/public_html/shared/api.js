@@ -35,7 +35,20 @@ const Auth = {
 };
 
 // ── API fetch wrapper ─────────────────────────────────────────
+// Solange eine Anfrage läuft: Lade-Zeiger statt Stoppzeichen an gesperrten Knöpfen
+let _apiLaeuft = 0;
+function _apiLaden(d) {
+  _apiLaeuft = Math.max(0, _apiLaeuft + d);
+  document.documentElement.classList.toggle('laedt', _apiLaeuft > 0);
+}
 async function api(method, path, body) {
+  // Nur Speichern/Ändern zählt, keine Hintergrundabfragen (sonst flackert der Zeiger)
+  const vordergrund = method !== 'GET' && path !== '/auth/heartbeat';
+  if (!vordergrund) return _api(method, path, body);
+  _apiLaden(1);
+  try { return await _api(method, path, body); } finally { _apiLaden(-1); }
+}
+async function _api(method, path, body) {
   const headers = { 'Content-Type': 'application/json' };
   const token = Auth.getToken();
   if (token) headers['Authorization'] = 'Bearer ' + token;
@@ -83,6 +96,43 @@ async function api(method, path, body) {
   }
   return data;
 }
+
+// ── Lead-Fenster: Breite ziehen und Vollbild ───────────────────
+// Am linken Rand ziehen ändert die Breite (wird auf dem Gerät gemerkt), der Knopf oben
+// schaltet Vollbild ein und aus.
+function leadPanelAnsicht() {
+  const panel = document.getElementById('leadPanel');
+  if (!panel || panel.dataset.ansicht) return;
+  panel.dataset.ansicht = '1';
+  const breite = Number(localStorage.getItem('lh_panel_breite')) || 0;
+  if (breite) panel.style.width = Math.min(breite, window.innerWidth) + 'px';
+  if (localStorage.getItem('lh_panel_voll') === '1') panel.classList.add('voll');
+  const griff = document.createElement('div');
+  griff.className = 'panel-griff'; griff.title = 'Ziehen, um das Fenster breiter oder schmaler zu machen';
+  panel.appendChild(griff);
+  griff.addEventListener('pointerdown', e => {
+    e.preventDefault(); griff.setPointerCapture(e.pointerId);
+    panel.classList.add('wird-gezogen'); panel.classList.remove('voll');
+    const zoom = Number(document.body.style.zoom) || 1;
+    const bewegen = ev => { panel.style.width = Math.max(420, Math.min(window.innerWidth / zoom, window.innerWidth / zoom - ev.clientX / zoom)) + 'px'; };
+    const ende = () => {
+      panel.classList.remove('wird-gezogen');
+      griff.removeEventListener('pointermove', bewegen); griff.removeEventListener('pointerup', ende);
+      try { localStorage.setItem('lh_panel_breite', String(parseInt(panel.style.width, 10))); localStorage.setItem('lh_panel_voll', '0'); } catch (_) {}
+    };
+    griff.addEventListener('pointermove', bewegen); griff.addEventListener('pointerup', ende);
+  });
+  const aktionen = panel.querySelector('.panel-head-actions');
+  if (aktionen) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'btn btn-ghost btn-sm btn-icon panel-voll-btn';
+    const zeichne = () => { const v = panel.classList.contains('voll'); b.title = v ? 'Normale Größe' : 'Vollbild'; b.innerHTML = `<i class="fas ${v ? 'fa-compress' : 'fa-expand'}"></i>`; };
+    b.onclick = () => { panel.classList.toggle('voll'); try { localStorage.setItem('lh_panel_voll', panel.classList.contains('voll') ? '1' : '0'); } catch (_) {} zeichne(); };
+    zeichne();
+    aktionen.prepend(b);
+  }
+}
+document.addEventListener('DOMContentLoaded', leadPanelAnsicht);
 
 // ── Fenster schließen nur über das X ──────────────────────────
 // Ein Klick auf den abgedunkelten Hintergrund neben einem Fenster (Modal, Lead-Panel) schließt
@@ -513,6 +563,8 @@ function renderSidebarUser() {
         <div class="sidebar-user-role">${user.role === 'admin' ? 'Administrator' : 'Closer'}</div>
       </div>
       <div class="sidebar-user-actions">
+        <button class="sidebar-icon-btn" title="Schrift kleiner (A−)" onclick="schriftAendern(-10)" aria-label="Schrift kleiner"><span class="sidebar-a">A−</span></button>
+        <button class="sidebar-icon-btn" title="Schrift größer (A+)" onclick="schriftAendern(10)" aria-label="Schrift größer"><span class="sidebar-a">A+</span></button>
         <button class="sidebar-icon-btn" id="themeBtn" title="Design wechseln" onclick="toggleTheme()"><i class="fas fa-moon"></i></button>
         <button class="sidebar-icon-btn" title="Einstellungen" onclick="openSettingsModal()"><i class="fas fa-cog"></i></button>
         <button class="sidebar-icon-btn logout-btn" title="Abmelden" onclick="logout()"><i class="fas fa-sign-out-alt"></i></button>
@@ -535,8 +587,24 @@ function applyTheme(theme) {
   localStorage.setItem('lh_theme', theme === 'dark' ? 'dark' : 'light');
   updateThemeBtn();
 }
+// Schriftgröße (A+/A−) je Benutzer, auf dem Server gespeichert wie Hell/Dunkel. 100 = normal.
+function applySchrift(p) {
+  p = Math.max(80, Math.min(150, Math.round(Number(p) || 100)));
+  document.body.style.zoom = p === 100 ? '' : String(p / 100);
+  try { localStorage.setItem('lh_schrift', String(p)); } catch (_) {}
+  return p;
+}
+function schriftAendern(d) {
+  const jetzt = Number(localStorage.getItem('lh_schrift')) || 100;
+  const p = applySchrift(jetzt + d);
+  const u = Auth.getUser();
+  if (u) { u.ui_schrift = p; localStorage.setItem('lh_user', JSON.stringify(u)); }
+  showToast(`Schriftgröße ${p} %`);
+  api('PATCH', '/auth/schrift', { schrift: p }).catch(() => {});
+}
 function initTheme() {
   applyTheme(Auth.getUser()?.theme || localStorage.getItem('lh_theme') || 'light');
+  applySchrift(Auth.getUser()?.ui_schrift || localStorage.getItem('lh_schrift') || 100);
   if (!Auth.getToken()) return;
   api('GET', '/auth/me').then(me => {
     if (!me) return;
@@ -545,6 +613,11 @@ function initTheme() {
     if (me.full_name && me.full_name !== u.full_name) {
       u.full_name = me.full_name;
       localStorage.setItem('lh_user', JSON.stringify(u));
+    }
+    if (me.ui_schrift && me.ui_schrift !== u.ui_schrift) {
+      u.ui_schrift = me.ui_schrift;
+      localStorage.setItem('lh_user', JSON.stringify(u));
+      applySchrift(me.ui_schrift);
     }
     if (me.theme) {
       u.theme = me.theme;

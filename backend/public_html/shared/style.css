@@ -342,6 +342,11 @@ h1, h2, h3, h4 { line-height: 1.2; letter-spacing: -0.02em; font-weight: 600; }
 .btn-icon { width: 32px; height: 32px; padding: 0; }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none !important; }
 button:disabled[data-klick] { cursor: progress !important; }
+/* Während gespeichert wird: Lade-Zeiger statt Stoppzeichen an gesperrten Knöpfen */
+html.laedt button:disabled, html.laedt .btn:disabled, html.laedt .btn[disabled] { cursor: wait !important; }
+html.laedt button:disabled[data-klick]::after { content: ''; display: inline-block; width: 11px; height: 11px; margin-left: 6px; vertical-align: -1px;
+  border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: dreh .7s linear infinite; }
+@keyframes dreh { to { transform: rotate(360deg); } }
 .btn:focus-visible { outline: 2px solid var(--navy-light); outline-offset: 2px; }
 
 /* ── Formulare ───────────────────────────────────────────────── */
@@ -538,6 +543,13 @@ body.dark .modal-overlay { background: rgba(0,0,0,0.55); }
 .slide-panel.open { transform: translateX(0); }
 .slide-overlay { position: fixed; inset: 0; z-index: 149; background: rgba(26,35,48,0.22); backdrop-filter: blur(2px); display: none; }
 .slide-overlay.open { display: block; }
+/* Lead-Fenster: Breite ziehen (linker Rand) und Vollbild */
+.panel-griff { position: absolute; left: 0; top: 0; bottom: 0; width: 7px; cursor: ew-resize; z-index: 3; }
+.panel-griff:hover, .slide-panel.wird-gezogen .panel-griff { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.slide-panel.wird-gezogen { transition: none; user-select: none; }
+.slide-panel.voll { width: 100vw !important; border-radius: 0; }
+.sidebar-a { font-weight: 700; font-size: 11px; letter-spacing: -.02em; }
+@media (max-width: 700px) { .panel-griff, .panel-voll-btn { display: none; } }
 
 /* ── Lead-Panel ──────────────────────────────────────────────── */
 .slide-panel { width: 600px; }
@@ -652,28 +664,32 @@ body.dark .panel-contact-row > i:first-child { background: var(--bg4); }
 
 /* ── Dunkelmodus (Navy-Flächen aus dem Markensystem) ─────────── */
 body.dark {
-  --bg:      #0f151e;
-  --bg2:     #141b26;
-  --bg3:     #1b2432;
-  --bg4:     #2a3547;
-  --text:    #eef1f6;
-  --text1:   #eef1f6;
-  --text2:   #9aa5b4;
-  --text3:   #7d8898;
-  --border:  #2a3547;
-  --border2: #364357;
-  --accent:    var(--navy-light);
-  --accent2:   #b9cdea;
-  --accent-fg: var(--ink-deep);
-  --copper:    var(--copper-light);
-  --amber:     var(--copper-light);
-  --green:     #3fbf85;
-  --green-deep: #6fd4a4;
-  --red:       #e46a6a;
-  --purple:    #a391d6;
-  --shadow:    0 1px 2px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.03);
+  /* Warme Töne statt Blau/Lila, schont die Augen */
+  --bg:      #1E1B18;
+  --bg2:     #25211D;
+  --bg3:     #2D2823;
+  --bg4:     #3A332C;
+  --text:    #EDE6DD;
+  --text1:   #EDE6DD;
+  --text2:   #BDB2A5;
+  --text3:   #978C7F;
+  --border:  #3A332C;
+  --border2: #4A4138;
+  --accent:    #F2994A;
+  --accent2:   #E8833A;
+  --accent-fg: #1E1B18;
+  --copper:    #F2994A;
+  --amber:     #F2B054;
+  --green:     #8DBF6A;
+  --green-deep: #A8D08A;
+  --red:       #E06C5A;
+  --purple:    #D9A27A;
+  --navy-light: #F2994A;
+  --shadow:    0 1px 2px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,240,220,0.03);
   --shadow-lg: 0 16px 40px rgba(0,0,0,0.55);
-  --sidebar-bg: #0b1017;
+  --sidebar-bg: #171411;
+  --ink-2: #2D2823;
+  --ink-deep: #1E1B18;
   color-scheme: dark;
 }
 body.dark .btn-primary:hover { background: var(--accent2); box-shadow: none; }
@@ -1043,7 +1059,7 @@ body.auth-body { background: var(--bg2); }
 .kb-mail-subj span { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); margin-right: 10px; }
 .kb-mail-body { padding: 16px; font-size: 13.5px; line-height: 1.7; color: var(--text2); max-height: 50vh; overflow-y: auto; }
 
-body.dark .kb-hero { background: radial-gradient(700px 260px at 92% -10%, rgba(143,176,221,0.18), transparent 65%), radial-gradient(420px 220px at 8% 120%, rgba(229,147,70,0.12), transparent 70%), linear-gradient(135deg, #0f151f 0%, var(--ink-2) 100%); border: 1px solid var(--border); }
+body.dark .kb-hero { background: radial-gradient(700px 260px at 92% -10%, rgba(242,153,74,0.16), transparent 65%), radial-gradient(420px 220px at 8% 120%, rgba(229,147,70,0.12), transparent 70%), linear-gradient(135deg, #0f151f 0%, var(--ink-2) 100%); border: 1px solid var(--border); }
 body.dark .kb-doc:hover { box-shadow: 0 16px 34px rgba(0,0,0,0.4); }
 body.dark .kb-page { background: #e9eef5; }
 body.dark .kb-chip.active .n { background: rgba(0,0,0,0.15); }

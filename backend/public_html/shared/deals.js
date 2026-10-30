@@ -182,7 +182,7 @@ const Deals = {
     const overdueClose = d.expected_close_date && new Date(d.expected_close_date + 'T23:59:59') < new Date();
     return `
       <div class="deal-card${rotten ? ' is-rotten' : ''}" draggable="true" data-id="${d.id}"
-           ondragstart="Deals.dragStart(event, ${d.id})" ondragend="Deals.dragEnd(event)" onclick="Deals.open(${d.id})">
+           ondragstart="Deals.dragStart(event, ${d.id})" ondragend="Deals.dragEnd(event)" onclick="Deals.oeffneLead(${d.lead_id || 0}, ${d.id})">
         <div class="dc-title">${escHtml(d.title)}</div>
         <div class="dc-sub">${escHtml(d.company || '')}${d.ceo ? ' · ' + escHtml(d.ceo) : ''}</div>
         ${rotten ? `<div class="dc-rot"><i class="fas fa-hourglass-end"></i>${d.days_in_stage} Tage in dieser Phase</div>` : ''}
@@ -277,7 +277,7 @@ const Deals = {
         <div class="table-wrap"><table>
           <thead><tr><th>Deal</th><th>Wert</th><th>Phase / Status</th><th class="mob-hide">Verantwortlich</th><th class="mob-hide">Erw. Abschluss</th><th class="mob-hide">Nächster Schritt</th></tr></thead>
           <tbody>${deals.map(d => `
-            <tr class="lead-row" onclick="Deals.open(${d.id})">
+            <tr class="lead-row" onclick="Deals.oeffneLead(${d.lead_id || 0}, ${d.id})">
               <td><div class="cell-title">${escHtml(d.title)}</div><div class="cell-sub">${escHtml(d.company || '')}</div></td>
               <td><b>${this.fmt(d.value)}</b></td>
               <td>${stCell(d)}</td>
@@ -503,6 +503,11 @@ const Deals = {
     } catch (e) { showToast(e.message, 'err'); }
   },
 
+  // Klick auf einen Deal öffnet direkt den Lead als Panel rechts (dort unter „Deals“ der Deal selbst)
+  oeffneLead(leadId, dealId) {
+    const panel = typeof openLeadPanel === 'function' ? openLeadPanel : typeof openPanel === 'function' ? openPanel : null;
+    if (panel && leadId) panel(leadId); else this.open(dealId);
+  },
   async markWon(id) {
     const d = (this.deals || []).find(x => x.id === id) || this._current || {};
     const ok = await customConfirm(`Deal${d.title ? ` „${d.title}“` : ''} als gewonnen markieren?`, { title: 'Gewonnen', okLabel: 'Ja, gewonnen' });

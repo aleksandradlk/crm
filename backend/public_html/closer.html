@@ -12,7 +12,7 @@
 <meta name="theme-color" content="#2c3a55">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf72">
+<link rel="stylesheet" href="/shared/style.css?v=nf73">
 <style>
 .notif-panel{position:fixed;top:0;right:0;bottom:0;width:340px;background:var(--bg2);border-left:1px solid var(--border2);z-index:150;transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;padding:20px}
 .notif-panel.open{transform:translateX(0)}
@@ -94,7 +94,7 @@
         </div>
         <div style="text-align:center">
           <div style="font-size:22px;font-weight:700;color:var(--text2)" id="cdb-avg">—</div>
-          <div style="font-size:11px;color:var(--text3)">Ø Anrufe/Tag (30T)</div>
+          <div style="font-size:11px;color:var(--text3)">Durchschnittliche Anrufe pro Tag (letzte 30 Tage)</div>
         </div>
         <div style="text-align:center;cursor:pointer" onclick="showSection('deals')" title="Zu den Deals">
           <div style="font-size:22px;font-weight:700;color:var(--green)" id="cdb-revenue">—</div>
@@ -462,25 +462,25 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf72"></script>
-<script src="/shared/datum.js?v=nf72"></script>
-<script src="/shared/bedarf-regeln.js?v=nf72"></script>
-<script src="/shared/bedarf.js?v=nf72"></script>
-<script src="/shared/mailvorschlag.js?v=nf72"></script>
-<script src="/shared/seitenpanel.js?v=nf72"></script>
-<script src="/shared/dialer.js?v=nf72"></script>
-<script src="/shared/provision.js?v=nf72"></script>
-<script src="/shared/deals.js?v=nf72"></script>
-<script src="/shared/calllists.js?v=nf72"></script>
-<script src="/shared/today.js?v=nf72"></script>
-<script src="/shared/ziele.js?v=nf72"></script>
-<script src="/shared/termine.js?v=nf72"></script>
-<script src="/shared/duplicates.js?v=nf72"></script>
-<script src="/shared/markdown.js?v=nf72"></script>
-<script src="/shared/wiki.js?v=nf72"></script>
-<script src="/shared/wiki-artikel.js?v=nf72"></script>
-<script src="/shared/finder.js?v=nf72"></script>
-<script src="/shared/board.js?v=nf72"></script>
+<script src="/shared/api.js?v=nf73"></script>
+<script src="/shared/datum.js?v=nf73"></script>
+<script src="/shared/bedarf-regeln.js?v=nf73"></script>
+<script src="/shared/bedarf.js?v=nf73"></script>
+<script src="/shared/mailvorschlag.js?v=nf73"></script>
+<script src="/shared/seitenpanel.js?v=nf73"></script>
+<script src="/shared/dialer.js?v=nf73"></script>
+<script src="/shared/provision.js?v=nf73"></script>
+<script src="/shared/deals.js?v=nf73"></script>
+<script src="/shared/calllists.js?v=nf73"></script>
+<script src="/shared/today.js?v=nf73"></script>
+<script src="/shared/ziele.js?v=nf73"></script>
+<script src="/shared/termine.js?v=nf73"></script>
+<script src="/shared/duplicates.js?v=nf73"></script>
+<script src="/shared/markdown.js?v=nf73"></script>
+<script src="/shared/wiki.js?v=nf73"></script>
+<script src="/shared/wiki-artikel.js?v=nf73"></script>
+<script src="/shared/finder.js?v=nf73"></script>
+<script src="/shared/board.js?v=nf73"></script>
 <script>
 const ME = Auth.getUser();
 const CAN = {

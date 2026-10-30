@@ -216,6 +216,7 @@ const Today = {
   },
 
   async done(leadId, rid) {
+    if (!(await customConfirm('Als erledigt markieren?', { title: 'Erledigt', okLabel: 'Ja, erledigt' }))) return;
     try {
       await api('DELETE', `/leads/${leadId}/reminders/${rid}`);
       showToast('Erledigt');
