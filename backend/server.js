@@ -121,6 +121,7 @@ app.use('/api/chats',    chatRoutes);
 app.use('/api/calls',    callRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/settings',        settingsRoutes);
+app.use('/api/sicherung',       require('./routes/sicherung'));
 app.use('/api/email-templates', emailTemplateRoutes);
 app.use('/api/tools',           toolRoutes);
 app.use('/api/emails',          emailRoutes);
