@@ -128,6 +128,41 @@ async function leadZumAngebot(a, kunde) {
   return l || null;
 }
 
+// Angebotsmail in den E-Mail-Verlauf des Leads (lead_emails), damit sie dort mit Text und
+// Anhängen steht wie jede andere Mail. Doppelte Einträge verhindert die Message-ID.
+async function angebotMailInVerlauf(leadId, a, eintrag, user) {
+  const an = Array.isArray(eintrag.an) ? eintrag.an.join(', ') : String(eintrag.an || '');
+  const dateien = (eintrag.anhaenge || []).join(', ');
+  const text = [eintrag.text || `(Der Mailtext wurde beim Versand noch nicht gespeichert. Verschickt wurde Angebot ${a.nummer}.)`,
+    dateien ? `Anhänge: ${dateien}` : ''].filter(Boolean).join('\n\n');
+  const am = new Date(eintrag.am || Date.now());
+  const zeit = isNaN(am) ? new Date() : am;
+  const msgId = eintrag.messageId || `<angebot-${a.id}-${zeit.getTime()}@crm.novaflowservices.de>`;
+  const [r] = await db.query(
+    `INSERT IGNORE INTO lead_emails (lead_id, direction, from_address, from_name, to_address, subject, body_text, message_id, received_at, is_read, user_id)
+     VALUES (?, 'outbound', ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+    [leadId, process.env.SMTP_USER || 'info@novaflowservices.de', (user && user.full_name) || 'Aleksandra Dalak', an.slice(0, 255),
+      String(eintrag.betreff || `Angebot ${a.nummer}`).slice(0, 500), text.slice(0, 60000), msgId.slice(0, 500),
+      zeit.toISOString().slice(0, 19).replace('T', ' '), (user && user.id) || null]);
+  return r.affectedRows || 0;
+}
+
+// Einmalig (und bei jedem Start, dank Message-ID ohne Doppelte): bisher verschickte Angebotsmails
+// in den E-Mail-Verlauf der Leads übernehmen.
+async function angebotMailsImportieren() {
+  if (!mandantRef) return 0;
+  let n = 0;
+  for (const { angebot: a, kunde } of mandantRef.crm.versandteAngebote()) {
+    const lead = await leadZumAngebot(a, kunde).catch(() => null);
+    if (!lead) continue;
+    for (const e of a.versand) {
+      n += await angebotMailInVerlauf(lead.id, a, e, null).catch(() => 0);
+    }
+  }
+  if (n) console.log(`Abrechnung: ${n} Angebotsmails in den E-Mail-Verlauf übernommen`);
+  return n;
+}
+
 // Angebot per E-Mail aus „Angebote & Rechnungen“ verschickt: im Lead-Verlauf festhalten,
 // damit der Vertrieb sieht, was wann an wen ging. Ohne Deal zusätzlich ein Hinweis an den
 // Closer (mit Deal übernimmt das angebotStatusAnCrm / „Angebot verschickt“).
@@ -136,6 +171,7 @@ async function angebotVersandAnCrm(a, eintrag, kunde, user) {
   if (!lead) return;
   const an = Array.isArray(eintrag.an) ? eintrag.an.join(', ') : eintrag.an;
   const dateien = (eintrag.anhaenge || []).join(', ');
+  await angebotMailInVerlauf(lead.id, a, eintrag, user).catch(e => console.error('Angebotsmail in Verlauf:', e.message));
   const vonId = (user && user.id) || lead.assigned_to;
   await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)', [lead.id, vonId,
     `📨 Angebot ${a.nummer} per E-Mail an ${an} verschickt${dateien ? ` · Anhänge: ${dateien}` : ''} · Mailtext und PDFs unter „Angebote & Rechnungen“`]);
@@ -158,6 +194,37 @@ async function angebotKontext(a, kunde) {
     closer: vorname,
     problem: [d.groesstes_problem, t && t.painpoints].filter(Boolean).join(' / ').slice(0, 600) || null,
     notizen: [d.ablauf_heute, d.sonderwuensche].filter(Boolean).join(' / ').slice(0, 600) || null,
+  };
+}
+
+// Bedarfsanalyse für den KI-Angebotsvorschlag: alle Antworten in Klartext, dazu wer das
+// Gespräch geführt hat. a darf ein noch nicht gespeichertes Angebot sein ({} + kunde).
+async function bedarfFuerAngebot(a, kunde) {
+  const lead = await leadZumAngebot(a || {}, kunde);
+  if (!lead) return null;
+  const bedarf = require('../routes/bedarf');
+  const an = await bedarf.analyseLaden(lead.id).catch(() => null);
+  const d = (an && an.data) || {};
+  if (!Object.keys(d).length) return null;
+  const R = bedarf.R, cfg = await bedarf.regeln();
+  const L = (f, v) => { if (f === 'kanal_wichtigster') f = 'kanaele'; return Array.isArray(v) ? v.map(x => R.label(f, x)).join(', ') : R.label(f, v); };
+  const FELDER = [
+    ['einleitung_notiz', 'Für die Einleitung (Notiz des Vertrieblers, oft wörtlich vom Kunden)'], ['groesstes_problem', 'Größtes Problem (wörtlich)'],
+    ['ablauf_heute', 'Ablauf heute'], ['zuerst_weg', 'Was soll zuerst weg (Kernwünsche)'], ['kanaele', 'Kanäle, über die Anfragen kommen'],
+    ['kanal_wichtigster', 'Wichtigster Kanal'], ['anfragen_pro_woche', 'Anfragen pro Woche'], ['anfragen_unpassend', 'Davon unpassend'],
+    ['auftragswert_schnitt', 'Auftragswert im Schnitt (€)'], ['antwortzeit', 'Antwortzeit heute'], ['nachfragen', 'Was er bei Anfragen nachfragen muss'],
+    ['besichtigungen', 'Besichtigungen'], ['branche', 'Branche'], ['branche_text', 'Branche (genauer)'], ['teamgroesse', 'Teamgröße'],
+    ['software', 'Software'], ['kalender', 'Kalender'], ['webseite_status', 'Webseite'], ['google_profil', 'Google-Profil'],
+    ['wunschstart', 'Wunschstart'], ['entscheider', 'Entscheider'], ['paket_empfohlen', 'Gewähltes Paket'], ['zusatzleistungen', 'Zusatzleistungen'],
+    ['rabatt_prozent', 'Rabatt %'], ['aktion_prozent', 'Zugesagte Aktion %'], ['aktion_bis', 'Aktion gültig bis'], ['gratismonat', 'Erster Monat Betreuung gratis'],
+    ['zahlungswunsch', 'Zahlungswunsch'], ['sonderwuensche', 'Sonderwünsche'],
+  ];
+  const zeilen = FELDER.filter(([f]) => !R.leer(d[f])).map(([f, t]) => `- ${t}: ${L(f, d[f])}`);
+  return {
+    leadId: lead.id, firma: lead.company,
+    closer: String(lead.closer || '').trim().split(/\s+/)[0] || null,
+    paket: d.paket_empfohlen ? (cfg.pakete[d.paket_empfohlen] || {}).name : null,
+    text: zeilen.join('\n'),
   };
 }
 
@@ -219,9 +286,13 @@ function registriere(app, { ki } = {}) {
     onAngebotStatus: angebotStatusAnCrm,
     onAngebotVersand: angebotVersandAnCrm,
     angebotKontext,
+    bedarfFuerAngebot,
   });
   mandantRef = mandant;
   status.aktiv = true;
+  try { const n = mandant.crm.geplanteAbosNachziehen(); if (n) console.log(`Abrechnung: ${n} geplante Abos aus offenen Angeboten angelegt`); }
+  catch (e) { console.error('Geplante Abos:', e.message); }
+  setTimeout(() => angebotMailsImportieren().catch(e => console.error('Angebotsmails übernehmen:', e.message)), 5000).unref();
   try { const k = mandant.crm.katalogAktualisieren(); if (k) console.log(`Abrechnung: Artikelkatalog aktualisiert – ${k.neu} neu, ${k.alt} alte auf inaktiv`); }
   catch (e) { console.error('Abrechnung: Katalog aktualisieren:', e.message); }
   // Kundenkonten (Betriebe) aus dem Angebotstool, nur zur Ansicht
@@ -305,12 +376,21 @@ function registriere(app, { ki } = {}) {
         }
       } catch (e) { console.error('Angebot aus Bedarfsanalyse:', e.message); }
       const angebot = mandant.crm.angebotEntwurf({ lead, deal, ...vorlage });
+      // Aus der Bedarfsanalyse gleich ein fertiges Angebot machen: KI schreibt Betreff, Einleitung,
+      // Schlusstext und Positionsbeschreibungen (Preise bleiben). Höchstens 60 Sekunden warten.
+      let ki = null;
+      if (vorlage.positionen && vorlage.positionen.length && mandant.crm.kiAusfuellen) {
+        ki = await Promise.race([
+          mandant.crm.kiAusfuellen(angebot.id).then(ok => ok ? 'ausgefuellt' : null),
+          new Promise(r => setTimeout(() => r('zeit'), 60000)),
+        ]).catch(e => { console.error('KI-Angebot ausfüllen:', e.message); return 'fehler'; });
+      }
       // Offene Angebots-Anfrage des Closers ist damit in Arbeit
       await db.query("UPDATE reminders SET done_at=NOW() WHERE lead_id=? AND kind='angebot' AND done_at IS NULL", [lead.id]);
       await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)',
         [lead.id, req.user.id, `📄 Angebot ${angebot.nummer} angelegt (Entwurf)`]);
       await log(req.user.id, 'angebot_create', 'lead', lead.id, { nummer: angebot.nummer, deal_id: deal ? deal.id : null }, req.ip);
-      res.json({ success: true, angebot: { id: angebot.id, nummer: angebot.nummer } });
+      res.json({ success: true, angebot: { id: angebot.id, nummer: angebot.nummer }, ki });
     } catch (e) {
       res.status(400).json({ success: false, error: e.message });
     }

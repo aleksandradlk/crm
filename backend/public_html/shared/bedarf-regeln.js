@@ -14,7 +14,8 @@
       software: { name: 'Individuelle Software', einrichtung: 2490, betreuung: 199, ab: true },
     },
     zusatz: {
-      google: { name: 'Google Business Profil', einrichtung: 349, betreuung: 0 },
+      // einrichtung_bestehend: Preis, wenn das Profil schon besteht oder jemand anderes es betreut (übernehmen + optimieren)
+      google: { name: 'Google Business Profil', einrichtung: 349, einrichtung_bestehend: 249, betreuung: 0 },
       webseite: { name: 'Webseite', einrichtung: 1200, betreuung: 29 },
       automation: { name: 'Weitere Automation', einrichtung: 0, betreuung: 0 },
     },
@@ -25,7 +26,8 @@
     admin_mail: 'info@novaflowservices.de',
     faellig_mail: true,                   // morgens eine Mail mit allem, was fällig ist
     demo_link: 'https://novaflowservices.de/#ausprobieren',   // Abschnitt „Nicht nur lesen. Ausprobieren.“
-    regeln: { l_auftragswert: 5000, m_kanaele: 3, m_anfragen: 10 },
+    // l_wenig_anfragen: unter so vielen Anfragen pro Woche über 1–2 Kanäle wird nie L vorgeschlagen
+    regeln: { l_auftragswert: 5000, m_kanaele: 3, m_anfragen: 10, l_wenig_anfragen: 5 },
     // Provision und Bonus (§8): Basis = gezahlter Einmalpreis ohne Betreuung/Hosting
     provision: {
       satz: 20, satz_rabatt: 15,          // % – mit Rabatt > 0 vom reduzierten Preis
@@ -39,6 +41,17 @@
     gesundheit: ['arzt', 'ärzt', 'praxis', 'zahnarzt', 'heilpraktiker', 'therapie', 'therapeut', 'physio', 'pflege', 'klinik', 'ergo', 'logopäd', 'osteopath'],
   };
 
+  // Kurzinhalt je Paket für die Preis-Seitenleiste der Bedarfsanalyse (wie Leistungsübersicht)
+  const INHALT = {
+    quickwin: 'Handy-Benachrichtigung bei jeder Anfrage, automatische Eingangsbestätigung. In einer Woche fertig, wird bei Upgrade binnen 30 Tagen angerechnet.',
+    s: 'Bis 2 Kanäle in einem Postfach, sofortige Antwort, Vorqualifizierung mit Fotos, Maßen und Wunsch, Übersicht aller Anfragen.',
+    m: 'Alles aus S, dazu bis 4 Kanäle, KI-Antwortentwurf, KI-Angebotsentwurf, Terminvorschlag und Erinnerung, Nachfassen offener Angebote, Bewertungsanfrage.',
+    l: 'Alles aus M, dazu Zahlungserinnerung, Erinnerung an Bestandskunden, Monatsübersicht mit Kennzahlen, Quartalsgespräch.',
+    software: 'Eigene Tools für interne Abläufe, z. B. Kalkulation oder Auftragsübersicht. Preis nach Umfang.',
+    google: 'Profil einrichten oder optimieren, Keywords für die Region, Bing und Apple, Bewertungslink mit QR-Code.',
+    webseite: 'Leistungen, Preisrahmen, Anfrageformular direkt in den Autopiloten. Aktuell bis 4 Seiten inkl. Impressum und Datenschutz.',
+  };
+
   // Auswahlwerte: [Schlüssel, Anzeige]
   const W = {
     branche: [['fahrzeug', 'Fahrzeugaufbereitung'], ['bad', 'Bad/SHK/Fliesen'], ['maler', 'Maler'], ['boden', 'Boden/Parkett'], ['andere', 'Andere']],
@@ -50,12 +63,13 @@
       ['formular', 'Webseiten-Formular'], ['portale', 'Portale (MyHammer/Check24)'], ['google', 'Google'], ['empfehlung', 'Empfehlung'], ['telegram', 'Telegram/TikTok/Line']],
     antwortzeit: [['unter1', 'unter 1 Std.'], ['tag', 'am selben Tag'], ['1-2', '1–2 Tage'], ['laenger', 'länger']],
     nachfragen: [['fotos', 'Fotos'], ['masse', 'Maße'], ['budget', 'Budget'], ['termin', 'Termin'], ['adresse', 'Adresse'], ['objekt', 'Fahrzeug/Objekt'], ['sonstiges', 'Sonstiges']],
-    zuerst_weg: [['liegen', 'Anfragen bleiben liegen'], ['preisfragen', 'Preisfragen ohne Infos'], ['besichtigungen', 'Besichtigungen umsonst'],
-      ['terminabstimmung', 'Terminabstimmung'], ['nachfassen', 'Angebote nachfassen'], ['bewertungen', 'Bewertungen sammeln'],
+    zuerst_weg: [['vor_rausfahren', 'Angebot vor dem Rausfahren'], ['nachfassen', 'Nachfassen'],
+      ['liegen', 'Anfragen bleiben liegen'], ['preisfragen', 'Preisfragen ohne Infos'], ['besichtigungen', 'Besichtigungen umsonst'],
+      ['terminabstimmung', 'Terminabstimmung'], ['bewertungen', 'Bewertungen sammeln'],
       ['angebote', 'Angebote schreiben'], ['zahlungen', 'Zahlungen hinterherlaufen'], ['bestandskunden', 'Bestandskunden erinnern']],
     kalender: [['google', 'Google'], ['outlook', 'Outlook'], ['papier', 'Papier'], ['software', 'Software'], ['keiner', 'keiner']],
-    webseite_status: [['ja', 'ja'], ['nein', 'nein'], ['veraltet', 'veraltet']],
-    google_profil: [['ja', 'ja'], ['nein', 'nein'], ['schwach', 'schwach']],
+    webseite_status: [['ja', 'besteht schon'], ['nein', 'nein'], ['veraltet', 'veraltet'], ['anderer', 'macht jemand anderes']],
+    google_profil: [['ja', 'besteht schon'], ['nein', 'nein'], ['schwach', 'schwach'], ['anderer', 'macht jemand anderes']],
     entscheider: [['allein', 'er/sie allein'], ['partner', 'mit Partner'], ['anderer', 'anderer']],
     paket_empfohlen: [['quickwin', 'Quick-Win'], ['s', 'Autopilot S'], ['m', 'Autopilot M'], ['l', 'Autopilot L'], ['software', 'Individuelle Software']],
     zusatzleistungen: [['google', 'Google Business Profil'], ['webseite', 'Webseite'], ['automation', 'weitere Automation']],
@@ -91,8 +105,31 @@
   const FELDNAME = {
     kanaele: 'Kanäle', kanal_wichtigster: 'wichtigster Kanal', anfragen_pro_woche: 'Anfragen pro Woche', ablauf_heute: 'Ablauf heute',
     groesstes_problem: 'größtes Problem', wunschstart: 'Wunschstart', entscheider: 'Entscheider', rabatt_begruendung: 'Begründung für den Rabatt',
-    sonderwuensche: 'Sonderwünsche', notiz: 'Notiz',
+    sonderwuensche: 'Sonderwünsche', notiz: 'Notiz', einleitung_notiz: 'Für die Einleitung',
   };
+  // Alle Felder mit Anzeigenamen (Verlauf, Konflikt-Ansicht, Änderungs-Stichpunkte)
+  const FELDLABEL = {
+  ansprechpartner_rolle: 'Ansprechpartner', branche: 'Branche', branche_text: 'Branche (Text)', email_angebot: 'E-Mail fürs Angebot',
+  webseite: 'Webseite', instagram: 'Instagram', teamgroesse: 'Teamgröße', buero_vorhanden: 'Büro vorhanden', kanaele: 'Kanäle',
+  kanal_wichtigster: 'Wichtigster Kanal', instagram_business: 'Instagram Business', whatsapp_firmennummer: 'WhatsApp Firmennummer',
+  anfragen_pro_woche: 'Anfragen pro Woche', anfragen_unpassend: 'Davon unpassend', auftragswert_schnitt: 'Auftragswert im Schnitt',
+  ablauf_heute: 'Ablauf heute', antwortzeit: 'Antwortzeit', nachfragen: 'Was fragt er nach?', besichtigungen: 'Besichtigungen',
+  groesstes_problem: 'Größtes Problem', zuerst_weg: 'Was soll zuerst weg?', wunschstart: 'Wunschstart', software: 'Software',
+  kalender: 'Kalender', webseite_status: 'Webseite (Stand)', google_profil: 'Google-Profil', entscheider: 'Entscheider',
+  entscheider_text: 'Entscheider (Text)', paket_empfohlen: 'Paket', zusatzleistungen: 'Zusatzleistungen', preis_genannt: 'Preis genannt',
+  reaktion_preis: 'Reaktion auf den Preis', rabatt_prozent: 'Rabatt %', rabatt_begruendung: 'Begründung Rabatt', gratismonat: 'Gratismonat',
+  zahlungswunsch: 'Zahlungswunsch', sonderwuensche: 'Sonderwünsche', nachfass_termin: 'Nachfass-Termin', notiz: 'Notiz',
+  einleitung_notiz: 'Für die Einleitung', aktion_prozent: 'Aktion %', aktion_bis: 'Aktion gültig bis',
+};
+  // Google-Profil: besteht schon (auch „schwach“) oder wird von jemand anderem betreut → übernehmen und optimieren (günstiger)
+  const GOOGLE_BESTEHEND = ['ja', 'schwach', 'anderer'];
+  function googlePreis(d, cfg) {
+    const g = cfgMit(cfg).zusatz.google;
+    return GOOGLE_BESTEHEND.includes(d && d.google_profil) && g.einrichtung_bestehend != null ? g.einrichtung_bestehend : g.einrichtung;
+  }
+  const zusatzPreis = (k, d, cfg) => k === 'google' ? googlePreis(d, cfg) : (cfgMit(cfg).zusatz[k]?.einrichtung || 0);
+  // Rabatt im Angebot: eigener Rabatt des Vertrieblers, sonst eine zugesagte Aktion
+  const angebotsRabatt = d => Math.min(100, Math.max(0, Number(d.rabatt_prozent) || Number(d.aktion_prozent) || 0));
 
   function cfgMit(cfg) {
     const c = { ...(cfg || {}) };
@@ -139,24 +176,34 @@
     let paket, grund;
     if (d.reaktion_preis === 'zu_teuer' || /testen/i.test(notiz)) {
       paket = 'quickwin'; grund = d.reaktion_preis === 'zu_teuer' ? 'Der Preis war zu hoch – mit einem kleinen Einstieg testen.' : 'Will erst testen – Einstieg mit Quick-Win.';
-    } else if (['6-20', '20+'].includes(d.teamgroesse) || wert >= r.l_auftragswert || hat(d.zuerst_weg, ['zahlungen', 'bestandskunden'])) {
+    } else if ((['6-20', '20+'].includes(d.teamgroesse) || wert >= r.l_auftragswert || hat(d.zuerst_weg, ['zahlungen', 'bestandskunden']))
+      && !(kanaele > 0 && kanaele <= 2 && anfragen > 0 && anfragen < (r.l_wenig_anfragen ?? 5))) {
       paket = 'l';
       grund = ['6-20', '20+'].includes(d.teamgroesse) ? 'Größeres Team – lohnt sich mit allen Abläufen.'
         : wert >= r.l_auftragswert ? `Hohe Auftragswerte (ab ${r.l_auftragswert.toLocaleString('de-DE')} €) – jeder gewonnene Auftrag zählt.`
           : 'Will Zahlungen oder Bestandskunden automatisieren.';
-    } else if (kanaele >= r.m_kanaele || anfragen >= r.m_anfragen || hat(d.zuerst_weg, ['angebote', 'terminabstimmung', 'nachfassen', 'bewertungen'])) {
+    } else if (kanaele >= r.m_kanaele || anfragen >= r.m_anfragen || hat(d.zuerst_weg, ['angebote', 'vor_rausfahren', 'terminabstimmung', 'nachfassen', 'bewertungen'])) {
       paket = 'm';
       grund = kanaele >= r.m_kanaele ? `${kanaele} Kanäle – alles an einem Ort bündeln.`
         : anfragen >= r.m_anfragen ? `${anfragen} Anfragen pro Woche – automatisch vorsortieren spart viel Zeit.`
-          : 'Will Angebote, Termine, Nachfassen oder Bewertungen automatisieren.';
+          : hat(d.zuerst_weg, ['vor_rausfahren', 'angebote']) ? 'Will Angebote schneller raus haben, am besten bevor er rausfährt.'
+            : 'Will Termine, Nachfassen oder Bewertungen automatisieren.';
     } else {
       paket = 's'; grund = 'Überschaubare Anfragen – der solide Einstieg in den Autopiloten.';
     }
+    // Hoher Auftragswert, aber wenige Anfragen über 1–2 Kanäle: L lohnt sich (noch) nicht
+    if (paket !== 'l' && paket !== 'quickwin' && kanaele > 0 && kanaele <= 2 && anfragen > 0 && anfragen < (r.l_wenig_anfragen ?? 5)
+        && (['6-20', '20+'].includes(d.teamgroesse) || wert >= r.l_auftragswert || hat(d.zuerst_weg, ['zahlungen', 'bestandskunden'])))
+      grund = `Nur ${anfragen} Anfragen pro Woche über ${kanaele} ${kanaele === 1 ? 'Kanal' : 'Kanäle'} – L lohnt sich noch nicht. ` + grund;
     const p = cfg.pakete[paket];
     const monat = Math.round((p.einrichtung / 12 + p.betreuung) / 10) * 10;
 
     const hinweise = [];
-    if (['nein', 'schwach'].includes(d.google_profil)) hinweise.push(`+ ${cfg.zusatz.google.name} (${eur(cfg.zusatz.google.einrichtung)})`);
+    if (['nein', 'schwach'].includes(d.google_profil) && !hat(d.zusatzleistungen, ['google'])) hinweise.push(`+ ${cfg.zusatz.google.name} (${eur(googlePreis(d, cfg))})`);
+    if (GOOGLE_BESTEHEND.includes(d.google_profil) && hat(d.zusatzleistungen, ['google']))
+      hinweise.push(`${cfg.zusatz.google.name}: Profil ${{ ja: 'besteht schon', schwach: 'besteht, ist aber schwach', anderer: 'betreut jemand anderes' }[d.google_profil]} – übernehmen und optimieren für ${eur(googlePreis(d, cfg))}.`);
+    if (d.webseite_status === 'anderer' && hat(d.zusatzleistungen, ['webseite'])) hinweise.push('Webseite macht jemand anderes – vorher klären, ob wir sie übernehmen sollen.');
+    if (Number(d.aktion_prozent) > 0) hinweise.push(`Zugesagte Aktion: ${d.aktion_prozent} %${d.aktion_bis ? ' bis ' + String(d.aktion_bis).split('-').reverse().join('.') : ''}${Number(d.rabatt_prozent) > 0 ? ' (im Angebot gilt der eigene Rabatt)' : ''}.`);
     if (['nein', 'veraltet'].includes(d.webseite_status)) hinweise.push(`+ ${cfg.zusatz.webseite.name} (${eur(cfg.zusatz.webseite.einrichtung)} + ${eur(cfg.zusatz.webseite.betreuung)}/Monat)`);
     const sw = String(d.software || '').toLowerCase();
     if (/craftnote|plancraft|tooltime/.test(sw) || (sw && !/lexware|hero|sevdesk|excel|keine|kein|^-$/.test(sw)))
@@ -174,8 +221,8 @@
     cfg = cfgMit(cfg);
     const p = cfg.pakete[d.paket_empfohlen];
     if (!p) return 0;
-    const zus = (d.zusatzleistungen || []).reduce((s, k) => s + (cfg.zusatz[k]?.einrichtung || 0), 0);
-    const rabatt = Math.min(100, Math.max(0, Number(d.rabatt_prozent) || 0));
+    const zus = (d.zusatzleistungen || []).reduce((s, k) => s + zusatzPreis(k, d, cfg), 0);
+    const rabatt = angebotsRabatt(d);
     return Math.round((p.einrichtung + zus) * (1 - rabatt / 100) * 100) / 100;
   }
 
@@ -184,20 +231,46 @@
     cfg = cfgMit(cfg);
     const p = cfg.pakete[d.paket_empfohlen];
     if (!p) return [];
-    const rabatt = Math.min(100, Math.max(0, Number(d.rabatt_prozent) || 0));
+    const rabatt = angebotsRabatt(d);
     const key = d.paket_empfohlen;
     const out = [{ key, titel: `${p.name} – Einrichtung`, beschreibung: '', einzelpreis: p.einrichtung, rabatt, abrechnung: 'einmalig' }];
     if (p.betreuung) out.push({ key, titel: `${p.name} – Betreuung`, beschreibung: d.gratismonat === 'ja' ? 'Erster Monat gratis' : '', einzelpreis: p.betreuung, abrechnung: 'monatlich', einheit: 'Monat', einheitMehrzahl: 'Monate' });
     (d.zusatzleistungen || []).forEach(k => {
       const z = cfg.zusatz[k];
       if (!z) return;
-      if (z.einrichtung) out.push({ key: k, titel: z.name, einzelpreis: z.einrichtung, rabatt, abrechnung: 'einmalig' });
+      const preis = zusatzPreis(k, d, cfg);
+      if (preis) out.push({ key: k, titel: z.name, beschreibung: k === 'google' && preis !== z.einrichtung ? 'Bestehendes Profil übernehmen und optimieren' : '', einzelpreis: preis, rabatt, abrechnung: 'einmalig' });
       if (z.betreuung) out.push({ key: k, titel: `${z.name} – Hosting & Pflege`, einzelpreis: z.betreuung, abrechnung: 'monatlich', einheit: 'Monat', einheitMehrzahl: 'Monate' });
     });
     return out;
   }
 
-  const api = { GRUENDE, grundPruefen, STATUS, STANDARD, W, FELDNAME, FRAGEN, ERGEBNIS, label, pruefen, vorschlag, dealWert, positionen, gesundheit, cfgMit, eur, leer };
+  // Stichpunkte, was sich zwischen zwei Ständen geändert hat (für den Verlauf), z. B.
+  // „Instagram hinzugefügt (Kanäle)“, „Paket: Autopilot M → Autopilot L“, „Größtes Problem ergänzt“
+  function aenderungen(alt, neu) {
+    alt = alt || {}; neu = neu || {};
+    const LANGTEXT = ['ablauf_heute', 'groesstes_problem', 'sonderwuensche', 'notiz', 'rabatt_begruendung', 'einleitung_notiz'];
+    const L = (f, v) => label(f === 'kanal_wichtigster' ? 'kanaele' : f, v);
+    const out = [];
+    for (const f of Object.keys(FELDLABEL)) {
+      const a = alt[f], b = neu[f];
+      if ((leer(a) && leer(b)) || JSON.stringify(a) === JSON.stringify(b)) continue;
+      const name = FELDLABEL[f];
+      if (Array.isArray(a) || Array.isArray(b)) {
+        const A = Array.isArray(a) ? a : [], B = Array.isArray(b) ? b : [];
+        B.filter(x => !A.includes(x)).forEach(x => out.push(`${L(f, x)} hinzugefügt (${name})`));
+        A.filter(x => !B.includes(x)).forEach(x => out.push(`${L(f, x)} entfernt (${name})`));
+      } else if (LANGTEXT.includes(f)) {
+        const sa = String(a || '').trim(), sb = String(b || '').trim();
+        out.push(!sa ? `${name} eingetragen` : !sb ? `${name} gelöscht` : sb.startsWith(sa) ? `${name} ergänzt` : sb.length < sa.length - 20 ? `${name} gekürzt` : `${name} geändert`);
+      } else if (leer(a)) out.push(`${name}: ${L(f, b)}`);
+      else if (leer(b)) out.push(`${name} entfernt`);
+      else out.push(`${name}: ${L(f, a)} → ${L(f, b)}`);
+    }
+    return out;
+  }
+
+  const api = { GRUENDE, grundPruefen, STATUS, STANDARD, W, FELDNAME, FELDLABEL, INHALT, googlePreis, aenderungen, FRAGEN, ERGEBNIS, label, pruefen, vorschlag, dealWert, positionen, gesundheit, cfgMit, eur, leer };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.BedarfRegeln = api;
 })(typeof window !== 'undefined' ? window : globalThis);

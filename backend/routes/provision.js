@@ -112,6 +112,14 @@ async function berechne(deal, cfg, besitzer, opts = {}) {
       if (gutschrift > 0) rabatt = !!daten.angebot.rabattProzent;
     }
   }
+  // Aktionsrabatt (vom Admin freigegeben, in der Bedarfsanalyse als „Aktion zugesagt“) ist kein
+  // Rabatt des Vertrieblers: Provision bleibt beim vollen Satz. Gilt, solange im Angebot kein
+  // höherer Rabatt steht und kein eigener Rabatt eingetragen ist.
+  if (rabatt && quelle === 'angebot') {
+    const d = await ladeAnalyse();
+    const aktion = Number(d.aktion_prozent) || 0;
+    if (aktion > 0 && !(Number(d.rabatt_prozent) > 0) && (daten.angebot.rabattMax || 0) <= aktion && !(gutschrift > 0 && !upgrade)) rabatt = false;
+  }
   const basis = round2(Math.max(0, basisPreis - (upgrade ? upgrade.abzug : 0)));
   // Bei festgeschriebenen Abschlüssen gilt der Satz vom Tag des Abschlusses, auch wenn sich die Regeln ändern
   const satz = opts.satzFest != null ? Number(opts.satzFest) : rabatt ? Number(P.satz_rabatt) : Number(P.satz);

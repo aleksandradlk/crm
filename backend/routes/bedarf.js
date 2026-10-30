@@ -16,11 +16,12 @@ const FELDER = ['ansprechpartner_rolle', 'branche', 'branche_text', 'email_angeb
   'kanaele', 'kanal_wichtigster', 'instagram_business', 'whatsapp_firmennummer', 'anfragen_pro_woche', 'anfragen_unpassend', 'auftragswert_schnitt',
   'ablauf_heute', 'antwortzeit', 'nachfragen', 'besichtigungen', 'groesstes_problem', 'zuerst_weg', 'wunschstart', 'software', 'kalender',
   'webseite_status', 'google_profil', 'entscheider', 'entscheider_text', 'paket_empfohlen', 'zusatzleistungen', 'preis_genannt', 'reaktion_preis',
-  'rabatt_prozent', 'rabatt_begruendung', 'gratismonat', 'zahlungswunsch', 'sonderwuensche', 'nachfass_termin', 'notiz'];
+  'rabatt_prozent', 'rabatt_begruendung', 'gratismonat', 'zahlungswunsch', 'sonderwuensche', 'nachfass_termin', 'notiz',
+  'einleitung_notiz', 'aktion_prozent', 'aktion_bis'];
 const LISTEN = ['kanaele', 'nachfragen', 'zuerst_weg', 'zusatzleistungen'];
 // Große Textfelder (Limit aus den Vertriebsregeln, Standard 10.000), alle anderen Textfelder 300 Zeichen.
 // Zu lange Eingaben werden abgelehnt, nie still abgeschnitten.
-const LANG = ['ablauf_heute', 'groesstes_problem', 'sonderwuensche', 'notiz', 'rabatt_begruendung'];
+const LANG = ['ablauf_heute', 'groesstes_problem', 'sonderwuensche', 'notiz', 'rabatt_begruendung', 'einleitung_notiz'];
 const KURZ_LIMIT = 300;
 
 function fehler400(text) { const e = new Error(text); e.status = 400; return e; }
@@ -31,10 +32,10 @@ function bereinigen(data, limit = R.STANDARD.textlimit) {
     let v = data?.[k];
     if (v === undefined || v === null || v === '') continue;
     if (LISTEN.includes(k)) { v = (Array.isArray(v) ? v : [v]).map(x => String(x).slice(0, 40)).slice(0, 20); if (!v.length) continue; }
-    else if (['anfragen_pro_woche', 'auftragswert_schnitt', 'rabatt_prozent'].includes(k)) {
+    else if (['anfragen_pro_woche', 'auftragswert_schnitt', 'rabatt_prozent', 'aktion_prozent'].includes(k)) {
       const n = parseFloat(String(v).replace(',', '.'));
       if (!Number.isFinite(n) || n < 0) continue;
-      v = k === 'rabatt_prozent' ? Math.min(100, n) : n;
+      v = k === 'rabatt_prozent' || k === 'aktion_prozent' ? Math.min(100, n) : n;
     } else {
       v = String(v);
       const max = LANG.includes(k) ? limit : KURZ_LIMIT;
@@ -247,10 +248,13 @@ router.get('/lead/:id/versionen', auth, async (req, res) => {
       `SELECT s.id, s.anlass, s.created_at, s.data, COALESCE(u.full_name, u.username) AS von
        FROM bedarfsanalyse_snapshots s LEFT JOIN users u ON u.id = s.created_by
        WHERE s.lead_id=? ORDER BY s.id DESC LIMIT 300`, [lead.id]);
-    res.json({ versionen: rows.map(r => {
-      let d = {}; try { d = JSON.parse(r.data || '{}'); } catch (_) {}
+    const daten = rows.map(r => { try { return JSON.parse(r.data || '{}'); } catch (_) { return {}; } });
+    res.json({ versionen: rows.map((r, i) => {
+      const d = daten[i];
       const zeichen = LANG.reduce((n, k) => n + String(d[k] || '').length, 0);
-      return { id: r.id, anlass: r.anlass, created_at: r.created_at, von: r.von || '', zeichen,
+      // Was sich gegenüber dem vorherigen (älteren) Stand geändert hat, als Stichpunkte
+      const aenderungen = i + 1 < daten.length ? R.aenderungen(daten[i + 1], d) : null;
+      return { id: r.id, anlass: r.anlass, created_at: r.created_at, von: r.von || '', zeichen, aenderungen,
         vorschau: String(d.groesstes_problem || d.ablauf_heute || d.sonderwuensche || '').slice(0, 120) };
     }) });
   } catch (e) { console.error('Bedarf Versionen:', e); res.status(500).json({ error: 'Verlauf konnte nicht geladen werden.' }); }
