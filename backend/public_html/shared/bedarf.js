@@ -6,9 +6,34 @@
 // (Seitenpanel im Anrufmodus) · Bedarf.kurzCheck(lead, opts) = „Keine Zeit“.
 // Regeln: shared/bedarf-regeln.js (gleich wie auf dem Server).
 // ============================================================
+// Große Textfelder (mit Zeichenzähler, Limit aus den Vertriebsregeln)
+const BD_LANG = ['ablauf_heute', 'groesstes_problem', 'sonderwuensche', 'notiz', 'rabatt_begruendung'];
+const BD_KURZ = 300;
+// Feldnamen für Verlauf und Konflikt-Ansicht
+const BD_LABEL = {
+  ansprechpartner_rolle: 'Ansprechpartner', branche: 'Branche', branche_text: 'Branche (Text)', email_angebot: 'E-Mail fürs Angebot',
+  webseite: 'Webseite', instagram: 'Instagram', teamgroesse: 'Teamgröße', buero_vorhanden: 'Büro vorhanden', kanaele: 'Kanäle',
+  kanal_wichtigster: 'Wichtigster Kanal', instagram_business: 'Instagram Business', whatsapp_firmennummer: 'WhatsApp Firmennummer',
+  anfragen_pro_woche: 'Anfragen pro Woche', anfragen_unpassend: 'Davon unpassend', auftragswert_schnitt: 'Auftragswert im Schnitt',
+  ablauf_heute: 'Ablauf heute', antwortzeit: 'Antwortzeit', nachfragen: 'Was fragt er nach?', besichtigungen: 'Besichtigungen',
+  groesstes_problem: 'Größtes Problem', zuerst_weg: 'Was soll zuerst weg?', wunschstart: 'Wunschstart', software: 'Software',
+  kalender: 'Kalender', webseite_status: 'Webseite (Stand)', google_profil: 'Google-Profil', entscheider: 'Entscheider',
+  entscheider_text: 'Entscheider (Text)', paket_empfohlen: 'Paket', zusatzleistungen: 'Zusatzleistungen', preis_genannt: 'Preis genannt',
+  reaktion_preis: 'Reaktion auf den Preis', rabatt_prozent: 'Rabatt %', rabatt_begruendung: 'Begründung Rabatt', gratismonat: 'Gratismonat',
+  zahlungswunsch: 'Zahlungswunsch', sonderwuensche: 'Sonderwünsche', nachfass_termin: 'Nachfass-Termin', notiz: 'Notiz',
+};
+const BD_ANLASS = {
+  autosave: 'Automatisch gespeichert', speichern: 'Gespeichert', stand_vorher: 'Stand vor einer Änderung', kurzcheck: 'Kurz-Check',
+  angebot_anfordern: 'Angebot angefordert', wiederherstellung: 'Wiederhergestellt', konflikt: 'Eigener Stand bei gleichzeitiger Änderung', uebergabe: 'Übergabe',
+};
+const bdLeer = v => v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length);
+const bdGleich = (a, b) => (bdLeer(a) && bdLeer(b)) || JSON.stringify(a) === JSON.stringify(b);
+const bdUhr = d => new Date(d).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' });
+
 const Bedarf = {
   cfg: null, leadId: null, lead: null, data: {}, info: null, el: null,
   _timer: null, _saving: null, _dirty: false, _opts: {},
+  version: 0, base: {}, _pause: false, _undo: [], _zuletzt: '{}', _anlass: 'autosave', _statusText: '',
   R: () => window.BedarfRegeln,
 
   async config() {
@@ -23,36 +48,51 @@ const Bedarf = {
     const o = document.createElement('div');
     o.id = 'bdModal';
     o.className = 'modal-overlay open bd-overlay';
-    o.onclick = e => { if (e.target === o) this.close(); };
-    o.innerHTML = `<div class="bd-sheet" role="dialog">
+    // Schließen nur über das X (oder Esc, mit Rückfrage bei ungespeicherten Änderungen)
+    o.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); this.close(); } });
+    o.innerHTML = `<div class="bd-sheet" role="dialog" tabindex="-1">
       <div class="bd-sheet-head">
         <div class="modal-heading"><div class="modal-icon"><i class="fas fa-clipboard-list"></i></div>
           <div style="min-width:0"><div class="modal-title">Bedarfsanalyse</div><div class="modal-subtitle" id="bdSub"></div></div></div>
         <span class="bd-saved" id="bdSaved"></span>
+        <button type="button" class="btn btn-ghost btn-sm btn-icon" onclick="Bedarf.verlauf()" title="Verlauf: frühere Stände ansehen und wiederherstellen"><i class="fas fa-history"></i></button>
         <button class="modal-x" onclick="Bedarf.close()" title="Schließen"><i class="fas fa-times"></i></button>
       </div>
       <div class="bd-sheet-body" id="bdRoot"><div class="bd-loading"><i class="fas fa-spinner fa-spin"></i></div></div>
     </div>`;
     document.body.appendChild(o);
+    o.querySelector('.bd-sheet').focus({ preventScroll: true });
     await this.mount(document.getElementById('bdRoot'), leadId, opts);
   },
   async close() {
     await this.flush();
+    if ((this._dirty || this._pause) && !confirm('Die letzten Änderungen sind noch nicht gespeichert. Sie bleiben als Entwurf auf diesem Gerät und werden beim nächsten Öffnen angeboten.\n\nTrotzdem schließen?')) return;
     document.getElementById('bdModal')?.remove();
     if (typeof this._opts.onClose === 'function') this._opts.onClose(this.info);
   },
 
   async mount(el, leadId, opts = {}) {
     await this.flush();
+    // Das bisherige Formular (z. B. im Seitenpanel) sperren, damit niemand dort weitertippt,
+    // während dieselbe Bedarfsanalyse in einem anderen Fenster offen ist.
+    if (this.el && this.el !== el && document.contains(this.el)) {
+      this.el.querySelectorAll('input, textarea, button').forEach(x => { x.disabled = true; });
+      this.el.insertAdjacentHTML('afterbegin', '<div class="bd-warn" style="margin-top:12px"><i class="fas fa-lock"></i><span>Die Bedarfsanalyse ist gerade in einem anderen Fenster offen. Nach dem Schließen erscheint sie hier wieder.</span></div>');
+    }
     this.el = el; this.leadId = leadId; this._opts = opts;
+    this._pause = false; this._undo = []; this._dirty = false;
     try {
       await this.config();
       const r = await api('GET', `/bedarf/lead/${leadId}`);
       if (this.leadId !== leadId) return;
       this.lead = r.lead; this.data = r.data || {}; this.info = r;
+      this.version = r.version || 0; this.base = JSON.parse(JSON.stringify(this.data)); this._zuletzt = JSON.stringify(this.data);
+      if (r.textlimit) this.cfg.textlimit = r.textlimit;
       const sub = document.getElementById('bdSub');
       if (sub) sub.textContent = [r.lead.company, r.lead.ceo].filter(Boolean).join(' · ');
       this.render();
+      this._status(r.updated_at ? `Zuletzt gespeichert ${fmtDate(r.updated_at)}${r.updated_von ? ' · ' + r.updated_von : ''}` : '');
+      this._entwurfPruefen();
     } catch (e) {
       el.innerHTML = `<div class="bd-loading" style="color:var(--red)">${escHtml(e.message)}</div>`;
     }
@@ -73,8 +113,8 @@ const Bedarf = {
       const dis = attrs.disabled && attrs.disabled(k);
       return `<button type="button" class="qf-btn${on ? ' active' : ''}" data-v="${escHtml(k)}" ${dis ? 'disabled title="' + escHtml(dis) + '"' : ''}>${escHtml(l)}</button>`;
     }).join('')}</div>`;
-    const inp = (f, type = 'text', ph = '', extra = '') => `<input type="${type}" class="form-control" data-f="${f}" value="${escHtml(d[f] ?? '')}" placeholder="${escHtml(ph)}" ${extra}>`;
-    const area = (f, ph = '', rows = 2) => `<textarea class="form-control" data-f="${f}" rows="${rows}" placeholder="${escHtml(ph)}">${escHtml(d[f] ?? '')}</textarea>`;
+    const inp = (f, type = 'text', ph = '', extra = '') => `<input type="${type}" class="form-control" data-f="${f}" value="${escHtml(d[f] ?? '')}" placeholder="${escHtml(ph)}" ${type === 'text' || type === 'email' ? `maxlength="${BD_KURZ}"` : ''} ${extra}>`;
+    const area = (f, ph = '', rows = 2) => `<textarea class="form-control" data-f="${f}" rows="${rows}" placeholder="${escHtml(ph)}" maxlength="${this._limit(f)}">${escHtml(d[f] ?? '')}</textarea><div class="bd-count" data-count="${f}"></div>`;
     const url = (f, ph) => `<div class="bd-url">${inp(f, 'text', ph)}<a class="btn btn-ghost btn-sm btn-icon" data-link="${f}" target="_blank" rel="noopener" title="Öffnen" ${d[f] ? `href="${escHtml(absUrl(d[f]))}"` : 'hidden'}><i class="fas fa-external-link-alt"></i></a></div>`;
     const row = (label, html, cls = '') => `<div class="bd-row ${cls}"><label>${label}</label><div>${html}</div></div>`;
     const sec = (nr, titel, pflicht, html, id) => `<section class="bd-sec" ${id ? `id="${id}"` : ''}>
@@ -82,6 +122,7 @@ const Bedarf = {
     const kanalOpts = W.kanaele.filter(([k]) => (d.kanaele || []).includes(k));
 
     this.el.innerHTML = `
+      <div id="bdHinweis"></div>
       <div class="bd-top" id="bdTop"></div>
       ${sec('', 'Betrieb', false, `
         ${row('Ansprechpartner', inp('ansprechpartner_rolle', 'text', 'Rolle, z. B. Inhaber'))}
@@ -136,6 +177,7 @@ const Bedarf = {
     if (nf) nf.value = String(d.nachfass_termin || '').replace(' ', 'T').slice(0, 16);
 
     this.el.querySelectorAll('input[data-f], textarea[data-f]').forEach(i => i.addEventListener('input', () => this._feld(i)));
+    this.el.querySelectorAll('textarea[data-f]').forEach(i => this._zaehler(i));
     this.el.querySelectorAll('.bd-chips').forEach(c => c.addEventListener('click', e => {
       const b = e.target.closest('button[data-v]');
       if (b && !b.disabled) this._chip(c.dataset.f, b.dataset.v, c.dataset.multi === '1');
@@ -206,10 +248,15 @@ const Bedarf = {
     const tip = p.angebotsreif ? '' : 'Es fehlt noch: ' + p.fehlt.join(', ');
     this.el.querySelector('#bdFoot').innerHTML = `
       <div class="bd-foot-info">${d.paket_empfohlen ? `Deal-Wert: <b>${R.eur(wert)}</b>` : 'Paket wählen, dann steht der Deal-Wert hier'}
-        ${angefordert ? `<span class="bd-hint">· zuletzt angefordert ${escHtml(fmtDate(angefordert))}</span>` : ''}</div>
+        ${angefordert ? `<span class="bd-hint">· zuletzt angefordert ${escHtml(fmtDate(angefordert))}</span>` : ''}
+        <div class="bd-saved bd-foot-status">${escHtml(this._statusText)}</div></div>
+      <div class="bd-foot-btns">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="Bedarf.rueckgaengig()" ${this._undo.length ? '' : 'disabled'} title="Letzte Änderung zurücknehmen"><i class="fas fa-undo"></i> Rückgängig</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="Bedarf.verlauf()" title="Frühere Stände ansehen und wiederherstellen"><i class="fas fa-history"></i> Verlauf</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="Bedarf.speichern()" data-klick><i class="fas fa-save"></i> Speichern</button>
       <span class="bd-anfordern-wrap" title="${escHtml(tip)}">
         <button type="button" class="btn btn-primary bd-anfordern" ${p.angebotsreif ? '' : 'disabled'} onclick="Bedarf.anfordern()">
-          <i class="fas fa-file-signature"></i> Angebot anfordern</button></span>`;
+          <i class="fas fa-file-signature"></i> Angebot anfordern</button></span></div>`;
   },
 
   async passtNicht() {
@@ -227,8 +274,18 @@ const Bedarf = {
   },
 
   // ── Eingaben ────────────────────────────────────────────────
+  _limit(f) { return BD_LANG.includes(f) ? (Number(this.cfg?.textlimit) || 10000) : BD_KURZ; },
+  _zaehler(i) {
+    const c = this.el.querySelector(`[data-count="${i.dataset.f}"]`);
+    if (!c) return;
+    const n = i.value.length, max = this._limit(i.dataset.f);
+    c.textContent = `${n.toLocaleString('de-DE')} / ${max.toLocaleString('de-DE')} Zeichen`;
+    c.classList.toggle('is-voll', n >= max * 0.9);
+  },
   _feld(i) {
+    if (!this.el || !this.el.contains(i)) return;   // Eingabe aus einem gesperrten, alten Formular
     const f = i.dataset.f;
+    if (i.tagName === 'TEXTAREA') this._zaehler(i);
     let v = i.value;
     if (f === 'nachfass_termin') v = v ? v.replace('T', ' ') : '';
     if (v === '') delete this.data[f]; else this.data[f] = v;
@@ -274,36 +331,219 @@ const Bedarf = {
     this._geaendert();
   },
 
-  // ── Speichern (verzögert) ───────────────────────────────────
+  // ── Speichern ───────────────────────────────────────────────
+  // Autosave 0,8 s nach der letzten Eingabe, zusätzlich Entwurf auf diesem Gerät (localStorage),
+  // Versionsnummer gegen gegenseitiges Überschreiben, Rückgängig-Stapel.
   _geaendert() {
+    if (!this._dirty) { this._undo.push(this._zuletzt); if (this._undo.length > 50) this._undo.shift(); }
     this._dirty = true;
-    this._status('…');
+    this._status(this._pause ? 'Nicht gespeichert: bitte unten auflösen' : 'Speichert …');
+    this._entwurfMerken();
     this._update();
     clearTimeout(this._timer);
     this._timer = setTimeout(() => this.flush(), 800);
   },
-  _status(t) { const s = document.getElementById('bdSaved') || this.el?.querySelector('.bd-saved'); if (s) s.textContent = t; },
+  _status(t) {
+    this._statusText = t;
+    document.querySelectorAll('#bdSaved').forEach(s => { s.textContent = t; });
+    this.el?.querySelectorAll('.bd-foot-status').forEach(s => { s.textContent = t; });
+  },
+  async speichern() {
+    this._dirty = true; this._anlass = 'speichern';
+    await this.flush();
+    if (!this._dirty && !this._pause) showToast(`Gespeichert um ${bdUhr(Date.now())} ✓`);
+  },
   async flush() {
     clearTimeout(this._timer);
     if (this._saving) await this._saving;
-    if (!this._dirty || !this.leadId) return;
+    if (!this._dirty || !this.leadId || this._pause) return;
     this._dirty = false;
-    const leadId = this.leadId, data = { ...this.data };
-    this._saving = api('PUT', `/bedarf/lead/${leadId}`, { data })
-      .then(r => { if (this.leadId === leadId) { this.info = { ...this.info, ...r }; this._status('Gespeichert ✓'); } })
-      .catch(e => { this._dirty = true; this._status('Nicht gespeichert'); showToast('Bedarfsanalyse: ' + e.message, 'err'); })
+    const leadId = this.leadId, data = JSON.parse(JSON.stringify(this.data)), anlass = this._anlass;
+    this._anlass = 'autosave';
+    this._zuletzt = JSON.stringify(data);
+    this._saving = api('PUT', `/bedarf/lead/${leadId}`, { data, version: this.version, anlass })
+      .then(r => {
+        if (this.leadId !== leadId) return;
+        this.info = { ...this.info, ...r }; this.version = r.version; this.base = data;
+        this._status(`Gespeichert um ${bdUhr(Date.now())}`);
+        if (!this._dirty) this._entwurfLoeschen(leadId);
+        this._update();
+      })
+      .catch(e => {
+        if (this.leadId !== leadId) return;
+        this._dirty = true;
+        if (e.status === 409 && e.data?.konflikt) return this._konflikt(e.data);
+        this._status('Nicht gespeichert');
+        showToast('Bedarfsanalyse nicht gespeichert: ' + e.message, 'err');
+      })
       .finally(() => { this._saving = null; });
     return this._saving;
   },
-  // Beim Schließen des Tabs: letzte Änderung noch rausschicken
+  // Beim Schließen des Tabs: letzte Änderung noch rausschicken (der Entwurf bleibt bis zur Bestätigung)
   _beacon() {
-    if (!this._dirty || !this.leadId) return;
+    if (!this._dirty || !this.leadId || this._pause) return;
     try {
       fetch(`/api/bedarf/lead/${this.leadId}`, { method: 'PUT', keepalive: true,
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + Auth.getToken() },
-        body: JSON.stringify({ data: this.data }) });
-      this._dirty = false;
+        body: JSON.stringify({ data: this.data, version: this.version }) });
     } catch (_) {}
+  },
+
+  // ── Entwurf auf diesem Gerät ────────────────────────────────
+  _entwurfKey(id) { return 'bd-entwurf-' + (id || this.leadId); },
+  _entwurfMerken() {
+    try { localStorage.setItem(this._entwurfKey(), JSON.stringify({ data: this.data, version: this.version, at: Date.now() })); } catch (_) {}
+  },
+  _entwurfLoeschen(id) { try { localStorage.removeItem(this._entwurfKey(id)); } catch (_) {} },
+  _entwurfPruefen() {
+    let e = null;
+    try { e = JSON.parse(localStorage.getItem(this._entwurfKey()) || 'null'); } catch (_) {}
+    if (!e || !e.data) return;
+    const felder = Object.keys(BD_LABEL).filter(k => !bdGleich(e.data[k], this.data[k]));
+    if (!felder.length) { this._entwurfLoeschen(); return; }
+    const box = this.el.querySelector('#bdHinweis');
+    box.innerHTML = `<div class="bd-warn" style="margin-top:12px"><i class="fas fa-file-alt"></i><span><b>Nicht gespeicherter Entwurf vom ${escHtml(fmtDate(new Date(e.at).toISOString()))} gefunden.</b>
+      Geändert: ${felder.map(k => escHtml(BD_LABEL[k])).join(', ')}.</span>
+      <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+        <button type="button" class="btn btn-ghost btn-sm" id="bdEntwurfNein">Verwerfen</button>
+        <button type="button" class="btn btn-primary btn-sm" id="bdEntwurfJa">Entwurf übernehmen</button></span></div>`;
+    box.querySelector('#bdEntwurfNein').onclick = () => { if (!confirm('Entwurf wirklich verwerfen?')) return; this._entwurfLoeschen(); box.innerHTML = ''; };
+    box.querySelector('#bdEntwurfJa').onclick = () => {
+      this._undo.push(JSON.stringify(this.data));
+      this.data = { ...this.data };
+      felder.forEach(k => { if (bdLeer(e.data[k])) delete this.data[k]; else this.data[k] = e.data[k]; });
+      box.innerHTML = '';
+      this._neuZeichnen();
+      this._dirty = true; this.flush();
+    };
+  },
+
+  // ── Rückgängig ──────────────────────────────────────────────
+  rueckgaengig() {
+    const vorher = this._undo.pop();
+    if (!vorher) return;
+    this.data = JSON.parse(vorher);
+    this._neuZeichnen();
+    this._dirty = true; this._entwurfMerken(); this.flush();
+    showToast('Letzte Änderung zurückgenommen');
+  },
+  // Neu zeichnen, ohne dass Fokus, Cursor und Scrollposition verloren gehen
+  _neuZeichnen() {
+    const a = document.activeElement, f = a && this.el.contains(a) ? a.dataset.f : null;
+    const sel = f && 'selectionStart' in a ? [a.selectionStart, a.selectionEnd] : null;
+    const sc = this.el.closest('.bd-sheet-body') || this.el.parentElement, top = sc ? sc.scrollTop : 0;
+    const hinweis = this.el.querySelector('#bdHinweis')?.innerHTML || '';
+    this.render();
+    if (hinweis) this.el.querySelector('#bdHinweis').innerHTML = hinweis;
+    if (sc) sc.scrollTop = top;
+    if (f) { const n = this.el.querySelector(`[data-f="${f}"]`); if (n) { n.focus({ preventScroll: true }); try { if (sel) n.setSelectionRange(...sel); } catch (_) {} } }
+  },
+
+  // ── Gleichzeitig geändert ───────────────────────────────────
+  // Felder, die nur einer geändert hat, werden zusammengeführt. Nur wenn beide dasselbe Feld
+  // unterschiedlich geändert haben, wird gefragt. Nichts geht verloren: der verworfene Stand
+  // landet im Verlauf.
+  _konflikt(srv) {
+    const base = this.base || {}, mein = this.data, fremd = srv.data || {};
+    const keys = Object.keys(BD_LABEL);
+    const meine = keys.filter(k => !bdGleich(mein[k], base[k]));
+    const fremde = keys.filter(k => !bdGleich(fremd[k], base[k]));
+    const kollision = meine.filter(k => fremde.includes(k) && !bdGleich(mein[k], fremd[k]));
+    const zusammen = (wahl = {}) => {
+      const m = { ...fremd };
+      meine.forEach(k => { if (kollision.includes(k) && wahl[k] !== 'mein') return; if (bdLeer(mein[k])) delete m[k]; else m[k] = mein[k]; });
+      return m;
+    };
+    const anwenden = (m) => {
+      this.data = m; this.base = JSON.parse(JSON.stringify(fremd)); this.version = srv.version || 0;
+      this._pause = false; this._dirty = true;
+      this.el.querySelector('#bdHinweis').innerHTML = '';
+      this._neuZeichnen();
+      this.flush();
+    };
+    const von = srv.updated_von || 'jemand anderes';
+    if (!kollision.length) {
+      anwenden(zusammen());
+      showToast(`${von} hat die Bedarfsanalyse gerade auch bearbeitet. Eure Änderungen wurden zusammengeführt.`);
+      return;
+    }
+    this._pause = true;
+    this._status('Nicht gespeichert: bitte oben auflösen');
+    const R = this.R();
+    const zeige = (k, v) => bdLeer(v) ? '<i>leer</i>' : escHtml(Array.isArray(v) ? v.map(x => R.label(k, x)).join(', ') : (R.label(k, v) || String(v)));
+    const box = this.el.querySelector('#bdHinweis');
+    box.innerHTML = `<div class="bd-konflikt">
+      <div class="bd-konflikt-head"><i class="fas fa-user-edit"></i><span><b>Wurde inzwischen von ${escHtml(von)} geändert${srv.updated_at ? ' (' + escHtml(fmtDate(srv.updated_at)) + ')' : ''}.</b>
+        Bei diesen Feldern habt ihr beide etwas geändert. Wähle je Feld, welcher Stand gilt. Der andere bleibt im Verlauf erhalten.</span></div>
+      ${kollision.map(k => `<div class="bd-konflikt-feld"><div class="bd-konflikt-name">${escHtml(BD_LABEL[k])}</div>
+        <label class="bd-konflikt-opt"><input type="radio" name="bdk-${k}" value="mein" checked><span><b>Dein Stand</b><div>${zeige(k, mein[k])}</div></span></label>
+        <label class="bd-konflikt-opt"><input type="radio" name="bdk-${k}" value="fremd"><span><b>Stand von ${escHtml(von)}</b><div>${zeige(k, fremd[k])}</div></span></label></div>`).join('')}
+      <div style="display:flex;justify-content:flex-end"><button type="button" class="btn btn-primary btn-sm" id="bdKonfliktOk"><i class="fas fa-check"></i> Übernehmen und speichern</button></div>
+    </div>`;
+    box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    box.querySelector('#bdKonfliktOk').onclick = async () => {
+      const wahl = {};
+      kollision.forEach(k => { wahl[k] = box.querySelector(`input[name="bdk-${k}"]:checked`)?.value || 'mein'; });
+      // Eigenen Stand sichern, wenn bei mindestens einem Feld der fremde Stand gewählt wurde
+      if (Object.values(wahl).includes('fremd')) await api('POST', `/bedarf/lead/${this.leadId}/versionen`, { data: mein }).catch(() => {});
+      anwenden(zusammen(wahl));
+    };
+  },
+
+  // ── Verlauf: frühere Stände ansehen und wiederherstellen ────
+  async verlauf() {
+    if (!this.leadId) return;
+    await this.flush();
+    const leadId = this.leadId;
+    let liste = [];
+    try { liste = (await api('GET', `/bedarf/lead/${leadId}/versionen`)).versionen || []; }
+    catch (e) { showToast(e.message, 'err'); return; }
+    document.getElementById('bdvModal')?.remove();
+    const o = document.createElement('div');
+    o.id = 'bdvModal'; o.className = 'modal-overlay open'; o.style.zIndex = 990;
+    o.innerHTML = `<div class="modal modal-flex" style="max-width:860px">
+      <div class="modal-header"><div class="modal-heading"><div class="modal-icon"><i class="fas fa-history"></i></div>
+        <div><div class="modal-title">Verlauf der Bedarfsanalyse</div><div class="modal-subtitle">${escHtml(this.lead?.company || '')} · Jeder Stand lässt sich ansehen und wiederherstellen</div></div></div>
+        <button class="modal-x" onclick="document.getElementById('bdvModal').remove()" title="Schließen"><i class="fas fa-times"></i></button></div>
+      <div class="modal-body bdv-body">
+        <div class="bdv-liste">${liste.length ? liste.map(v => `<button type="button" class="bdv-item" data-id="${v.id}">
+          <b>${escHtml(fmtDate(v.created_at))}</b><span>${escHtml(BD_ANLASS[v.anlass] || v.anlass)}${v.von ? ' · ' + escHtml(v.von) : ''}</span>
+          <span class="bdv-meta">${v.zeichen.toLocaleString('de-DE')} Zeichen Text${v.vorschau ? ' · „' + escHtml(v.vorschau.slice(0, 60)) + (v.vorschau.length > 60 ? '…' : '') + '“' : ''}</span></button>`).join('')
+          : '<div class="bd-hint" style="padding:12px">Noch keine Versionen. Sie entstehen ab jetzt bei jedem Speichern.</div>'}</div>
+        <div class="bdv-vorschau" id="bdvVorschau"><div class="bd-hint" style="padding:12px">Links einen Stand wählen.</div></div>
+      </div></div>`;
+    document.body.appendChild(o);
+    const R = this.R();
+    o.querySelectorAll('.bdv-item').forEach(b => b.onclick = async () => {
+      o.querySelectorAll('.bdv-item').forEach(x => x.classList.toggle('active', x === b));
+      const ziel = o.querySelector('#bdvVorschau');
+      ziel.innerHTML = '<div class="bd-loading"><i class="fas fa-spinner fa-spin"></i></div>';
+      try {
+        const v = await api('GET', `/bedarf/lead/${leadId}/versionen/${b.dataset.id}`);
+        const zeilen = Object.keys(BD_LABEL).filter(k => !bdLeer(v.data[k])).map(k => {
+          const x = v.data[k];
+          const text = Array.isArray(x) ? x.map(y => R.label(k, y)).join(', ') : (R.label(k, x) || String(x));
+          const anders = !bdGleich(x, this.data[k]);
+          return `<div class="bdv-zeile${anders ? ' is-anders' : ''}"><span>${escHtml(BD_LABEL[k])}${anders ? ' <em>anders als jetzt</em>' : ''}</span><div>${escHtml(text)}</div></div>`;
+        });
+        const fehlt = Object.keys(BD_LABEL).filter(k => bdLeer(v.data[k]) && !bdLeer(this.data[k]));
+        ziel.innerHTML = `<div class="bdv-kopf"><b>${escHtml(fmtDate(v.created_at))}</b> · ${escHtml(BD_ANLASS[v.anlass] || v.anlass)}${v.von ? ' · ' + escHtml(v.von) : ''}</div>
+          ${zeilen.join('') || '<div class="bd-hint">Leer</div>'}
+          ${fehlt.length ? `<div class="bd-hint" style="margin-top:8px">In diesem Stand noch leer: ${fehlt.map(k => escHtml(BD_LABEL[k])).join(', ')}</div>` : ''}
+          <div style="display:flex;justify-content:flex-end;margin-top:12px"><button type="button" class="btn btn-primary btn-sm" id="bdvRestore" data-klick><i class="fas fa-undo"></i> Diesen Stand wiederherstellen</button></div>`;
+        ziel.querySelector('#bdvRestore').onclick = async () => {
+          if (!confirm('Diesen Stand wiederherstellen? Der aktuelle Stand bleibt im Verlauf erhalten.')) return;
+          try {
+            await api('POST', `/bedarf/lead/${leadId}/versionen/${v.id}/wiederherstellen`);
+            o.remove();
+            this._entwurfLoeschen(leadId);
+            if (this.leadId === leadId && this.el && document.contains(this.el)) { this._dirty = false; await this.mount(this.el, leadId, this._opts); }
+            showToast('Stand wiederhergestellt ✓');
+          } catch (e) { showToast(e.message, 'err'); }
+        };
+      } catch (e) { ziel.innerHTML = `<div class="bd-loading" style="color:var(--red)">${escHtml(e.message)}</div>`; }
+    });
+    o.querySelector('.bdv-item')?.click();
   },
 
   // ── Angebot anfordern ───────────────────────────────────────
@@ -336,6 +576,7 @@ const Bedarf = {
   // opts.onSaved(rueckrufDate, vorschlag) – im Anrufmodus legt das Ergebnis den Rückruf an
   async kurzCheck(lead, opts = {}) {
     await this.config();
+    if (this.leadId === lead.id) await this.flush();
     const R = this.R();
     const vorher = await api('GET', `/bedarf/lead/${lead.id}`).then(r => r.data).catch(() => ({}));
     const sel = new Set(vorher.kanaele || []);
@@ -344,7 +585,6 @@ const Bedarf = {
     document.getElementById('kcModal')?.remove();
     const o = document.createElement('div');
     o.id = 'kcModal'; o.className = 'modal-overlay open'; o.style.zIndex = 980;
-    o.onclick = e => { if (e.target === o) o.remove(); };
     o.innerHTML = `<div class="modal modal-flex" style="max-width:520px">
       <div class="modal-header"><div class="modal-heading"><div class="modal-icon copper"><i class="fas fa-bolt"></i></div>
         <div><div class="modal-title">Keine Zeit: Kurz-Check</div><div class="modal-subtitle">${escHtml(lead.company || '')} · 3 Fragen, dann Rückruf</div></div></div>
@@ -395,6 +635,8 @@ const Bedarf = {
           reminder: !opts.imAnrufmodus,
         });
         o.remove();
+        // Ist dieselbe Bedarfsanalyse irgendwo offen, neu laden, damit sie den Kurz-Check nicht überschreibt
+        if (this.leadId === lead.id && this.el && document.contains(this.el)) this.mount(this.el, lead.id, this._opts);
         if (typeof opts.onSaved === 'function') opts.onSaved(new Date(at), r.vorschlag);
         else showToast(`Kurz-Check gespeichert · Vorschlag ${r.vorschlag.name} · Rückruf eingetragen`);
       } catch (e) { btn.disabled = false; o.querySelector('#kcErr').textContent = e.message; }
@@ -421,7 +663,6 @@ const Bedarf = {
     document.getElementById('vrModal')?.remove();
     const o = document.createElement('div');
     o.id = 'vrModal'; o.className = 'modal-overlay open'; o.style.zIndex = 990;
-    o.onclick = e => { if (e.target === o) o.remove(); };
     const num = (id, v, w = 90) => `<input type="number" min="0" class="form-control" id="${id}" value="${escHtml(v)}" style="width:${w}px">`;
     o.innerHTML = `<div class="modal modal-flex" style="max-width:640px">
       <div class="modal-header"><div class="modal-heading"><div class="modal-icon"><i class="fas fa-sliders-h"></i></div>
@@ -441,6 +682,7 @@ const Bedarf = {
           <label>Paket M ab … Anfragen/Woche</label><div>${num('vr-m-anf', c.regeln.m_anfragen, 70)}</div>
           <label>Nachfassen nach dem Angebot (Tage)</label><div><input class="form-control" id="vr-tage" value="${escHtml((c.nachfass_tage || []).join(', '))}" style="width:140px"></div>
           <label>Hinweis, wenn Anfrage wartet seit</label><div>${num('vr-std', c.anfrage_warte_std, 70)} Std.</div>
+          <label>Max. Zeichen in großen Textfeldern der Bedarfsanalyse</label><div>${num('vr-textlimit', c.textlimit, 100)}</div>
           <label>Anfragen per E-Mail an</label><div><input class="form-control" id="vr-mail" type="email" value="${escHtml(c.admin_mail)}"></div>
           <label>Morgens um 7:41 eine Mail mit allem, was fällig ist</label><div><label class="vr-inline"><input type="checkbox" id="vr-faellig" ${c.faellig_mail !== false ? 'checked' : ''}> an diese Adresse schicken</label></div>
           <label>Live-Demo-Link</label><div><input class="form-control" id="vr-demo" value="${escHtml(c.demo_link)}"></div>
@@ -482,6 +724,7 @@ const Bedarf = {
         regeln: { l_auftragswert: val('vr-l-wert'), m_kanaele: val('vr-m-kan'), m_anfragen: val('vr-m-anf') },
         nachfass_tage: o.querySelector('#vr-tage').value.split(/[,; ]+/).map(Number).filter(n => n > 0),
         anfrage_warte_std: val('vr-std') || 24,
+        textlimit: Math.max(1000, val('vr-textlimit') || R.STANDARD.textlimit),
         admin_mail: o.querySelector('#vr-mail').value.trim() || R.STANDARD.admin_mail,
         faellig_mail: o.querySelector('#vr-faellig').checked,
         demo_link: o.querySelector('#vr-demo').value.trim() || R.STANDARD.demo_link,
@@ -497,3 +740,5 @@ const Bedarf = {
   },
 };
 window.addEventListener('pagehide', () => Bedarf._beacon());
+// Hinweis beim Verlassen der Seite, solange etwas nicht gespeichert ist
+window.addEventListener('beforeunload', e => { if (Bedarf._dirty || Bedarf._pause) { e.preventDefault(); e.returnValue = ''; } });

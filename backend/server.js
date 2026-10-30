@@ -672,6 +672,9 @@ migrate(`CREATE TABLE IF NOT EXISTS bedarfsanalyse_snapshots (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_bsnap_lead (lead_id)
 )`).catch(() => {});
+// Versionsnummer gegen gegenseitiges Überschreiben (Rückweg: db/rollback/2026-10-30_bedarf-versionen.sql)
+migrate('ALTER TABLE bedarfsanalysen ADD COLUMN version INT NOT NULL DEFAULT 0').catch(() => {});
+migrate('ALTER TABLE bedarfsanalyse_snapshots ADD INDEX idx_bsnap_analyse (analyse_id, id)').catch(() => {});
 for (const col of ['herkunft VARCHAR(30) NULL', 'paket VARCHAR(20) NULL', 'admin_flag VARCHAR(255) NULL',
   'angefordert_at DATETIME NULL', 'angebot_gesendet_at DATETIME NULL', 'hinweis_24h_at DATETIME NULL'])
   migrate(`ALTER TABLE deals ADD COLUMN ${col}`).catch(() => {});
