@@ -161,6 +161,37 @@ async function angebotKontext(a, kunde) {
   };
 }
 
+// Bedarfsanalyse für den KI-Angebotsvorschlag: alle Antworten in Klartext, dazu wer das
+// Gespräch geführt hat. a darf ein noch nicht gespeichertes Angebot sein ({} + kunde).
+async function bedarfFuerAngebot(a, kunde) {
+  const lead = await leadZumAngebot(a || {}, kunde);
+  if (!lead) return null;
+  const bedarf = require('../routes/bedarf');
+  const an = await bedarf.analyseLaden(lead.id).catch(() => null);
+  const d = (an && an.data) || {};
+  if (!Object.keys(d).length) return null;
+  const R = bedarf.R, cfg = await bedarf.regeln();
+  const L = (f, v) => { if (f === 'kanal_wichtigster') f = 'kanaele'; return Array.isArray(v) ? v.map(x => R.label(f, x)).join(', ') : R.label(f, v); };
+  const FELDER = [
+    ['einleitung_notiz', 'Für die Einleitung (Notiz des Vertrieblers, oft wörtlich vom Kunden)'], ['groesstes_problem', 'Größtes Problem (wörtlich)'],
+    ['ablauf_heute', 'Ablauf heute'], ['zuerst_weg', 'Was soll zuerst weg (Kernwünsche)'], ['kanaele', 'Kanäle, über die Anfragen kommen'],
+    ['kanal_wichtigster', 'Wichtigster Kanal'], ['anfragen_pro_woche', 'Anfragen pro Woche'], ['anfragen_unpassend', 'Davon unpassend'],
+    ['auftragswert_schnitt', 'Auftragswert im Schnitt (€)'], ['antwortzeit', 'Antwortzeit heute'], ['nachfragen', 'Was er bei Anfragen nachfragen muss'],
+    ['besichtigungen', 'Besichtigungen'], ['branche', 'Branche'], ['branche_text', 'Branche (genauer)'], ['teamgroesse', 'Teamgröße'],
+    ['software', 'Software'], ['kalender', 'Kalender'], ['webseite_status', 'Webseite'], ['google_profil', 'Google-Profil'],
+    ['wunschstart', 'Wunschstart'], ['entscheider', 'Entscheider'], ['paket_empfohlen', 'Gewähltes Paket'], ['zusatzleistungen', 'Zusatzleistungen'],
+    ['rabatt_prozent', 'Rabatt %'], ['aktion_prozent', 'Zugesagte Aktion %'], ['aktion_bis', 'Aktion gültig bis'], ['gratismonat', 'Erster Monat Betreuung gratis'],
+    ['zahlungswunsch', 'Zahlungswunsch'], ['sonderwuensche', 'Sonderwünsche'],
+  ];
+  const zeilen = FELDER.filter(([f]) => !R.leer(d[f])).map(([f, t]) => `- ${t}: ${L(f, d[f])}`);
+  return {
+    leadId: lead.id, firma: lead.company,
+    closer: String(lead.closer || '').trim().split(/\s+/)[0] || null,
+    paket: d.paket_empfohlen ? (cfg.pakete[d.paket_empfohlen] || {}).name : null,
+    text: zeilen.join('\n'),
+  };
+}
+
 // ── Einhängen in die CRM-App ──────────────────────────────────
 function registriere(app, { ki } = {}) {
   let sqlite;
@@ -219,6 +250,7 @@ function registriere(app, { ki } = {}) {
     onAngebotStatus: angebotStatusAnCrm,
     onAngebotVersand: angebotVersandAnCrm,
     angebotKontext,
+    bedarfFuerAngebot,
   });
   mandantRef = mandant;
   status.aktiv = true;

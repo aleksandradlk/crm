@@ -479,6 +479,7 @@ async function zeigeUebersicht() {
 
 // ── Positionen-Editor (Angebot & Rechnung) ────────────────
 let POS = [];
+let AG_ID = null;   // Angebot, das gerade im Editor offen ist (für den KI-Vorschlag mit Bedarfsanalyse)
 function artikelOptionen(gewaehlt) {
   return '<option value="">– frei –</option>' + S.artikel.filter(a => a.aktiv !== false || a.nr === gewaehlt).map(a => `<option value="${esc(a.nr)}" ${a.nr === gewaehlt ? 'selected' : ''}>${esc(a.nr)} · ${esc(a.titel)}</option>`).join('');
 }
@@ -555,6 +556,7 @@ function angebotNeu() { angebotEditor({ kundeId: '', datum: heute(), gueltigBis:
 async function angebotBearbeiten(id) { angebotEditor((await api('/angebote/' + id)).angebot); }
 function angebotEditor(a) {
   POS = a.positionen.map(p => ({ ...p }));
+  AG_ID = a.id || null;
   const z = a.zahlung || {};
   $('angebot-editor').style.display = 'block';
   $('angebot-editor').innerHTML = `
@@ -570,7 +572,7 @@ function angebotEditor(a) {
     </div>
     ${textFeld('ag-einleitung', 'Einleitung (leer = Standardtext)', a.einleitung)}
     ${KONTEXT.kiVerfuegbar ? `<div class="hinweis" style="border-left-color:var(--navy)">
-      <b>Mit KI vorschlagen:</b> Beschreibe den Auftrag in deinen Worten, die KI macht daraus Betreff, Einleitung, Positionen (aus deinem Artikelkatalog, sonst mit Preisvorschlag) und Schlusstext. Alles bleibt danach editierbar.
+      <b>Mit KI vorschlagen:</b> ${KONTEXT.admin ? 'Ist der Kunde mit einem Lead verknüpft, nutzt die KI dessen Bedarfsanalyse: Einleitung im Stil „Du hast Nala erzählt …“, Positionsbeschreibungen passend zum Kunden. Stehen schon Positionen unten, bleiben Titel und Preise, nur die Beschreibungen werden neu geschrieben (Betreuung bleibt wie im Katalog). Das Feld darf dann leer bleiben oder ergänzt etwas.' : 'Beschreibe den Auftrag in deinen Worten, die KI macht daraus Betreff, Einleitung, Positionen (aus deinem Artikelkatalog, sonst mit Preisvorschlag) und Schlusstext.'} Alles bleibt danach editierbar.
       <textarea id="ag-ki-text" style="width:100%;margin:10px 0 8px;min-height:64px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;font-family:inherit;font-size:0.9rem" placeholder="${KONTEXT.admin ? 'z. B. Website mit Anfrageformular für einen Malerbetrieb, danach monatliche Betreuung …' : 'z. B. Komplette Elektroinstallation einer 90 m² Wohnung, 3 Zimmer, Küche, Bad, inkl. Unterverteilung …'}"></textarea>
       <div class="btn-zeile" style="margin:0"><button class="btn klein" onclick="kiVorschlag()">Vorschlag erstellen</button><span class="status-text" id="ag-ki-status"></span></div>
     </div>` : ''}
@@ -622,13 +624,16 @@ async function anhangLoeschen(id, name) {
 async function kiVorschlag() {
   const el = $('ag-ki-status'); el.className = 'status-text'; el.textContent = 'Die KI denkt nach …';
   try {
-    const d = await api('/ki/angebot', 'POST', { beschreibung: $('ag-ki-text').value, kundeId: $('ag-kunde').value });
+    const d = await api('/ki/angebot', 'POST', { beschreibung: $('ag-ki-text').value, kundeId: $('ag-kunde').value, angebotId: AG_ID,
+      positionen: POS.filter(p => String(p.titel || '').trim()) });
     const v = d.vorschlag;
     if (v.betreff && !$('ag-betreff').value) $('ag-betreff').value = v.betreff;
     if (v.einleitung) $('ag-einleitung').value = v.einleitung;
     if (v.schlusstext) $('ag-schluss').value = v.schlusstext;
     POS = v.positionen.map(p => ({ ...p })); posRender(true);
-    el.textContent = `${v.positionen.length} Positionen vorgeschlagen – bitte Preise und Texte prüfen.`; el.className = 'status-text ok';
+    const quelle = v.bedarf ? ` Bedarfsanalyse von ${v.bedarf.firma}${v.bedarf.closer ? ' (Gespräch: ' + v.bedarf.closer + ')' : ''} verwendet.` : '';
+    el.textContent = (v.festePositionen ? 'Einleitung und Positionsbeschreibungen neu geschrieben, Preise unverändert.' : `${v.positionen.length} Positionen vorgeschlagen – bitte Preise und Texte prüfen.`) + quelle;
+    el.className = 'status-text ok';
   } catch (e) { el.textContent = e.message; el.className = 'status-text fehler'; }
 }
 function ratenFelder() {
@@ -1056,6 +1061,6 @@ async function wiederherstellen() {
   wechsle(LADER[start] ? start : 'uebersicht', true);
 })();
 </script>
-<script src="/shared/datum.js?v=nf71"></script>
+<script src="/shared/datum.js?v=nf72"></script>
 </body>
 </html>

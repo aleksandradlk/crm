@@ -7,7 +7,7 @@
 // Regeln: shared/bedarf-regeln.js (gleich wie auf dem Server).
 // ============================================================
 // Große Textfelder (mit Zeichenzähler, Limit aus den Vertriebsregeln)
-const BD_LANG = ['ablauf_heute', 'groesstes_problem', 'sonderwuensche', 'notiz', 'rabatt_begruendung'];
+const BD_LANG = ['ablauf_heute', 'groesstes_problem', 'sonderwuensche', 'notiz', 'rabatt_begruendung', 'einleitung_notiz'];
 const BD_KURZ = 300;
 // Feldnamen für Verlauf und Konflikt-Ansicht
 const BD_LABEL = {
@@ -21,6 +21,7 @@ const BD_LABEL = {
   entscheider_text: 'Entscheider (Text)', paket_empfohlen: 'Paket', zusatzleistungen: 'Zusatzleistungen', preis_genannt: 'Preis genannt',
   reaktion_preis: 'Reaktion auf den Preis', rabatt_prozent: 'Rabatt %', rabatt_begruendung: 'Begründung Rabatt', gratismonat: 'Gratismonat',
   zahlungswunsch: 'Zahlungswunsch', sonderwuensche: 'Sonderwünsche', nachfass_termin: 'Nachfass-Termin', notiz: 'Notiz',
+  einleitung_notiz: 'Für die Einleitung', aktion_prozent: 'Aktion %', aktion_bis: 'Aktion gültig bis',
 };
 const BD_ANLASS = {
   autosave: 'Automatisch gespeichert', speichern: 'Gespeichert', stand_vorher: 'Stand vor einer Änderung', kurzcheck: 'Kurz-Check',
@@ -55,10 +56,14 @@ const Bedarf = {
         <div class="modal-heading"><div class="modal-icon"><i class="fas fa-clipboard-list"></i></div>
           <div style="min-width:0"><div class="modal-title">Bedarfsanalyse</div><div class="modal-subtitle" id="bdSub"></div></div></div>
         <span class="bd-saved" id="bdSaved"></span>
+        <button type="button" class="btn btn-ghost btn-sm bd-preise-btn" onclick="document.getElementById('bdModal').classList.toggle('preise-offen')" title="Pakete und Preise"><i class="fas fa-tags"></i><span class="bd-btn-text"> Preise</span></button>
         <button type="button" class="btn btn-ghost btn-sm btn-icon" onclick="Bedarf.verlauf()" title="Verlauf: frühere Stände ansehen und wiederherstellen"><i class="fas fa-history"></i></button>
         <button class="modal-x" onclick="Bedarf.close()" title="Schließen"><i class="fas fa-times"></i></button>
       </div>
-      <div class="bd-sheet-body" id="bdRoot"><div class="bd-loading"><i class="fas fa-spinner fa-spin"></i></div></div>
+      <div class="bd-sheet-main">
+        <div class="bd-sheet-body" id="bdRoot"><div class="bd-loading"><i class="fas fa-spinner fa-spin"></i></div></div>
+        <aside class="bd-preise" id="bdPreise"></aside>
+      </div>
     </div>`;
     document.body.appendChild(o);
     o.querySelector('.bd-sheet').focus({ preventScroll: true });
@@ -91,11 +96,41 @@ const Bedarf = {
       const sub = document.getElementById('bdSub');
       if (sub) sub.textContent = [r.lead.company, r.lead.ceo].filter(Boolean).join(' · ');
       this.render();
+      this._preise();
       this._status(r.updated_at ? `Zuletzt gespeichert ${fmtDate(r.updated_at)}${r.updated_von ? ' · ' + r.updated_von : ''}` : '');
       this._entwurfPruefen();
     } catch (e) {
       el.innerHTML = `<div class="bd-loading" style="color:var(--red)">${escHtml(e.message)}</div>`;
     }
+  },
+
+  // ── Preis- und Paketübersicht (Seitenleiste im Fenster) ─────
+  _preise() {
+    const box = document.getElementById('bdPreise');
+    if (!box || !this.cfg) return;
+    const R = this.R(), c = this.cfg, d = this.data || {};
+    const gewaehlt = d.paket_empfohlen, vorschlag = this._calc().v.paket;
+    const monat = p => Math.round((p.einrichtung / 12 + p.betreuung) / 10) * 10;
+    const raten = p => { const rest = p.einrichtung / 2; return `50 % = ${R.eur(p.einrichtung / 2)}, dann 3 × ${R.eur(Math.round(rest / 3))}`; };
+    const pk = Object.entries(c.pakete).map(([k, p]) => `<div class="bdp-paket${k === gewaehlt ? ' is-gewaehlt' : ''}${k === vorschlag ? ' is-vorschlag' : ''}">
+        <div class="bdp-kopf"><b>${escHtml(p.name)}</b>${k === vorschlag ? '<span>Vorschlag</span>' : ''}</div>
+        <div class="bdp-preis">${p.ab ? 'ab ' : ''}${R.eur(p.einrichtung)} <small>+ ${R.eur(p.betreuung)}/Monat</small></div>
+        <div class="bdp-inhalt">${escHtml(R.INHALT[k] || '')}</div>
+        <div class="bdp-zeile"><span>1. Jahr pro Monat</span><b>ca. ${R.eur(monat(p))}</b></div>
+        ${k === 'quickwin' ? '<div class="bdp-zeile"><span>Zahlung</span><b>50/50, keine Raten</b></div>'
+          : `<div class="bdp-zeile"><span>Raten</span><b>${raten(p)}</b></div>`}
+      </div>`).join('');
+    const g = c.zusatz.google, w = c.zusatz.webseite;
+    box.innerHTML = `<div class="bdp-titel">Pakete &amp; Preise</div>
+      <div class="bd-hint" style="margin-bottom:8px">Endpreise (Kleinunternehmerin). Zahlung 50/50 oder ab S: 50 % bei Auftrag + 2–3 Raten.</div>
+      ${pk}
+      <div class="bdp-titel" style="margin-top:12px">Zusatzleistungen</div>
+      <div class="bdp-paket"><div class="bdp-kopf"><b>${escHtml(g.name)}</b></div>
+        <div class="bdp-preis">${R.eur(g.einrichtung)}${g.einrichtung_bestehend != null ? ` <small>· besteht schon / macht jemand anderes: ${R.eur(g.einrichtung_bestehend)}</small>` : ''}</div>
+        <div class="bdp-inhalt">${escHtml(R.INHALT.google)}</div></div>
+      <div class="bdp-paket"><div class="bdp-kopf"><b>${escHtml(w.name)}</b></div>
+        <div class="bdp-preis">${R.eur(w.einrichtung)} <small>+ ${R.eur(w.betreuung)}/Monat</small></div>
+        <div class="bdp-inhalt">${escHtml(R.INHALT.webseite)}</div></div>`;
   },
 
   // ── Auswertung (live, gleiche Regeln wie der Server) ────────
@@ -149,7 +184,7 @@ const Bedarf = {
         ${row('Besichtigungen', inp('besichtigungen', 'text', 'pro Woche, wie viele werden zum Auftrag'))}`)}
       ${sec(4, 'Größter Zeitfresser', true, `
         ${row('Größtes Problem', area('groesstes_problem', 'Wörtlich mitschreiben, z. B. „Ich sitz jeden Abend eine Stunde am Handy“', 3))}
-        ${row('Was soll zuerst weg?', chips('zuerst_weg', W.zuerst_weg, true))}`)}
+        ${row('Was soll zuerst weg? (Kernwünsche)', chips('zuerst_weg', W.zuerst_weg, true))}`)}
       ${sec(5, 'Rahmen', true, `
         ${row('Wunschstart', inp('wunschstart', 'text', 'z. B. vor Saisonstart März'))}
         ${row('Entscheider', chips('entscheider', W.entscheider) + `<div data-show="entscheider_text" ${d.entscheider === 'anderer' ? '' : 'hidden'}>${inp('entscheider_text', 'text', 'Wer entscheidet mit?')}</div>`)}`)}
@@ -166,9 +201,14 @@ const Bedarf = {
         ${row('Reaktion auf den Preis', chips('reaktion_preis', W.reaktion_preis))}
         ${row('Rabatt', `<div class="bd-eur">${inp('rabatt_prozent', 'number', '0', 'min="0" max="100" inputmode="numeric"')}<span>%</span></div><div id="bdRabatt"></div>
           <div data-show="rabatt_begruendung" hidden>${area('rabatt_begruendung', 'Warum mehr Rabatt? (Pflicht)')}</div>`)}
+        ${row('Aktion zugesagt', `<div class="bd-aktion"><div class="bd-eur">${inp('aktion_prozent', 'number', '0', 'min="0" max="100" inputmode="numeric"')}<span>%</span></div>
+          <label class="bd-hint">gültig bis</label><input type="date" class="form-control" data-f="aktion_bis" value="${escHtml(d.aktion_bis || '')}" style="max-width:170px"></div>
+          <div class="bd-hint">Aktionsrabatt, den Aleksandra freigegeben hat. Gilt im Angebot, wenn kein eigener Rabatt eingetragen ist.</div>`)}
         ${row('Gratismonat', chips('gratismonat', W.janein) + '<div class="bd-hint">höchstens 1 Monat</div>')}
         ${row('Zahlungswunsch', `<div id="bdZahlung"></div>`)}
         ${row('Sonderwünsche', area('sonderwuensche', 'Alles, was nicht im Handbuch steht'))}
+        ${row('Für die Einleitung', area('einleitung_notiz', 'In 2–3 Sätzen, möglichst in seinen Worten: Was hat er dir erzählt, was soll anders werden? z. B. „Ich fahr für jedes Angebot raus und dann hör ich nie wieder was.“', 3)
+          + '<div class="bd-hint">Daraus schreibt die KI die persönliche Einleitung im Angebot.</div>')}
         ${row('Nachfass-Termin <span class="bd-star">★</span>', `<input type="datetime-local" class="form-control" data-f="nachfass_termin">` + '<div class="bd-hint">Legt automatisch eine Erinnerung für dich an.</div>')}`, 'bdErgebnis')}
       <div class="bd-foot" id="bdFoot"></div>`;
 
@@ -203,6 +243,8 @@ const Bedarf = {
       const f = p.fragen.find(x => String(x.nr) === s.dataset.ok);
       s.innerHTML = f && f.ok ? '<i class="fas fa-check-circle"></i>' : '';
     });
+
+    if (this.el.closest('#bdModal')) this._preise();
 
     // Gesundheitsbranche
     this.el.querySelector('#bdGesund').innerHTML = p.gesundheit
@@ -680,6 +722,8 @@ const Bedarf = {
           <label>Paket L ab Auftragswert</label><div>${num('vr-l-wert', c.regeln.l_auftragswert)} €</div>
           <label>Paket M ab … Kanälen</label><div>${num('vr-m-kan', c.regeln.m_kanaele, 70)}</div>
           <label>Paket M ab … Anfragen/Woche</label><div>${num('vr-m-anf', c.regeln.m_anfragen, 70)}</div>
+          <label>Kein L unter … Anfragen/Woche (bei 1–2 Kanälen)</label><div>${num('vr-l-wenig', c.regeln.l_wenig_anfragen ?? 5, 70)}</div>
+          <label>Google-Profil, wenn es schon besteht oder jemand anderes es macht</label><div>${num('vr-g-bestehend', c.zusatz.google.einrichtung_bestehend ?? 249)} €</div>
           <label>Nachfassen nach dem Angebot (Tage)</label><div><input class="form-control" id="vr-tage" value="${escHtml((c.nachfass_tage || []).join(', '))}" style="width:140px"></div>
           <label>Hinweis, wenn Anfrage wartet seit</label><div>${num('vr-std', c.anfrage_warte_std, 70)} Std.</div>
           <label>Max. Zeichen in großen Textfeldern der Bedarfsanalyse</label><div>${num('vr-textlimit', c.textlimit, 100)}</div>
@@ -719,9 +763,10 @@ const Bedarf = {
         .filter(([ab, b]) => ab > 1 && b >= 0).map(([ab, betrag]) => ({ ab, betrag }));
       pk.forEach(([k, p]) => { pakete[k] = { ...p, einrichtung: val(`vr-p-${k}-e`), betreuung: val(`vr-p-${k}-b`) }; });
       zs.forEach(([k, p]) => { zusatz[k] = k === 'automation' ? p : { ...p, einrichtung: val(`vr-z-${k}-e`), betreuung: val(`vr-z-${k}-b`) }; });
+      zusatz.google.einrichtung_bestehend = val('vr-g-bestehend');
       speichern({
         pakete, zusatz, rabatt_grenze: val('vr-rabatt'),
-        regeln: { l_auftragswert: val('vr-l-wert'), m_kanaele: val('vr-m-kan'), m_anfragen: val('vr-m-anf') },
+        regeln: { l_auftragswert: val('vr-l-wert'), m_kanaele: val('vr-m-kan'), m_anfragen: val('vr-m-anf'), l_wenig_anfragen: val('vr-l-wenig') },
         nachfass_tage: o.querySelector('#vr-tage').value.split(/[,; ]+/).map(Number).filter(n => n > 0),
         anfrage_warte_std: val('vr-std') || 24,
         textlimit: Math.max(1000, val('vr-textlimit') || R.STANDARD.textlimit),

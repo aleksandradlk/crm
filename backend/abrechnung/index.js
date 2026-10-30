@@ -1236,36 +1236,77 @@ Antworte NUR mit gültigem JSON: {"betreff": "...", "text": "..."}`;
   }));
 
   // ── KI-Vorschlag für ein Angebot ──────────────────────────
-  // Aus einer freien Auftragsbeschreibung macht die KI Betreff, Einleitung,
-  // Positionen (bevorzugt aus dem eigenen Artikelkatalog) und Schlusstext.
-  // Preise sind Vorschläge und werden im Editor geprüft.
+  // Aus einer freien Auftragsbeschreibung und – wenn der Kunde mit einem Lead verknüpft ist –
+  // der Bedarfsanalyse macht die KI Betreff, Einleitung, Positionen (bevorzugt aus dem eigenen
+  // Artikelkatalog) und Schlusstext. Stehen schon Positionen im Editor (z. B. aus der
+  // Bedarfsanalyse übernommen), bleiben Titel, Menge und Preis fest; die KI schreibt nur die
+  // Beschreibungen der einmaligen Positionen passend zum Kunden. Der Katalog selbst bleibt
+  // unverändert, ebenso die Beschreibung monatlicher Leistungen (Betreuung = Vertragsinhalt).
+  // Vorbild für die Einleitung (Angebot an Reinheitswerk, von Aleksandra freigegeben)
+  const EINLEITUNG_VORBILD = 'Du hast Nala erzählt, dass du bei der Arbeit ständig aufs Handy schaust und manchmal nachts um 3 noch Anfragen beantwortest. Genau das nimmt dir der Anfragen-Autopilot ab: Jede Anfrage über Instagram, WhatsApp, E-Mail oder dein Formular bekommt sofort eine Antwort. Fahrzeug, Zustand, Fotos und Ort werden automatisch abgefragt, und der Kunde bekommt direkt einen Preis nach deiner Preisliste. Anfragen, die zu weit weg sind oder nicht zu dir passen, siehst du sofort und sagst mit einem Klick ab. So machst du nur noch die Autos, auf die du Lust hast, und hast nachts deine Ruhe.';
+
   app.post('/api/abrechnung/ki/angebot', asyncRoute(async (req, res) => {
     if (!ctx.ki || !ctx.ki.client) throw new Error('KI ist auf diesem Server nicht eingerichtet (ANTHROPIC_API_KEY fehlt).');
-    if (ctx.ki.rateLimit && !ctx.ki.rateLimit(req)) throw new Error(`Tageslimit erreicht (max. ${ctx.ki.limit} KI-Vorschläge pro Tag).`);
     const b = req.body || {};
-    const beschreibung = String(b.beschreibung || '').trim();
-    if (beschreibung.length < 10) throw new Error('Bitte den Auftrag kurz beschreiben (mindestens ein Satz).');
+    const beschreibung = String(b.beschreibung || '').trim().slice(0, 4000);
     const kunde = ladeKunden().find(k => k.id === b.kundeId) || null;
+    const gespeichert = b.angebotId ? ladeEins(ANGEBOTE_DIR, String(b.angebotId)) : null;
+    const bedarf = kunde && ctx.bedarfFuerAngebot
+      ? await Promise.resolve(ctx.bedarfFuerAngebot(gespeichert || {}, kunde)).catch(e => { console.error('Bedarf fürs Angebot:', e.message); return null; }) : null;
+    if (beschreibung.length < 10 && !bedarf) throw new Error('Bitte den Auftrag kurz beschreiben (mindestens ein Satz). Ist der Kunde mit einem Lead mit Bedarfsanalyse verknüpft, reicht auch ein leeres Feld.');
+    if (ctx.ki.rateLimit && !ctx.ki.rateLimit(req)) throw new Error(`Tageslimit erreicht (max. ${ctx.ki.limit} KI-Vorschläge pro Tag).`);
     const stamm = ladeStammdaten();
     const artikel = ladeArtikel().filter(a => a.aktiv !== false);
     const katalog = artikel.length ? artikel.map(a => `- ${a.nr}: ${a.titel} – ${round2(a.preis)} € pro ${a.einheit} (${a.abrechnung}) – ${a.beschreibung || ''}`).join('\n') : '(leer)';
     const du = kunde && kunde.anrede === 'du';
-    const prompt = `Du hilfst dem Unternehmen "${stamm.firma}" (${stamm.kleinunternehmer ? 'Kleinunternehmer, Preise ohne USt' : 'Preise netto zzgl. 19 % USt'}), ein professionelles deutsches Angebot zu formulieren.
+    const form = du ? 'Du-Form' : 'Sie-Form';
+    const vorhanden = (Array.isArray(b.positionen) ? b.positionen : []).filter(p => p && String(p.titel || '').trim()).slice(0, 20);
+    const festePositionen = !!bedarf && vorhanden.length > 0;
+    const closer = bedarf && bedarf.closer;
 
-AUFTRAGSBESCHREIBUNG:
-${beschreibung}
+    const einleitungRegeln = bedarf ? `- Einleitung nach fester Definition, ${form}, OHNE Anrede am Anfang (die setzt das Tool, z. B. „Hey ${(kunde && kunde.ansprechpartner || '').split(/\s+/)[0] || 'Vorname'},“):
+  1. Einstieg mit der konkreten Situation, die der Kunde ${closer || 'uns'} erzählt hat, möglichst in seinen eigenen Worten („Du hast ${closer || 'uns'} erzählt, dass …“ oder „Wie du ${closer || 'uns'} erzählt hast, …“). Nutze vor allem „Für die Einleitung“ und „Größtes Problem“.
+  2. „Genau das nimmt dir der Anfragen-Autopilot ab:“ oder „Das drehen wir um:“ und dann der konkrete Ablauf in 2–3 Sätzen: seine Kanäle, was automatisch abgefragt wird (passend zu seiner Branche), was der Kunde sofort bekommt.
+  3. Das spürbare Ergebnis für ihn in einem Satz (z. B. „Du fährst erst raus, wenn der Kunde zugesagt hat.“).
+  4. Falls vorhanden: Geschenk oder Bonus (erster Monat Betreuung gratis, zugesagte Aktion mit Frist) und Zusatzleistungen (Google-Profil, Webseite) in einem Satz.
+  Warm und persönlich, keine Floskeln („Vielen Dank für Ihr Interesse“ u. ä.), keine Technikwörter (kein KI, Automatisierung, Workflow, Integration, Tool), keine Preise, keine Paketbuchstaben (S/M/L). Insgesamt 6–10 Sätze. Erfinde nichts, was nicht in der Bedarfsanalyse steht.
+  Vorbild für Ton und Aufbau (nicht wörtlich übernehmen, die Fakten müssen von diesem Kunden kommen):
+  „${EINLEITUNG_VORBILD}“` : `- Einleitung: 1–2 Sätze, ${form}, OHNE Anrede/Begrüßung am Anfang (die setzt das Tool).`;
+
+    const kopf = `Du hilfst dem Unternehmen "${stamm.firma}" (${stamm.kleinunternehmer ? 'Kleinunternehmer, Preise ohne USt' : 'Preise netto zzgl. 19 % USt'}), ein deutsches Angebot zu formulieren.
 
 ${kunde ? `KUNDE: ${kunde.firma}${kunde.ansprechpartner ? ', Ansprechpartner ' + kunde.ansprechpartner : ''} (Anrede: ${du ? 'Du' : 'Sie'})` : 'KUNDE: nicht angegeben (Sie-Form)'}
+${bedarf ? `\nBEDARFSANALYSE (Gespräch geführt von ${closer || 'unserem Vertrieb'}):\n${bedarf.text}\n` : ''}${beschreibung ? `\nZUSÄTZLICHE HINWEISE ZUM AUFTRAG:\n${beschreibung}\n` : ''}`;
 
+    let prompt;
+    if (festePositionen) {
+      const liste = vorhanden.map((p, i) => `${i}. ${p.titel} (${p.abrechnung === 'monatlich' ? 'monatlich' : 'einmalig'})${p.artikelNr ? ' [' + p.artikelNr + ']' : ''}\n   Leistungsumfang laut Katalog/Editor: ${String(p.beschreibung || '').slice(0, 800) || '(keiner angegeben)'}`).join('\n');
+      prompt = `${kopf}
+POSITIONEN (fest – Titel, Menge und Preis werden NICHT geändert):
+${liste}
+
+Regeln:
+- Schreibe für jede EINMALIGE Position eine neue Beschreibung (2–3 Sätze, ${form}), konkret für diesen Kunden: seine Kanäle, seine Branche, die Angaben, die bei seinen Anfragen automatisch abgefragt werden (z. B. bei Fliesen: Format, Preisklasse, Altbelag, Abdichtung; bei Fahrzeugen: Fahrzeug, Zustand, Fotos, Ort), sein größtes Problem.
+- Nenne nur Leistungen, die im Leistungsumfang der Position stehen. Nichts dazuerfinden, keine Preise.
+- Monatliche Positionen (Betreuung, Hosting): NICHT umschreiben, dafür "beschreibung": null.
+${einleitungRegeln}
+- Betreff: kurz, z. B. „Anfragen-Autopilot mit automatischem Preisvorschlag“.
+- Schlusstext: 1 Satz, freundlich, ${form}.
+
+Antworte NUR mit gültigem JSON, kein Text davor oder danach:
+{ "betreff": "...", "einleitung": "...", "beschreibungen": [ { "index": 0, "beschreibung": "..." } ], "schlusstext": "..." }`;
+    } else {
+      prompt = `${kopf}
 ARTIKELKATALOG (bevorzugt verwenden, Preise und Einheiten übernehmen):
 ${katalog}
 
 Regeln:
-- 2 bis 6 Positionen, fachlich sinnvoll gegliedert. Passt ein Katalogartikel, nutze seine "artikelNr" und seinen Preis.
+- 2 bis 6 Positionen, fachlich sinnvoll gegliedert. Passt ein Katalogartikel, nutze seine "artikelNr" und seinen Preis.${bedarf && bedarf.paket ? ` Gewähltes Paket laut Bedarfsanalyse: ${bedarf.paket}.` : ''}
 - Für freie Positionen: realistischen Einzelpreis in Euro schätzen, Einheit sinnvoll wählen (Stunde/Stunden, Paket/Pakete, Stück/Stück, Pauschal/Pauschal, Monat/Monate).
 - "abrechnung": "monatlich" nur für laufende Leistungen (Wartung, Hosting, Betreuung), sonst "einmalig".
-- Einleitung: 1–2 Sätze, ${du ? 'Du-Form' : 'Sie-Form'}, OHNE Anrede/Begrüßung am Anfang (die setzt das Tool).
-- Schlusstext: 1 Satz, freundlich, ${du ? 'Du-Form' : 'Sie-Form'}.
+- Beschreibungen einmaliger Positionen: 1–3 Sätze, ${form}${bedarf ? ', konkret für diesen Kunden (seine Kanäle, seine Branche, was bei seinen Anfragen abgefragt wird); nur Leistungen aus dem Katalogtext' : ''}.
+${einleitungRegeln}
+- Schlusstext: 1 Satz, freundlich, ${form}.
 - Keine Preise im Fließtext.
 
 Antworte NUR mit gültigem JSON, kein Text davor oder danach:
@@ -1277,36 +1318,49 @@ Antworte NUR mit gültigem JSON, kein Text davor oder danach:
   ],
   "schlusstext": "..."
 }`;
-    const antwort = await ctx.ki.client.messages.create({ model: ctx.ki.model || 'claude-haiku-4-5', max_tokens: 1500, messages: [{ role: 'user', content: prompt }] });
+    }
+    const antwort = await ctx.ki.client.messages.create({ model: ctx.ki.model || 'claude-haiku-4-5', max_tokens: 3000, messages: [{ role: 'user', content: prompt }] });
     const text = (antwort.content && antwort.content[0] && antwort.content[0].text || '').trim();
     const a0 = text.indexOf('{'), a1 = text.lastIndexOf('}');
     if (a0 < 0 || a1 < 0) throw new Error('Die KI hat keine verwertbare Antwort geliefert, bitte noch einmal versuchen.');
     let ki;
     try { ki = JSON.parse(text.slice(a0, a1 + 1)); } catch (e) { throw new Error('Die KI-Antwort war nicht lesbar, bitte noch einmal versuchen.'); }
-    const positionen = (Array.isArray(ki.positionen) ? ki.positionen : []).map(p => {
-      const art = p.artikelNr ? artikel.find(a => a.nr === String(p.artikelNr).toUpperCase()) : null;
-      return {
-        artikelNr: art ? art.nr : null,
-        titel: String((art && art.titel) || p.titel || '').trim(),
-        beschreibung: String(p.beschreibung || (art && art.beschreibung) || '').trim(),
-        menge: Number(p.menge) > 0 ? Number(p.menge) : 1,
-        einheit: String((art && art.einheit) || p.einheit || 'Stück').trim(),
-        einheitMehrzahl: String((art && art.einheitMehrzahl) || p.einheitMehrzahl || '').trim(),
-        einzelpreis: art ? round2(art.preis) : round2(p.einzelpreis),
-        rabatt: 0,
-        abrechnung: (art ? art.abrechnung : p.abrechnung) === 'monatlich' ? 'monatlich' : 'einmalig'
-      };
-    }).filter(p => p.titel);
-    // Zu jedem Paket gehört die passende Betreuung (sie erklärt, was laufend dabei ist).
-    // Lässt die KI sie weg, wird sie aus dem Katalog ergänzt.
-    const BETREUUNG_ZU = { 'AP-001': 'BE-001', 'AP-002': 'BE-002', 'AP-003': 'BE-003', 'AP-004': 'BE-004', 'ZU-002': 'BE-005', 'ZU-003': 'BE-006' };
-    for (const p of [...positionen]) {
-      const be = p.artikelNr && BETREUUNG_ZU[p.artikelNr] && artikel.find(a => a.nr === BETREUUNG_ZU[p.artikelNr]);
-      if (!be || positionen.some(x => x.artikelNr === be.nr)) continue;
-      positionen.push({ artikelNr: be.nr, titel: be.titel, beschreibung: be.beschreibung || '', menge: 1, einheit: be.einheit, einheitMehrzahl: be.einheitMehrzahl || '', einzelpreis: round2(be.preis), rabatt: 0, abrechnung: 'monatlich' });
+
+    let positionen;
+    if (festePositionen) {
+      const neu = new Map((Array.isArray(ki.beschreibungen) ? ki.beschreibungen : [])
+        .filter(x => x && Number.isInteger(Number(x.index)) && typeof x.beschreibung === 'string' && x.beschreibung.trim())
+        .map(x => [Number(x.index), x.beschreibung.trim().slice(0, 1500)]));
+      positionen = vorhanden.map((p, i) => (p.abrechnung !== 'monatlich' && neu.has(i)) ? { ...p, beschreibung: neu.get(i) } : { ...p });
+    } else {
+      positionen = (Array.isArray(ki.positionen) ? ki.positionen : []).map(p => {
+        const art = p.artikelNr ? artikel.find(a => a.nr === String(p.artikelNr).toUpperCase()) : null;
+        return {
+          artikelNr: art ? art.nr : null,
+          titel: String((art && art.titel) || p.titel || '').trim(),
+          beschreibung: String(p.beschreibung || (art && art.beschreibung) || '').trim(),
+          menge: Number(p.menge) > 0 ? Number(p.menge) : 1,
+          einheit: String((art && art.einheit) || p.einheit || 'Stück').trim(),
+          einheitMehrzahl: String((art && art.einheitMehrzahl) || p.einheitMehrzahl || '').trim(),
+          einzelpreis: art ? round2(art.preis) : round2(p.einzelpreis),
+          rabatt: 0,
+          abrechnung: (art ? art.abrechnung : p.abrechnung) === 'monatlich' ? 'monatlich' : 'einmalig'
+        };
+      }).filter(p => p.titel);
+      // Zu jedem Paket gehört die passende Betreuung (sie erklärt, was laufend dabei ist).
+      // Lässt die KI sie weg, wird sie aus dem Katalog ergänzt – mit der Katalogbeschreibung.
+      const BETREUUNG_ZU = { 'AP-001': 'BE-001', 'AP-002': 'BE-002', 'AP-003': 'BE-003', 'AP-004': 'BE-004', 'ZU-002': 'BE-005', 'ZU-003': 'BE-006' };
+      for (const p of [...positionen]) {
+        const be = p.artikelNr && BETREUUNG_ZU[p.artikelNr] && artikel.find(a => a.nr === BETREUUNG_ZU[p.artikelNr]);
+        if (!be || positionen.some(x => x.artikelNr === be.nr)) continue;
+        positionen.push({ artikelNr: be.nr, titel: be.titel, beschreibung: be.beschreibung || '', menge: 1, einheit: be.einheit, einheitMehrzahl: be.einheitMehrzahl || '', einzelpreis: round2(be.preis), rabatt: 0, abrechnung: 'monatlich' });
+      }
+      // Monatliche Katalogleistungen behalten den Katalogtext (Vertragsinhalt)
+      positionen.forEach(p => { const art = p.artikelNr && artikel.find(a => a.nr === p.artikelNr); if (art && p.abrechnung === 'monatlich' && art.beschreibung) p.beschreibung = art.beschreibung; });
     }
     if (!positionen.length) throw new Error('Die KI hat keine Positionen vorgeschlagen, bitte die Beschreibung präzisieren.');
-    ok(res, { vorschlag: { betreff: String(ki.betreff || '').trim(), einleitung: String(ki.einleitung || '').trim(), schlusstext: String(ki.schlusstext || '').trim(), positionen } });
+    ok(res, { vorschlag: { betreff: String(ki.betreff || '').trim(), einleitung: String(ki.einleitung || '').trim(), schlusstext: String(ki.schlusstext || '').trim(), positionen,
+      bedarf: bedarf ? { firma: bedarf.firma, closer: bedarf.closer } : null, festePositionen } });
   }));
 
   // Kennzahlen für die Admin-Übersicht
@@ -1889,6 +1943,7 @@ Antworte NUR mit gültigem JSON, kein Text davor oder danach:
           einmaligNetto: round2(einmalig.reduce((x, p) => x + positionGesamt(p), 0)),
           rabatt: einmalig.some(p => Number(p.rabatt) > 0 || Number(p.einzelpreis) < 0),
           rabattProzent: einmalig.some(p => Number(p.rabatt) > 0),
+          rabattMax: Math.max(0, ...einmalig.map(p => Number(p.rabatt) || 0)),
           // Minus-Positionen (z. B. „Anrechnung Quick-Win“)
           gutschrift: round2(-einmalig.filter(p => positionGesamt(p) < 0).reduce((x, p) => x + positionGesamt(p), 0)),
           zahlung: { art: v.zahlung.art, anzahlungProzent: v.zahlung.anzahlungProzent, raten: (v.zahlung.raten || []).map(r => r.betrag),
