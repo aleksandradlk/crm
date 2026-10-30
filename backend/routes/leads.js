@@ -613,12 +613,13 @@ router.post('/bulk', auth, async (req, res) => {
       if ((await findDuplicates(l, 0, 1)).length) { skippedDuplicates.push(l.company); continue; }
       const [r] = await db.query(
         `INSERT INTO leads
-          (company, ceo, email, phone, location, website, linkedin_url,
+          (company, ceo, email, phone, location, website, linkedin_url, instagram_url,
            industry, employees, revenue, source, confidence, notes,
            status, assigned_to, created_by)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [l.company||null, l.ceo||null, l.email||null, l.phone||null,
-         l.location||null, l.website||null, l.linkedin_url||null,
+         l.location ? String(l.location).slice(0, 150) : null, l.website||null, l.linkedin_url||null,
+         l.instagram_url ? String(l.instagram_url).slice(0, 255) : null,
          l.industry||null, l.employees||null, l.revenue||null,
          l.source||'web', l.confidence||50, l.notes||null,
          'neu', assigned_to||null, req.user.id]
@@ -715,7 +716,7 @@ router.get('/:id', auth, async (req, res) => {
      WHERE l.id = ? AND l.archived_at IS NULL`, [id]
   );
   if (!lead) return res.status(404).json({ error: 'Nicht gefunden' });
-  if (!canView(req.user, lead)) return res.status(403).json({ error: 'Dieser Lead wird von einem Kollegen betreut.' });
+  if (!(await sicht.darfMitarbeiten(req.user, lead, parseInt(req.params.id)))) return res.status(403).json({ error: 'Dieser Lead wird von einem Kollegen betreut.' });
 
   const [comments] = await db.query(
     `SELECT c.*, u.full_name, u.username, pu.full_name AS pinned_by_name FROM comments c
@@ -753,7 +754,8 @@ router.get('/:id', auth, async (req, res) => {
     `SELECT m.id, m.from_id, m.merged_by, m.created_at, l.company AS from_company, u.full_name AS merged_by_name
      FROM lead_merges m LEFT JOIN leads l ON l.id = m.from_id LEFT JOIN users u ON u.id = m.merged_by
      WHERE m.target_id = ? AND m.undone_at IS NULL ORDER BY m.id DESC`, [id]).catch(() => [[]]);
-  res.json({ ...lead, comments, reminders, call_logs, email_thread, deals, duplicates, merges });
+  res.json({ ...lead, comments, reminders, call_logs, email_thread, deals, duplicates, merges,
+    mein_deal: await sicht.hatDeal(req.user.id, lead.id) });
 });
 
 // ── PATCH /api/leads/:id/status ──────────────────────────────
@@ -860,7 +862,7 @@ router.post('/:id/comments', auth, async (req, res) => {
 
   const [[lead]] = await db.query('SELECT assigned_to FROM leads WHERE id=?', [leadId]);
   if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
-  if (!canView(req.user, lead))
+  if (!(await sicht.darfMitarbeiten(req.user, lead, parseInt(req.params.id))))
     return res.status(403).json({ error: 'Kein Zugriff' });
 
   const [r] = await db.query(
@@ -894,7 +896,7 @@ router.post('/:id/comments/:cid/pin', auth, async (req, res) => {
   try {
     const [[lead]] = await db.query('SELECT assigned_to FROM leads WHERE id=?', [leadId]);
     if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
-    if (!canView(req.user, lead)) return res.status(403).json({ error: 'Kein Zugriff' });
+    if (!(await sicht.darfMitarbeiten(req.user, lead, parseInt(req.params.id)))) return res.status(403).json({ error: 'Kein Zugriff' });
     const an = req.body && req.body.pinned !== false;
     const [r] = await db.query('UPDATE comments SET pinned_at=?, pinned_by=? WHERE id=? AND lead_id=?',
       [an ? new Date() : null, an ? req.user.id : null, cid, leadId]);
@@ -930,7 +932,7 @@ router.post('/:id/reminders', auth, async (req, res) => {
 
   const [[lead]] = await db.query('SELECT assigned_to FROM leads WHERE id=?', [leadId]);
   if (!lead) return res.status(404).json({ error: 'Lead nicht gefunden' });
-  if (!canView(req.user, lead))
+  if (!(await sicht.darfMitarbeiten(req.user, lead, parseInt(req.params.id))))
     return res.status(403).json({ error: 'Kein Zugriff' });
 
   const [r] = await db.query(
@@ -986,7 +988,7 @@ router.post('/:id/email', auth, async (req, res) => {
   try {
     const [[lead]] = await db.query('SELECT * FROM leads WHERE id=?', [id]);
     if (!lead) return res.status(404).json({ error: 'Nicht gefunden' });
-    if (!canView(req.user, lead))
+    if (!(await sicht.darfMitarbeiten(req.user, lead, parseInt(req.params.id))))
       return res.status(403).json({ error: 'E-Mail nur bei eigenen oder unzugewiesenen Leads erlaubt' });
 
     const [[user]] = await db.query('SELECT full_name, role, signatur FROM users WHERE id=?', [req.user.id]);

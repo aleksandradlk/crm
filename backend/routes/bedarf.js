@@ -17,11 +17,11 @@ const FELDER = ['ansprechpartner_rolle', 'branche', 'branche_text', 'email_angeb
   'ablauf_heute', 'antwortzeit', 'nachfragen', 'besichtigungen', 'groesstes_problem', 'zuerst_weg', 'wunschstart', 'software', 'kalender',
   'webseite_status', 'google_profil', 'entscheider', 'entscheider_text', 'paket_empfohlen', 'zusatzleistungen', 'preis_genannt', 'reaktion_preis',
   'rabatt_prozent', 'rabatt_begruendung', 'gratismonat', 'zahlungswunsch', 'sonderwuensche', 'nachfass_termin', 'notiz',
-  'einleitung_notiz', 'aktion_prozent', 'aktion_bis'];
+  'einleitung_notiz', 'aktion_prozent', 'aktion_bis', 'vertraulich'];
 const LISTEN = ['kanaele', 'nachfragen', 'zuerst_weg', 'zusatzleistungen'];
 // Große Textfelder (Limit aus den Vertriebsregeln, Standard 10.000), alle anderen Textfelder 300 Zeichen.
 // Zu lange Eingaben werden abgelehnt, nie still abgeschnitten.
-const LANG = ['ablauf_heute', 'groesstes_problem', 'sonderwuensche', 'notiz', 'rabatt_begruendung', 'einleitung_notiz'];
+const LANG = ['ablauf_heute', 'groesstes_problem', 'sonderwuensche', 'notiz', 'rabatt_begruendung', 'einleitung_notiz', 'vertraulich'];
 const KURZ_LIMIT = 300;
 
 function fehler400(text) { const e = new Error(text); e.status = 400; return e; }
@@ -62,7 +62,9 @@ async function leadFuer(req, leadId, schreiben = false) {
      WHERE id=? AND archived_at IS NULL`, [leadId]);
   if (!lead) return { fehler: [404, 'Lead nicht gefunden'] };
   if (req.user.role !== 'admin') {
-    if (!sicht.darfSehen(req.user, lead) || (lead.assigned_to !== null && lead.assigned_to !== req.user.id && !sicht.siehtAlles(req.user)))
+    const eigen = sicht.darfSehen(req.user, lead) && (lead.assigned_to === null || lead.assigned_to === req.user.id || sicht.siehtAlles(req.user));
+    // Wer einen Deal am Lead hat (z. B. nach der Übergabe), darf die Bedarfsanalyse weiter öffnen und ergänzen
+    if (!eigen && !(await sicht.hatDeal(req.user.id, lead.id)))
       return { fehler: [403, 'Dieser Lead wird von einem Kollegen betreut.'] };
     if (schreiben && lead.assigned_to === null) {
       const [r] = await db.query('UPDATE leads SET assigned_to=? WHERE id=? AND assigned_to IS NULL', [req.user.id, lead.id]);

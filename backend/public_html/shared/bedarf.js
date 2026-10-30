@@ -7,7 +7,7 @@
 // Regeln: shared/bedarf-regeln.js (gleich wie auf dem Server).
 // ============================================================
 // Große Textfelder (mit Zeichenzähler, Limit aus den Vertriebsregeln)
-const BD_LANG = ['ablauf_heute', 'groesstes_problem', 'sonderwuensche', 'notiz', 'rabatt_begruendung', 'einleitung_notiz'];
+const BD_LANG = ['ablauf_heute', 'groesstes_problem', 'sonderwuensche', 'notiz', 'rabatt_begruendung', 'einleitung_notiz', 'vertraulich'];
 const BD_KURZ = 300;
 // Feldnamen für Verlauf und Konflikt-Ansicht (gemeinsam mit dem Server, shared/bedarf-regeln.js)
 const BD_LABEL = window.BedarfRegeln.FELDLABEL;
@@ -197,6 +197,8 @@ const Bedarf = {
         ${row('Sonderwünsche', area('sonderwuensche', 'Alles, was nicht im Handbuch steht'))}
         ${row('Für die Einleitung', area('einleitung_notiz', 'In 2–3 Sätzen, möglichst in seinen Worten: Was hat er dir erzählt, was soll anders werden? z. B. „Ich fahr für jedes Angebot raus und dann hör ich nie wieder was.“', 3)
           + '<div class="bd-hint">Daraus schreibt die KI die persönliche Einleitung im Angebot.</div>')}
+        ${row('Vertraulich <i class="fas fa-lock" style="color:var(--text3)"></i>', area('vertraulich', 'Was der Kunde im Vertrauen erzählt hat (privat, Geld, Mitarbeiter, Konkurrenz …)', 2)
+          + '<div class="bd-hint">Kommt nie ins Angebot und nie in Mails an den Kunden. Die KI bekommt es gar nicht zu sehen.</div>')}
         ${row('Nachfass-Termin', `<input type="datetime-local" class="form-control" data-f="nachfass_termin">` + '<div class="bd-hint">Freiwillig. Legt eine Erinnerung für dich an.</div>')}`, 'bdErgebnis')}
       <div class="bd-foot" id="bdFoot"></div>`;
 
@@ -738,7 +740,7 @@ const Bedarf = {
           <label>Google-Profil, wenn es schon besteht (auch schwach) oder jemand anderes es macht</label><div>${num('vr-g-bestehend', c.zusatz.google.einrichtung_bestehend ?? 249)} €</div>
           <label>Hinweis, wenn Anfrage wartet seit</label><div>${num('vr-std', c.anfrage_warte_std, 70)} Std.</div>
           <label>Max. Zeichen in großen Textfeldern der Bedarfsanalyse</label><div>${num('vr-textlimit', c.textlimit, 100)}</div>
-          <label>Kommentare im Lead-Fenster (neueste, ältere über „Mehr laden“)</label><div>${num('vr-kommentare', c.kommentare_anzahl ?? 10, 70)}</div>
+          <label>Kommentare im Lead-Fenster (neueste, ältere über „Mehr laden“)</label><div>${num('vr-kommentare', c.kommentare_anzahl ?? 5, 70)}</div>
           <label>Anfragen per E-Mail an</label><div><input class="form-control" id="vr-mail" type="email" value="${escHtml(c.admin_mail)}"></div>
           <label>Morgens um 7:41 eine Mail mit allem, was fällig ist</label><div><label class="vr-inline"><input type="checkbox" id="vr-faellig" ${c.faellig_mail !== false ? 'checked' : ''}> an diese Adresse schicken</label></div>
           <label>Live-Demo-Link</label><div><input class="form-control" id="vr-demo" value="${escHtml(c.demo_link)}"></div>
@@ -747,7 +749,6 @@ const Bedarf = {
         <div class="tr-sub">Provision &amp; Bonus</div>
         <div class="vr-grid">
           <label>Provision vom Einmalpreis</label><div>${num('vr-pv-satz', c.provision.satz, 70)} %</div>
-          <label>Provision mit Rabatt (vom reduzierten Preis)</label><div>${num('vr-pv-rabatt', c.provision.satz_rabatt, 70)} %</div>
           <label>Quick-Win-Upgrade zählt innerhalb von</label><div>${num('vr-pv-upgrade', c.provision.upgrade_tage, 70)} Tagen</div>
           <label>Provision fällig nach Zahlungseingang</label><div>${num('vr-pv-faellig', c.provision.faellig_tage, 70)} Tage</div>
           <label>USt-Aufschlag (wenn am Closer eingestellt)</label><div>${num('vr-pv-ust', c.provision.ust, 70)} %</div>
@@ -781,13 +782,13 @@ const Bedarf = {
         regeln: { l_auftragswert: val('vr-l-wert'), m_kanaele: val('vr-m-kan'), m_anfragen: val('vr-m-anf'), l_wenig_anfragen: val('vr-l-wenig') },
         anfrage_warte_std: val('vr-std') || 24,
         textlimit: Math.max(1000, val('vr-textlimit') || R.STANDARD.textlimit),
-        kommentare_anzahl: Math.max(3, val('vr-kommentare') || 10),
+        kommentare_anzahl: Math.max(3, val('vr-kommentare') || 5),
         admin_mail: o.querySelector('#vr-mail').value.trim() || R.STANDARD.admin_mail,
         faellig_mail: o.querySelector('#vr-faellig').checked,
         demo_link: o.querySelector('#vr-demo').value.trim() || R.STANDARD.demo_link,
         gesundheit: o.querySelector('#vr-gesund').value.split(',').map(s => s.trim()).filter(Boolean),
         provision: {
-          satz: val('vr-pv-satz'), satz_rabatt: val('vr-pv-rabatt'), upgrade_tage: val('vr-pv-upgrade'),
+          satz: val('vr-pv-satz'), satz_rabatt: val('vr-pv-satz'), upgrade_tage: val('vr-pv-upgrade'),
           faellig_tage: val('vr-pv-faellig'), ust: val('vr-pv-ust'), bonus_erster: val('vr-pv-erster'),
           bonus_pakete: [...o.querySelectorAll('.vr-pv-paket:checked')].map(x => x.value),
           bonus: stufen.length ? stufen : R.STANDARD.provision.bonus,

@@ -215,10 +215,12 @@ async function bedarfFuerAngebot(a, kunde) {
     ['auftragswert_schnitt', 'Auftragswert im Schnitt (€)'], ['antwortzeit', 'Antwortzeit heute'], ['nachfragen', 'Was er bei Anfragen nachfragen muss'],
     ['besichtigungen', 'Besichtigungen'], ['branche', 'Branche'], ['branche_text', 'Branche (genauer)'], ['teamgroesse', 'Teamgröße'],
     ['software', 'Software'], ['kalender', 'Kalender'], ['webseite_status', 'Webseite'], ['google_profil', 'Google-Profil'],
-    ['wunschstart', 'Wunschstart'], ['entscheider', 'Entscheider'], ['paket_empfohlen', 'Gewähltes Paket'], ['zusatzleistungen', 'Zusatzleistungen'],
+    ['wunschstart', 'Wunschstart'], ['paket_empfohlen', 'Gewähltes Paket'], ['zusatzleistungen', 'Zusatzleistungen'],
     ['rabatt_prozent', 'Rabatt %'], ['aktion_prozent', 'Zugesagte Aktion %'], ['aktion_bis', 'Aktion gültig bis'], ['gratismonat', 'Erster Monat Betreuung gratis'],
     ['zahlungswunsch', 'Zahlungswunsch'], ['sonderwuensche', 'Sonderwünsche'],
   ];
+  // Bewusst NICHT an die KI: „Vertraulich“, interne Notiz, Preisreaktion, Rabattbegründung, Entscheider-Details
+  // (nichts davon gehört in ein Angebot an den Kunden).
   const zeilen = FELDER.filter(([f]) => !R.leer(d[f])).map(([f, t]) => `- ${t}: ${L(f, d[f])}`);
   return {
     leadId: lead.id, firma: lead.company,

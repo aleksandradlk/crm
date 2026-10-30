@@ -52,4 +52,15 @@ async function uebergeben(leadId, alterId, neuerId) {
     [neuerId, leadId, alterId]).catch(() => {});
 }
 
-module.exports = { freieLeadsSichtbar, neuLaden, siehtAlles, darfSehen, leadFilter, uebergeben };
+// Wer einen Deal an diesem Lead hat (z. B. nach Übergabe an Aleksandra), darf weiter mitarbeiten:
+// Lead ansehen, Bedarfsanalyse öffnen, Notizen und Erinnerungen schreiben.
+async function hatDeal(userId, leadId) {
+  if (!userId || !leadId) return false;
+  const [[d]] = await db.query("SELECT id FROM deals WHERE lead_id=? AND owner_id=? AND status<>'lost' LIMIT 1", [leadId, userId]).catch(() => [[null]]);
+  return !!d;
+}
+async function darfMitarbeiten(user, lead, leadId) {
+  return darfSehen(user, lead) || await hatDeal(user.id, leadId || lead.id);
+}
+
+module.exports = { freieLeadsSichtbar, neuLaden, siehtAlles, darfSehen, leadFilter, uebergeben, hatDeal, darfMitarbeiten };

@@ -1307,7 +1307,10 @@ Antworte NUR mit gültigem JSON: {"betreff": "...", "text": "..."}`;
   2. „Genau das nimmt dir der Anfragen-Autopilot ab:“ oder „Das drehen wir um:“ und dann der konkrete Ablauf in 2–3 Sätzen: seine Kanäle, was automatisch abgefragt wird (passend zu seiner Branche), was der Kunde sofort bekommt.
   3. Das spürbare Ergebnis für ihn in einem Satz (z. B. „Du fährst erst raus, wenn der Kunde zugesagt hat.“).
   4. Falls vorhanden: Geschenk oder Bonus (erster Monat Betreuung gratis, zugesagte Aktion mit Frist) und Zusatzleistungen (Google-Profil, Webseite) in einem Satz.
-  Warm und persönlich, keine Floskeln („Vielen Dank für Ihr Interesse“ u. ä.), keine Technikwörter (kein KI, Automatisierung, Workflow, Integration, Tool), keine Preise, keine Paketbuchstaben (S/M/L). Insgesamt 6–10 Sätze. Erfinde nichts, was nicht in der Bedarfsanalyse steht.
+  Persönlich heißt: mindestens zwei konkrete Details nur dieses Kunden (seine Worte, seine Zahlen wie Anfragen pro Woche, seine Kanäle, was er bei Anfragen nachfragen muss, wie er heute arbeitet, seine Branche mit ihren Fachbegriffen). Wer den Text liest, muss merken, dass er nur für ihn geschrieben ist.
+  VERBOTEN (wirkt wie ein Serienbrief): „Danke für das (sympathische/nette) Gespräch“, „danke für dein Vertrauen“, „Vielen Dank für Ihr Interesse“, „wertvolle Zeit“, „Zeit und Geld sparen“, „die wichtigen Dinge“, „persönliche Note“, „Kundenflow“, „Mehrwert“, „nahtlos“, „effizient“, „auf das Wesentliche konzentrieren“, „wir freuen uns“. Keine Technikwörter (kein KI, Automatisierung, Workflow, Integration, Tool, generieren), keine Preise, keine Paketbuchstaben (S/M/L).
+  VERTRAULICH: Nichts über Geld, Privates, Gesundheit, Familie, Mitarbeiterprobleme, Konkurrenten, Preisreaktion oder Rabattgründe erwähnen, auch wenn es irgendwo anklingt. Im Zweifel weglassen.
+  Insgesamt 6–10 Sätze. Erfinde nichts, was nicht in der Bedarfsanalyse steht.
   Vorbild für Ton und Aufbau (nicht wörtlich übernehmen, die Fakten müssen von diesem Kunden kommen):
   „${EINLEITUNG_VORBILD}“` : `- Einleitung: 1–2 Sätze, ${form}, OHNE Anrede/Begrüßung am Anfang (die setzt das Tool).`;
 
@@ -1325,7 +1328,7 @@ ${liste}
 
 Regeln:
 - Schreibe für jede EINMALIGE Position eine neue Beschreibung (2–3 Sätze, ${form}), konkret für diesen Kunden: seine Kanäle, seine Branche, die Angaben, die bei seinen Anfragen automatisch abgefragt werden (z. B. bei Fliesen: Format, Preisklasse, Altbelag, Abdichtung; bei Fahrzeugen: Fahrzeug, Zustand, Fotos, Ort), sein größtes Problem.
-- Nenne nur Leistungen, die im Leistungsumfang der Position stehen. Nichts dazuerfinden, keine Preise.
+- Nenne nur Leistungen, die im Leistungsumfang der Position stehen. Nichts dazuerfinden, keine Preise. Nichts Vertrauliches (Geld, Privates, Mitarbeiter, Konkurrenz).
 - Monatliche Positionen (Betreuung, Hosting): NICHT umschreiben, dafür "beschreibung": null.
 ${einleitungRegeln}
 - Betreff: kurz, z. B. „Anfragen-Autopilot mit automatischem Preisvorschlag“.
@@ -1357,7 +1360,15 @@ Antworte NUR mit gültigem JSON, kein Text davor oder danach:
   "schlusstext": "..."
 }`;
     }
-    const antwort = await ctx.ki.client.messages.create({ model: ctx.ki.model || 'claude-haiku-4-5', max_tokens: 3000, messages: [{ role: 'user', content: prompt }] });
+    // Für Angebote das stärkere Modell (persönlichere Texte); ist es nicht verfügbar, das Standardmodell
+    let antwort;
+    try {
+      antwort = await ctx.ki.client.messages.create({ model: ctx.ki.modelAngebot || ctx.ki.model || 'claude-haiku-4-5', max_tokens: 3000, messages: [{ role: 'user', content: prompt }] });
+    } catch (e) {
+      if (!ctx.ki.modelAngebot || ![400, 403, 404].includes(e.status)) throw e;
+      console.error('KI-Angebot: Modell', ctx.ki.modelAngebot, 'nicht verfügbar, nehme', ctx.ki.model, '-', e.message);
+      antwort = await ctx.ki.client.messages.create({ model: ctx.ki.model || 'claude-haiku-4-5', max_tokens: 3000, messages: [{ role: 'user', content: prompt }] });
+    }
     const text = (antwort.content && antwort.content[0] && antwort.content[0].text || '').trim();
     const a0 = text.indexOf('{'), a1 = text.lastIndexOf('}');
     if (a0 < 0 || a1 < 0) throw new Error('Die KI hat keine verwertbare Antwort geliefert, bitte noch einmal versuchen.');

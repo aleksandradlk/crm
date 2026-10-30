@@ -110,7 +110,9 @@ const Finder = {
       const el = document.getElementById('fdSizes');
       if (el) el.innerHTML = `<span class="kb-pick on" title="Vom Admin festgelegt"><i class="fas fa-lock"></i>${escHtml((this.SIZES.find(([k]) => k === this.size) || [, 'Egal'])[1])}</span>`;
     } else this._picks('fdSizes', this.SIZES, this.size, 'setSize');
-    this._picks('fdMax', (this.opts.isAdmin ? [5, 10, 20, 50, 100] : [5, 10, 20, 50]).map(n => [n, String(n)]), this.max, 'setMax');
+    // Höchstens 20 pro Suche: dafür wird jede Firma gründlich geprüft (zwei Websuchen je Lead)
+    if (this.max > 20) this.max = 20;
+    this._picks('fdMax', [5, 10, 20].map(n => [n, String(n)]), this.max, 'setMax');
     if (this.opts.isAdmin) {
       const users = (this.opts.users || []).filter(u => u.is_active);
       this._picks('fdAssign', [[null, 'Niemand', 'inbox']].concat(users.map(u => [u.id, u.full_name.split(' ')[0], u.role === 'admin' ? 'user-shield' : 'headset'])), this.assign, 'setAssign');
@@ -176,10 +178,21 @@ const Finder = {
         extra: document.getElementById('fdExtra').value.trim(),
       });
       this.leads = data.leads || [];
-      this.picked = new Set(this.leads.map((_, k) => k));
+      // Schon im CRM vorhandene Firmen sind markiert und nicht vorausgewählt
+      this.picked = new Set(this.leads.map((l, k) => l.vorhanden ? -1 : k).filter(k => k >= 0));
+      const st = data.statistik || {};
+      const teile = [
+        st.ohne_telefon ? `${st.ohne_telefon} ohne Telefon aussortiert` : '',
+        st.ausserhalb ? `${st.ausserhalb} außerhalb der Region aussortiert` : '',
+        st.unsicher ? `${st.unsicher} unsichere aussortiert` : '',
+        st.schon_im_crm ? `${st.schon_im_crm} schon im CRM` : '',
+        st.region_ungeprueft ? `${st.region_ungeprueft} Ort ungeprüft` : '',
+      ].filter(Boolean);
+      const anteil = (n) => this.leads.length ? `${n} von ${this.leads.length}` : '0';
       run.innerHTML = `<div class="fd-run-card done"><div class="fd-orb"><i class="fas fa-check"></i></div>
         <div><b>${this.leads.length ? `${this.leads.length} ${this.leads.length === 1 ? 'Firma' : 'Firmen'} gefunden` : 'Keine passenden Firmen gefunden'}</b>
-        <span>${data.real_data ? 'Per Web-Suche geprüft' : 'Web-Suche ohne Treffer – Angaben aus KI-Wissen, bitte prüfen'}${data.dropped_low_confidence ? ` · ${data.dropped_low_confidence} unsichere Treffer aussortiert` : ''}</span></div></div>`;
+        <span>${data.real_data ? `Per Web-Suche geprüft (${st.websuchen || 0} Suchen)` : 'Web-Suche ohne Treffer – Angaben aus KI-Wissen, bitte prüfen'}${teile.length ? ' · ' + teile.join(' · ') : ''}</span>
+        ${this.leads.length ? `<span class="fd-stat">Alle mit Telefon · E-Mail ${anteil(st.mit_email || 0)} · Webseite ${anteil(st.mit_webseite || 0)} · Instagram ${anteil(st.mit_instagram || 0)}</span>` : ''}</div></div>`;
       this.renderResults(data.real_data);
     } catch (e) {
       run.innerHTML = `<div class="fd-run-card err"><div class="fd-orb"><i class="fas fa-exclamation"></i></div><div><b>Suche fehlgeschlagen</b><span>${escHtml(e.message)}</span></div></div>`;
@@ -221,10 +234,13 @@ const Finder = {
         <div class="fd-card-title"><b>${escHtml(l.company || '—')}</b>${l.location ? `<span>${escHtml(l.location)}</span>` : ''}</div>
         ${conf ? `<span class="fd-conf" style="--p:${conf}" title="Sicherheit ${conf} %"><span>${conf}</span></span>` : ''}
       </div>
+      ${l.vorhanden ? `<div class="fd-vorhanden"><i class="fas fa-clone"></i>Schon im CRM${l.vorhanden.betreut ? ` (betreut von ${escHtml(l.vorhanden.betreut)})` : ''}</div>` : ''}
+      ${l.region === 'ungeprueft' ? `<div class="fd-region"><i class="fas fa-map-marker-alt"></i>Ort ungeprüft, bitte kurz checken</div>` : ''}
       ${row('user-tie', escHtml(l.ceo || ''))}
       ${row('phone-alt', l.phone ? `<span class="mono">${escHtml(l.phone)}</span>` : '')}
       ${row('envelope', escHtml(l.email || ''))}
       ${row('globe', l.website ? escHtml(String(l.website).replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')) : '')}
+      ${row('camera', l.instagram_url ? escHtml(String(l.instagram_url).replace(/^instagram\.com\//, '@')) : '')}
     </article>`;
   },
 

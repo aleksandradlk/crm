@@ -4,7 +4,7 @@
 // Bedarfsanalyse bzw. dem Deal-Wert geschätzt. Jeder gewonnene Deal wird zusätzlich
 // dauerhaft in provision_abschluesse gesichert (Satz vom Tag des Abschlusses).
 //   Basis   = Einmalpreis (Einrichtung + Zusätze) netto, ohne Betreuung/Hosting
-//   Satz    = 20 %, mit Rabatt 15 % vom reduzierten Preis (Gratismonat zählt nicht)
+//   Satz    = 20 % vom (ggf. reduzierten) Einmalpreis, auch mit Rabatt (Gratismonat zählt nicht)
 //   Upgrade = Quick-Win → Autopilot beim selben Kunden in 30 Tagen: Basis − Quick-Win-Preis
 //   Fällig  = Zahlungseingang + 14 Tage, je Zahlung anteilig
 //   USt     = + 19 %, wenn am Benutzer „zzgl. USt“ (nicht bei Sitz im Ausland)
@@ -124,7 +124,9 @@ async function berechne(deal, cfg, besitzer, opts = {}) {
   }
   const basis = round2(Math.max(0, basisPreis - (upgrade ? upgrade.abzug : 0)));
   // Bei festgeschriebenen Abschlüssen gilt der Satz vom Tag des Abschlusses, auch wenn sich die Regeln ändern
-  const satz = opts.satzFest != null ? Number(opts.satzFest) : rabatt ? Number(P.satz_rabatt) : Number(P.satz);
+  // Immer der volle Satz, auch mit Rabatt (Aleksandra, 30.10.2026). Ein beim Abschluss festgeschriebener
+  // höherer Satz bleibt; ältere, mit Rabatt niedriger festgeschriebene Sätze werden auf den vollen angehoben.
+  const satz = Math.max(opts.satzFest != null ? Number(opts.satzFest) || 0 : 0, Number(P.satz));
   const netto = round2(basis * satz / 100);
   const mitUst = !!(besitzer && besitzer.provision_zzgl_ust && !besitzer.provision_ausland);
   const ustSatz = mitUst ? Number(P.ust) : 0;
