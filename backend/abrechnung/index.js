@@ -341,7 +341,7 @@ function bauMandant(app, ctx) {
         positionen: v.positionen.filter(p => p.abrechnung === 'einmalig'),
         summen: v.summen,
         zahlung: v.zahlung,
-        monatlich: v.monatlichPositionen.map(p => ({ titel: p.titel, preis: positionGesamt(p), einheit: 'Monat', start: a.monatlichStart || plusMonate(monatsAnfang(monatVon(a.datum)), 1) })),
+        monatlich: v.monatlichPositionen.map(p => ({ titel: p.titel, beschreibung: p.beschreibung || '', menge: p.menge, einzelpreis: p.einzelpreis, rabatt: p.rabatt || 0, preis: positionGesamt(p), einheit: 'Monat', einheitMehrzahl: 'Monate', start: a.monatlichStart || plusMonate(monatsAnfang(monatVon(a.datum)), 1) })),
         projektvereinbarung: a.projektvereinbarung !== false,
         schlusstext: a.schlusstext || texte.angebotSchluss,
         gruss: a.gruss || kundeGruss(kunde)
@@ -1297,6 +1297,14 @@ Antworte NUR mit gültigem JSON, kein Text davor oder danach:
         abrechnung: (art ? art.abrechnung : p.abrechnung) === 'monatlich' ? 'monatlich' : 'einmalig'
       };
     }).filter(p => p.titel);
+    // Zu jedem Paket gehört die passende Betreuung (sie erklärt, was laufend dabei ist).
+    // Lässt die KI sie weg, wird sie aus dem Katalog ergänzt.
+    const BETREUUNG_ZU = { 'AP-001': 'BE-001', 'AP-002': 'BE-002', 'AP-003': 'BE-003', 'AP-004': 'BE-004', 'ZU-002': 'BE-005', 'ZU-003': 'BE-006' };
+    for (const p of [...positionen]) {
+      const be = p.artikelNr && BETREUUNG_ZU[p.artikelNr] && artikel.find(a => a.nr === BETREUUNG_ZU[p.artikelNr]);
+      if (!be || positionen.some(x => x.artikelNr === be.nr)) continue;
+      positionen.push({ artikelNr: be.nr, titel: be.titel, beschreibung: be.beschreibung || '', menge: 1, einheit: be.einheit, einheitMehrzahl: be.einheitMehrzahl || '', einzelpreis: round2(be.preis), rabatt: 0, abrechnung: 'monatlich' });
+    }
     if (!positionen.length) throw new Error('Die KI hat keine Positionen vorgeschlagen, bitte die Beschreibung präzisieren.');
     ok(res, { vorschlag: { betreff: String(ki.betreff || '').trim(), einleitung: String(ki.einleitung || '').trim(), schlusstext: String(ki.schlusstext || '').trim(), positionen } });
   }));

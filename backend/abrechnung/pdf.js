@@ -173,14 +173,16 @@ function ueberschrift(doc, text) {
 }
 
 // Positionen-Tabelle mit Seitenumbruch
-function positionenTabelle(doc, positionen) {
+// opts.startNr: Positionsnummer der ersten Zeile, opts.gesamtTitel: Kopf der letzten Spalte
+function positionenTabelle(doc, positionen, opts = {}) {
+  const startNr = opts.startNr || 1;
   const spalten = [
     { key: 'pos', titel: 'Pos.', breite: 30, align: 'left' },
     { key: 'bez', titel: 'Bezeichnung', breite: 235, align: 'left' },
     { key: 'menge', titel: 'Menge', breite: 45, align: 'right' },
     { key: 'einheit', titel: 'Einheit', breite: 55, align: 'left' },
     { key: 'einzel', titel: 'Einzelpreis', breite: 65, align: 'right' },
-    { key: 'gesamt', titel: 'Gesamt', breite: 65, align: 'right' }
+    { key: 'gesamt', titel: opts.gesamtTitel || 'Gesamt', breite: 65, align: 'right' }
   ];
   const xStart = RAND.links;
   const zeilenPad = 6;
@@ -224,7 +226,7 @@ function positionenTabelle(doc, positionen) {
       doc.font(font).fontSize(groesse).fillColor(farbe)
         .text(text, x + 5, y0 + zeilenPad, { width: sp.breite - 10, align: sp.align, lineBreak: false });
     };
-    zelle(String(i + 1), spalten[0], 'M400', 9, GRAU); x += spalten[0].breite;
+    zelle(String(startNr + i), spalten[0], 'M400', 9, GRAU); x += spalten[0].breite;
     doc.font('M600').fontSize(9.5).fillColor(INK).text(p.titel || '', x + 5, y0 + zeilenPad, { width: bezBreite });
     if (p.beschreibung) {
       doc.font('M400').fontSize(8.5).fillColor(GRAU).text(p.beschreibung, x + 5, y0 + zeilenPad + titelH + 3, { width: bezBreite, lineGap: 1 });
@@ -327,12 +329,29 @@ function erzeugeAngebotPdf({ angebot, kunde, absender, kleinunternehmer }) {
   positionenTabelle(doc, angebot.positionen || []);
   summenBlock(doc, angebot.summen, kleinunternehmer, { gesamtLabel: 'Gesamtbetrag (einmalig)' });
 
+  // Monatliche Leistungen (z. B. Betreuung) als eigene Tabelle mit Beschreibung,
+  // damit der Kunde sieht, was in der Betreuung steckt.
   if (angebot.monatlich && angebot.monatlich.length) {
+    platzSicherstellen(doc, 90);
     ueberschrift(doc, 'Monatliche Leistungen');
-    angebot.monatlich.forEach(m => {
-      absatz(doc, `Zusätzlich ab ${datum(m.start)}: ${euro(m.preis)} pro ${m.einheit || 'Monat'} für ${m.titel}, monatlich kündbar${kleinunternehmer ? '' : ' (zzgl. 19 % USt)'}.`, { abstand: 4 });
-    });
-    doc.y += 8;
+    const starts = [...new Set(angebot.monatlich.map(m => m.start).filter(Boolean))];
+    absatz(doc, `Zusätzlich zum einmaligen Betrag${starts.length === 1 ? `, abgerechnet ab ${datum(starts[0])}` : ''}, monatlich kündbar${kleinunternehmer ? '' : ', Preise zzgl. 19 % USt'}.`, { groesse: 9, farbe: GRAU, abstand: 6 });
+    positionenTabelle(doc, angebot.monatlich.map(m => ({
+      titel: m.titel,
+      beschreibung: [m.beschreibung, starts.length > 1 && m.start ? `Ab ${datum(m.start)}.` : ''].filter(Boolean).join(' '),
+      menge: m.menge != null ? m.menge : 1,
+      einheit: m.einheit || 'Monat', einheitMehrzahl: m.einheitMehrzahl || 'Monate',
+      einzelpreis: m.einzelpreis != null ? m.einzelpreis : m.preis,
+      rabatt: m.rabatt || 0
+    })), { startNr: (angebot.positionen || []).length + 1, gesamtTitel: 'Pro Monat' });
+    const summe = round2(angebot.monatlich.reduce((x, m) => x + (Number(m.preis) || 0), 0));
+    const breite = 260, wertBreite = 100, x = SEITE.breite - RAND.rechts - breite;
+    platzSicherstellen(doc, 22);
+    const y = doc.y;
+    doc.font('M700').fontSize(11).fillColor(INK)
+      .text('Monatlich gesamt', x, y, { width: breite - wertBreite, lineBreak: false })
+      .text(euro(summe), x + breite - wertBreite, y, { width: wertBreite, align: 'right', lineBreak: false });
+    doc.y = y + 26;
   }
 
   const raten = angebot.zahlung && angebot.zahlung.art === 'raten' ? (angebot.zahlung.raten || []) : [];
