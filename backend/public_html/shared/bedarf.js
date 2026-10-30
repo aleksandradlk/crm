@@ -152,7 +152,7 @@ const Bedarf = {
         ${row('Branche', chips('branche', W.branche) + `<div data-show="branche_text" ${d.branche === 'andere' ? '' : 'hidden'}>${inp('branche_text', 'text', 'Welche Branche?')}</div>`)}
         <div id="bdGesund"></div>
         ${row('E-Mail fürs Angebot', inp('email_angebot', 'email', 'name@betrieb.de'))}
-        ${row('Webseite', url('webseite', 'betrieb.de'))}
+        ${row('Webseite', url('webseite', 'betrieb.de') + '<div class="bd-hint bd-domain" id="bdDomain"></div>')}
         ${row('Instagram', url('instagram', 'instagram.com/…'))}
         ${row('Teamgröße', chips('teamgroesse', W.teamgroesse))}
         ${row('Büro vorhanden', chips('buero_vorhanden', W.janein))}`)}
@@ -197,7 +197,7 @@ const Bedarf = {
         ${row('Sonderwünsche', area('sonderwuensche', 'Alles, was nicht im Handbuch steht'))}
         ${row('Für die Einleitung', area('einleitung_notiz', 'In 2–3 Sätzen, möglichst in seinen Worten: Was hat er dir erzählt, was soll anders werden? z. B. „Ich fahr für jedes Angebot raus und dann hör ich nie wieder was.“', 3)
           + '<div class="bd-hint">Daraus schreibt die KI die persönliche Einleitung im Angebot.</div>')}
-        ${row('Nachfass-Termin <span class="bd-star">★</span>', `<input type="datetime-local" class="form-control" data-f="nachfass_termin">` + '<div class="bd-hint">Legt automatisch eine Erinnerung für dich an.</div>')}`, 'bdErgebnis')}
+        ${row('Nachfass-Termin', `<input type="datetime-local" class="form-control" data-f="nachfass_termin">` + '<div class="bd-hint">Freiwillig. Legt eine Erinnerung für dich an.</div>')}`, 'bdErgebnis')}
       <div class="bd-foot" id="bdFoot"></div>`;
 
     // datetime-local braucht „YYYY-MM-DDTHH:MM“
@@ -206,6 +206,7 @@ const Bedarf = {
 
     this.el.querySelectorAll('input[data-f], textarea[data-f]').forEach(i => i.addEventListener('input', () => this._feld(i)));
     this.el.querySelectorAll('textarea[data-f]').forEach(i => this._zaehler(i));
+    this._domain();
     this.el.querySelectorAll('.bd-chips').forEach(c => c.addEventListener('click', e => {
       const b = e.target.closest('button[data-v]');
       if (b && !b.disabled) this._chip(c.dataset.f, b.dataset.v, c.dataset.multi === '1');
@@ -311,6 +312,10 @@ const Bedarf = {
   },
 
   // ── Eingaben ────────────────────────────────────────────────
+  _domain() {
+    const el = this.el && this.el.querySelector('#bdDomain');
+    if (el) el.textContent = typeof domainHinweis === 'function' ? domainHinweis(this.data.email_angebot, this.data.webseite) : '';
+  },
   _limit(f) { return BD_LANG.includes(f) ? (Number(this.cfg?.textlimit) || 10000) : BD_KURZ; },
   _zaehler(i) {
     const c = this.el.querySelector(`[data-count="${i.dataset.f}"]`);
@@ -326,6 +331,7 @@ const Bedarf = {
     let v = i.value;
     if (f === 'nachfass_termin') v = v ? v.replace('T', ' ') : '';
     if (v === '') delete this.data[f]; else this.data[f] = v;
+    if (f === 'email_angebot' || f === 'webseite') this._domain();
     if (i.closest('.bd-url')) {
       const a = this.el.querySelector(`[data-link="${f}"]`);
       if (a) { a.hidden = !v; if (v) a.href = absUrl(v); }
@@ -730,9 +736,9 @@ const Bedarf = {
           <label>Paket M ab … Anfragen/Woche</label><div>${num('vr-m-anf', c.regeln.m_anfragen, 70)}</div>
           <label>Kein L unter … Anfragen/Woche (bei 1–2 Kanälen)</label><div>${num('vr-l-wenig', c.regeln.l_wenig_anfragen ?? 5, 70)}</div>
           <label>Google-Profil, wenn es schon besteht (auch schwach) oder jemand anderes es macht</label><div>${num('vr-g-bestehend', c.zusatz.google.einrichtung_bestehend ?? 249)} €</div>
-          <label>Nachfassen nach dem Angebot (Tage)</label><div><input class="form-control" id="vr-tage" value="${escHtml((c.nachfass_tage || []).join(', '))}" style="width:140px"></div>
           <label>Hinweis, wenn Anfrage wartet seit</label><div>${num('vr-std', c.anfrage_warte_std, 70)} Std.</div>
           <label>Max. Zeichen in großen Textfeldern der Bedarfsanalyse</label><div>${num('vr-textlimit', c.textlimit, 100)}</div>
+          <label>Kommentare im Lead-Fenster (neueste, ältere über „Mehr laden“)</label><div>${num('vr-kommentare', c.kommentare_anzahl ?? 10, 70)}</div>
           <label>Anfragen per E-Mail an</label><div><input class="form-control" id="vr-mail" type="email" value="${escHtml(c.admin_mail)}"></div>
           <label>Morgens um 7:41 eine Mail mit allem, was fällig ist</label><div><label class="vr-inline"><input type="checkbox" id="vr-faellig" ${c.faellig_mail !== false ? 'checked' : ''}> an diese Adresse schicken</label></div>
           <label>Live-Demo-Link</label><div><input class="form-control" id="vr-demo" value="${escHtml(c.demo_link)}"></div>
@@ -773,9 +779,9 @@ const Bedarf = {
       speichern({
         pakete, zusatz, rabatt_grenze: val('vr-rabatt'),
         regeln: { l_auftragswert: val('vr-l-wert'), m_kanaele: val('vr-m-kan'), m_anfragen: val('vr-m-anf'), l_wenig_anfragen: val('vr-l-wenig') },
-        nachfass_tage: o.querySelector('#vr-tage').value.split(/[,; ]+/).map(Number).filter(n => n > 0),
         anfrage_warte_std: val('vr-std') || 24,
         textlimit: Math.max(1000, val('vr-textlimit') || R.STANDARD.textlimit),
+        kommentare_anzahl: Math.max(3, val('vr-kommentare') || 10),
         admin_mail: o.querySelector('#vr-mail').value.trim() || R.STANDARD.admin_mail,
         faellig_mail: o.querySelector('#vr-faellig').checked,
         demo_link: o.querySelector('#vr-demo').value.trim() || R.STANDARD.demo_link,

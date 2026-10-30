@@ -24,8 +24,8 @@ const Auswertung = {
     const leer = t => `<div class="au-empty">${t}</div>`;
     const quoteTab = (rows, titel) => `
       <div class="card au-card"><div class="au-h">${titel}</div>
-        ${rows.length ? `<table class="au-table"><thead><tr><th></th><th>Gewonnen</th><th>Verloren</th><th>Offen</th><th>Quote</th><th>Umsatz</th></tr></thead><tbody>
-          ${rows.map(r => `<tr><td><b>${escHtml(r.label)}</b></td><td data-l="Gewonnen">${r.gewonnen}</td><td data-l="Verloren">${r.verloren}</td><td data-l="Offen">${r.offen}</td>
+        ${rows.length ? `<table class="au-table"><thead><tr><th></th><th>Gewonnen</th><th>Abgelehnt</th><th>Offen</th><th>Quote</th><th>Umsatz</th></tr></thead><tbody>
+          ${rows.map(r => `<tr><td><b>${escHtml(r.label)}</b></td><td data-l="Gewonnen">${r.gewonnen}</td><td data-l="Abgelehnt">${r.verloren}</td><td data-l="Offen">${r.offen}</td>
             <td data-l="Quote">${r.quote == null ? '<span class="au-muted">—</span>' : `<b>${r.quote} %</b>${balken(r.quote, r.quote >= 30)}`}</td><td data-l="Umsatz">${eur(r.umsatz)}</td></tr>`).join('')}
         </tbody></table>` : leer('Noch keine Deals im Zeitraum.')}
       </div>`;
@@ -43,10 +43,10 @@ const Auswertung = {
         <span>${d.inaktiv.map(c => `${escHtml(c.full_name)} (${c.tage == null ? 'noch nie aktiv' : 'seit ' + c.tage + ' Tagen'})`).join(' · ')}</span></div></div>` : ''}
       <div class="au-grid">
         <div class="card au-card"><div class="au-h">Bedarfsanalysen je Closer</div>
-          ${d.bedarf.length ? `<table class="au-table"><thead><tr><th>Closer</th><th>Analysen</th><th>Angebotsreif</th><th>Angefordert</th><th title="Pflichtfragen im Schnitt beantwortet">Ø Fragen</th></tr></thead><tbody>
+          ${d.bedarf.length ? `<table class="au-table"><thead><tr><th>Closer</th><th>Analysen</th><th>Angebotsreif</th><th>Angefordert</th><th title="Pflichtfragen im Schnitt beantwortet">Durchschnittlich beantwortete Fragen</th></tr></thead><tbody>
             ${d.bedarf.map(b => `<tr><td><b>${escHtml(b.full_name)}</b></td><td data-l="Analysen">${b.analysen}</td>
               <td data-l="Angebotsreif">${b.anteil == null ? '<span class="au-muted">—</span>' : `<b>${b.anteil} %</b> <span class="au-muted">(${b.reif})</span>${balken(b.anteil, b.anteil >= 60)}`}</td>
-              <td data-l="Angefordert">${b.angefordert}</td><td data-l="Ø Fragen">${b.fragen_schnitt == null ? '—' : String(b.fragen_schnitt).replace('.', ',') + ' / 5'}</td></tr>`).join('')}
+              <td data-l="Angefordert">${b.angefordert}</td><td data-l="Durchschnittlich beantwortete Fragen">${b.fragen_schnitt == null ? '—' : String(b.fragen_schnitt).replace('.', ',') + ' / 5'}</td></tr>`).join('')}
           </tbody></table>` : leer('Noch keine Closer angelegt.')}
         </div>
         <div class="card au-card"><div class="au-h">Angebot anfordern → Angebot gesendet</div>
@@ -61,7 +61,7 @@ const Auswertung = {
         ${quoteTab(d.nach_paket, 'Abschlussquote nach Paket')}
         ${quoteTab(d.nach_herkunft, 'Abschlussquote nach Herkunft')}
         <div class="card au-card au-wide"><div class="au-h">Gründe</div>
-          <div class="au-gruende-wrap">${gruende(d.gruende.verloren, 'Deal verloren')}${gruende(d.gruende.passt_nicht, 'Lead passt nicht')}</div>
+          <div class="au-gruende-wrap">${gruende(d.gruende.verloren, 'Deal abgelehnt')}${gruende(d.gruende.passt_nicht, 'Lead passt nicht')}</div>
         </div>
         ${typeof Provision !== 'undefined' ? '<div class="au-wide" id="auProvision"></div><div class="au-wide" id="auAbschluesse"></div>' : ''}
       </div>`;

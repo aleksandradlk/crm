@@ -428,37 +428,25 @@ async function mailAnfrage({ lead, data: d, cfg, deal, closer, flag }) {
   await sendHtmlMail({ to: cfg.admin_mail, subject: `Angebot anfordern: ${lead.company} · ${paket?.name || ''} · von ${closer}`, html });
 }
 
-// ── Angebot gesendet (nur Admin): Closer benachrichtigen, Nachfass-Reminder Tag 2/5/10 ──
+// ── Angebot gesendet (nur Admin): Closer benachrichtigen (keine automatischen Nachfass-Reminder mehr) ──
 async function angebotGesendet(dealId, admin) {
   const [[d]] = await db.query('SELECT d.*, l.company, l.assigned_to FROM deals d JOIN leads l ON l.id=d.lead_id WHERE d.id=?', [dealId]);
   if (!d) return;
-  const cfg = await regeln();
   const closerId = d.owner_id || d.assigned_to;
   await db.query('UPDATE deals SET angebot_gesendet_at=NOW() WHERE id=?', [d.id]);
   await db.query("UPDATE reminders SET done_at=NOW() WHERE lead_id=? AND kind IN ('angebot','angebot_wartet') AND done_at IS NULL", [d.lead_id]);
   await db.query('INSERT INTO comments (lead_id, user_id, text) VALUES (?,?,?)', [d.lead_id, admin.id, `📨 Angebot an ${d.company} verschickt`]);
   if (!closerId) return;
   await db.query("INSERT INTO reminders (lead_id, user_id, remind_at, note, kind, sent) VALUES (?,?,NOW(),?, 'info', 1)",
-    [d.lead_id, closerId, `Angebot an ${d.company} ist raus. Jetzt nachfassen.`]);
-  // Automatische Nachfass-Reminder, außer der Closer hat selbst schon später einen Termin
-  const tage = (cfg.nachfass_tage || []).map(Number).filter(n => n > 0).sort((a, b) => a - b);
-  const [eigene] = await db.query("SELECT remind_at FROM reminders WHERE lead_id=? AND user_id=? AND done_at IS NULL AND (kind IS NULL OR kind IN ('nachfass')) AND remind_at > NOW()", [d.lead_id, closerId]);
-  const spaetester = eigene.reduce((m, r) => Math.max(m, new Date(r.remind_at).getTime()), 0);
-  for (const [i, t] of tage.entries()) {
-    const at = new Date(); at.setDate(at.getDate() + t); at.setHours(10, 0, 0, 0);
-    if (spaetester >= at.getTime()) continue;
-    const letzter = i === tage.length - 1;
-    await db.query("INSERT INTO reminders (lead_id, user_id, remind_at, note, kind) VALUES (?,?,?,?, 'nachfass_auto')",
-      [d.lead_id, closerId, at, letzter
-        ? `Tag ${t} nach dem Angebot an ${d.company}: Deal auf Verloren setzen oder neuen Termin vereinbaren`
-        : `Tag ${t} nach dem Angebot: bei ${d.company} nachfassen`]);
-  }
+    [d.lead_id, closerId, `Angebot an ${d.company} ist raus. Du entscheidest selbst, wann du nachfasst.`]);
+  // Keine automatischen Nachfass-Erinnerungen (Tag 2/5/10) mehr: der Vertriebler entscheidet selbst.
+  // Am Deal steht „Angebot gesendet am …“ und ob der Kunde geantwortet hat.
   try {
     const [[u]] = await db.query('SELECT email, full_name, notify_email FROM users WHERE id=?', [closerId]);
     if (u?.email && u.notify_email) {
       const base = (process.env.BASE_URL || '').replace(/\/$/, '');
       await sendHtmlMail({ to: u.email, subject: `📨 Angebot an ${d.company} ist raus`,
-        html: `<div style="font-family:Arial,sans-serif;color:#1a2330">Hallo ${String(u.full_name).replace(/</g, '')},<br><br>das Angebot an <b>${String(d.company).replace(/</g, '')}</b> ist raus. Jetzt nachfassen – die Erinnerungen stehen in deinem CRM.<br><br><a href="${base}/closer">Zum CRM</a></div>` });
+        html: `<div style="font-family:Arial,sans-serif;color:#1a2330">Hallo ${String(u.full_name).replace(/</g, '')},<br><br>das Angebot an <b>${String(d.company).replace(/</g, '')}</b> ist raus. Wann du nachfasst, entscheidest du selbst; am Deal siehst du, ob der Kunde geantwortet hat.<br><br><a href="${base}/closer">Zum CRM</a></div>` });
     }
   } catch (e) { console.error('Mail Angebot gesendet:', e.message); }
 }

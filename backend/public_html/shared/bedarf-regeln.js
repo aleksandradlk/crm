@@ -22,6 +22,7 @@
     rabatt_grenze: 20,
     nachfass_tage: [2, 5, 10],
     textlimit: 10000,          // max. Zeichen in großen Textfeldern der Bedarfsanalyse
+    kommentare_anzahl: 10,     // so viele neueste Kommentare zeigt das Lead-Fenster, ältere über „Mehr laden“
     anfrage_warte_std: 24,
     admin_mail: 'info@novaflowservices.de',
     faellig_mail: true,                   // morgens eine Mail mit allem, was fällig ist
@@ -101,7 +102,8 @@
     { nr: 4, titel: 'Größter Zeitfresser', felder: ['groesstes_problem'] },
     { nr: 5, titel: 'Rahmen', felder: ['wunschstart', 'entscheider'] },
   ];
-  const ERGEBNIS = [['paket_empfohlen', 'Paket'], ['preis_genannt', 'Preis genannt?'], ['nachfass_termin', 'Nachfass-Termin']];
+  // Nachfass-Termin ist kein Pflichtfeld mehr (der Vertriebler entscheidet selbst, wann er nachfasst)
+  const ERGEBNIS = [['paket_empfohlen', 'Paket'], ['preis_genannt', 'Preis genannt?']];
   const FELDNAME = {
     kanaele: 'Kanäle', kanal_wichtigster: 'wichtigster Kanal', anfragen_pro_woche: 'Anfragen pro Woche', ablauf_heute: 'Ablauf heute',
     groesstes_problem: 'größtes Problem', wunschstart: 'Wunschstart', entscheider: 'Entscheider', rabatt_begruendung: 'Begründung für den Rabatt',

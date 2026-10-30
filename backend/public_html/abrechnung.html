@@ -126,9 +126,10 @@
 
     /* Dunkles Design – folgt der Einstellung im CRM (Hell/Dunkel je Benutzer) */
     html.dunkel {
-      --navy: #A9BFE6; --ink: #0B111A; --text: #D3DBE7; --text-dark: #EEF2F8; --muted: #8E99AB;
-      --border: #263244; --paper-card: #1A2332; --bg: #0E141D; --flaeche: #141C28;
-      --gruen: #4CC38A; --rot: #F07A70; --gelb: #E2B84B; color-scheme: dark;
+      /* warme Töne wie im CRM-Dunkelmodus */
+      --navy: #F2994A; --ink: #171411; --text: #EDE6DD; --text-dark: #F5EFE7; --muted: #A89C8F;
+      --border: #3A332C; --paper-card: #2D2823; --bg: #1E1B18; --flaeche: #25211D;
+      --gruen: #8DBF6A; --rot: #E06C5A; --gelb: #F2B054; color-scheme: dark;
     }
     html.dunkel nav.tabs, html.dunkel .card, html.dunkel .stat-tile, html.dunkel .modal,
     html.dunkel .field input, html.dunkel .field select, html.dunkel .field textarea,
@@ -622,6 +623,7 @@ async function anhangHochladen(id) {
   catch (e) { el.textContent = 'Nicht gespeichert: ' + e.message; el.className = 'status-text fehler'; toast('Anhang nicht gespeichert: ' + e.message, true); return false; }
 }
 async function anhangLoeschen(id, name) {
+  if (!confirm(`Anhang „${name}“ entfernen? Er liegt danach 30 Tage im Papierkorb (CRM → Einstellungen → Papierkorb).`)) return;
   try { const d = await api(`/angebote/${id}/anhang/${encodeURIComponent(name)}`, 'DELETE'); $('ag-anhaenge').innerHTML = anhaengeHtml(d.angebot); } catch (e) { toast(e.message, true); }
 }
 async function kiVorschlag() {
@@ -1064,6 +1066,6 @@ async function wiederherstellen() {
   wechsle(LADER[start] ? start : 'uebersicht', true);
 })();
 </script>
-<script src="/shared/datum.js?v=nf72"></script>
+<script src="/shared/datum.js?v=nf73"></script>
 </body>
 </html>

@@ -136,13 +136,32 @@ const { auth } = require('../middleware/auth');
 router.get('/me', auth, async (req, res) => {
   try {
     const [[user]] = await db.query(
-      'SELECT id, username, full_name, email, role, notify_email, notify_sms, phone, can_edit_contacts, can_archive_leads, can_reassign_leads, can_view_all_leads, can_create_users, can_generate_leads, can_manage_email_templates, can_abrechnung, theme FROM users WHERE id=?',
+      'SELECT id, username, full_name, email, role, notify_email, notify_sms, phone, can_edit_contacts, can_archive_leads, can_reassign_leads, can_view_all_leads, can_create_users, can_generate_leads, can_manage_email_templates, can_abrechnung, theme, ui_schrift, signatur FROM users WHERE id=?',
       [req.user.id]
     );
     if (!user) return res.status(404).json({ error: 'Nicht gefunden' });
     user.freie_leads = require('../helpers/sichtbarkeit').freieLeadsSichtbar();
     res.json(user);
   } catch(e) { console.error('Auth /me error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
+});
+
+// PATCH /api/auth/schrift — Schriftgröße (A+/A−) speichern, 80–150 %
+router.patch('/schrift', auth, async (req, res) => {
+  const p = Math.max(80, Math.min(150, Math.round(Number(req.body.schrift) || 100)));
+  try {
+    await db.query('UPDATE users SET ui_schrift=? WHERE id=?', [p, req.user.id]);
+    res.json({ ok: true, schrift: p });
+  } catch (e) { console.error('Auth /schrift error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
+});
+
+// PATCH /api/auth/signatur — eigene E-Mail-Signatur (leer = automatisch aus Name, Rolle, Telefon)
+router.patch('/signatur', auth, async (req, res) => {
+  const s = String(req.body.signatur || '').replace(/\r\n/g, '\n').trim();
+  if (s.length > 1000) return res.status(400).json({ error: 'Die Signatur ist zu lang (höchstens 1.000 Zeichen).' });
+  try {
+    await db.query('UPDATE users SET signatur=? WHERE id=?', [s || null, req.user.id]);
+    res.json({ ok: true, signatur: s || null });
+  } catch (e) { console.error('Auth /signatur error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }
 });
 
 // PATCH /api/auth/theme — Hell/Dunkel speichern

@@ -12,7 +12,7 @@
 <meta name="theme-color" content="#2c3a55">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/shared/style.css?v=nf72">
+<link rel="stylesheet" href="/shared/style.css?v=nf73">
 <style>
 .tab-btns{display:flex;gap:4px;margin-bottom:20px}
 .tab-btn{padding:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s}
@@ -637,29 +637,29 @@
   </div>
 </div>
 
-<script src="/shared/api.js?v=nf72"></script>
-<script src="/shared/datum.js?v=nf72"></script>
-<script src="/shared/bedarf-regeln.js?v=nf72"></script>
-<script src="/shared/bedarf.js?v=nf72"></script>
-<script src="/shared/mailvorschlag.js?v=nf72"></script>
-<script src="/shared/seitenpanel.js?v=nf72"></script>
-<script src="/shared/dialer.js?v=nf72"></script>
-<script src="/shared/provision.js?v=nf72"></script>
-<script src="/shared/deals.js?v=nf72"></script>
-<script src="/shared/calllists.js?v=nf72"></script>
-<script src="/shared/today.js?v=nf72"></script>
-<script src="/shared/ziele.js?v=nf72"></script>
-<script src="/shared/auswertung.js?v=nf72"></script>
-<script src="/shared/termine.js?v=nf72"></script>
-<script src="/shared/duplicates.js?v=nf72"></script>
-<script src="/shared/markdown.js?v=nf72"></script>
-<script src="/shared/wiki.js?v=nf72"></script>
-<script src="/shared/wiki-artikel.js?v=nf72"></script>
-<script src="/shared/lines.js?v=nf72"></script>
-<script src="/shared/finder.js?v=nf72"></script>
-<script src="/shared/board.js?v=nf72"></script>
-<script src="/shared/integrations.js?v=nf72"></script>
-<script src="/shared/startklar.js?v=nf72"></script>
+<script src="/shared/api.js?v=nf73"></script>
+<script src="/shared/datum.js?v=nf73"></script>
+<script src="/shared/bedarf-regeln.js?v=nf73"></script>
+<script src="/shared/bedarf.js?v=nf73"></script>
+<script src="/shared/mailvorschlag.js?v=nf73"></script>
+<script src="/shared/seitenpanel.js?v=nf73"></script>
+<script src="/shared/dialer.js?v=nf73"></script>
+<script src="/shared/provision.js?v=nf73"></script>
+<script src="/shared/deals.js?v=nf73"></script>
+<script src="/shared/calllists.js?v=nf73"></script>
+<script src="/shared/today.js?v=nf73"></script>
+<script src="/shared/ziele.js?v=nf73"></script>
+<script src="/shared/auswertung.js?v=nf73"></script>
+<script src="/shared/termine.js?v=nf73"></script>
+<script src="/shared/duplicates.js?v=nf73"></script>
+<script src="/shared/markdown.js?v=nf73"></script>
+<script src="/shared/wiki.js?v=nf73"></script>
+<script src="/shared/wiki-artikel.js?v=nf73"></script>
+<script src="/shared/lines.js?v=nf73"></script>
+<script src="/shared/finder.js?v=nf73"></script>
+<script src="/shared/board.js?v=nf73"></script>
+<script src="/shared/integrations.js?v=nf73"></script>
+<script src="/shared/startklar.js?v=nf73"></script>
 <script>
 let allLeads = [], allUsers = [], editingUserId = null;
 let panelDirty = false;
@@ -1368,7 +1368,8 @@ function renderPanelKeyInfo(l) {
   const contactItems = [
     l.ceo ? `<div class="panel-contact-row"><i class="fas fa-user"></i><span>${escHtml(l.ceo)}</span></div>` : '',
     `<div class="panel-contact-row"><i class="fas fa-phone"></i>${l.phone ? `<a href="tel:${escHtml(l.phone)}" class="mono">${escHtml(l.phone)}</a>` : empty}${editBtn('phone', l.phone)}${callBtn}</div>`,
-    `<div class="panel-contact-row"><i class="fas fa-envelope"></i>${l.email ? `<a href="mailto:${escHtml(l.email)}">${escHtml(l.email)}</a>` : empty}${editBtn('email', l.email)}</div>`,
+    `<div class="panel-contact-row"><i class="fas fa-envelope"></i>${l.email ? `<a href="mailto:${escHtml(l.email)}">${escHtml(l.email)}</a>` : empty}${editBtn('email', l.email)}</div>`
+      + (domainHinweis(l.email, l.website) ? `<div class="panel-domain-hinweis"><i class="fas fa-exclamation-triangle"></i>${escHtml(domainHinweis(l.email, l.website))}</div>` : ''),
   ].filter(Boolean).join('');
   const avatar = document.getElementById('panelAvatar');
   if (avatar) avatar.textContent = (l.company||'').trim().charAt(0).toUpperCase() || '?';
@@ -1422,7 +1423,7 @@ function renderLeadDetail(l) {
     `<button class="status-chip s-${s} ${l.status===s?'active':''}" onclick="changeStatus(${l.id},'${s}')">${statusLabels[s]}</button>`
   ).join('');
 
-  const commentsHtml = (l.comments||[]).map(c => {
+  const commentsHtml = kommentarListe((l.comments||[]).map(c => {
     const editBtn   = `<button class="panel-icon-btn" onclick="editComment(${l.id},${c.id},${escHtml(JSON.stringify(c.text))})" title="Bearbeiten"><i class="fas fa-edit"></i></button>`;
     const deleteBtn = `<button class="panel-icon-btn" onclick="deleteComment(${l.id},${c.id})" title="Löschen"><i class="fas fa-trash"></i></button>`;
     return `<div id="comment-wrap-${c.id}" class="comment">
@@ -1432,7 +1433,7 @@ function renderLeadDetail(l) {
         <div id="comment-text-${c.id}" class="comment-text">${escHtml(c.text)}</div>
       </div>
     </div>`;
-  }).join('') || '<div class="panel-empty">Noch keine Kommentare</div>';
+  })) || '<div class="panel-empty">Noch keine Kommentare</div>';
 
   const remindersHtml = (l.reminders||[]).map(r => `
     <div class="reminder">
@@ -1473,7 +1474,7 @@ function renderLeadDetail(l) {
       <div class="panel-section-title">Kommentare</div>
       <div class="panel-list">${commentsHtml}</div>
       <div class="panel-row" style="margin-top:10px">
-        <input type="text" id="newComment-${l.id}" class="form-control" placeholder="Kommentar schreiben …" onkeydown="if(event.key==='Enter')addComment(${l.id})">
+        <textarea id="newComment-${l.id}" class="form-control kommentar-eingabe" rows="1" placeholder="Kommentar schreiben … (Enter senden, Shift+Enter neue Zeile)" onkeydown="kommentarTaste(event, () => addComment(${l.id}))" oninput="kommentarHoehe(this)"></textarea>
         <button class="btn btn-primary btn-sm btn-icon" onclick="addComment(${l.id})" title="Senden"><i class="fas fa-paper-plane"></i></button>
       </div>
     </div>
@@ -1955,6 +1956,46 @@ function filterTrackingUser(userId) {
   document.getElementById('activityBody')?.closest('table')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// ── Papierkorb: gelöschte Kommentare, Deals, Anhänge (30 Tage) und archivierte Leads ──
+async function papierkorbOeffnen() {
+  let d;
+  try { d = await api('GET', '/papierkorb'); } catch (e) { showToast(e.message, 'err'); return; }
+  document.getElementById('pkModal')?.remove();
+  const ART = { kommentar: 'Kommentar', deal: 'Deal', anhang: 'Anhang' };
+  const o = document.createElement('div');
+  o.id = 'pkModal'; o.className = 'modal-overlay open'; o.style.zIndex = 990;
+  const zeile = (e) => `<tr><td><span class="pk-art">${escHtml(ART[e.art] || e.art)}</span></td>
+      <td>${escHtml(e.titel)}${e.company ? `<div class="cell-sub">${escHtml(e.company)}</div>` : ''}</td>
+      <td class="cell-sub">${escHtml(fmtDate(e.geloescht_am))}${e.von ? '<br>' + escHtml(e.von) : ''}</td>
+      <td style="white-space:nowrap;text-align:right"><button class="btn btn-ghost btn-sm" onclick="papierkorbAktion(${e.id}, 'zurueck')"><i class="fas fa-undo"></i> Wiederherstellen</button>
+        <button class="btn btn-ghost btn-sm btn-icon" title="Endgültig löschen" onclick="papierkorbAktion(${e.id}, 'weg')"><i class="fas fa-times"></i></button></td></tr>`;
+  const leadZeile = (l) => `<tr><td><span class="pk-art">Lead</span></td><td>${escHtml(l.company)}${l.archive_reason ? `<div class="cell-sub">${escHtml(l.archive_reason)}</div>` : ''}</td>
+      <td class="cell-sub">${escHtml(fmtDate(l.archived_at))}${l.von ? '<br>' + escHtml(l.von) : ''}</td>
+      <td style="text-align:right"><button class="btn btn-ghost btn-sm" onclick="papierkorbLead(${l.id})"><i class="fas fa-undo"></i> Wiederherstellen</button></td></tr>`;
+  o.innerHTML = `<div class="modal modal-flex" style="max-width:860px">
+    <div class="modal-header"><div class="modal-heading"><div class="modal-icon"><i class="fas fa-trash-restore"></i></div>
+      <div><div class="modal-title">Papierkorb</div><div class="modal-subtitle">Gelöschtes bleibt ${d.tage} Tage wiederherstellbar, danach wird es endgültig entfernt.</div></div></div>
+      <button class="modal-x" onclick="document.getElementById('pkModal').remove()" title="Schließen"><i class="fas fa-times"></i></button></div>
+    <div class="modal-body">
+      <table class="pk-tabelle"><tbody>${d.eintraege.map(zeile).join('') || '<tr><td colspan="4" class="cell-sub">Keine gelöschten Kommentare, Deals oder Anhänge.</td></tr>'}</tbody></table>
+      <div class="tr-sub" style="margin-top:16px">Archivierte Leads</div>
+      <table class="pk-tabelle"><tbody>${d.leads.map(leadZeile).join('') || '<tr><td colspan="4" class="cell-sub">Keine archivierten Leads.</td></tr>'}</tbody></table>
+    </div></div>`;
+  document.body.appendChild(o);
+}
+async function papierkorbAktion(id, was) {
+  if (was === 'weg' && !(await customConfirm('Endgültig löschen? Das lässt sich nicht rückgängig machen.', { title: 'Endgültig löschen', okLabel: 'Endgültig löschen', danger: true }))) return;
+  try {
+    if (was === 'weg') await api('DELETE', `/papierkorb/${id}`); else await api('POST', `/papierkorb/${id}/wiederherstellen`);
+    showToast(was === 'weg' ? 'Endgültig gelöscht' : 'Wiederhergestellt ✓');
+    papierkorbOeffnen();
+  } catch (e) { showToast(e.message, 'err'); }
+}
+async function papierkorbLead(id) {
+  try { await api('POST', `/leads/${id}/restore`); showToast('Lead wiederhergestellt ✓'); papierkorbOeffnen(); }
+  catch (e) { showToast(e.message, 'err'); }
+}
+
 async function crmSicherungLaden() {
   const btn = document.getElementById('crmSicherungBtn');
   if (btn) { btn.disabled = true; btn.style.cursor = 'wait'; }
@@ -2089,7 +2130,7 @@ async function loadActivityFeed() {
     const rows = await api('GET', '/leads/activity-feed');
     if (!rows.length) { list.innerHTML = '<div class="wiki-empty" style="margin-top:12px"><i class="fas fa-stream"></i>Noch keine Aktivitäten.</div>'; return; }
     const ACTION_ICONS = { status_change:'exchange-alt', comment_add:'sticky-note', lead_create_manual:'plus', leads_bulk_create:'plus', leads_csv_import:'file-import', lead_assign:'user-tag', lead_update:'pen', lead_archive:'archive', lead_restore:'undo', lead_email_sent:'envelope', email_assigned:'envelope-open', call_started:'phone', call_logged:'phone', reminder_set:'bell', login:'sign-in-alt', logout:'sign-out-alt', deal_create:'handshake', deal_stage_change:'arrow-right', deal_update:'pen', deal_won:'trophy', deal_lost:'times-circle', deal_reopen:'undo', deal_delete:'trash' };
-    const FEED_LABELS = { status_change:'Status geändert', comment_add:'Notiz hinzugefügt', lead_create_manual:'Lead angelegt', leads_bulk_create:'Leads angelegt', leads_csv_import:'CSV importiert', lead_assign:'Lead übernommen', lead_update:'Lead bearbeitet', lead_archive:'Lead archiviert', lead_restore:'Lead wiederhergestellt', lead_email_sent:'E-Mail gesendet', email_assigned:'E-Mail zugeordnet', call_started:'Anruf gestartet', call_logged:'Anruf dokumentiert', reminder_set:'Wiedervorlage gesetzt', login:'Angemeldet', logout:'Abgemeldet', deal_create:'Deal angelegt', deal_stage_change:'Deal verschoben', deal_update:'Deal bearbeitet', deal_won:'Deal gewonnen', deal_lost:'Deal verloren', deal_reopen:'Deal wieder geöffnet', deal_delete:'Deal gelöscht' };
+    const FEED_LABELS = { status_change:'Status geändert', comment_add:'Notiz hinzugefügt', lead_create_manual:'Lead angelegt', leads_bulk_create:'Leads angelegt', leads_csv_import:'CSV importiert', lead_assign:'Lead übernommen', lead_update:'Lead bearbeitet', lead_archive:'Lead archiviert', lead_restore:'Lead wiederhergestellt', lead_email_sent:'E-Mail gesendet', email_assigned:'E-Mail zugeordnet', call_started:'Anruf gestartet', call_logged:'Anruf dokumentiert', reminder_set:'Wiedervorlage gesetzt', login:'Angemeldet', logout:'Abgemeldet', deal_create:'Deal angelegt', deal_stage_change:'Deal verschoben', deal_update:'Deal bearbeitet', deal_won:'Deal gewonnen', deal_lost:'Deal abgelehnt', deal_reopen:'Deal wieder geöffnet', deal_delete:'Deal gelöscht' };
     list.innerHTML = rows.map(r => {
       const icon = ACTION_ICONS[r.action] || 'dot-circle';
       const dt = new Date(r.created_at);
@@ -2177,7 +2218,7 @@ async function dropAssignLead(userId) {
 
 // ── LEAD MANUELL HINZUFÜGEN ───────────────────────────────────
 function openAddLeadModal() {
-  ['ml-company','ml-ceo','ml-phone','ml-email','ml-location','ml-industry','ml-website','ml-notes']
+  ['ml-company','ml-ceo','ml-phone','ml-email','ml-strasse','ml-plz','ml-ort','ml-industry','ml-website','ml-instagram','ml-quelle','ml-notes']
     .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   document.getElementById('addLeadErr').textContent = '';
   document.getElementById('addLeadModal').classList.add('open');
@@ -2188,9 +2229,11 @@ function closeAddLeadModal() { document.getElementById('addLeadModal').classList
 async function saveManualLead(force = false) {
   const get = id => document.getElementById(id)?.value.trim() || '';
   const body = { company: get('ml-company'), ceo: get('ml-ceo'), phone: get('ml-phone'),
-    email: get('ml-email'), location: get('ml-location'), industry: get('ml-industry'),
-    website: get('ml-website'), notes: get('ml-notes') };
+    email: get('ml-email'), strasse: get('ml-strasse'), plz: get('ml-plz'), ort: get('ml-ort'),
+    industry: get('ml-industry'), website: get('ml-website'), instagram: get('ml-instagram'),
+    quelle: get('ml-quelle'), notes: get('ml-notes') };
   if (!body.company) { document.getElementById('addLeadErr').textContent = 'Firmenname ist erforderlich'; return; }
+  if (body.plz && !/^\d{5}$/.test(body.plz)) { document.getElementById('addLeadErr').textContent = 'Die PLZ hat 5 Ziffern.'; return; }
 
   try {
     await api('POST', '/leads', { ...body, force });
@@ -2520,7 +2563,7 @@ async function saveCommentEdit(leadId, cid) {
   } catch(e) { showToast(e.message, 'err'); }
 }
 async function deleteComment(leadId, cid) {
-  if (!confirm('Kommentar wirklich löschen?')) return;
+  if (!confirm('Kommentar löschen? Er liegt danach 30 Tage im Papierkorb und kann wiederhergestellt werden.')) return;
   try {
     await api('DELETE', `/leads/${leadId}/comments/${cid}`);
     showToast('Kommentar gelöscht');
@@ -2558,6 +2601,7 @@ async function openSettingsModal() {
   } catch {}
   renderCallerIdSettings('callerIdSettings');
   Benachrichtigungen.render('pushSettings');
+  signaturEinstellung('signaturSettings');
   document.getElementById('settingsModal').classList.add('open');
 }
 function closeSettingsModal() { clearInterval(_callerIdPoll); document.getElementById('settingsModal').classList.remove('open'); }
@@ -3116,12 +3160,12 @@ function renderDashboard(data) {
       ${kpi('c-green', 'fa-euro-sign', 'Umsatz diesen Monat', Deals.fmtShort(dl.won_month.value), `<b>${dl.won_month.count}</b> gewonnene Deals`, "showTab('deals')")}
       ${kpi('', 'fa-funnel-dollar', 'Offene Pipeline', Deals.fmtShort(dl.open.value), `<b>${dl.open.count}</b> offene Deals`, "showTab('deals')")}
       ${kpi('c-ink', 'fa-balance-scale', 'Gewichtete Prognose', Deals.fmtShort(dl.open.weighted), 'Wert × Wahrscheinlichkeit', "showTab('deals')")}
-      ${kpi('c-copper', 'fa-calendar-check', 'Abschluss bis Monatsende', Deals.fmtShort(dl.closing_month.value), `<b>${dl.closing_month.count}</b> geplant · <b>${dl.lost_month.count}</b> verloren`, "showTab('deals')")}
+      ${kpi('c-copper', 'fa-calendar-check', 'Abschluss bis Monatsende', Deals.fmtShort(dl.closing_month.value), `<b>${dl.closing_month.count}</b> geplant · <b>${dl.lost_month.count}</b> abgelehnt`, "showTab('deals')")}
     </div>` : '';
 
   el.innerHTML = `${dealsHtml}
     <div class="dash-kpis">
-      ${kpi('', 'fa-phone-alt', 'Anrufe heute', n(data.callsToday), `Ø <b>${avgCalls}</b> pro Closer`, "showTab('tracking')")}
+      ${kpi('', 'fa-phone-alt', 'Anrufe heute', n(data.callsToday), `Durchschnittlich <b>${avgCalls}</b> pro Closer`, "showTab('tracking')")}
       ${kpi('c-green', 'fa-trophy', 'Abschlüsse diese Woche', n(data.winsThisWeek), 'Status „Kunde“ seit Montag', "showTab('leads')")}
       ${kpi('c-ink', 'fa-layer-group', 'Leads gesamt', total, 'aktiv, ohne Archiv', "showTab('leads')")}
       ${kpi('c-copper', 'fa-star', 'Neue Leads', fresh, `<b>${newPct}&nbsp;%</b> aller Leads noch unbearbeitet`, "showTab('leads')", `<div class="kpi-bar"><i style="width:${newPct}%"></i></div>`)}
@@ -3509,13 +3553,18 @@ async function permanentDeleteLead(id, name) {
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="form-group" style="margin:0"><label>Firmenname *</label><input id="ml-company" class="form-control" placeholder="Muster GmbH" onkeydown="if(event.key==='Enter')saveManualLead()"></div>
-      <div class="form-group" style="margin:0"><label>Geschäftsführer</label><input id="ml-ceo" class="form-control" placeholder="Max Muster"></div>
-      <div class="form-group" style="margin:0"><label>Telefon</label><input id="ml-phone" class="form-control" placeholder="+49 211 ..."></div>
-      <div class="form-group" style="margin:0"><label>E-Mail</label><input id="ml-email" class="form-control" placeholder="info@..."></div>
-      <div class="form-group" style="margin:0"><label>Standort</label><input id="ml-location" class="form-control" placeholder="Düsseldorf"></div>
-      <div class="form-group" style="margin:0"><label>Branche</label><input id="ml-industry" class="form-control" placeholder="Dachdecker"></div>
-      <div class="form-group" style="grid-column:1/-1;margin:0"><label>Website</label><input id="ml-website" class="form-control" placeholder="https://..."></div>
-      <div class="form-group" style="grid-column:1/-1;margin:0"><label>Notizen</label><textarea id="ml-notes" class="form-control" rows="2" placeholder="Interne Notiz..."></textarea></div>
+      <div class="form-group" style="margin:0"><label>Ansprechpartner</label><input id="ml-ceo" class="form-control" placeholder="Max Muster"></div>
+      <div class="form-group" style="margin:0"><label>Telefon</label><input id="ml-phone" class="form-control" type="tel" placeholder="+49 211 ..."></div>
+      <div class="form-group" style="margin:0"><label>E-Mail</label><input id="ml-email" class="form-control" type="email" placeholder="info@..."></div>
+      <div class="form-group" style="grid-column:1/-1;margin:0"><label>Straße und Hausnummer</label><input id="ml-strasse" class="form-control" placeholder="Hauptstraße 12"></div>
+      <div class="form-group" style="margin:0"><label>PLZ</label><input id="ml-plz" class="form-control" inputmode="numeric" maxlength="5" placeholder="47804"></div>
+      <div class="form-group" style="margin:0"><label>Ort</label><input id="ml-ort" class="form-control" placeholder="Krefeld"></div>
+      <div class="form-group" style="margin:0"><label>Webseite</label><input id="ml-website" class="form-control" placeholder="betrieb.de"></div>
+      <div class="form-group" style="margin:0"><label>Instagram</label><input id="ml-instagram" class="form-control" placeholder="instagram.com/betrieb oder @betrieb"></div>
+      <div class="form-group" style="margin:0"><label>Branche</label><input id="ml-industry" class="form-control" list="lead-branchen" placeholder="z. B. Fliesenleger"></div>
+      <div class="form-group" style="margin:0"><label>Quelle</label><input id="ml-quelle" class="form-control" maxlength="50" placeholder="z. B. Empfehlung Matthias"></div>
+      <div class="form-group" style="grid-column:1/-1;margin:0"><label>Notiz</label><textarea id="ml-notes" class="form-control" rows="2" placeholder="Was weißt du schon über den Betrieb?"></textarea></div>
+      <datalist id="lead-branchen"><option value="Fahrzeugaufbereitung"><option value="Fahrzeugfolierung"><option value="Fliesenleger"><option value="Bad/SHK"><option value="Maler"><option value="Boden/Parkett"><option value="Laserreinigung"><option value="Gebäudereinigung"><option value="Dachdecker"><option value="Garten- und Landschaftsbau"><option value="Elektriker"><option value="Tischler"></datalist>
     </div>
     <div style="color:var(--red);font-size:12px;margin-top:8px;min-height:16px" id="addLeadErr"></div>
     <div class="modal-actions">
@@ -3552,7 +3601,11 @@ document.getElementById('addLeadModal').addEventListener('click', function(e){ i
     <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
     <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)"><i class="fas fa-box-archive" style="color:var(--accent);margin-right:6px"></i>Datensicherung</div>
     <button type="button" class="btn btn-secondary btn-sm" id="crmSicherungBtn" onclick="crmSicherungLaden()"><i class="fas fa-download"></i> CRM-Sicherung herunterladen (ZIP)</button>
+    <button type="button" class="btn btn-ghost btn-sm" onclick="papierkorbOeffnen()"><i class="fas fa-trash-restore"></i> Papierkorb</button>
     <div style="font-size:11px;color:var(--text3);margin-top:5px;line-height:1.5">Alle Leads, Deals, Notizen, Bedarfsanalysen, Termine usw. als komplette Datenbank-Sicherung, dazu die Leads als Excel-Liste. Angebote und Rechnungen sichert das Gesamtarchiv unter Angebote &amp; Rechnungen. Datei sicher aufbewahren (enthält Zugangsdaten).</div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+    <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)"><i class="fas fa-signature" style="color:var(--accent);margin-right:6px"></i>Meine E-Mail-Signatur</div>
+    <div id="signaturSettings"></div>
     <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
     <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)"><i class="fas fa-bell" style="color:var(--accent);margin-right:6px"></i>Handy-Benachrichtigungen</div>
     <div id="pushSettings"></div>

@@ -115,6 +115,8 @@ async function berechne(deal, cfg, besitzer, opts = {}) {
   // Aktionsrabatt (vom Admin freigegeben, in der Bedarfsanalyse als „Aktion zugesagt“) ist kein
   // Rabatt des Vertrieblers: Provision bleibt beim vollen Satz. Gilt, solange im Angebot kein
   // höherer Rabatt steht und kein eigener Rabatt eingetragen ist.
+  // Häkchen „Aktionsrabatt“ am Deal (Admin): Rabatt kam vom Admin, Provision bleibt beim vollen Satz
+  if (rabatt && deal.aktionsrabatt) rabatt = false;
   if (rabatt && quelle === 'angebot') {
     const d = await ladeAnalyse();
     const aktion = Number(d.aktion_prozent) || 0;
@@ -213,7 +215,7 @@ async function bonus(userId, monat, cfg) {
 async function uebersicht(userId, monat, cfg) {
   const besitzer = await besitzerLaden(userId);
   const [deals] = await db.query(
-    `SELECT d.id, d.title, d.lead_id, d.owner_id, d.status, d.paket, d.value, d.won_at, l.company
+    `SELECT d.id, d.title, d.lead_id, d.owner_id, d.status, d.paket, d.value, d.won_at, d.aktionsrabatt, l.company
      FROM deals d LEFT JOIN leads l ON l.id=d.lead_id
      WHERE d.owner_id=? AND d.status='won' AND d.won_at >= NOW() - INTERVAL 365 DAY ORDER BY d.won_at DESC`, [userId]);
   const liste = [];
@@ -258,7 +260,7 @@ async function speichereAbschluss(d, p, besitzer) {
 // Nach Gewonnen/Verloren/Wieder öffnen (aus deals.js)
 async function festschreiben(dealId) {
   const [[d]] = await db.query(
-    `SELECT d.id, d.title, d.lead_id, d.owner_id, d.status, d.paket, d.value, d.won_at, l.company
+    `SELECT d.id, d.title, d.lead_id, d.owner_id, d.status, d.paket, d.value, d.won_at, d.aktionsrabatt, l.company
      FROM deals d LEFT JOIN leads l ON l.id=d.lead_id WHERE d.id=?`, [dealId]);
   if (!d) return;
   if (d.status !== 'won') {
@@ -307,7 +309,7 @@ router.get('/abschluesse', auth, async (req, res) => {
 
 router.get('/deal/:id', auth, async (req, res) => {
   try {
-    const [[deal]] = await db.query('SELECT id, lead_id, owner_id, status, paket, value, won_at FROM deals WHERE id=?', [parseInt(req.params.id)]);
+    const [[deal]] = await db.query('SELECT id, lead_id, owner_id, status, paket, value, won_at, aktionsrabatt FROM deals WHERE id=?', [parseInt(req.params.id)]);
     if (!deal) return res.status(404).json({ error: 'Deal nicht gefunden' });
     if (req.user.role !== 'admin' && deal.owner_id !== req.user.id) return res.status(403).json({ error: 'Kein Zugriff' });
     const cfg = await bedarf.regeln();
@@ -348,7 +350,7 @@ async function faelligeAuszahlungen() {
   const heute = new Date().toISOString().slice(0, 10);
   for (const c of closer) {
     const besitzer = await besitzerLaden(c.id);
-    const [deals] = await db.query(`SELECT d.id, d.title, d.lead_id, d.owner_id, d.status, d.paket, d.value, d.won_at, l.company
+    const [deals] = await db.query(`SELECT d.id, d.title, d.lead_id, d.owner_id, d.status, d.paket, d.value, d.won_at, d.aktionsrabatt, l.company
       FROM deals d LEFT JOIN leads l ON l.id=d.lead_id WHERE d.owner_id=? AND d.status='won'`, [c.id]);
     for (const d of deals) {
       const p = await berechne(d, cfg, besitzer);
@@ -388,6 +390,8 @@ router.delete('/auszahlung/:schluessel', auth, adminOnly, async (req, res) => {
 
 router.faelligeAuszahlungen = faelligeAuszahlungen;
 router.berechne = berechne;
+router.besitzerLaden = besitzerLaden;
+router.festeSaetze = festeSaetze;
 router.bonus = bonus;
 router.festschreiben = festschreiben;
 router.nachtragen = nachtragen;

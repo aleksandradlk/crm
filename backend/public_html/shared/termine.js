@@ -223,7 +223,11 @@ const Termine = {
       if (typeof this.opts.onChange === 'function') this.opts.onChange();
     } catch (e) { showToast(e.message, 'err'); }
   },
-  erledigt(id) { this._patch(id, { status: 'erledigt' }, 'Als erledigt markiert'); },
+  async erledigt(id) {
+    const a = this.rows.find(x => x.id === id);
+    if (!(await customConfirm(`Termin${a ? ' mit ' + a.company : ''} als erledigt markieren?`, { title: 'Erledigt', okLabel: 'Ja, erledigt' }))) return;
+    this._patch(id, { status: 'erledigt' }, 'Als erledigt markiert');
+  },
   absagen(id) {
     const a = this.rows.find(x => x.id === id);
     if (!confirm(`Termin${a ? ' mit ' + a.company : ''} wirklich absagen?`)) return;
