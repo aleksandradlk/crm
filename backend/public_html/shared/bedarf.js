@@ -9,20 +9,8 @@
 // Große Textfelder (mit Zeichenzähler, Limit aus den Vertriebsregeln)
 const BD_LANG = ['ablauf_heute', 'groesstes_problem', 'sonderwuensche', 'notiz', 'rabatt_begruendung', 'einleitung_notiz'];
 const BD_KURZ = 300;
-// Feldnamen für Verlauf und Konflikt-Ansicht
-const BD_LABEL = {
-  ansprechpartner_rolle: 'Ansprechpartner', branche: 'Branche', branche_text: 'Branche (Text)', email_angebot: 'E-Mail fürs Angebot',
-  webseite: 'Webseite', instagram: 'Instagram', teamgroesse: 'Teamgröße', buero_vorhanden: 'Büro vorhanden', kanaele: 'Kanäle',
-  kanal_wichtigster: 'Wichtigster Kanal', instagram_business: 'Instagram Business', whatsapp_firmennummer: 'WhatsApp Firmennummer',
-  anfragen_pro_woche: 'Anfragen pro Woche', anfragen_unpassend: 'Davon unpassend', auftragswert_schnitt: 'Auftragswert im Schnitt',
-  ablauf_heute: 'Ablauf heute', antwortzeit: 'Antwortzeit', nachfragen: 'Was fragt er nach?', besichtigungen: 'Besichtigungen',
-  groesstes_problem: 'Größtes Problem', zuerst_weg: 'Was soll zuerst weg?', wunschstart: 'Wunschstart', software: 'Software',
-  kalender: 'Kalender', webseite_status: 'Webseite (Stand)', google_profil: 'Google-Profil', entscheider: 'Entscheider',
-  entscheider_text: 'Entscheider (Text)', paket_empfohlen: 'Paket', zusatzleistungen: 'Zusatzleistungen', preis_genannt: 'Preis genannt',
-  reaktion_preis: 'Reaktion auf den Preis', rabatt_prozent: 'Rabatt %', rabatt_begruendung: 'Begründung Rabatt', gratismonat: 'Gratismonat',
-  zahlungswunsch: 'Zahlungswunsch', sonderwuensche: 'Sonderwünsche', nachfass_termin: 'Nachfass-Termin', notiz: 'Notiz',
-  einleitung_notiz: 'Für die Einleitung', aktion_prozent: 'Aktion %', aktion_bis: 'Aktion gültig bis',
-};
+// Feldnamen für Verlauf und Konflikt-Ansicht (gemeinsam mit dem Server, shared/bedarf-regeln.js)
+const BD_LABEL = window.BedarfRegeln.FELDLABEL;
 const BD_ANLASS = {
   autosave: 'Automatisch gespeichert', speichern: 'Gespeichert', stand_vorher: 'Stand vor einer Änderung', kurzcheck: 'Kurz-Check',
   angebot_anfordern: 'Angebot angefordert', wiederherstellung: 'Wiederhergestellt', konflikt: 'Eigener Stand bei gleichzeitiger Änderung', uebergabe: 'Übergabe',
@@ -251,17 +239,22 @@ const Bedarf = {
       ? `<div class="bd-warn is-red"><i class="fas fa-ban"></i><span><b>Gesundheitsbranche nehmen wir aktuell nicht an.</b> Freundlich absagen und den Lead als „passt nicht“ markieren.</span>
           <button type="button" class="btn btn-ghost btn-sm" style="margin-left:auto;white-space:nowrap" onclick="Bedarf.passtNicht()">Als „passt nicht“ markieren</button></div>` : '';
 
-    // Paket-Vorschlag
+    // Paket: gewählt (mit dessen Preisen) bzw. Vorschlag nach den Antworten
     const gewaehlt = d.paket_empfohlen;
+    const gp = gewaehlt && cfg.pakete[gewaehlt];
+    const zeig = gp ? { name: gp.name, einrichtung: gp.einrichtung, betreuung: gp.betreuung, ab: !!gp.ab,
+      monat_erstes_jahr: Math.round((gp.einrichtung / 12 + gp.betreuung) / 10) * 10 } : v;
+    const abweichend = gp && gewaehlt !== v.paket;
     this.el.querySelector('#bdVorschlag').innerHTML = `
       <div class="bd-vorschlag">
-        <div class="bd-v-head"><span>Vorschlag: <b>${escHtml(v.name)}</b></span>
-          ${gewaehlt === v.paket ? '<span class="bd-v-ok"><i class="fas fa-check"></i> übernommen</span>' : `<button type="button" class="btn btn-primary btn-sm" onclick="Bedarf.uebernehmen()">Übernehmen</button>`}</div>
-        <div class="bd-v-grund">${escHtml(v.grund)}</div>
+        <div class="bd-v-head"><span>${gp ? 'Gewählt' : 'Vorschlag'}: <b>${escHtml(zeig.name)}</b></span>
+          ${gewaehlt === v.paket ? '<span class="bd-v-ok"><i class="fas fa-check"></i> passt zum Vorschlag</span>' : !gp ? `<button type="button" class="btn btn-primary btn-sm" onclick="Bedarf.uebernehmen()">Übernehmen</button>` : ''}</div>
+        <div class="bd-v-grund">${abweichend ? `Vorschlag nach den Antworten wäre <b>${escHtml(v.name)}</b>: ${escHtml(v.grund)}
+          <button type="button" class="btn btn-ghost btn-sm" style="margin-left:6px" onclick="Bedarf.uebernehmen()">${escHtml(v.name)} nehmen</button>` : escHtml(v.grund)}</div>
         <div class="bd-v-preise">
-          <div><span>Einrichtung</span><b>${v.ab ? 'ab ' : ''}${R.eur(v.einrichtung)}</b></div>
-          <div><span>Betreuung</span><b>${R.eur(v.betreuung)}/Monat</b></div>
-          <div><span>1. Jahr pro Monat</span><b>ca. ${R.eur(v.monat_erstes_jahr)}</b></div>
+          <div><span>Einrichtung</span><b>${zeig.ab ? 'ab ' : ''}${R.eur(zeig.einrichtung)}</b></div>
+          <div><span>Betreuung</span><b>${R.eur(zeig.betreuung)}/Monat</b></div>
+          <div><span>1. Jahr pro Monat</span><b>ca. ${R.eur(zeig.monat_erstes_jahr)}</b></div>
         </div>
         ${v.hinweise.length ? `<ul class="bd-v-hinweise">${v.hinweise.map(h => `<li>${escHtml(h)}</li>`).join('')}</ul>` : ''}
       </div>`;
@@ -296,6 +289,8 @@ const Bedarf = {
         <button type="button" class="btn btn-ghost btn-sm" onclick="Bedarf.rueckgaengig()" ${this._undo.length ? '' : 'disabled'} title="Letzte Änderung zurücknehmen"><i class="fas fa-undo"></i> Rückgängig</button>
         <button type="button" class="btn btn-ghost btn-sm" onclick="Bedarf.verlauf()" title="Frühere Stände ansehen und wiederherstellen"><i class="fas fa-history"></i> Verlauf</button>
         <button type="button" class="btn btn-secondary btn-sm" onclick="Bedarf.speichern()" data-klick><i class="fas fa-save"></i> Speichern</button>
+        ${typeof Auth !== 'undefined' && Auth.isAdmin && Auth.isAdmin() && typeof angebotErstellen === 'function' && d.paket_empfohlen
+          ? `<button type="button" class="btn btn-secondary btn-sm" onclick="Bedarf.angebotErstellen()" data-klick title="Angebot aus dieser Bedarfsanalyse anlegen, die KI schreibt es fertig"><i class="fas fa-file-invoice"></i> Angebot erstellen</button>` : ''}
       <span class="bd-anfordern-wrap" title="${escHtml(tip)}">
         <button type="button" class="btn btn-primary bd-anfordern" ${p.angebotsreif ? '' : 'disabled'} onclick="Bedarf.anfordern()">
           <i class="fas fa-file-signature"></i> Angebot anfordern</button></span></div>`;
@@ -549,8 +544,10 @@ const Bedarf = {
         <button class="modal-x" onclick="document.getElementById('bdvModal').remove()" title="Schließen"><i class="fas fa-times"></i></button></div>
       <div class="modal-body bdv-body">
         <div class="bdv-liste">${liste.length ? liste.map(v => `<button type="button" class="bdv-item" data-id="${v.id}">
-          <b>${escHtml(fmtDate(v.created_at))}</b><span>${escHtml(BD_ANLASS[v.anlass] || v.anlass)}${v.von ? ' · ' + escHtml(v.von) : ''}</span>
-          <span class="bdv-meta">${v.zeichen.toLocaleString('de-DE')} Zeichen Text${v.vorschau ? ' · „' + escHtml(v.vorschau.slice(0, 60)) + (v.vorschau.length > 60 ? '…' : '') + '“' : ''}</span></button>`).join('')
+          <b>${escHtml(fmtDate(v.created_at))}${v.von ? ' · ' + escHtml(v.von) : ''}</b><span>${escHtml(BD_ANLASS[v.anlass] || v.anlass)}</span>
+          ${v.aenderungen === null ? '<span class="bdv-meta">Ältester gespeicherter Stand</span>'
+            : v.aenderungen.length ? `<ul class="bdv-aend">${v.aenderungen.slice(0, 6).map(t => `<li>${escHtml(t)}</li>`).join('')}${v.aenderungen.length > 6 ? `<li>… und ${v.aenderungen.length - 6} weitere</li>` : ''}</ul>`
+            : '<span class="bdv-meta">Keine inhaltliche Änderung</span>'}</button>`).join('')
           : '<div class="bd-hint" style="padding:12px">Noch keine Versionen. Sie entstehen ab jetzt bei jedem Speichern.</div>'}</div>
         <div class="bdv-vorschau" id="bdvVorschau"><div class="bd-hint" style="padding:12px">Links einen Stand wählen.</div></div>
       </div></div>`;
@@ -586,6 +583,15 @@ const Bedarf = {
       } catch (e) { ziel.innerHTML = `<div class="bd-loading" style="color:var(--red)">${escHtml(e.message)}</div>`; }
     });
     o.querySelector('.bdv-item')?.click();
+  },
+
+  // ── Angebot erstellen (Admin): Entwurf aus der Bedarfsanalyse, KI schreibt ihn fertig ──
+  async angebotErstellen() {
+    await this.flush();
+    if (this._dirty || this._pause) { showToast('Bitte erst speichern, dann das Angebot erstellen.', 'err'); return; }
+    const leadId = this.leadId, dealId = this.info?.deal?.id || null;
+    document.getElementById('bdModal')?.remove();
+    await angebotErstellen(leadId, dealId);
   },
 
   // ── Angebot anfordern ───────────────────────────────────────

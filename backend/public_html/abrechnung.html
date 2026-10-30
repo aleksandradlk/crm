@@ -35,7 +35,10 @@
     nav.tabs button.aktiv { color: var(--navy); border-bottom-color: var(--copper); font-weight: 600; }
     nav.tabs button:hover { color: var(--navy); }
 
-    .container { max-width: 1100px; margin: 0 auto; padding: 28px 20px 60px; }
+    /* Volle Breite nutzen (Angebote, Rechnungen, Abos, Kunden), damit Tabellen nicht seitlich wischen */
+    .container { max-width: 1800px; margin: 0 auto; padding: 28px 20px 60px; }
+    html.eingebettet .container { max-width: none; padding: 18px 18px 60px; }
+    .card table td.aktionen { white-space: normal; }
     .view { display: none; }
     .view.aktiv { display: block; }
     .kopfzeile { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -583,8 +586,8 @@ function angebotEditor(a) {
     <div class="row">
       <div class="field klein"><label>Zahlungsart</label><select id="ag-zahlart" onchange="ratenFelder()"><option value="einmal" ${!['raten', 'anzahlung'].includes(z.art) ? 'selected' : ''}>Einmalzahlung</option><option value="anzahlung" ${z.art === 'anzahlung' ? 'selected' : ''}>Anzahlung + Schlussrechnung</option><option value="raten" ${z.art === 'raten' ? 'selected' : ''}>Ratenzahlung (monatlich)</option></select></div>
       <div class="field klein" id="ag-anz-prozent-feld"><label>Anzahlung %</label><input type="number" id="ag-anz-prozent" min="1" max="99" value="${z.anzahlungProzent || 50}" oninput="posSumme()"></div>
-      <div class="field" id="ag-anz-text-feld"><label>Anzahlung fällig …</label><input id="ag-anz-text" value="${esc(z.anzahlungText || 'bei Auftragserteilung')}" oninput="posSumme()"></div>
-      <div class="field" id="ag-rest-text-feld"><label>Rest fällig …</label><input id="ag-rest-text" value="${esc(z.restText || 'nach Abschluss des Projekts')}" oninput="posSumme()"></div>
+      <div class="field" id="ag-anz-text-feld"><label>Anzahlung fällig …</label><input id="ag-anz-text" value="${esc(z.anzahlungText || (KONTEXT.mandant === 'novaflow' ? '7 Tage nach Unterzeichnung' : 'bei Auftragserteilung'))}" oninput="posSumme()"></div>
+      <div class="field" id="ag-rest-text-feld"><label>Rest fällig …</label><input id="ag-rest-text" value="${esc(z.restText || (KONTEXT.mandant === 'novaflow' ? 'bei Bereitstellung, spätestens 30 Tage nach Projektstart' : 'nach Abschluss des Projekts'))}" oninput="posSumme()"></div>
       <div class="field klein" id="ag-raten-anz-feld"><label>Anzahlung bei Auftrag %</label><input type="number" id="ag-raten-anz" min="0" max="99" value="${z.ratenAnzahlung ?? (a.id ? 0 : (KONTEXT.admin ? 50 : 0))}" oninput="ratenFelder()"><div class="hint">0 = gleiche Raten ohne Anzahlung</div></div>
       <div class="field klein" id="ag-raten-anzahl-feld"><label id="ag-raten-anzahl-label">Anzahl Raten</label><input type="number" id="ag-raten-anzahl" min="1" max="36" value="${z.anzahl || 3}" oninput="posSumme()"></div>
       <div class="field klein" id="ag-raten-erste-feld"><label id="ag-raten-erste-label">1. Rate fällig am</label><input type="date" id="ag-raten-erste" value="${z.ersteRate || plusTage(a.datum || heute(), 14)}" oninput="posSumme()"></div>
@@ -841,10 +844,10 @@ async function zeigeAbos() {
     <td class="sub">${a.positionen.map(p => esc(p.titel) + ' (' + euro(p.preis) + ')').join('<br>')}</td>
     <td class="zahl">${euro(a.monatlich)}<div class="sub">pro Monat</div></td>
     <td class="sub">ab ${datumDe(a.start)}${a.ende ? '<br>bis ' + datumDe(a.ende) : ''}<br>zuletzt: ${a.letzteAbrechnung || '–'}</td>
-    <td>${chip(a.aktiv ? 'aktiv' : 'beendet')}</td>
+    <td>${a.geplant ? `<span class="chip versendet" title="Wird aktiv, sobald Angebot ${esc(a.angebotNummer || '')} in Rechnungen umgewandelt wird">geplant</span><div class="sub">startet mit Annahme von ${esc(a.angebotNummer || 'Angebot')}</div>` : chip(a.aktiv ? 'aktiv' : 'beendet')}</td>
     <td class="aktionen">
-      <button class="btn klein sekundaer" onclick="aboBearbeiten('${a.id}')">Bearbeiten</button>
-      ${a.aktiv ? `<button class="btn klein gefahr" onclick="aboBeenden('${a.id}')">Beenden</button>` : `<button class="btn klein sekundaer" onclick="aboAktiv('${a.id}', true)">Reaktivieren</button>`}
+      ${a.geplant ? '<span class="sub">Änderungen im Angebot</span>' : `<button class="btn klein sekundaer" onclick="aboBearbeiten('${a.id}')">Bearbeiten</button>
+      ${a.aktiv ? `<button class="btn klein gefahr" onclick="aboBeenden('${a.id}')">Beenden</button>` : `<button class="btn klein sekundaer" onclick="aboAktiv('${a.id}', true)">Reaktivieren</button>`}`}
     </td></tr>`).join('');
   $('abos-liste').innerHTML = rows ? `<table><thead><tr><th>Kunde · Abo</th><th>Positionen</th><th class="zahl">Betrag</th><th>Laufzeit</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="leer">Keine Abos. Abos entstehen aus Angeboten mit monatlichen Positionen oder manuell.</div>';
 }

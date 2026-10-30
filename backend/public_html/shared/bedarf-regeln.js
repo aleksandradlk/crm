@@ -107,6 +107,20 @@
     groesstes_problem: 'größtes Problem', wunschstart: 'Wunschstart', entscheider: 'Entscheider', rabatt_begruendung: 'Begründung für den Rabatt',
     sonderwuensche: 'Sonderwünsche', notiz: 'Notiz', einleitung_notiz: 'Für die Einleitung',
   };
+  // Alle Felder mit Anzeigenamen (Verlauf, Konflikt-Ansicht, Änderungs-Stichpunkte)
+  const FELDLABEL = {
+  ansprechpartner_rolle: 'Ansprechpartner', branche: 'Branche', branche_text: 'Branche (Text)', email_angebot: 'E-Mail fürs Angebot',
+  webseite: 'Webseite', instagram: 'Instagram', teamgroesse: 'Teamgröße', buero_vorhanden: 'Büro vorhanden', kanaele: 'Kanäle',
+  kanal_wichtigster: 'Wichtigster Kanal', instagram_business: 'Instagram Business', whatsapp_firmennummer: 'WhatsApp Firmennummer',
+  anfragen_pro_woche: 'Anfragen pro Woche', anfragen_unpassend: 'Davon unpassend', auftragswert_schnitt: 'Auftragswert im Schnitt',
+  ablauf_heute: 'Ablauf heute', antwortzeit: 'Antwortzeit', nachfragen: 'Was fragt er nach?', besichtigungen: 'Besichtigungen',
+  groesstes_problem: 'Größtes Problem', zuerst_weg: 'Was soll zuerst weg?', wunschstart: 'Wunschstart', software: 'Software',
+  kalender: 'Kalender', webseite_status: 'Webseite (Stand)', google_profil: 'Google-Profil', entscheider: 'Entscheider',
+  entscheider_text: 'Entscheider (Text)', paket_empfohlen: 'Paket', zusatzleistungen: 'Zusatzleistungen', preis_genannt: 'Preis genannt',
+  reaktion_preis: 'Reaktion auf den Preis', rabatt_prozent: 'Rabatt %', rabatt_begruendung: 'Begründung Rabatt', gratismonat: 'Gratismonat',
+  zahlungswunsch: 'Zahlungswunsch', sonderwuensche: 'Sonderwünsche', nachfass_termin: 'Nachfass-Termin', notiz: 'Notiz',
+  einleitung_notiz: 'Für die Einleitung', aktion_prozent: 'Aktion %', aktion_bis: 'Aktion gültig bis',
+};
   // Google-Profil: besteht schon (auch „schwach“) oder wird von jemand anderem betreut → übernehmen und optimieren (günstiger)
   const GOOGLE_BESTEHEND = ['ja', 'schwach', 'anderer'];
   function googlePreis(d, cfg) {
@@ -231,7 +245,32 @@
     return out;
   }
 
-  const api = { GRUENDE, grundPruefen, STATUS, STANDARD, W, FELDNAME, INHALT, googlePreis, FRAGEN, ERGEBNIS, label, pruefen, vorschlag, dealWert, positionen, gesundheit, cfgMit, eur, leer };
+  // Stichpunkte, was sich zwischen zwei Ständen geändert hat (für den Verlauf), z. B.
+  // „Instagram hinzugefügt (Kanäle)“, „Paket: Autopilot M → Autopilot L“, „Größtes Problem ergänzt“
+  function aenderungen(alt, neu) {
+    alt = alt || {}; neu = neu || {};
+    const LANGTEXT = ['ablauf_heute', 'groesstes_problem', 'sonderwuensche', 'notiz', 'rabatt_begruendung', 'einleitung_notiz'];
+    const L = (f, v) => label(f === 'kanal_wichtigster' ? 'kanaele' : f, v);
+    const out = [];
+    for (const f of Object.keys(FELDLABEL)) {
+      const a = alt[f], b = neu[f];
+      if ((leer(a) && leer(b)) || JSON.stringify(a) === JSON.stringify(b)) continue;
+      const name = FELDLABEL[f];
+      if (Array.isArray(a) || Array.isArray(b)) {
+        const A = Array.isArray(a) ? a : [], B = Array.isArray(b) ? b : [];
+        B.filter(x => !A.includes(x)).forEach(x => out.push(`${L(f, x)} hinzugefügt (${name})`));
+        A.filter(x => !B.includes(x)).forEach(x => out.push(`${L(f, x)} entfernt (${name})`));
+      } else if (LANGTEXT.includes(f)) {
+        const sa = String(a || '').trim(), sb = String(b || '').trim();
+        out.push(!sa ? `${name} eingetragen` : !sb ? `${name} gelöscht` : sb.startsWith(sa) ? `${name} ergänzt` : sb.length < sa.length - 20 ? `${name} gekürzt` : `${name} geändert`);
+      } else if (leer(a)) out.push(`${name}: ${L(f, b)}`);
+      else if (leer(b)) out.push(`${name} entfernt`);
+      else out.push(`${name}: ${L(f, a)} → ${L(f, b)}`);
+    }
+    return out;
+  }
+
+  const api = { GRUENDE, grundPruefen, STATUS, STANDARD, W, FELDNAME, FELDLABEL, INHALT, googlePreis, aenderungen, FRAGEN, ERGEBNIS, label, pruefen, vorschlag, dealWert, positionen, gesundheit, cfgMit, eur, leer };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.BedarfRegeln = api;
 })(typeof window !== 'undefined' ? window : globalThis);

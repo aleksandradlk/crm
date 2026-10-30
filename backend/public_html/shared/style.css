@@ -2521,6 +2521,7 @@ body.dark .ob-icon.is-accent { color: var(--accent2); }
 .bdv-item b { color: var(--text); font-size: 13px; }
 .bdv-item.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--bg2)); }
 .bdv-meta { font-size: 11.5px; color: var(--text3); }
+.bdv-aend { margin: 2px 0 0; padding-left: 16px; font-size: 12px; color: var(--text); line-height: 1.45; }
 .bdv-vorschau { border: 1px solid var(--border); border-radius: 12px; padding: 12px; max-height: 65vh; overflow-y: auto; }
 .bdv-kopf { font-size: 13px; color: var(--text2); margin-bottom: 10px; }
 .bdv-zeile { display: grid; grid-template-columns: 150px 1fr; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }

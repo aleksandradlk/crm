@@ -504,6 +504,9 @@ const Deals = {
   },
 
   async markWon(id) {
+    const d = (this.deals || []).find(x => x.id === id) || this._current || {};
+    const ok = await customConfirm(`Deal${d.title ? ` „${d.title}“` : ''} als gewonnen markieren?`, { title: 'Gewonnen', okLabel: 'Ja, gewonnen' });
+    if (!ok) return;
     try {
       await api('POST', `/deals/${id}/won`, {});
       showToast('Deal gewonnen 🎉');

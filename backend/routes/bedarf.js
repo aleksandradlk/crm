@@ -248,10 +248,13 @@ router.get('/lead/:id/versionen', auth, async (req, res) => {
       `SELECT s.id, s.anlass, s.created_at, s.data, COALESCE(u.full_name, u.username) AS von
        FROM bedarfsanalyse_snapshots s LEFT JOIN users u ON u.id = s.created_by
        WHERE s.lead_id=? ORDER BY s.id DESC LIMIT 300`, [lead.id]);
-    res.json({ versionen: rows.map(r => {
-      let d = {}; try { d = JSON.parse(r.data || '{}'); } catch (_) {}
+    const daten = rows.map(r => { try { return JSON.parse(r.data || '{}'); } catch (_) { return {}; } });
+    res.json({ versionen: rows.map((r, i) => {
+      const d = daten[i];
       const zeichen = LANG.reduce((n, k) => n + String(d[k] || '').length, 0);
-      return { id: r.id, anlass: r.anlass, created_at: r.created_at, von: r.von || '', zeichen,
+      // Was sich gegenüber dem vorherigen (älteren) Stand geändert hat, als Stichpunkte
+      const aenderungen = i + 1 < daten.length ? R.aenderungen(daten[i + 1], d) : null;
+      return { id: r.id, anlass: r.anlass, created_at: r.created_at, von: r.von || '', zeichen, aenderungen,
         vorschau: String(d.groesstes_problem || d.ablauf_heute || d.sonderwuensche || '').slice(0, 120) };
     }) });
   } catch (e) { console.error('Bedarf Versionen:', e); res.status(500).json({ error: 'Verlauf konnte nicht geladen werden.' }); }

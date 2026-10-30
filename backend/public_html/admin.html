@@ -2739,8 +2739,11 @@ function abrKontoZurueck() {
 // Neuen Angebotsentwurf für Lead (und optional Deal) anlegen und direkt öffnen
 async function angebotErstellen(leadId, dealId) {
   try {
+    showToast('Angebot wird angelegt, die KI schreibt es aus der Bedarfsanalyse … (bis zu 1 Minute)');
     const r = await api('POST', '/abrechnung-crm/angebot', { leadId, dealId: dealId || null });
-    showToast(`Angebot ${r.angebot.nummer} angelegt`);
+    showToast(r.ki === 'ausgefuellt' ? `Angebot ${r.angebot.nummer} ist fertig geschrieben. Bitte drüberschauen und verschicken.`
+      : r.ki === 'fehler' || r.ki === 'zeit' ? `Angebot ${r.angebot.nummer} angelegt. Die KI hat es nicht geschafft, bitte im Angebot „Mit KI vorschlagen“ klicken.`
+        : `Angebot ${r.angebot.nummer} angelegt`, r.ki === 'fehler' || r.ki === 'zeit' ? 'err' : 'ok');
     oeffneAbrechnung('/abrechnung/angebote?angebot=' + encodeURIComponent(r.angebot.id));
   } catch (e) { showToast(e.message, 'err'); }
 }
