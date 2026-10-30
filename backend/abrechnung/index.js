@@ -842,8 +842,9 @@ function bauMandant(app, ctx) {
     const pv = (a.anhaenge || []).length > 0;
     const closer = String(extra.closer || '').trim();
     const einstieg = du
-      ? `${closer ? `wie mit ${closer} besprochen` : 'wie besprochen'}, bekommst du hier dein Angebot${pv ? ' und die Projektvereinbarung' : ''}.`
-      : `${closer ? `wie mit ${closer} besprochen` : 'wie besprochen'}, erhalten Sie hier Ihr Angebot${pv ? ' und die Projektvereinbarung' : ''}.`;
+      // Feste Regel: in Mails an Kunden nie den Namen einer Person aus dem Vertrieb, immer „wie besprochen“
+      ? `wie besprochen, bekommst du hier dein Angebot${pv ? ' und die Projektvereinbarung' : ''}.`
+      : `wie besprochen, erhalten Sie hier Ihr Angebot${pv ? ' und die Projektvereinbarung' : ''}.`;
     // Leistungen als Stichpunkte in Kundensprache, ohne Paketnamen (bei NovaFlow), sonst Titel ohne „– Einrichtung“
     const dein = du ? 'Dein' : 'Ihr', rausfahren = du ? 'bevor du rausfährst' : 'bevor Sie rausfahren';
     const S_PUNKTE = ['Anfragen landen in einem Postfach und werden sofort beantwortet', `Fotos, Maße oder Wünsche werden automatisch abgefragt, ${rausfahren}`];
@@ -1198,7 +1199,7 @@ function bauMandant(app, ctx) {
 
 Hey Christoph,
 
-wie mit Nala besprochen, bekommst du hier dein Angebot und die Projektvereinbarung.
+wie besprochen, bekommst du hier dein Angebot und die Projektvereinbarung. Damit fährst du nicht mehr für jedes Angebot zum Aufmaß raus, um danach nichts mehr zu hören.
 
 Kurz zusammengefasst:
 - Anfragen über Webseite und WhatsApp landen in einem Postfach und werden sofort beantwortet
@@ -1237,7 +1238,6 @@ Fragen kannst du einfach hier drunter schreiben 😊`;
       v.positionen.some(p => /webseite/i.test(p.titel) && p.abrechnung === 'einmalig') && ctx.id === 'novaflow'
         ? `Webseite: Standard ist eine Seite. Der Kunde bekommt aktuell bis zu ${WEBSEITE_SEITEN} Seiten inklusive Impressum und Datenschutz, ${WEBSEITE_SEITEN - 1} Seiten davon geschenkt – das als Geschenk erwähnen.` : '',
       (a.anhaenge || []).length ? 'Projektvereinbarung liegt bei und soll unterschrieben zurückkommen (Scan oder Foto reicht).' : 'Keine Projektvereinbarung angehängt: Kunde gibt einfach kurz Bescheid, wenn alles passt.',
-      kontext && kontext.closer ? `Das Gespräch mit dem Kunden hat ${kontext.closer} geführt (Vertrieb).` : '',
       kontext && kontext.problem ? `Was den Kunden laut Gespräch stört: ${kontext.problem}` : '',
       kontext && kontext.notizen ? `Weitere Notizen aus dem Gespräch: ${kontext.notizen}` : '',
     ].filter(Boolean).join('\n');
@@ -1256,20 +1256,25 @@ Regeln:
 - Betreff persönlich, beginnt mit "${du ? 'Dein' : 'Ihr'} Angebot:" und nennt in wenigen Worten, was der Kunde davon hat (z. B. "Dein Angebot: Zeit sparen, ohne für jedes Angebot rauszufahren"). Am besten aufgreifen, was ihn laut Gespräch stört.
 - NIE Paket- oder Produktnamen nennen (z. B. "Anfragen-Autopilot S/M/L", "Quick-Win", "Einrichtung", Artikelnummern), weder im Betreff noch im Text. Stattdessen beschreiben, was passiert und was der Kunde davon hat. Webseite und Google-Profil dürfen so heißen.
 - Text OHNE Anrede am Anfang und OHNE Gruß/Signatur am Ende (beides setzt das System). Der letzte Satz lädt zu Fragen ein und endet mit einem passenden Emoji wie 😊.
-- Wenn bekannt, wer das Gespräch geführt hat, im ersten Satz darauf beziehen.
+- NIE den Namen einer Person aus dem Vertrieb oder Team nennen (nicht "wie mit … besprochen"), immer nur "wie besprochen".
+- Persönlich: Direkt nach "wie besprochen …" in einem Satz aufgreifen, was den Kunden laut Gespräch stört, möglichst in seinen eigenen Worten, und was sich dadurch für ihn ändert. Die Stichpunkte konkret für ihn (seine Kanäle, seine Branche, was bei ihm abgefragt wird), nicht allgemein.
+- VERBOTEN (Serienbrief-Ton): "Danke für das (nette/sympathische) Gespräch", "danke für dein Vertrauen", "Vielen Dank für Ihr Interesse", "wertvolle Zeit", "Zeit und Geld sparen", "die wichtigen Dinge", "persönliche Note", "Mehrwert", "nahtlos", "effizient", "wir freuen uns". Keine Technikwörter (KI, Automatisierung, Workflow, Tool).
+- VERTRAULICH: Nichts über Geld, Privates, Gesundheit, Familie, Mitarbeiterprobleme, Konkurrenten oder Preisverhandlung erwähnen.
 - "Kurz zusammengefasst:" mit 3 bis 5 Stichpunkten (Zeilen beginnen mit "- "), Nutzen für den Kunden in seinen Worten.
 - Preise und Zahlungsweise in einem kurzen Absatz, genau wie in den Fakten.
 - Zum Schluss: was der Kunde jetzt tun soll, und dass er bei Fragen einfach antworten kann.
 
 Antworte NUR mit gültigem JSON: {"betreff": "...", "text": "..."}`;
-    const antwort = await ctx.ki.client.messages.create({ model: ctx.ki.model || 'claude-haiku-4-5', max_tokens: 1200, messages: [{ role: 'user', content: prompt }] });
+    const antwort = await kiAnfrage(prompt, 1200);
     const roh = (antwort.content && antwort.content[0] && antwort.content[0].text || '').trim();
     const i0 = roh.indexOf('{'), i1 = roh.lastIndexOf('}');
     let ki;
     try { ki = JSON.parse(roh.slice(i0, i1 + 1)); } catch (e) { throw new Error('Die KI-Antwort war nicht lesbar, bitte noch einmal versuchen.'); }
-    const text = String(ki.text || '').trim();
+    // Sicherheitsnetz für die feste Regel: „wie mit Nala besprochen“ → „wie besprochen“
+    const ohneNamen = t => String(t || '').replace(/\b([Ww])ie (?:du |ihr |Sie )?(?:mit|bei) [A-ZÄÖÜ][\wäöüß-]+(?: [A-ZÄÖÜ][\wäöüß-]+)? besprochen(?: hast| habt| haben)?/g, '$1ie besprochen');
+    const text = ohneNamen(ki.text).trim();
     if (!text) throw new Error('Die KI hat keinen Text geliefert, bitte noch einmal versuchen.');
-    ok(res, { betreff: String(ki.betreff || '').trim() || emailVorlage('angebot', a, kunde, stamm).betreff,
+    ok(res, { betreff: ohneNamen(ki.betreff).trim() || emailVorlage('angebot', a, kunde, stamm).betreff,
       text: `${kundeAnrede(kunde)}\n\n${text}\n\n${kundeGruss(kunde)}` });
   }));
 
@@ -1282,6 +1287,18 @@ Antworte NUR mit gültigem JSON: {"betreff": "...", "text": "..."}`;
   // unverändert, ebenso die Beschreibung monatlicher Leistungen (Betreuung = Vertragsinhalt).
   // Vorbild für die Einleitung (Angebot an Reinheitswerk, von Aleksandra freigegeben)
   const EINLEITUNG_VORBILD = 'Du hast Nala erzählt, dass du bei der Arbeit ständig aufs Handy schaust und manchmal nachts um 3 noch Anfragen beantwortest. Genau das nimmt dir der Anfragen-Autopilot ab: Jede Anfrage über Instagram, WhatsApp, E-Mail oder dein Formular bekommt sofort eine Antwort. Fahrzeug, Zustand, Fotos und Ort werden automatisch abgefragt, und der Kunde bekommt direkt einen Preis nach deiner Preisliste. Anfragen, die zu weit weg sind oder nicht zu dir passen, siehst du sofort und sagst mit einem Klick ab. So machst du nur noch die Autos, auf die du Lust hast, und hast nachts deine Ruhe.';
+
+  // Für Angebote und Angebotsmails das stärkere Modell (persönlichere Texte); ist es nicht verfügbar,
+  // automatisch das Standardmodell
+  async function kiAnfrage(prompt, maxTokens) {
+    try {
+      return await ctx.ki.client.messages.create({ model: ctx.ki.modelAngebot || ctx.ki.model || 'claude-haiku-4-5', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] });
+    } catch (e) {
+      if (!ctx.ki.modelAngebot || ![400, 403, 404].includes(e.status)) throw e;
+      console.error('KI: Modell', ctx.ki.modelAngebot, 'nicht verfügbar, nehme', ctx.ki.model, '-', e.message);
+      return ctx.ki.client.messages.create({ model: ctx.ki.model || 'claude-haiku-4-5', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] });
+    }
+  }
 
   // b: { beschreibung, kundeId, angebotId, positionen }; req nur für das Tageslimit (fehlt beim automatischen Ausfüllen)
   async function kiVorschlag(b, req = null) {
@@ -1360,15 +1377,7 @@ Antworte NUR mit gültigem JSON, kein Text davor oder danach:
   "schlusstext": "..."
 }`;
     }
-    // Für Angebote das stärkere Modell (persönlichere Texte); ist es nicht verfügbar, das Standardmodell
-    let antwort;
-    try {
-      antwort = await ctx.ki.client.messages.create({ model: ctx.ki.modelAngebot || ctx.ki.model || 'claude-haiku-4-5', max_tokens: 3000, messages: [{ role: 'user', content: prompt }] });
-    } catch (e) {
-      if (!ctx.ki.modelAngebot || ![400, 403, 404].includes(e.status)) throw e;
-      console.error('KI-Angebot: Modell', ctx.ki.modelAngebot, 'nicht verfügbar, nehme', ctx.ki.model, '-', e.message);
-      antwort = await ctx.ki.client.messages.create({ model: ctx.ki.model || 'claude-haiku-4-5', max_tokens: 3000, messages: [{ role: 'user', content: prompt }] });
-    }
+    const antwort = await kiAnfrage(prompt, 3000);
     const text = (antwort.content && antwort.content[0] && antwort.content[0].text || '').trim();
     const a0 = text.indexOf('{'), a1 = text.lastIndexOf('}');
     if (a0 < 0 || a1 < 0) throw new Error('Die KI hat keine verwertbare Antwort geliefert, bitte noch einmal versuchen.');
