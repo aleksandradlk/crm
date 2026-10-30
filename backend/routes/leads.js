@@ -93,12 +93,26 @@ router.get('/', auth, async (req, res) => {
 
 // ── POST /api/leads — einzelnen Lead manuell anlegen ────
 router.post('/', auth, async (req, res) => {
-  const { company, ceo, email, phone, location, website, industry, notes, force } = req.body;
+  const { company, ceo, email, phone, website, industry, notes, force } = req.body;
   if (!company?.trim()) return res.status(400).json({ error: 'Firmenname ist erforderlich' });
+  // Adresse aus Straße, PLZ, Ort (Format wie bei der Übergabe: „Str. Nr, PLZ Ort“); alter Weg: location
+  const t = v => String(v || '').trim();
+  const ortTeil = [t(req.body.plz), t(req.body.ort)].filter(Boolean).join(' ');
+  const location = [t(req.body.strasse), ortTeil].filter(Boolean).join(', ') || t(req.body.location) || null;
+  let instagram = t(req.body.instagram);
+  if (instagram && !/instagram\.com/i.test(instagram)) instagram = 'instagram.com/' + instagram.replace(/^@/, '');
+  const quelle = t(req.body.quelle).slice(0, 50) || 'manuell';
   try {
-    // Dubletten-Check (Telefon, E-Mail, Website) – mit force=true trotzdem anlegen
+    // Dubletten-Check (Telefon, E-Mail, Webseite, Firmenname) – mit force=true trotzdem anlegen
     if (!force) {
-      const duplicates = await findDuplicates({ phone, email, website });
+      let duplicates = await findDuplicates({ phone, email, website });
+      if (!duplicates.length) {
+        const [gleich] = await db.query(
+          `SELECT l.id, l.company, l.assigned_to, u.full_name AS assigned_name, 'Firmenname' AS matched_on
+           FROM leads l LEFT JOIN users u ON u.id = l.assigned_to
+           WHERE l.archived_at IS NULL AND LOWER(TRIM(l.company)) = LOWER(?) LIMIT 3`, [company.trim()]);
+        duplicates = gleich;
+      }
       if (duplicates.length) {
         const d = duplicates[0];
         return res.status(409).json({
@@ -108,13 +122,13 @@ router.post('/', auth, async (req, res) => {
       }
     }
     const [r] = await db.query(
-      `INSERT INTO leads (company, ceo, email, phone, location, website, industry, notes,
+      `INSERT INTO leads (company, ceo, email, phone, location, website, industry, notes, instagram_url,
         status, assigned_to, created_by, source, confidence)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [company.trim(), ceo||null, email||null, phone||null, location||null,
-       website||null, industry||null, notes||null,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [company.trim(), ceo||null, email||null, phone||null, location ? location.slice(0, 150) : null,
+       website||null, industry||null, notes||null, instagram ? instagram.slice(0, 255) : null,
        'neu', req.user.role === 'closer' ? req.user.id : null,
-       req.user.id, 'manuell', 80]
+       req.user.id, quelle, 80]
     );
     await refreshNorm(r.insertId);
     await log(req.user.id, 'lead_create_manual', 'lead', r.insertId, { company }, req.ip);
@@ -898,7 +912,9 @@ router.delete('/:id/comments/:cid', auth, async (req, res) => {
     if (!c) return res.status(404).json({ error: 'Kommentar nicht gefunden' });
     if (req.user.role !== 'admin' && c.user_id !== req.user.id)
       return res.status(403).json({ error: 'Nur eigene Kommentare löschbar' });
-    await db.query('DELETE FROM comments WHERE id=?', [cid]);
+    // In den Papierkorb (30 Tage wiederherstellbar) statt endgültig löschen
+    await require('../helpers/papierkorb').zeileLoeschen('comments', 'kommentar', cid,
+      { leadId: c.lead_id, titel: `Kommentar: ${String(c.text || '').slice(0, 120)}`, userId: req.user.id });
     await log(req.user.id, 'comment_delete', 'lead', parseInt(req.params.id), { cid }, req.ip);
     res.json({ ok: true });
   } catch(e) { console.error('Comment delete error:', e); res.status(500).json({ error: 'Ein Fehler ist aufgetreten.' }); }

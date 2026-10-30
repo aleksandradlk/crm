@@ -409,7 +409,9 @@ router.post('/:id/reopen', auth, async (req, res) => {
 router.delete('/:id', auth, adminOnly, async (req, res) => {
   const deal = await loadDeal(parseInt(req.params.id));
   if (!deal) return res.status(404).json({ error: 'Deal nicht gefunden' });
-  await db.query('DELETE FROM deals WHERE id=?', [deal.id]);
+  // In den Papierkorb (30 Tage wiederherstellbar) statt endgültig löschen
+  await require('../helpers/papierkorb').zeileLoeschen('deals', 'deal', deal.id,
+    { leadId: deal.lead_id, titel: `Deal: ${deal.title}`, userId: req.user.id });
   await log(req.user.id, 'deal_delete', 'lead', deal.lead_id, { deal_id: deal.id, title: deal.title }, req.ip);
   res.json({ ok: true });
 });

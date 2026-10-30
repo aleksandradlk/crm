@@ -122,6 +122,7 @@ app.use('/api/calls',    callRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/settings',        settingsRoutes);
 app.use('/api/sicherung',       require('./routes/sicherung'));
+app.use('/api/papierkorb',      require('./routes/papierkorb'));
 app.use('/api/email-templates', emailTemplateRoutes);
 app.use('/api/tools',           toolRoutes);
 app.use('/api/emails',          emailRoutes);
@@ -672,6 +673,18 @@ migrate(`CREATE TABLE IF NOT EXISTS bedarfsanalyse_snapshots (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_bsnap_lead (lead_id)
 )`).catch(() => {});
+// Papierkorb für gelöschte Kommentare, Deals und Anhänge (30 Tage, Rückweg: db/rollback/2026-10-30_papierkorb.sql)
+migrate(`CREATE TABLE IF NOT EXISTS papierkorb (
+  id            INT AUTO_INCREMENT PRIMARY KEY,
+  art           VARCHAR(20) NOT NULL,
+  lead_id       INT NULL,
+  titel         VARCHAR(300) NOT NULL,
+  daten         LONGTEXT NOT NULL,
+  geloescht_von INT NULL,
+  geloescht_am  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_papierkorb_zeit (geloescht_am)
+)`).catch(() => {});
+cron.schedule('17 3 * * *', () => require('./helpers/papierkorb').aufraeumen().catch(e => console.error('Papierkorb:', e.message)), { timezone: 'Europe/Berlin' });
 // Deals: Häkchen „Aktionsrabatt“ (Provision bleibt beim vollen Satz); keine Auto-Nachfass-Reminder mehr
 // (Rückweg: db/rollback/2026-10-30_deals.sql)
 migrate('ALTER TABLE deals ADD COLUMN aktionsrabatt TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});

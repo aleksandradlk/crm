@@ -1800,7 +1800,7 @@ async function finishReminder(leadId, rid) {
 
 // ── LEAD MANUELL HINZUFÜGEN ───────────────────────────────────
 function openAddLeadModal() {
-  ['cl-company','cl-ceo','cl-phone','cl-email','cl-location','cl-industry','cl-website','cl-notes']
+  ['cl-company','cl-ceo','cl-phone','cl-email','cl-strasse','cl-plz','cl-ort','cl-industry','cl-website','cl-instagram','cl-quelle','cl-notes']
     .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   document.getElementById('clLeadErr').textContent = '';
   document.getElementById('clAddLeadModal').classList.add('open');
@@ -1837,9 +1837,11 @@ async function setQuickReminderCl(tage) {
 async function saveManualLead(force = false) {
   const get = id => document.getElementById(id)?.value.trim() || '';
   const body = { company: get('cl-company'), ceo: get('cl-ceo'), phone: get('cl-phone'),
-    email: get('cl-email'), location: get('cl-location'), industry: get('cl-industry'),
-    website: get('cl-website'), notes: get('cl-notes') };
+    email: get('cl-email'), strasse: get('cl-strasse'), plz: get('cl-plz'), ort: get('cl-ort'),
+    industry: get('cl-industry'), website: get('cl-website'), instagram: get('cl-instagram'),
+    quelle: get('cl-quelle'), notes: get('cl-notes') };
   if (!body.company) { document.getElementById('clLeadErr').textContent = 'Firmenname ist erforderlich'; return; }
+  if (body.plz && !/^\d{5}$/.test(body.plz)) { document.getElementById('clLeadErr').textContent = 'Die PLZ hat 5 Ziffern.'; return; }
 
   try {
     await api('POST', '/leads', { ...body, force });
@@ -2021,7 +2023,7 @@ async function saveCommentEdit(leadId, cid) {
   } catch(e) { showToast(e.message, 'err'); }
 }
 async function deleteComment(leadId, cid) {
-  if (!confirm('Kommentar wirklich löschen?')) return;
+  if (!confirm('Kommentar löschen? Er liegt danach 30 Tage im Papierkorb und kann wiederhergestellt werden.')) return;
   try {
     await api('DELETE', `/leads/${leadId}/comments/${cid}`);
     showToast('Kommentar gelöscht');
@@ -2544,12 +2546,17 @@ async function submitCreateUser() {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="form-group" style="margin:0"><label>Firmenname *</label><input id="cl-company" class="form-control" placeholder="Muster GmbH" onkeydown="if(event.key==='Enter')saveManualLead()"></div>
       <div class="form-group" style="margin:0"><label>Ansprechpartner</label><input id="cl-ceo" class="form-control" placeholder="Max Muster"></div>
-      <div class="form-group" style="margin:0"><label>Telefon</label><input id="cl-phone" class="form-control" placeholder="+49 211 ..."></div>
-      <div class="form-group" style="margin:0"><label>E-Mail</label><input id="cl-email" class="form-control" placeholder="info@..."></div>
-      <div class="form-group" style="margin:0"><label>Standort</label><input id="cl-location" class="form-control" placeholder="Düsseldorf"></div>
-      <div class="form-group" style="margin:0"><label>Branche</label><input id="cl-industry" class="form-control" placeholder="Dachdecker"></div>
-      <div class="form-group" style="grid-column:1/-1;margin:0"><label>Website</label><input id="cl-website" class="form-control" placeholder="https://..."></div>
-      <div class="form-group" style="grid-column:1/-1;margin:0"><label>Notizen</label><textarea id="cl-notes" class="form-control" rows="2" placeholder="Interne Notiz..."></textarea></div>
+      <div class="form-group" style="margin:0"><label>Telefon</label><input id="cl-phone" class="form-control" type="tel" placeholder="+49 211 ..."></div>
+      <div class="form-group" style="margin:0"><label>E-Mail</label><input id="cl-email" class="form-control" type="email" placeholder="info@..."></div>
+      <div class="form-group" style="grid-column:1/-1;margin:0"><label>Straße und Hausnummer</label><input id="cl-strasse" class="form-control" placeholder="Hauptstraße 12"></div>
+      <div class="form-group" style="margin:0"><label>PLZ</label><input id="cl-plz" class="form-control" inputmode="numeric" maxlength="5" placeholder="47804"></div>
+      <div class="form-group" style="margin:0"><label>Ort</label><input id="cl-ort" class="form-control" placeholder="Krefeld"></div>
+      <div class="form-group" style="margin:0"><label>Webseite</label><input id="cl-website" class="form-control" placeholder="betrieb.de"></div>
+      <div class="form-group" style="margin:0"><label>Instagram</label><input id="cl-instagram" class="form-control" placeholder="instagram.com/betrieb oder @betrieb"></div>
+      <div class="form-group" style="margin:0"><label>Branche</label><input id="cl-industry" class="form-control" list="lead-branchen" placeholder="z. B. Fliesenleger"></div>
+      <div class="form-group" style="margin:0"><label>Quelle</label><input id="cl-quelle" class="form-control" maxlength="50" placeholder="z. B. Empfehlung Matthias"></div>
+      <div class="form-group" style="grid-column:1/-1;margin:0"><label>Notiz</label><textarea id="cl-notes" class="form-control" rows="2" placeholder="Was weißt du schon über den Betrieb?"></textarea></div>
+      <datalist id="lead-branchen"><option value="Fahrzeugaufbereitung"><option value="Fahrzeugfolierung"><option value="Fliesenleger"><option value="Bad/SHK"><option value="Maler"><option value="Boden/Parkett"><option value="Laserreinigung"><option value="Gebäudereinigung"><option value="Dachdecker"><option value="Garten- und Landschaftsbau"><option value="Elektriker"><option value="Tischler"></datalist>
     </div>
     <div style="color:var(--red);font-size:12px;margin-top:8px;min-height:16px" id="clLeadErr"></div>
     <div class="modal-actions">

@@ -287,7 +287,15 @@ function registriere(app, { ki } = {}) {
     onAngebotVersand: angebotVersandAnCrm,
     angebotKontext,
     bedarfFuerAngebot,
+    // Gelöschter Angebotsanhang → Papierkorb (30 Tage wiederherstellbar)
+    async anhangInPapierkorb(d, user) {
+      const lead = d.crmLeadId ? await leadZumAngebot({ crm: { leadId: d.crmLeadId } }, null).catch(() => null) : null;
+      await require('../helpers/papierkorb').ablegen({ art: 'anhang', leadId: lead ? lead.id : null,
+        titel: `Anhang ${d.name} (Angebot ${d.nummer})`, daten: d, userId: user && user.id });
+    },
   });
+  require('../helpers/papierkorb').setzeAnhangHook(d => mandant.crm.anhangWiederherstellen(d));
+  require('../helpers/papierkorb').setzeDateiHook(d => { try { fs.unlinkSync(d.pfad); } catch (_) {} });
   mandantRef = mandant;
   status.aktiv = true;
   try { const n = mandant.crm.geplanteAbosNachziehen(); if (n) console.log(`Abrechnung: ${n} geplante Abos aus offenen Angeboten angelegt`); }

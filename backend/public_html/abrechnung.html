@@ -623,6 +623,7 @@ async function anhangHochladen(id) {
   catch (e) { el.textContent = 'Nicht gespeichert: ' + e.message; el.className = 'status-text fehler'; toast('Anhang nicht gespeichert: ' + e.message, true); return false; }
 }
 async function anhangLoeschen(id, name) {
+  if (!confirm(`Anhang „${name}“ entfernen? Er liegt danach 30 Tage im Papierkorb (CRM → Einstellungen → Papierkorb).`)) return;
   try { const d = await api(`/angebote/${id}/anhang/${encodeURIComponent(name)}`, 'DELETE'); $('ag-anhaenge').innerHTML = anhaengeHtml(d.angebot); } catch (e) { toast(e.message, true); }
 }
 async function kiVorschlag() {

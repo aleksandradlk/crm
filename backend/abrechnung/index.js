@@ -963,7 +963,15 @@ function bauMandant(app, ctx) {
     if (a.umgewandelt) throw new Error('Angebot ist bereits umgewandelt und gesperrt.');
     const name = String(req.params.name);
     a.anhaenge = (a.anhaenge || []).filter(n => n !== name);
-    try { fs.unlinkSync(anhangPfad(a, name)); } catch (e) { /* schon weg */ }
+    if (ctx.anhangInPapierkorb) {
+      // Datei in den Papierkorb-Ordner verschieben (30 Tage wiederherstellbar)
+      const ziel = path.join(ANHAENGE_DIR, '_papierkorb', `${Date.now()}_${a.id}_${name}`);
+      try {
+        fs.mkdirSync(path.dirname(ziel), { recursive: true });
+        fs.renameSync(anhangPfad(a, name), ziel);
+        await ctx.anhangInPapierkorb({ angebotId: a.id, nummer: a.nummer, name, pfad: ziel, crmLeadId: a.crm && a.crm.leadId, kundeId: a.kundeId }, req.user);
+      } catch (e) { console.error('Anhang in Papierkorb:', e.message); }
+    } else { try { fs.unlinkSync(anhangPfad(a, name)); } catch (e) { /* schon weg */ } }
     speichere(ANGEBOTE_DIR, a);
     ok(res, { angebot: angebotMitKunde(a) });
   }));
@@ -1944,6 +1952,17 @@ Antworte NUR mit gültigem JSON, kein Text davor oder danach:
       db.setze(ANGEBOTE_DIR, a.id, a);   // ohne Statusmeldung (Status unverändert)
     },
     kiAusfuellen,
+    // Anhang aus dem Papierkorb zurück ans Angebot
+    anhangWiederherstellen({ angebotId, name, pfad }) {
+      const a = ladeEins(ANGEBOTE_DIR, angebotId);
+      if (!a) throw new Error('Das Angebot gibt es nicht mehr.');
+      if (!fs.existsSync(pfad)) throw new Error('Die Datei ist nicht mehr vorhanden.');
+      let ziel = name, n = 2;
+      while ((a.anhaenge || []).includes(ziel)) ziel = name.replace(/(\.pdf)?$/i, ` (${n++})$1`);
+      fs.renameSync(pfad, anhangPfad(a, ziel));
+      a.anhaenge = [...(a.anhaenge || []), ziel];
+      speichere(ANGEBOTE_DIR, a);
+    },
     // Offene Angebote mit monatlichen Positionen bekommen ihr geplantes Abo (beim Start)
     geplanteAbosNachziehen() {
       let n = 0;
