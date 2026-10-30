@@ -613,12 +613,13 @@ router.post('/bulk', auth, async (req, res) => {
       if ((await findDuplicates(l, 0, 1)).length) { skippedDuplicates.push(l.company); continue; }
       const [r] = await db.query(
         `INSERT INTO leads
-          (company, ceo, email, phone, location, website, linkedin_url,
+          (company, ceo, email, phone, location, website, linkedin_url, instagram_url,
            industry, employees, revenue, source, confidence, notes,
            status, assigned_to, created_by)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [l.company||null, l.ceo||null, l.email||null, l.phone||null,
-         l.location||null, l.website||null, l.linkedin_url||null,
+         l.location ? String(l.location).slice(0, 150) : null, l.website||null, l.linkedin_url||null,
+         l.instagram_url ? String(l.instagram_url).slice(0, 255) : null,
          l.industry||null, l.employees||null, l.revenue||null,
          l.source||'web', l.confidence||50, l.notes||null,
          'neu', assigned_to||null, req.user.id]

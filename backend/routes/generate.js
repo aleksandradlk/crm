@@ -3,6 +3,8 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { auth, adminOnly } = require('../middleware/auth');
 const { log } = require('../helpers/logger');
 const db = require('../db');
+const { findDuplicates } = require('../helpers/dedupe');
+const { imGebiet } = require('../helpers/regionen');
 
 // Vorgaben für Closer (Admin stellt sie unter „Leads generieren“ ein, app_settings.finder_vorgaben):
 // erlaubte Branchen und feste Größe. Der Admin selbst sucht frei.
@@ -23,12 +25,15 @@ const FIELD_LABELS = {
   ceo:       'Geschäftsführer / Ansprechpartner',
   email:     'E-Mail-Adresse',
   phone:     'Telefonnummer',
-  location:  'Standort / Adresse',
+  location:  'Standort / Adresse (Straße, PLZ, Ort)',
+  instagram: 'Instagram-Profil',
   linkedin:  'LinkedIn-URL',
   revenue:   'Jahresumsatz (nur falls öffentlich bekannt)',
   employees: 'Mitarbeiterzahl',
 };
-const DEFAULT_FIELDS = ['company', 'ceo', 'email', 'phone', 'location'];
+const DEFAULT_FIELDS = ['company', 'ceo', 'email', 'phone', 'location', 'instagram'];
+// Gründlicher statt breiter: höchstens so viele Leads pro Klick, je Lead zwei Websuchen
+const MAX_LEADS = 20;
 // Alles unter dieser Schwelle wird serverseitig verworfen, unabhängig davon, was das
 // Modell selbst als confidence angibt — die Selbsteinschätzung allein ist kein verlässlicher Filter.
 const MIN_CONFIDENCE = 80;
@@ -53,6 +58,9 @@ REGELN:
   bestätigt, 65-84 = Firma bestätigt, aber Details aus Kontext erschlossen, 40-64 = unsicher
 - Nur Ergebnisse mit confidence ≥ ${MIN_CONFIDENCE} werden überhaupt gespeichert — alles
   darunter lässt du direkt weg, anstatt es unsicher ins Ergebnis zu schreiben
+- Nur Betriebe mit belegter Telefonnummer aufnehmen (Leads ohne Telefon werden verworfen)
+- Nur Betriebe im angegebenen Standort bzw. dessen Umland; "plz" und "ort" immer angeben
+- Instagram-Profil (instagram.com/…) mit angeben, wenn es auf der Webseite oder in der Suche belegt ist
 - Lieber 3 verifizierte Leads als 10 ungeprüfte
 - Antworte am Ende NUR mit einem validen JSON-Array, keine Erklärungen danach`;
 
@@ -70,7 +78,7 @@ ${extra ? `Zusätzliche Kriterien: ${extra}` : ''}
 Gewünschte Felder (so vollständig wie recherchierbar): ${wanted}
 
 Antworte NUR mit diesem JSON-Array:
-[{"company":"Name","ceo":null,"email":null,"phone":null,"location":"Stadt","website":null,"linkedin_url":null,"industry":"Branche","employees":null,"revenue":null,"source":"web","confidence":70,"notes":null}]`;
+[{"company":"Name","ceo":null,"email":null,"phone":"+49 …","strasse":null,"plz":"12345","ort":"Stadt","website":null,"instagram":null,"linkedin_url":null,"employees":null,"revenue":null,"source":"web","confidence":70,"notes":null}]`;
 }
 
 // GET /api/generate/vorgaben — Vorgaben für Closer (alle mit Zugriff auf die Suche)
@@ -111,10 +119,10 @@ router.post('/', auth, async (req, res) => {
   const apiKey = process.env.CLAUDE_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'Claude API Key nicht konfiguriert (.env)' });
 
-  const maxL = Math.min(parseInt(max_leads) || 10, 100);
-  // Suchen sind mit $10 / 1000 Anfragen abgerechnet — an die gewünschte Lead-Zahl gekoppelt,
-  // aber gedeckelt, damit ein einzelner Generieren-Klick nie außer Kontrolle gerät.
-  const maxSearches = Math.min(Math.max(maxL, 3), 20);
+  const maxL = Math.min(parseInt(max_leads) || 10, MAX_LEADS);
+  // Suchen sind mit $10 / 1000 Anfragen abgerechnet — je Lead zwei (Existenz + Kontaktdaten),
+  // gedeckelt bei 40, damit ein einzelner Klick höchstens ca. 40 Cent Suchkosten hat.
+  const maxSearches = Math.min(Math.max(maxL * 2, 5), 40);
 
   // Je Lead ca. 250 Token JSON – bei festen 4000 Token brach die Liste ab 15–20 Leads ab
   const maxTokens = Math.min(16000, 2000 + maxL * 300);
@@ -134,6 +142,8 @@ router.post('/', auth, async (req, res) => {
     // Der serverseitige Such-Loop pausiert nach 10 internen Iterationen (pause_turn) —
     // bei vielen angeforderten Leads ggf. mehrfach fortsetzen.
     let continuations = 0;
+    // Websuchen über alle Durchläufe zählen (vorher nur der letzte → „Live-Daten“ war manchmal falsch)
+    let searchesUsed = response.usage?.server_tool_use?.web_search_requests || 0;
     while (response.stop_reason === 'pause_turn' && continuations < 3) {
       messages = [...messages, { role: 'assistant', content: response.content }];
       response = await client.messages.create({
@@ -144,9 +154,8 @@ router.post('/', auth, async (req, res) => {
         messages,
       });
       continuations++;
+      searchesUsed += response.usage?.server_tool_use?.web_search_requests || 0;
     }
-
-    const searchesUsed = response.usage?.server_tool_use?.web_search_requests || 0;
     const realData = searchesUsed > 0;
 
     const rawText = response.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
@@ -156,16 +165,23 @@ router.post('/', auth, async (req, res) => {
     let leads = JSON.parse(jsonMatch[0]);
     if (!Array.isArray(leads)) throw new Error('Ungültiges Format');
 
+    const t = v => (v == null ? '' : String(v).trim());
+    const insta = v => { v = t(v); if (!v) return null; if (/instagram\.com/i.test(v)) return v.replace(/^https?:\/\/(www\.)?/i, '').slice(0, 255); return v.startsWith('@') ? 'instagram.com/' + v.slice(1) : null; };
     leads = leads
       .map(l => ({
         company:      l.company || null,
         ceo:          l.ceo || null,
         email:        l.email || null,
         phone:        l.phone || null,
-        location:     l.location || null,
+        plz:          (t(l.plz).match(/\d{5}/) || [null])[0],
+        ort:          t(l.ort) || null,
+        // Adresse wie überall im CRM: „Str. Nr, PLZ Ort“
+        location:     [t(l.strasse), [t(l.plz), t(l.ort)].filter(Boolean).join(' ')].filter(Boolean).join(', ') || l.location || null,
         website:      l.website || null,
+        instagram_url: insta(l.instagram || l.instagram_url),
         linkedin_url: l.linkedin_url || null,
-        industry:     l.industry || null,
+        // Branche fest = gesuchte Branche (nicht die freie Formulierung der KI)
+        industry:     query,
         employees:    l.employees != null ? String(l.employees) : null,
         revenue:      l.revenue || null,
         source:       l.source || 'web',
@@ -177,12 +193,38 @@ router.post('/', auth, async (req, res) => {
     const candidateCount = leads.length;
     leads = leads.filter(l => l.confidence >= MIN_CONFIDENCE);
     const droppedLowConfidence = candidateCount - leads.length;
+    // Telefon ist Pflicht (Nala ruft an)
+    const vorTelefon = leads.length;
+    leads = leads.filter(l => String(l.phone || '').replace(/\D/g, '').length >= 6);
+    const ohneTelefon = vorTelefon - leads.length;
+    // Region: Treffer außerhalb des Suchgebiets fliegen raus, ohne PLZ/Ort werden sie markiert
+    const vorRegion = leads.length;
+    leads = leads.map(l => ({ ...l, region: imGebiet(l, location) })).filter(l => l.region !== 'nein');
+    const ausserhalb = vorRegion - leads.length;
+    // Schon im CRM? (gleiche Telefonnummer, E-Mail, Webseite oder gleicher Firmenname) → markieren
+    for (const l of leads) {
+      let d = (await findDuplicates(l, 0, 1).catch(() => []))[0];
+      if (!d) {
+        const [[g]] = await db.query(
+          `SELECT l.id, l.company, u.full_name AS assigned_name FROM leads l LEFT JOIN users u ON u.id = l.assigned_to
+           WHERE l.archived_at IS NULL AND LOWER(TRIM(l.company)) = LOWER(?) LIMIT 1`, [String(l.company).trim()]).catch(() => [[null]]);
+        d = g;
+      }
+      if (d) l.vorhanden = { id: d.id, company: d.company, betreut: d.assigned_name || null };
+    }
+    const statistik = {
+      kandidaten: candidateCount, unsicher: droppedLowConfidence, ohne_telefon: ohneTelefon, ausserhalb,
+      treffer: leads.length, schon_im_crm: leads.filter(l => l.vorhanden).length,
+      region_ungeprueft: leads.filter(l => l.region === 'ungeprueft').length,
+      mit_email: leads.filter(l => l.email).length, mit_webseite: leads.filter(l => l.website).length,
+      mit_instagram: leads.filter(l => l.instagram_url).length, websuchen: searchesUsed,
+    };
 
     await log(req.user.id, 'leads_generate', 'system', null,
       { query, location, count: leads.length, dropped_low_confidence: droppedLowConfidence,
-        real_data: realData, web_searches: searchesUsed }, req.ip);
+        real_data: realData, web_searches: searchesUsed, statistik }, req.ip);
 
-    res.json({ ok: true, leads, real_data: realData, dropped_low_confidence: droppedLowConfidence });
+    res.json({ ok: true, leads, real_data: realData, dropped_low_confidence: droppedLowConfidence, statistik });
   } catch (err) {
     console.error('Generate error:', err);
     const status = err instanceof Anthropic.APIError ? (err.status || 500) : 500;
