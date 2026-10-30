@@ -133,7 +133,7 @@ async function signaturEinstellung(elId) {
 
 // ── Kommentare: nur die neuesten zeigen, „Mehr laden“ für ältere ──
 // teile = HTML je Kommentar, älteste zuerst. Anzahl aus den Vertriebsregeln (Standard 10).
-function kommentarAnzahl() { return Number(typeof Bedarf !== 'undefined' && Bedarf.cfg && Bedarf.cfg.kommentare_anzahl) || 10; }
+function kommentarAnzahl() { return Number(typeof Bedarf !== 'undefined' && Bedarf.cfg && Bedarf.cfg.kommentare_anzahl) || 5; }
 function kommentarListe(teile, anzahl = kommentarAnzahl()) {
   if (teile.length <= anzahl) return teile.join('');
   const alt = teile.length - anzahl;
@@ -187,8 +187,43 @@ function leadPanelAnsicht() {
     aktionen.prepend(b);
   }
 }
+// ── Seitenleiste links: Breite ziehen (wird gemerkt), ganz schmal nur Symbole ──
+function seitenleisteAnsicht() {
+  const sb = document.getElementById('sidebar');
+  if (!sb || sb.dataset.griff) return;
+  sb.dataset.griff = '1';
+  const setze = w => {
+    w = Math.max(64, Math.min(360, Math.round(w)));
+    const schmal = w < 150;
+    if (schmal) w = 72;
+    document.documentElement.style.setProperty('--sb-w', w + 'px');
+    document.documentElement.classList.toggle('sb-schmal', schmal);
+    return w;
+  };
+  const gemerkt = Number(localStorage.getItem('lh_sb_breite'));
+  if (gemerkt) setze(gemerkt);
+  sb.querySelectorAll('.nav-item').forEach(n => { if (!n.title) n.title = n.textContent.replace(/\s+\d+\s*$/, '').trim(); });
+  const g = document.createElement('div');
+  g.className = 'sb-griff';
+  g.title = 'Ziehen: Seitenleiste breiter oder schmaler · Doppelklick: Standardbreite';
+  sb.appendChild(g);
+  g.addEventListener('pointerdown', e => {
+    e.preventDefault(); g.setPointerCapture(e.pointerId);
+    const zoom = Number(document.body.style.zoom) || 1;
+    let w = 0;
+    const bewegen = ev => { w = setze(ev.clientX / zoom); };
+    const ende = () => {
+      g.removeEventListener('pointermove', bewegen); g.removeEventListener('pointerup', ende);
+      if (w) { try { localStorage.setItem('lh_sb_breite', String(w)); } catch (_) {} }
+    };
+    g.addEventListener('pointermove', bewegen); g.addEventListener('pointerup', ende);
+  });
+  g.addEventListener('dblclick', () => { try { localStorage.removeItem('lh_sb_breite'); } catch (_) {} setze(248); });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   leadPanelAnsicht();
+  seitenleisteAnsicht();
   // Vertriebsregeln (u. a. Anzahl Kommentare) vorab laden
   if (typeof Bedarf !== 'undefined' && Auth.getToken()) Bedarf.config().catch(() => {});
 });
@@ -650,6 +685,7 @@ function applyTheme(theme) {
 function applySchrift(p) {
   p = Math.max(80, Math.min(150, Math.round(Number(p) || 100)));
   document.body.style.zoom = p === 100 ? '' : String(p / 100);
+  document.documentElement.style.setProperty('--z', String(p / 100));   // Ausgleich für 100vh (Seitenleiste)
   try { localStorage.setItem('lh_schrift', String(p)); } catch (_) {}
   return p;
 }

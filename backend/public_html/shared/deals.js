@@ -169,13 +169,11 @@ const Deals = {
   },
 
   // ── Pipeline-Board ──────────────────────────────────────────
-  // Provision des zuständigen Vertrieblers auf den einmaligen Wert (Betreuung zählt nicht):
-  // voller Satz, mit eigenem Rabatt der reduzierte Satz, mit Häkchen „Aktionsrabatt“ wieder der volle.
+  // Provision des zuständigen Vertrieblers auf den einmaligen Wert (Betreuung zählt nicht), immer voller Satz
   provision(d) {
     if (d.provision_betrag != null) return Number(d.provision_betrag);   // vom Server, wie im Deal-Fenster
     if (!this._prov || !d.value || d.owner_role === 'admin' || !d.owner_id) return null;
-    const rabatt = Number(d.bedarf_rabatt) > 0 && !Number(d.aktionsrabatt);
-    const satz = Number(rabatt ? this._prov.satz_rabatt : this._prov.satz) || 0;
+    const satz = Number(this._prov.satz) || 0;   // immer der volle Satz, auch mit Rabatt
     return Math.round(Number(d.value) * satz) / 100;
   },
   // „Angebot gesendet am …“ und ob der Kunde seitdem geantwortet hat (eingehende Mail)
@@ -341,7 +339,6 @@ const Deals = {
           </div>
           <div class="form-group"><label>Notizen</label><textarea id="dmNotes" class="form-control" rows="3" placeholder="Umfang, Ansprechpartner, Besonderheiten …"></textarea></div>
           <div id="dmAngebot"></div>
-          ${this.opts.isAdmin ? `<label class="deal-aktion"><input type="checkbox" id="dmAktion"> Aktionsrabatt von mir (Provision bleibt beim vollen Satz)</label>` : ''}
           <div id="dmProvision"></div>
           <div class="deal-modal-err" id="dmErr"></div>
           <div class="deal-modal-actions" id="dmActions"></div>

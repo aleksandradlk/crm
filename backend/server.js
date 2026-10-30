@@ -144,7 +144,9 @@ app.use('/api/v1',              rateLimit({ windowMs: 60*1000, max: 300 }), apiV
 // ── Abrechnung (Angebote, Rechnungen, Abos – nur Admin) ───────
 const abrechnung = require('./abrechnung/crm').registriere(app, {
   ki: process.env.CLAUDE_API_KEY
-    ? { client: new (require('@anthropic-ai/sdk'))({ apiKey: process.env.CLAUDE_API_KEY }), model: 'claude-haiku-4-5', limit: 0 }
+    ? { client: new (require('@anthropic-ai/sdk'))({ apiKey: process.env.CLAUDE_API_KEY }), model: 'claude-haiku-4-5', limit: 0,
+        // Angebote: stärkeres Modell für persönlichere Texte (per KI_MODELL_ANGEBOT änderbar)
+        modelAngebot: process.env.KI_MODELL_ANGEBOT || 'claude-sonnet-5-5' }
     : null,
 });
 const provisionRoutes = require('./routes/provision');

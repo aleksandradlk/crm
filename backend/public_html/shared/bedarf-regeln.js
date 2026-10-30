@@ -22,7 +22,7 @@
     rabatt_grenze: 20,
     nachfass_tage: [2, 5, 10],
     textlimit: 10000,          // max. Zeichen in großen Textfeldern der Bedarfsanalyse
-    kommentare_anzahl: 10,     // so viele neueste Kommentare zeigt das Lead-Fenster, ältere über „Mehr laden“
+    kommentare_anzahl: 5,      // so viele neueste Kommentare zeigt das Lead-Fenster, „Mehr laden“ holt je so viele dazu
     anfrage_warte_std: 24,
     admin_mail: 'info@novaflowservices.de',
     faellig_mail: true,                   // morgens eine Mail mit allem, was fällig ist
@@ -31,7 +31,7 @@
     regeln: { l_auftragswert: 5000, m_kanaele: 3, m_anfragen: 10, l_wenig_anfragen: 5 },
     // Provision und Bonus (§8): Basis = gezahlter Einmalpreis ohne Betreuung/Hosting
     provision: {
-      satz: 20, satz_rabatt: 15,          // % – mit Rabatt > 0 vom reduzierten Preis
+      satz: 20, satz_rabatt: 20,          // % vom (ggf. reduzierten) Einmalpreis – immer 20 %, auch mit Rabatt
       upgrade_tage: 30,                   // Quick-Win → Autopilot beim selben Kunden: Basis − Quick-Win-Preis
       faellig_tage: 14,                   // Provision fällig = Zahlungseingang + X Tage
       ust: 19,                            // Aufschlag, wenn am Benutzer „zzgl. USt“
@@ -121,7 +121,7 @@
   entscheider_text: 'Entscheider (Text)', paket_empfohlen: 'Paket', zusatzleistungen: 'Zusatzleistungen', preis_genannt: 'Preis genannt',
   reaktion_preis: 'Reaktion auf den Preis', rabatt_prozent: 'Rabatt %', rabatt_begruendung: 'Begründung Rabatt', gratismonat: 'Gratismonat',
   zahlungswunsch: 'Zahlungswunsch', sonderwuensche: 'Sonderwünsche', nachfass_termin: 'Nachfass-Termin', notiz: 'Notiz',
-  einleitung_notiz: 'Für die Einleitung', aktion_prozent: 'Aktion %', aktion_bis: 'Aktion gültig bis',
+  einleitung_notiz: 'Für die Einleitung', aktion_prozent: 'Aktion %', aktion_bis: 'Aktion gültig bis', vertraulich: 'Vertraulich',
 };
   // Google-Profil: besteht schon (auch „schwach“) oder wird von jemand anderem betreut → übernehmen und optimieren (günstiger)
   const GOOGLE_BESTEHEND = ['ja', 'schwach', 'anderer'];
@@ -251,7 +251,7 @@
   // „Instagram hinzugefügt (Kanäle)“, „Paket: Autopilot M → Autopilot L“, „Größtes Problem ergänzt“
   function aenderungen(alt, neu) {
     alt = alt || {}; neu = neu || {};
-    const LANGTEXT = ['ablauf_heute', 'groesstes_problem', 'sonderwuensche', 'notiz', 'rabatt_begruendung', 'einleitung_notiz'];
+    const LANGTEXT = ['ablauf_heute', 'groesstes_problem', 'sonderwuensche', 'notiz', 'rabatt_begruendung', 'einleitung_notiz', 'vertraulich'];
     const L = (f, v) => label(f === 'kanal_wichtigster' ? 'kanaele' : f, v);
     const out = [];
     for (const f of Object.keys(FELDLABEL)) {
