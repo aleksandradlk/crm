@@ -107,10 +107,11 @@
     groesstes_problem: 'größtes Problem', wunschstart: 'Wunschstart', entscheider: 'Entscheider', rabatt_begruendung: 'Begründung für den Rabatt',
     sonderwuensche: 'Sonderwünsche', notiz: 'Notiz', einleitung_notiz: 'Für die Einleitung',
   };
-  // Google-Profil: besteht schon oder wird von jemand anderem betreut → übernehmen und optimieren (günstiger)
+  // Google-Profil: besteht schon (auch „schwach“) oder wird von jemand anderem betreut → übernehmen und optimieren (günstiger)
+  const GOOGLE_BESTEHEND = ['ja', 'schwach', 'anderer'];
   function googlePreis(d, cfg) {
     const g = cfgMit(cfg).zusatz.google;
-    return ['ja', 'anderer'].includes(d && d.google_profil) && g.einrichtung_bestehend != null ? g.einrichtung_bestehend : g.einrichtung;
+    return GOOGLE_BESTEHEND.includes(d && d.google_profil) && g.einrichtung_bestehend != null ? g.einrichtung_bestehend : g.einrichtung;
   }
   const zusatzPreis = (k, d, cfg) => k === 'google' ? googlePreis(d, cfg) : (cfgMit(cfg).zusatz[k]?.einrichtung || 0);
   // Rabatt im Angebot: eigener Rabatt des Vertrieblers, sonst eine zugesagte Aktion
@@ -184,9 +185,9 @@
     const monat = Math.round((p.einrichtung / 12 + p.betreuung) / 10) * 10;
 
     const hinweise = [];
-    if (['nein', 'schwach'].includes(d.google_profil)) hinweise.push(`+ ${cfg.zusatz.google.name} (${eur(cfg.zusatz.google.einrichtung)})`);
-    if (['ja', 'anderer'].includes(d.google_profil) && hat(d.zusatzleistungen, ['google']))
-      hinweise.push(`${cfg.zusatz.google.name}: Profil ${d.google_profil === 'ja' ? 'besteht schon' : 'betreut jemand anderes'} – übernehmen und optimieren für ${eur(googlePreis(d, cfg))}.`);
+    if (['nein', 'schwach'].includes(d.google_profil) && !hat(d.zusatzleistungen, ['google'])) hinweise.push(`+ ${cfg.zusatz.google.name} (${eur(googlePreis(d, cfg))})`);
+    if (GOOGLE_BESTEHEND.includes(d.google_profil) && hat(d.zusatzleistungen, ['google']))
+      hinweise.push(`${cfg.zusatz.google.name}: Profil ${{ ja: 'besteht schon', schwach: 'besteht, ist aber schwach', anderer: 'betreut jemand anderes' }[d.google_profil]} – übernehmen und optimieren für ${eur(googlePreis(d, cfg))}.`);
     if (d.webseite_status === 'anderer' && hat(d.zusatzleistungen, ['webseite'])) hinweise.push('Webseite macht jemand anderes – vorher klären, ob wir sie übernehmen sollen.');
     if (Number(d.aktion_prozent) > 0) hinweise.push(`Zugesagte Aktion: ${d.aktion_prozent} %${d.aktion_bis ? ' bis ' + String(d.aktion_bis).split('-').reverse().join('.') : ''}${Number(d.rabatt_prozent) > 0 ? ' (im Angebot gilt der eigene Rabatt)' : ''}.`);
     if (['nein', 'veraltet'].includes(d.webseite_status)) hinweise.push(`+ ${cfg.zusatz.webseite.name} (${eur(cfg.zusatz.webseite.einrichtung)} + ${eur(cfg.zusatz.webseite.betreuung)}/Monat)`);

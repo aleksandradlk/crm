@@ -126,7 +126,7 @@ const Bedarf = {
       ${pk}
       <div class="bdp-titel" style="margin-top:12px">Zusatzleistungen</div>
       <div class="bdp-paket"><div class="bdp-kopf"><b>${escHtml(g.name)}</b></div>
-        <div class="bdp-preis">${R.eur(g.einrichtung)}${g.einrichtung_bestehend != null ? ` <small>· besteht schon / macht jemand anderes: ${R.eur(g.einrichtung_bestehend)}</small>` : ''}</div>
+        <div class="bdp-preis">${R.eur(g.einrichtung)}${g.einrichtung_bestehend != null ? ` <small>· besteht schon, schwach oder macht jemand anderes: ${R.eur(g.einrichtung_bestehend)}</small>` : ''}</div>
         <div class="bdp-inhalt">${escHtml(R.INHALT.google)}</div></div>
       <div class="bdp-paket"><div class="bdp-kopf"><b>${escHtml(w.name)}</b></div>
         <div class="bdp-preis">${R.eur(w.einrichtung)} <small>+ ${R.eur(w.betreuung)}/Monat</small></div>
@@ -723,7 +723,7 @@ const Bedarf = {
           <label>Paket M ab … Kanälen</label><div>${num('vr-m-kan', c.regeln.m_kanaele, 70)}</div>
           <label>Paket M ab … Anfragen/Woche</label><div>${num('vr-m-anf', c.regeln.m_anfragen, 70)}</div>
           <label>Kein L unter … Anfragen/Woche (bei 1–2 Kanälen)</label><div>${num('vr-l-wenig', c.regeln.l_wenig_anfragen ?? 5, 70)}</div>
-          <label>Google-Profil, wenn es schon besteht oder jemand anderes es macht</label><div>${num('vr-g-bestehend', c.zusatz.google.einrichtung_bestehend ?? 249)} €</div>
+          <label>Google-Profil, wenn es schon besteht (auch schwach) oder jemand anderes es macht</label><div>${num('vr-g-bestehend', c.zusatz.google.einrichtung_bestehend ?? 249)} €</div>
           <label>Nachfassen nach dem Angebot (Tage)</label><div><input class="form-control" id="vr-tage" value="${escHtml((c.nachfass_tage || []).join(', '))}" style="width:140px"></div>
           <label>Hinweis, wenn Anfrage wartet seit</label><div>${num('vr-std', c.anfrage_warte_std, 70)} Std.</div>
           <label>Max. Zeichen in großen Textfeldern der Bedarfsanalyse</label><div>${num('vr-textlimit', c.textlimit, 100)}</div>
